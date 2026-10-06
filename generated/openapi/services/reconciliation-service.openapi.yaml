@@ -1,1723 +1,34 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    ReconException:
-      description: A reconciliation break awaiting investigation
-      properties:
-        age_days:
-          description: Days open
-          format: int32
-          readOnly: true
-          type: integer
-        amount:
-          description: Break amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        assigned_to:
-          description: Assignee
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        external_record_id:
-          description: External record, if any
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        internal_entry_id:
-          description: Internal entry, if any
-          format: uuid
-          type:
-          - string
-          - 'null'
-        reason:
-          description: Break reason
-          enum:
-          - MISSING_INTERNAL
-          - MISSING_EXTERNAL
-          - AMOUNT_MISMATCH
-          - DATE_MISMATCH
-          - DUPLICATE
-          - CURRENCY_MISMATCH
-          - OTHER
-          type: string
-        recon_run_id:
-          description: Run
-          format: uuid
-          type: string
-        resolution_note:
-          description: How it was resolved
-          type:
-          - string
-          - 'null'
-        resolved_at:
-          description: Resolution time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - RESOLVED
-          - WRITTEN_OFF
-          - IGNORED
-          type: string
-        suggested_match:
-          additionalProperties: true
-          description: AI-suggested counterpart records with confidence
-          readOnly: true
-          type:
-          - object
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - recon_run_id
-      - reason
-      - status
-      - amount
-      - currency
-      - age_days
-      type: object
-    ReconExceptionPage:
-      description: One page of ReconException results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconException'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconExceptionUpdate:
-      properties:
-        amount:
-          description: Break amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        assigned_to:
-          description: Assignee
-          maxLength: 64
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        external_record_id:
-          description: External record, if any
-          format: uuid
-          type: string
-        internal_entry_id:
-          description: Internal entry, if any
-          format: uuid
-          type: string
-        reason:
-          description: Break reason
-          enum:
-          - MISSING_INTERNAL
-          - MISSING_EXTERNAL
-          - AMOUNT_MISMATCH
-          - DATE_MISMATCH
-          - DUPLICATE
-          - CURRENCY_MISMATCH
-          - OTHER
-          type: string
-        recon_run_id:
-          description: Run
-          format: uuid
-          type: string
-        resolution_note:
-          description: How it was resolved
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - RESOLVED
-          - WRITTEN_OFF
-          - IGNORED
-          type: string
-      type: object
-    ReconExceptionsAssignRequest:
-      properties:
-        assigned_to:
-          maxLength: 64
-          type: string
-      required:
-      - assigned_to
-      type: object
-    ReconExceptionsResolveRequest:
-      properties:
-        adjustment:
-          additionalProperties: true
-          type: object
-        resolution_note:
-          type: string
-      required:
-      - resolution_note
-      type: object
-    ReconFile:
-      description: An imported statement or settlement file
-      properties:
-        checksum:
-          description: SHA-256, used to reject duplicates
-          maxLength: 64
-          readOnly: true
-          type: string
-        closing_balance:
-          description: Closing balance stated in the file
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        error:
-          description: Parsing error
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        file_name:
-          description: Original file name
-          maxLength: 255
-          type: string
-        file_uri:
-          description: Storage location
-          maxLength: 500
-          readOnly: true
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        opening_balance:
-          description: Opening balance stated in the file
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        recon_source_id:
-          description: Source
-          format: uuid
-          type: string
-        record_count:
-          description: Lines parsed
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        statement_date:
-          description: Statement / settlement date
-          format: date
-          type:
-          - string
-          - 'null'
-        status:
-          description: Processing status
-          enum:
-          - RECEIVED
-          - PARSING
-          - PARSED
-          - FAILED
-          - MATCHED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - recon_source_id
-      - file_name
-      - file_uri
-      - checksum
-      - status
-      type: object
-    ReconFilePage:
-      description: One page of ReconFile results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconFile'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconFilesImportRequest:
-      properties:
-        closing_balance:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        content:
-          type: string
-        file_name:
-          maxLength: 255
-          type: string
-        opening_balance:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        recon_source_id:
-          format: uuid
-          type: string
-        records:
-          items: {}
-          type: array
-        statement_date:
-          format: date
-          type: string
-      required:
-      - recon_source_id
-      - file_name
-      type: object
-    ReconMatch:
-      description: A confirmed link between external records and internal ledger entries. Append-only.
-      properties:
-        confidence:
-          description: AI / rule confidence 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        confirmed_by:
-          description: Who confirmed a manual or suggested match
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        difference:
-          description: Residual difference within tolerance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        external_record_ids:
-          description: recon_record ids (sorted)
-          items: {}
-          type: array
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        internal_entry_ids:
-          description: ledger_entry ids (sorted)
-          items: {}
-          type: array
-        match_type:
-          description: Cardinality
-          enum:
-          - ONE_TO_ONE
-          - ONE_TO_MANY
-          - MANY_TO_ONE
-          - MANY_TO_MANY
-          - MANUAL
-          type: string
-        recon_rule_id:
-          description: Rule that matched
-          format: uuid
-          type:
-          - string
-          - 'null'
-        recon_run_id:
-          description: Run that produced it (empty when manual)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        unmatched_at:
-          description: Set via a new compensating match record when undone
-          format: date-time
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - match_type
-      - external_record_ids
-      - internal_entry_ids
-      - difference
-      type: object
-    ReconMatchCreate:
-      properties:
-        confidence:
-          description: AI / rule confidence 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        confirmed_by:
-          description: Who confirmed a manual or suggested match
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        difference:
-          description: Residual difference within tolerance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        external_record_ids:
-          description: recon_record ids (sorted)
-          items: {}
-          type: array
-        internal_entry_ids:
-          description: ledger_entry ids (sorted)
-          items: {}
-          type: array
-        match_type:
-          description: Cardinality
-          enum:
-          - ONE_TO_ONE
-          - ONE_TO_MANY
-          - MANY_TO_ONE
-          - MANY_TO_MANY
-          - MANUAL
-          type: string
-        recon_rule_id:
-          description: Rule that matched
-          format: uuid
-          type: string
-        recon_run_id:
-          description: Run that produced it (empty when manual)
-          format: uuid
-          type: string
-        unmatched_at:
-          description: Set via a new compensating match record when undone
-          format: date-time
-          type: string
-      required:
-      - match_type
-      - external_record_ids
-      - internal_entry_ids
-      type: object
-    ReconMatchPage:
-      description: One page of ReconMatch results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconMatch'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconMatchesUnmatchRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    ReconRecord:
-      description: One external line (statement line, settlement record). Append-only.
-      properties:
-        amount:
-          description: Amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        booking_date:
-          description: Booking date
-          format: date
-          type:
-          - string
-          - 'null'
-        counterparty:
-          description: Counterparty name / account
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        direction:
-          description: Debit or credit from the source's view
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        end_to_end_id:
-          description: ISO 20022 end-to-end id when present
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        external_ref:
-          description: Bank / scheme reference
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        narrative:
-          description: Description
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        raw:
-          additionalProperties: true
-          description: Original parsed line
-          type:
-          - object
-          - 'null'
-        recon_file_id:
-          description: File
-          format: uuid
-          type: string
-        recon_source_id:
-          description: Source
-          format: uuid
-          type: string
-        value_date:
-          description: Value date
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - recon_file_id
-      - recon_source_id
-      - value_date
-      - direction
-      - amount
-      - currency
-      type: object
-    ReconRecordPage:
-      description: One page of ReconRecord results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconRecord'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconRule:
-      description: Matching rule, evaluated in priority order
-      properties:
-        amount_tolerance:
-          description: Allowed absolute amount difference
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        auto_confirm:
-          description: Confirm matches without review
-          type: boolean
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        date_tolerance_days:
-          description: Allowed value-date difference
-          format: int32
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        match_fields:
-          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
-          items: {}
-          type: array
-        match_type:
-          description: Cardinality
-          enum:
-          - ONE_TO_ONE
-          - ONE_TO_MANY
-          - MANY_TO_ONE
-          - MANY_TO_MANY
-          - MANUAL
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower runs first
-          format: int32
-          type: integer
-        recon_source_id:
-          description: Source (empty = all sources)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - priority
-      - match_type
-      - match_fields
-      - amount_tolerance
-      - date_tolerance_days
-      - auto_confirm
-      - is_active
-      type: object
-    ReconRuleCreate:
-      properties:
-        amount_tolerance:
-          description: Allowed absolute amount difference
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        auto_confirm:
-          description: Confirm matches without review
-          type: boolean
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        date_tolerance_days:
-          description: Allowed value-date difference
-          format: int32
-          type: integer
-        is_active:
-          description: Active
-          type: boolean
-        match_fields:
-          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
-          items: {}
-          type: array
-        match_type:
-          description: Cardinality
-          enum:
-          - ONE_TO_ONE
-          - ONE_TO_MANY
-          - MANY_TO_ONE
-          - MANY_TO_MANY
-          - MANUAL
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower runs first
-          format: int32
-          type: integer
-        recon_source_id:
-          description: Source (empty = all sources)
-          format: uuid
-          type: string
-      required:
-      - name
-      - match_type
-      - match_fields
-      type: object
-    ReconRulePage:
-      description: One page of ReconRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconRuleUpdate:
-      properties:
-        amount_tolerance:
-          description: Allowed absolute amount difference
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        auto_confirm:
-          description: Confirm matches without review
-          type: boolean
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        date_tolerance_days:
-          description: Allowed value-date difference
-          format: int32
-          type: integer
-        is_active:
-          description: Active
-          type: boolean
-        match_fields:
-          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
-          items: {}
-          type: array
-        match_type:
-          description: Cardinality
-          enum:
-          - ONE_TO_ONE
-          - ONE_TO_MANY
-          - MANY_TO_ONE
-          - MANY_TO_MANY
-          - MANUAL
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower runs first
-          format: int32
-          type: integer
-        recon_source_id:
-          description: Source (empty = all sources)
-          format: uuid
-          type: string
-      type: object
-    ReconRun:
-      description: A matching run over a source and date range
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        exception_count:
-          description: Breaks raised
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        finished_at:
-          description: End
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        from_date:
-          description: Range start
-          format: date
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        matched_count:
-          description: Records matched
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        recon_source_id:
-          description: Source
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        started_at:
-          description: Start
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        to_date:
-          description: Range end
-          format: date
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - recon_source_id
-      - from_date
-      - to_date
-      - status
-      type: object
-    ReconRunCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        from_date:
-          description: Range start
-          format: date
-          type: string
-        recon_source_id:
-          description: Source
-          format: uuid
-          type: string
-        to_date:
-          description: Range end
-          format: date
-          type: string
-      required:
-      - recon_source_id
-      - from_date
-      - to_date
-      type: object
-    ReconRunPage:
-      description: One page of ReconRun results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconRun'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconSource:
-      description: A configured external source to reconcile (bank account, scheme, rail, partner)
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        delivery_channel:
-          description: SFTP, API, EMAIL, MANUAL_UPLOAD
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        file_format:
-          description: Expected file format
-          enum:
-          - CAMT_053
-          - CAMT_054
-          - MT940
-          - MT942
-          - BAI2
-          - CSV
-          - VISA_BASE2
-          - MASTERCARD_T112
-          - JSON
-          - CUSTOM
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Internal account it reconciles against
-          format: uuid
-          type:
-          - string
-          - 'null'
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        parser_config:
-          additionalProperties: true
-          description: Column mapping and parsing options
-          type:
-          - object
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        schedule_cron:
-          description: When files are expected
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        source_type:
-          description: Kind of source
-          enum:
-          - BANK_STATEMENT
-          - CARD_SCHEME
-          - PAYMENT_RAIL
-          - PARTNER_REPORT
-          - INTERNAL_LEDGER
-          - WALLET_OPERATOR
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - source_type
-      - file_format
-      - is_active
-      type: object
-    ReconSourceCreate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        delivery_channel:
-          description: SFTP, API, EMAIL, MANUAL_UPLOAD
-          maxLength: 32
-          type: string
-        file_format:
-          description: Expected file format
-          enum:
-          - CAMT_053
-          - CAMT_054
-          - MT940
-          - MT942
-          - BAI2
-          - CSV
-          - VISA_BASE2
-          - MASTERCARD_T112
-          - JSON
-          - CUSTOM
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Internal account it reconciles against
-          format: uuid
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        parser_config:
-          additionalProperties: true
-          description: Column mapping and parsing options
-          type: object
-        schedule_cron:
-          description: When files are expected
-          maxLength: 64
-          type: string
-        source_type:
-          description: Kind of source
-          enum:
-          - BANK_STATEMENT
-          - CARD_SCHEME
-          - PAYMENT_RAIL
-          - PARTNER_REPORT
-          - INTERNAL_LEDGER
-          - WALLET_OPERATOR
-          type: string
-      required:
-      - name
-      - source_type
-      - file_format
-      type: object
-    ReconSourcePage:
-      description: One page of ReconSource results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReconSource'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReconSourceUpdate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        delivery_channel:
-          description: SFTP, API, EMAIL, MANUAL_UPLOAD
-          maxLength: 32
-          type: string
-        file_format:
-          description: Expected file format
-          enum:
-          - CAMT_053
-          - CAMT_054
-          - MT940
-          - MT942
-          - BAI2
-          - CSV
-          - VISA_BASE2
-          - MASTERCARD_T112
-          - JSON
-          - CUSTOM
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Internal account it reconciles against
-          format: uuid
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        parser_config:
-          additionalProperties: true
-          description: Column mapping and parsing options
-          type: object
-        schedule_cron:
-          description: When files are expected
-          maxLength: 64
-          type: string
-        source_type:
-          description: Kind of source
-          enum:
-          - BANK_STATEMENT
-          - CARD_SCHEME
-          - PAYMENT_RAIL
-          - PARTNER_REPORT
-          - INTERNAL_LEDGER
-          - WALLET_OPERATOR
-          type: string
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            ledger:read: Read Ledger and Accounting
-            ledger:write: Change Ledger and Accounting
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            ledger:read: Read Ledger and Accounting
-            ledger:write: Change Ledger and Accounting
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — reconciliation-service
+  version: 1.0.0
   description: 'The single source of truth for money. A real-time, append-only double-entry ledger that every other service
     posts through, the general ledger and period close, and automated reconciliation.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — reconciliation-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Recon Sources
+  description: A configured external source to reconcile (bank account, scheme, rail, partner)
+- name: Recon Files
+  description: An imported statement or settlement file
+- name: Recon Rules
+  description: Matching rule, evaluated in priority order
+- name: Recon Runs
+  description: A matching run over a source and date range
+- name: Recon Matches
+  description: A confirmed link between external records and internal ledger entries. Append-only.
+- name: Recon Exceptions
+  description: A reconciliation break awaiting investigation
 paths:
   /v1/reconciliation/sources:
     get:
@@ -2999,23 +1310,1712 @@ paths:
       x-service: reconciliation-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-table: recon_exception
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A configured external source to reconcile (bank account, scheme, rail, partner)
-  name: Recon Sources
-- description: An imported statement or settlement file
-  name: Recon Files
-- description: Matching rule, evaluated in priority order
-  name: Recon Rules
-- description: A matching run over a source and date range
-  name: Recon Runs
-- description: A confirmed link between external records and internal ledger entries. Append-only.
-  name: Recon Matches
-- description: A reconciliation break awaiting investigation
-  name: Recon Exceptions
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    ReconSourcePage:
+      type: object
+      description: One page of ReconSource results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconSource'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconFilePage:
+      type: object
+      description: One page of ReconFile results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconFile'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconFilesImportRequest:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+          maxLength: 255
+        content:
+          type: string
+        records:
+          type: array
+          items: {}
+        statement_date:
+          type: string
+          format: date
+        opening_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        closing_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - recon_source_id
+      - file_name
+    ReconRecordPage:
+      type: object
+      description: One page of ReconRecord results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRecord'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRulePage:
+      type: object
+      description: One page of ReconRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRunPage:
+      type: object
+      description: One page of ReconRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconMatchPage:
+      type: object
+      description: One page of ReconMatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconMatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconMatchesUnmatchRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    ReconExceptionPage:
+      type: object
+      description: One page of ReconException results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconException'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconExceptionsAssignRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          maxLength: 64
+      required:
+      - assigned_to
+    ReconExceptionsResolveRequest:
+      type: object
+      properties:
+        resolution_note:
+          type: string
+        adjustment:
+          type: object
+          additionalProperties: true
+      required:
+      - resolution_note
+    ReconException:
+      type: object
+      description: A reconciliation break awaiting investigation
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_run_id:
+          type: string
+          format: uuid
+          description: Run
+        reason:
+          type: string
+          enum:
+          - MISSING_INTERNAL
+          - MISSING_EXTERNAL
+          - AMOUNT_MISMATCH
+          - DATE_MISMATCH
+          - DUPLICATE
+          - CURRENCY_MISMATCH
+          - OTHER
+          description: Break reason
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - RESOLVED
+          - WRITTEN_OFF
+          - IGNORED
+          description: Status
+        external_record_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: External record, if any
+        internal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal entry, if any
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Break amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        age_days:
+          type: integer
+          format: int32
+          description: Days open
+          readOnly: true
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Assignee
+        suggested_match:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: AI-suggested counterpart records with confidence
+          readOnly: true
+        resolution_note:
+          type:
+          - string
+          - 'null'
+          description: How it was resolved
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Resolution time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_run_id
+      - reason
+      - status
+      - amount
+      - currency
+      - age_days
+    ReconExceptionUpdate:
+      type: object
+      properties:
+        recon_run_id:
+          type: string
+          format: uuid
+          description: Run
+        reason:
+          type: string
+          enum:
+          - MISSING_INTERNAL
+          - MISSING_EXTERNAL
+          - AMOUNT_MISMATCH
+          - DATE_MISMATCH
+          - DUPLICATE
+          - CURRENCY_MISMATCH
+          - OTHER
+          description: Break reason
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - RESOLVED
+          - WRITTEN_OFF
+          - IGNORED
+          description: Status
+        external_record_id:
+          type: string
+          format: uuid
+          description: External record, if any
+        internal_entry_id:
+          type: string
+          format: uuid
+          description: Internal entry, if any
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Break amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Assignee
+        resolution_note:
+          type: string
+          description: How it was resolved
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ReconFile:
+      type: object
+      description: An imported statement or settlement file
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source
+        file_name:
+          type: string
+          maxLength: 255
+          description: Original file name
+        file_uri:
+          type: string
+          maxLength: 500
+          description: Storage location
+          readOnly: true
+        checksum:
+          type: string
+          maxLength: 64
+          description: SHA-256, used to reject duplicates
+          readOnly: true
+        statement_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Statement / settlement date
+        opening_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Opening balance stated in the file
+        closing_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Closing balance stated in the file
+        record_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines parsed
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - PARSING
+          - PARSED
+          - FAILED
+          - MATCHED
+          description: Processing status
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Parsing error
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_source_id
+      - file_name
+      - file_uri
+      - checksum
+      - status
+    ReconMatch:
+      type: object
+      description: A confirmed link between external records and internal ledger entries. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        recon_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run that produced it (empty when manual)
+        recon_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule that matched
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        external_record_ids:
+          type: array
+          items: {}
+          description: recon_record ids (sorted)
+        internal_entry_ids:
+          type: array
+          items: {}
+          description: ledger_entry ids (sorted)
+        difference:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Residual difference within tolerance
+        confidence:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: AI / rule confidence 0..1
+        confirmed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who confirmed a manual or suggested match
+        unmatched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Set via a new compensating match record when undone
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - match_type
+      - external_record_ids
+      - internal_entry_ids
+      - difference
+    ReconMatchCreate:
+      type: object
+      properties:
+        recon_run_id:
+          type: string
+          format: uuid
+          description: Run that produced it (empty when manual)
+        recon_rule_id:
+          type: string
+          format: uuid
+          description: Rule that matched
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        external_record_ids:
+          type: array
+          items: {}
+          description: recon_record ids (sorted)
+        internal_entry_ids:
+          type: array
+          items: {}
+          description: ledger_entry ids (sorted)
+        difference:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Residual difference within tolerance
+        confidence:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: AI / rule confidence 0..1
+        confirmed_by:
+          type: string
+          maxLength: 64
+          description: Who confirmed a manual or suggested match
+        unmatched_at:
+          type: string
+          format: date-time
+          description: Set via a new compensating match record when undone
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - match_type
+      - external_record_ids
+      - internal_entry_ids
+    ReconRecord:
+      type: object
+      description: One external line (statement line, settlement record). Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        recon_file_id:
+          type: string
+          format: uuid
+          description: File
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source
+        external_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Bank / scheme reference
+        end_to_end_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: ISO 20022 end-to-end id when present
+        value_date:
+          type: string
+          format: date
+          description: Value date
+        booking_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Booking date
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit from the source's view
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        counterparty:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Counterparty name / account
+        narrative:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Description
+        raw:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Original parsed line
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - recon_file_id
+      - recon_source_id
+      - value_date
+      - direction
+      - amount
+      - currency
+    ReconRule:
+      type: object
+      description: Matching rule, evaluated in priority order
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source (empty = all sources)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower runs first
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        match_fields:
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+        amount_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Allowed absolute amount difference
+        date_tolerance_days:
+          type: integer
+          format: int32
+          description: Allowed value-date difference
+        auto_confirm:
+          type: boolean
+          description: Confirm matches without review
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - priority
+      - match_type
+      - match_fields
+      - amount_tolerance
+      - date_tolerance_days
+      - auto_confirm
+      - is_active
+    ReconRuleCreate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = all sources)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower runs first
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        match_fields:
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+        amount_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Allowed absolute amount difference
+        date_tolerance_days:
+          type: integer
+          format: int32
+          description: Allowed value-date difference
+        auto_confirm:
+          type: boolean
+          description: Confirm matches without review
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - match_type
+      - match_fields
+    ReconRuleUpdate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = all sources)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower runs first
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        match_fields:
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+        amount_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Allowed absolute amount difference
+        date_tolerance_days:
+          type: integer
+          format: int32
+          description: Allowed value-date difference
+        auto_confirm:
+          type: boolean
+          description: Confirm matches without review
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ReconRun:
+      type: object
+      description: A matching run over a source and date range
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source
+        from_date:
+          type: string
+          format: date
+          description: Range start
+        to_date:
+          type: string
+          format: date
+          description: Range end
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        matched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched
+          readOnly: true
+        exception_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Breaks raised
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_source_id
+      - from_date
+      - to_date
+      - status
+    ReconRunCreate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source
+        from_date:
+          type: string
+          format: date
+          description: Range start
+        to_date:
+          type: string
+          format: date
+          description: Range end
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - recon_source_id
+      - from_date
+      - to_date
+    ReconSource:
+      type: object
+      description: A configured external source to reconcile (bank account, scheme, rail, partner)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        source_type:
+          type: string
+          enum:
+          - BANK_STATEMENT
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - PARTNER_REPORT
+          - INTERNAL_LEDGER
+          - WALLET_OPERATOR
+          description: Kind of source
+        file_format:
+          type: string
+          enum:
+          - CAMT_053
+          - CAMT_054
+          - MT940
+          - MT942
+          - BAI2
+          - CSV
+          - VISA_BASE2
+          - MASTERCARD_T112
+          - JSON
+          - CUSTOM
+          description: Expected file format
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal account it reconciles against
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        delivery_channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: SFTP, API, EMAIL, MANUAL_UPLOAD
+        schedule_cron:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: When files are expected
+        parser_config:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Column mapping and parsing options
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - source_type
+      - file_format
+      - is_active
+    ReconSourceCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        source_type:
+          type: string
+          enum:
+          - BANK_STATEMENT
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - PARTNER_REPORT
+          - INTERNAL_LEDGER
+          - WALLET_OPERATOR
+          description: Kind of source
+        file_format:
+          type: string
+          enum:
+          - CAMT_053
+          - CAMT_054
+          - MT940
+          - MT942
+          - BAI2
+          - CSV
+          - VISA_BASE2
+          - MASTERCARD_T112
+          - JSON
+          - CUSTOM
+          description: Expected file format
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Internal account it reconciles against
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        delivery_channel:
+          type: string
+          maxLength: 32
+          description: SFTP, API, EMAIL, MANUAL_UPLOAD
+        schedule_cron:
+          type: string
+          maxLength: 64
+          description: When files are expected
+        parser_config:
+          type: object
+          additionalProperties: true
+          description: Column mapping and parsing options
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - source_type
+      - file_format
+    ReconSourceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        source_type:
+          type: string
+          enum:
+          - BANK_STATEMENT
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - PARTNER_REPORT
+          - INTERNAL_LEDGER
+          - WALLET_OPERATOR
+          description: Kind of source
+        file_format:
+          type: string
+          enum:
+          - CAMT_053
+          - CAMT_054
+          - MT940
+          - MT942
+          - BAI2
+          - CSV
+          - VISA_BASE2
+          - MASTERCARD_T112
+          - JSON
+          - CUSTOM
+          description: Expected file format
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Internal account it reconciles against
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        delivery_channel:
+          type: string
+          maxLength: 32
+          description: SFTP, API, EMAIL, MANUAL_UPLOAD
+        schedule_cron:
+          type: string
+          maxLength: 64
+          description: When files are expected
+        parser_config:
+          type: object
+          additionalProperties: true
+          description: Column mapping and parsing options
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting

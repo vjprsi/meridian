@@ -1,1502 +1,29 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    CardAuthorization:
-      description: One authorisation message and its decision (auth, incremental, reversal, advice)
-      properties:
-        acquirer_id:
-          description: Acquiring institution id (DE32)
-          maxLength: 16
-          type:
-          - string
-          - 'null'
-        approved_amount:
-          description: Approved amount (partial approvals)
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        auth_code:
-          description: Approval code (DE38)
-          maxLength: 6
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        avs_result:
-          description: Address verification result
-          maxLength: 1
-          type:
-          - string
-          - 'null'
-        billing_amount:
-          description: Amount in card billing currency (DE6)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        billing_currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        card_id:
-          description: Card
-          format: uuid
-          type: string
-        card_present:
-          description: Card present
-          type: boolean
-        card_program_id:
-          description: Program
-          format: uuid
-          type: string
-        card_token_id:
-          description: Network token used, if any
-          format: uuid
-          type:
-          - string
-          - 'null'
-        cardholder_present:
-          description: Cardholder present
-          type: boolean
-        channel:
-          description: Channel
-          enum:
-          - ECOM
-          - POS
-          - ATM
-          - CONTACTLESS
-          - MOTO
-          - RECURRING
-          - ANY
-          type: string
-        cleared_amount:
-          description: Amount cleared so far
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        conversion_rate:
-          description: Billing conversion rate
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Cardholder
-          format: uuid
-          type:
-          - string
-          - 'null'
-        cvv_result:
-          description: CVV2 verification result
-          maxLength: 1
-          type:
-          - string
-          - 'null'
-        decision:
-          description: Decision
-          enum:
-          - APPROVED
-          - DECLINED
-          - PARTIAL
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        decline_reason:
-          description: Internal decline reason
-          enum:
-          - INSUFFICIENT_FUNDS
-          - CARD_INACTIVE
-          - CARD_FROZEN
-          - CARD_EXPIRED
-          - INVALID_PIN
-          - PIN_TRIES_EXCEEDED
-          - CONTROL_MCC
-          - CONTROL_MERCHANT
-          - CONTROL_COUNTRY
-          - CONTROL_CHANNEL
-          - LIMIT_EXCEEDED
-          - VELOCITY_EXCEEDED
-          - FRAUD_SUSPECTED
-          - JIT_DECLINED
-          - JIT_TIMEOUT
-          - INVALID_CVV
-          - INVALID_EXPIRY
-          - THREEDS_FAILED
-          - SYSTEM_ERROR
-          - OTHER
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        eci:
-          description: Electronic commerce indicator
-          maxLength: 2
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Time the hold auto-releases
-          format: date-time
-          type:
-          - string
-          - 'null'
-        fraud_alert_id:
-          description: Fraud alert raised
-          format: uuid
-          type:
-          - string
-          - 'null'
-        fraud_score:
-          description: Fraud score 0-1000
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        fx_markup:
-          description: Issuer FX markup
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        hold_id:
-          description: Ledger hold placed
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_international:
-          description: Cross-border
-          type: boolean
-        is_recurring:
-          description: Recurring / credential on file
-          type: boolean
-        jit_latency_ms:
-          description: JIT round-trip latency
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        jit_result:
-          description: JIT outcome
-          enum:
-          - APPROVED
-          - DECLINED
-          - TIMEOUT
-          - ERROR
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        jit_used:
-          description: JIT funding was called
-          readOnly: true
-          type: boolean
-        mcc:
-          description: Merchant category code
-          maxLength: 4
-          type:
-          - string
-          - 'null'
-        merchant_city:
-          description: Merchant city
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        merchant_country:
-          description: Merchant country (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        merchant_id:
-          description: Card acceptor id (DE42)
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        merchant_name:
-          description: Card acceptor name
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        message_type:
-          description: Message type
-          enum:
-          - AUTHORIZATION
-          - FINANCIAL
-          - INCREMENTAL
-          - REVERSAL
-          - PARTIAL_REVERSAL
-          - ADVICE
-          - BALANCE_INQUIRY
-          - ACCOUNT_VERIFICATION
-          - REFUND_AUTH
-          type: string
-        mti:
-          description: ISO 8583 message type indicator
-          maxLength: 4
-          type: string
-        network_transaction_id:
-          description: Scheme transaction id (trace id / banknet ref)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        parent_authorization_id:
-          description: Original auth for incremental, reversal or advice
-          format: uuid
-          type:
-          - string
-          - 'null'
-        pin_verified:
-          description: PIN verification outcome
-          type:
-          - boolean
-          - 'null'
-        pos_entry_mode:
-          description: POS entry mode
-          enum:
-          - CHIP
-          - CONTACTLESS
-          - MAGSTRIPE
-          - MANUAL
-          - ECOMMERCE
-          - CREDENTIAL_ON_FILE
-          - TOKEN
-          - FALLBACK
-          - UNKNOWN
-          type: string
-        processing_code:
-          description: ISO 8583 DE3
-          maxLength: 6
-          type:
-          - string
-          - 'null'
-        processing_time_ms:
-          description: End-to-end decision time inside Meridian
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        raw_message:
-          additionalProperties: true
-          description: Parsed ISO 8583 fields (sensitive fields removed)
-          type:
-          - object
-          - 'null'
-        response_code:
-          description: ISO response code (DE39)
-          maxLength: 3
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        rrn:
-          description: Retrieval reference number (DE37)
-          maxLength: 12
-          type:
-          - string
-          - 'null'
-        settlement_amount:
-          description: Settlement amount (DE5)
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        settlement_currency:
-          description: Settlement currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        stan:
-          description: System trace audit number (DE11)
-          maxLength: 12
-          type:
-          - string
-          - 'null'
-        stand_in:
-          description: Decided in stand-in
-          readOnly: true
-          type: boolean
-        status:
-          description: Lifecycle status
-          enum:
-          - PENDING
-          - APPROVED
-          - DECLINED
-          - REVERSED
-          - PARTIALLY_REVERSED
-          - EXPIRED
-          - CLEARED
-          - PARTIALLY_CLEARED
-          readOnly: true
-          type: string
-        terminal_id:
-          description: Terminal id (DE41)
-          maxLength: 16
-          type:
-          - string
-          - 'null'
-        threeds_authentication_id:
-          description: 3DS authentication
-          format: uuid
-          type:
-          - string
-          - 'null'
-        transaction_amount:
-          description: Amount in transaction currency (DE4)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        transaction_currency:
-          description: Transaction currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - card_id
-      - card_program_id
-      - message_type
-      - mti
-      - pos_entry_mode
-      - channel
-      - card_present
-      - cardholder_present
-      - transaction_amount
-      - transaction_currency
-      - billing_amount
-      - billing_currency
-      - status
-      - jit_used
-      - stand_in
-      - is_recurring
-      - is_international
-      - cleared_amount
-      type: object
-    CardAuthorizationPage:
-      description: One page of CardAuthorization results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardAuthorization'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardAuthorizationRule:
-      description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
-      properties:
-        action:
-          description: Action when the condition is true
-          enum:
-          - APPROVE
-          - DECLINE
-          - REVIEW
-          - STEP_UP
-          type: string
-        card_program_id:
-          description: Program (empty = all programs)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        condition_expression:
-          description: CEL expression over the authorisation context
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decline_reason:
-          description: Decline reason when action is DECLINE
-          enum:
-          - INSUFFICIENT_FUNDS
-          - CARD_INACTIVE
-          - CARD_FROZEN
-          - CARD_EXPIRED
-          - INVALID_PIN
-          - PIN_TRIES_EXCEEDED
-          - CONTROL_MCC
-          - CONTROL_MERCHANT
-          - CONTROL_COUNTRY
-          - CONTROL_CHANNEL
-          - LIMIT_EXCEEDED
-          - VELOCITY_EXCEEDED
-          - FRAUD_SUSPECTED
-          - JIT_DECLINED
-          - JIT_TIMEOUT
-          - INVALID_CVV
-          - INVALID_EXPIRY
-          - THREEDS_FAILED
-          - SYSTEM_ERROR
-          - OTHER
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Start
-          format: date-time
-          type:
-          - string
-          - 'null'
-        valid_to:
-          description: End
-          format: date-time
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - priority
-      - condition_expression
-      - action
-      - is_active
-      type: object
-    CardAuthorizationRuleCreate:
-      properties:
-        action:
-          description: Action when the condition is true
-          enum:
-          - APPROVE
-          - DECLINE
-          - REVIEW
-          - STEP_UP
-          type: string
-        card_program_id:
-          description: Program (empty = all programs)
-          format: uuid
-          type: string
-        condition_expression:
-          description: CEL expression over the authorisation context
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        decline_reason:
-          description: Decline reason when action is DECLINE
-          enum:
-          - INSUFFICIENT_FUNDS
-          - CARD_INACTIVE
-          - CARD_FROZEN
-          - CARD_EXPIRED
-          - INVALID_PIN
-          - PIN_TRIES_EXCEEDED
-          - CONTROL_MCC
-          - CONTROL_MERCHANT
-          - CONTROL_COUNTRY
-          - CONTROL_CHANNEL
-          - LIMIT_EXCEEDED
-          - VELOCITY_EXCEEDED
-          - FRAUD_SUSPECTED
-          - JIT_DECLINED
-          - JIT_TIMEOUT
-          - INVALID_CVV
-          - INVALID_EXPIRY
-          - THREEDS_FAILED
-          - SYSTEM_ERROR
-          - OTHER
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        valid_from:
-          description: Start
-          format: date-time
-          type: string
-        valid_to:
-          description: End
-          format: date-time
-          type: string
-      required:
-      - name
-      - condition_expression
-      - action
-      type: object
-    CardAuthorizationRulePage:
-      description: One page of CardAuthorizationRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardAuthorizationRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardAuthorizationRuleUpdate:
-      properties:
-        action:
-          description: Action when the condition is true
-          enum:
-          - APPROVE
-          - DECLINE
-          - REVIEW
-          - STEP_UP
-          type: string
-        card_program_id:
-          description: Program (empty = all programs)
-          format: uuid
-          type: string
-        condition_expression:
-          description: CEL expression over the authorisation context
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        decline_reason:
-          description: Decline reason when action is DECLINE
-          enum:
-          - INSUFFICIENT_FUNDS
-          - CARD_INACTIVE
-          - CARD_FROZEN
-          - CARD_EXPIRED
-          - INVALID_PIN
-          - PIN_TRIES_EXCEEDED
-          - CONTROL_MCC
-          - CONTROL_MERCHANT
-          - CONTROL_COUNTRY
-          - CONTROL_CHANNEL
-          - LIMIT_EXCEEDED
-          - VELOCITY_EXCEEDED
-          - FRAUD_SUSPECTED
-          - JIT_DECLINED
-          - JIT_TIMEOUT
-          - INVALID_CVV
-          - INVALID_EXPIRY
-          - THREEDS_FAILED
-          - SYSTEM_ERROR
-          - OTHER
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        valid_from:
-          description: Start
-          format: date-time
-          type: string
-        valid_to:
-          description: End
-          format: date-time
-          type: string
-      type: object
-    CardAuthorizationRulesTestRequest:
-      properties:
-        sample:
-          additionalProperties: true
-          type: object
-      required:
-      - sample
-      type: object
-    CardAuthorizationsExpireRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    CardAuthorizationsSimulateClearingRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - amount
-      type: object
-    CardAuthorizationsSimulateIncrementalRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - amount
-      type: object
-    CardAuthorizationsSimulateRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        card_id:
-          format: uuid
-          type: string
-        channel:
-          enum:
-          - ECOM
-          - POS
-          - ATM
-          - CONTACTLESS
-          - MOTO
-          - RECURRING
-          - ANY
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        mcc:
-          maxLength: 4
-          type: string
-        merchant_country:
-          description: ISO 3166-1 alpha-2
-          pattern: ^[A-Z]{2}$
-          type: string
-        merchant_name:
-          maxLength: 64
-          type: string
-      required:
-      - card_id
-      - amount
-      - currency
-      type: object
-    CardAuthorizationsSimulateReversalRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    CardJitFundingRequest:
-      description: Immutable log of JIT funding calls to the client's endpoint
-      properties:
-        approved_amount:
-          description: Amount approved by the client
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        card_authorization_id:
-          description: Authorisation
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        endpoint:
-          description: Endpoint called
-          maxLength: 500
-          type: string
-        http_status:
-          description: HTTP status
-          format: int32
-          type:
-          - integer
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        latency_ms:
-          description: Latency
-          format: int32
-          type: integer
-        request_amount:
-          description: Amount requested
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        response_body:
-          additionalProperties: true
-          description: Response (truncated)
-          type:
-          - object
-          - 'null'
-        result:
-          description: Outcome
-          enum:
-          - APPROVED
-          - DECLINED
-          - TIMEOUT
-          - ERROR
-          type: string
-      required:
-      - id
-      - created_at
-      - card_authorization_id
-      - endpoint
-      - request_amount
-      - currency
-      - result
-      - latency_ms
-      type: object
-    CardJitFundingRequestPage:
-      description: One page of CardJitFundingRequest results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardJitFundingRequest'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardStandInRecord:
-      description: Authorisation approved in stand-in, awaiting replay against the ledger
-      properties:
-        amount:
-          description: Amount approved in stand-in
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        card_authorization_id:
-          description: Authorisation
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        hold_id:
-          description: Hold created on replay
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        replay_result:
-          description: POSTED, OVERDRAWN, FAILED
-          maxLength: 32
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        replayed:
-          description: Replayed to the ledger
-          readOnly: true
-          type: boolean
-        replayed_at:
-          description: Replay time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - card_authorization_id
-      - amount
-      - currency
-      - replayed
-      type: object
-    CardStandInRecordPage:
-      description: One page of CardStandInRecord results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardStandInRecord'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ClearingRecord:
-      description: One clearing record (presentment, refund, chargeback, fee). Append-only.
-      properties:
-        arn:
-          description: Acquirer reference number
-          maxLength: 23
-          type:
-          - string
-          - 'null'
-        auth_code:
-          description: Approval code
-          maxLength: 6
-          type:
-          - string
-          - 'null'
-        billing_amount:
-          description: Amount in billing currency
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        billing_currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        card_authorization_id:
-          description: Matched authorisation
-          format: uuid
-          type:
-          - string
-          - 'null'
-        card_id:
-          description: Card
-          format: uuid
-          type:
-          - string
-          - 'null'
-        clearing_file_id:
-          description: File
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        interchange_amount:
-          description: Interchange (issuer income or cost)
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        interchange_rate_code:
-          description: Interchange program / rate designator
-          maxLength: 16
-          type:
-          - string
-          - 'null'
-        journal_entry_id:
-          description: Ledger posting
-          format: uuid
-          type:
-          - string
-          - 'null'
-        match_status:
-          description: Match result
-          enum:
-          - MATCHED
-          - FORCE_POST
-          - UNMATCHED
-          - EXCEPTION
-          type: string
-        mcc:
-          description: MCC
-          maxLength: 4
-          type:
-          - string
-          - 'null'
-        merchant_id:
-          description: Merchant id
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        merchant_name:
-          description: Merchant name
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        network_transaction_id:
-          description: Scheme transaction id
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        raw:
-          additionalProperties: true
-          description: Parsed record (sensitive fields removed)
-          type:
-          - object
-          - 'null'
-        record_type:
-          description: Record type
-          enum:
-          - PRESENTMENT
-          - REFUND
-          - REVERSAL
-          - CHARGEBACK
-          - REPRESENTMENT
-          - FEE_COLLECTION
-          - FUNDS_DISBURSEMENT
-          type: string
-        scheme_fee_amount:
-          description: Scheme fees
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        settlement_amount:
-          description: Amount in settlement currency
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        settlement_currency:
-          description: Settlement currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        transaction_amount:
-          description: Amount in transaction currency
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        transaction_currency:
-          description: Transaction currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        transaction_date:
-          description: Transaction date
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - clearing_file_id
-      - record_type
-      - match_status
-      - transaction_date
-      - transaction_amount
-      - transaction_currency
-      - billing_amount
-      - billing_currency
-      - settlement_amount
-      - settlement_currency
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            cards:read: Read Card Issuing and Processing
-            cards:write: Change Card Issuing and Processing
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            cards:read: Read Card Issuing and Processing
-            cards:write: Change Card Issuing and Processing
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — card-authorization-service
+  version: 1.0.0
   description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
     vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
     clearing and settlement, interchange and fees, and scheme disputes.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — card-authorization-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Card Authorizations
+  description: Read authorisations; simulate them in sandbox. Live authorisations arrive through the ISO 8583 gateway.
+- name: Card Stand In Records
+  description: Authorisation approved in stand-in, awaiting replay against the ledger
+- name: Card Authorization Rules
+  description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
 paths:
   /v1/card-authorizations:
     get:
@@ -2377,17 +904,1490 @@ paths:
       x-service: card-authorization-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-table: card_authorization_rule
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: Read authorisations; simulate them in sandbox. Live authorisations arrive through the ISO 8583 gateway.
-  name: Card Authorizations
-- description: Authorisation approved in stand-in, awaiting replay against the ledger
-  name: Card Stand In Records
-- description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
-  name: Card Authorization Rules
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CardAuthorizationPage:
+      type: object
+      description: One page of CardAuthorization results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardAuthorization'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardAuthorizationsSimulateRequest:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        mcc:
+          type: string
+          maxLength: 4
+        merchant_name:
+          type: string
+          maxLength: 64
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        channel:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+      required:
+      - card_id
+      - amount
+      - currency
+    CardAuthorizationsSimulateReversalRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+    CardAuthorizationsSimulateIncrementalRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - amount
+    CardAuthorizationsSimulateClearingRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - amount
+    CardAuthorizationsExpireRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    CardJitFundingRequestPage:
+      type: object
+      description: One page of CardJitFundingRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardJitFundingRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardStandInRecordPage:
+      type: object
+      description: One page of CardStandInRecord results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardStandInRecord'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardAuthorizationRulePage:
+      type: object
+      description: One page of CardAuthorizationRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardAuthorizationRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardAuthorizationRulesTestRequest:
+      type: object
+      properties:
+        sample:
+          type: object
+          additionalProperties: true
+      required:
+      - sample
+    CardAuthorization:
+      type: object
+      description: One authorisation message and its decision (auth, incremental, reversal, advice)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder
+        message_type:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - FINANCIAL
+          - INCREMENTAL
+          - REVERSAL
+          - PARTIAL_REVERSAL
+          - ADVICE
+          - BALANCE_INQUIRY
+          - ACCOUNT_VERIFICATION
+          - REFUND_AUTH
+          description: Message type
+        mti:
+          type: string
+          maxLength: 4
+          description: ISO 8583 message type indicator
+        processing_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 6
+          description: ISO 8583 DE3
+        stan:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+          description: System trace audit number (DE11)
+        rrn:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+          description: Retrieval reference number (DE37)
+        auth_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 6
+          description: Approval code (DE38)
+          readOnly: true
+        response_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 3
+          description: ISO response code (DE39)
+          readOnly: true
+        network_transaction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Scheme transaction id (trace id / banknet ref)
+        parent_authorization_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Original auth for incremental, reversal or advice
+        pos_entry_mode:
+          type: string
+          enum:
+          - CHIP
+          - CONTACTLESS
+          - MAGSTRIPE
+          - MANUAL
+          - ECOMMERCE
+          - CREDENTIAL_ON_FILE
+          - TOKEN
+          - FALLBACK
+          - UNKNOWN
+          description: POS entry mode
+        channel:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          description: Channel
+        card_present:
+          type: boolean
+          description: Card present
+        cardholder_present:
+          type: boolean
+          description: Cardholder present
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Card acceptor id (DE42)
+        merchant_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Card acceptor name
+        merchant_city:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant city
+        merchant_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
+        mcc:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Merchant category code
+        acquirer_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Acquiring institution id (DE32)
+        terminal_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Terminal id (DE41)
+        transaction_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in transaction currency (DE4)
+        transaction_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Transaction currency (ISO 4217)
+        billing_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in card billing currency (DE6)
+        billing_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        settlement_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Settlement amount (DE5)
+        settlement_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Settlement currency (ISO 4217)
+        conversion_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Billing conversion rate
+        fx_markup:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Issuer FX markup
+        approved_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Approved amount (partial approvals)
+          readOnly: true
+        decision:
+          type:
+          - string
+          - 'null'
+          enum:
+          - APPROVED
+          - DECLINED
+          - PARTIAL
+          description: Decision
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INSUFFICIENT_FUNDS
+          - CARD_INACTIVE
+          - CARD_FROZEN
+          - CARD_EXPIRED
+          - INVALID_PIN
+          - PIN_TRIES_EXCEEDED
+          - CONTROL_MCC
+          - CONTROL_MERCHANT
+          - CONTROL_COUNTRY
+          - CONTROL_CHANNEL
+          - LIMIT_EXCEEDED
+          - VELOCITY_EXCEEDED
+          - FRAUD_SUSPECTED
+          - JIT_DECLINED
+          - JIT_TIMEOUT
+          - INVALID_CVV
+          - INVALID_EXPIRY
+          - THREEDS_FAILED
+          - SYSTEM_ERROR
+          - OTHER
+          description: Internal decline reason
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - APPROVED
+          - DECLINED
+          - REVERSED
+          - PARTIALLY_REVERSED
+          - EXPIRED
+          - CLEARED
+          - PARTIALLY_CLEARED
+          description: Lifecycle status
+          readOnly: true
+        fraud_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Fraud score 0-1000
+          readOnly: true
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud alert raised
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger hold placed
+        jit_used:
+          type: boolean
+          description: JIT funding was called
+          readOnly: true
+        jit_result:
+          type:
+          - string
+          - 'null'
+          enum:
+          - APPROVED
+          - DECLINED
+          - TIMEOUT
+          - ERROR
+          description: JIT outcome
+          readOnly: true
+        jit_latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: JIT round-trip latency
+          readOnly: true
+        stand_in:
+          type: boolean
+          description: Decided in stand-in
+          readOnly: true
+        card_token_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Network token used, if any
+        threeds_authentication_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 3DS authentication
+        eci:
+          type:
+          - string
+          - 'null'
+          maxLength: 2
+          description: Electronic commerce indicator
+        cvv_result:
+          type:
+          - string
+          - 'null'
+          maxLength: 1
+          description: CVV2 verification result
+        avs_result:
+          type:
+          - string
+          - 'null'
+          maxLength: 1
+          description: Address verification result
+        pin_verified:
+          type:
+          - boolean
+          - 'null'
+          description: PIN verification outcome
+        is_recurring:
+          type: boolean
+          description: Recurring / credential on file
+        is_international:
+          type: boolean
+          description: Cross-border
+        processing_time_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: End-to-end decision time inside Meridian
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the hold auto-releases
+        cleared_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount cleared so far
+          readOnly: true
+        raw_message:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Parsed ISO 8583 fields (sensitive fields removed)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - card_program_id
+      - message_type
+      - mti
+      - pos_entry_mode
+      - channel
+      - card_present
+      - cardholder_present
+      - transaction_amount
+      - transaction_currency
+      - billing_amount
+      - billing_currency
+      - status
+      - jit_used
+      - stand_in
+      - is_recurring
+      - is_international
+      - cleared_amount
+    CardAuthorizationRule:
+      type: object
+      description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program (empty = all programs)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        condition_expression:
+          type: string
+          description: CEL expression over the authorisation context
+        action:
+          type: string
+          enum:
+          - APPROVE
+          - DECLINE
+          - REVIEW
+          - STEP_UP
+          description: Action when the condition is true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INSUFFICIENT_FUNDS
+          - CARD_INACTIVE
+          - CARD_FROZEN
+          - CARD_EXPIRED
+          - INVALID_PIN
+          - PIN_TRIES_EXCEEDED
+          - CONTROL_MCC
+          - CONTROL_MERCHANT
+          - CONTROL_COUNTRY
+          - CONTROL_CHANNEL
+          - LIMIT_EXCEEDED
+          - VELOCITY_EXCEEDED
+          - FRAUD_SUSPECTED
+          - JIT_DECLINED
+          - JIT_TIMEOUT
+          - INVALID_CVV
+          - INVALID_EXPIRY
+          - THREEDS_FAILED
+          - SYSTEM_ERROR
+          - OTHER
+          description: Decline reason when action is DECLINE
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - priority
+      - condition_expression
+      - action
+      - is_active
+    CardAuthorizationRuleCreate:
+      type: object
+      properties:
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program (empty = all programs)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        condition_expression:
+          type: string
+          description: CEL expression over the authorisation context
+        action:
+          type: string
+          enum:
+          - APPROVE
+          - DECLINE
+          - REVIEW
+          - STEP_UP
+          description: Action when the condition is true
+        decline_reason:
+          type: string
+          enum:
+          - INSUFFICIENT_FUNDS
+          - CARD_INACTIVE
+          - CARD_FROZEN
+          - CARD_EXPIRED
+          - INVALID_PIN
+          - PIN_TRIES_EXCEEDED
+          - CONTROL_MCC
+          - CONTROL_MERCHANT
+          - CONTROL_COUNTRY
+          - CONTROL_CHANNEL
+          - LIMIT_EXCEEDED
+          - VELOCITY_EXCEEDED
+          - FRAUD_SUSPECTED
+          - JIT_DECLINED
+          - JIT_TIMEOUT
+          - INVALID_CVV
+          - INVALID_EXPIRY
+          - THREEDS_FAILED
+          - SYSTEM_ERROR
+          - OTHER
+          description: Decline reason when action is DECLINE
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date-time
+          description: Start
+        valid_to:
+          type: string
+          format: date-time
+          description: End
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - condition_expression
+      - action
+    CardAuthorizationRuleUpdate:
+      type: object
+      properties:
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program (empty = all programs)
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        condition_expression:
+          type: string
+          description: CEL expression over the authorisation context
+        action:
+          type: string
+          enum:
+          - APPROVE
+          - DECLINE
+          - REVIEW
+          - STEP_UP
+          description: Action when the condition is true
+        decline_reason:
+          type: string
+          enum:
+          - INSUFFICIENT_FUNDS
+          - CARD_INACTIVE
+          - CARD_FROZEN
+          - CARD_EXPIRED
+          - INVALID_PIN
+          - PIN_TRIES_EXCEEDED
+          - CONTROL_MCC
+          - CONTROL_MERCHANT
+          - CONTROL_COUNTRY
+          - CONTROL_CHANNEL
+          - LIMIT_EXCEEDED
+          - VELOCITY_EXCEEDED
+          - FRAUD_SUSPECTED
+          - JIT_DECLINED
+          - JIT_TIMEOUT
+          - INVALID_CVV
+          - INVALID_EXPIRY
+          - THREEDS_FAILED
+          - SYSTEM_ERROR
+          - OTHER
+          description: Decline reason when action is DECLINE
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date-time
+          description: Start
+        valid_to:
+          type: string
+          format: date-time
+          description: End
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CardJitFundingRequest:
+      type: object
+      description: Immutable log of JIT funding calls to the client's endpoint
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        card_authorization_id:
+          type: string
+          format: uuid
+          description: Authorisation
+        endpoint:
+          type: string
+          maxLength: 500
+          description: Endpoint called
+        request_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount requested
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        result:
+          type: string
+          enum:
+          - APPROVED
+          - DECLINED
+          - TIMEOUT
+          - ERROR
+          description: Outcome
+        approved_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount approved by the client
+        http_status:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: HTTP status
+        latency_ms:
+          type: integer
+          format: int32
+          description: Latency
+        response_body:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Response (truncated)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - card_authorization_id
+      - endpoint
+      - request_amount
+      - currency
+      - result
+      - latency_ms
+    CardStandInRecord:
+      type: object
+      description: Authorisation approved in stand-in, awaiting replay against the ledger
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_authorization_id:
+          type: string
+          format: uuid
+          description: Authorisation
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount approved in stand-in
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        replayed:
+          type: boolean
+          description: Replayed to the ledger
+          readOnly: true
+        replayed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Replay time
+          readOnly: true
+        replay_result:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: POSTED, OVERDRAWN, FAILED
+          readOnly: true
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Hold created on replay
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_authorization_id
+      - amount
+      - currency
+      - replayed
+    ClearingRecord:
+      type: object
+      description: One clearing record (presentment, refund, chargeback, fee). Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        clearing_file_id:
+          type: string
+          format: uuid
+          description: File
+        record_type:
+          type: string
+          enum:
+          - PRESENTMENT
+          - REFUND
+          - REVERSAL
+          - CHARGEBACK
+          - REPRESENTMENT
+          - FEE_COLLECTION
+          - FUNDS_DISBURSEMENT
+          description: Record type
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card
+        card_authorization_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Matched authorisation
+        match_status:
+          type: string
+          enum:
+          - MATCHED
+          - FORCE_POST
+          - UNMATCHED
+          - EXCEPTION
+          description: Match result
+        network_transaction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Scheme transaction id
+        arn:
+          type:
+          - string
+          - 'null'
+          maxLength: 23
+          description: Acquirer reference number
+        auth_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 6
+          description: Approval code
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Merchant id
+        merchant_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant name
+        mcc:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: MCC
+        transaction_date:
+          type: string
+          format: date
+          description: Transaction date
+        transaction_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in transaction currency
+        transaction_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Transaction currency (ISO 4217)
+        billing_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in billing currency
+        billing_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        settlement_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in settlement currency
+        settlement_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Settlement currency (ISO 4217)
+        interchange_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Interchange (issuer income or cost)
+        interchange_rate_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Interchange program / rate designator
+        scheme_fee_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme fees
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting
+        raw:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Parsed record (sensitive fields removed)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - clearing_file_id
+      - record_type
+      - match_status
+      - transaction_date
+      - transaction_amount
+      - transaction_currency
+      - billing_amount
+      - billing_currency
+      - settlement_amount
+      - settlement_currency
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing

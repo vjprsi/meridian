@@ -1,2291 +1,38 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    AccountBalance:
-      description: Current balances per ledger account, updated in the same transaction as each posting
-      properties:
-        account_version:
-          description: Last applied ledger entry version
-          format: int64
-          readOnly: true
-          type: integer
-        available_balance:
-          description: Posted - pending debits + overdraft limit
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        last_entry_at:
-          description: Time of the last posting
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        ledger_account_id:
-          description: Account
-          format: uuid
-          type: string
-        pending_credits:
-          description: Pending credits not yet available
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        pending_debits:
-          description: Active holds and pending debits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_balance:
-          description: Posted (ledger) balance in normal-balance terms
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_credits:
-          description: Lifetime posted credits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_debits:
-          description: Lifetime posted debits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - ledger_account_id
-      - currency
-      - posted_debits
-      - posted_credits
-      - posted_balance
-      - pending_debits
-      - pending_credits
-      - available_balance
-      - account_version
-      type: object
-    BalanceSnapshot:
-      description: End-of-day balance per account; used for statements, interest and point-in-time queries
-      properties:
-        account_version:
-          description: Last entry version included
-          format: int64
-          type: integer
-        as_of_date:
-          description: Business date of the snapshot
-          format: date
-          type: string
-        available_balance:
-          description: Available balance at end of day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        closing_balance:
-          description: Balance at end of day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_account_id:
-          description: Account
-          format: uuid
-          type: string
-        opening_balance:
-          description: Balance at start of day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        total_credits:
-          description: Credits during the day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        total_debits:
-          description: Debits during the day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - id
-      - created_at
-      - ledger_account_id
-      - as_of_date
-      - currency
-      - opening_balance
-      - total_debits
-      - total_credits
-      - closing_balance
-      - available_balance
-      - account_version
-      type: object
-    BalanceSnapshotPage:
-      description: One page of BalanceSnapshot results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/BalanceSnapshot'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    Hold:
-      description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
-      properties:
-        amount:
-          description: Held amount (can be incremented)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        captured_amount:
-          description: Amount converted into postings
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Narrative
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Automatic release time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        hold_type:
-          description: Reason for the hold
-          enum:
-          - CARD_AUTHORIZATION
-          - PAYMENT
-          - MANUAL
-          - LEGAL
-          - CHEQUE
-          - RESERVATION
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Taken from the Idempotency-Key header
-          maxLength: 128
-          readOnly: true
-          type: string
-        ledger_account_id:
-          description: Account the funds are reserved on
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        released_at:
-          description: Time released or expired
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source_id:
-          description: Business object id
-          format: uuid
-          type:
-          - string
-          - 'null'
-        source_type:
-          description: Business object type, e.g. CARD_AUTHORIZATION
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        status:
-          description: Lifecycle status
-          enum:
-          - ACTIVE
-          - PARTIALLY_CAPTURED
-          - CAPTURED
-          - RELEASED
-          - EXPIRED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - ledger_account_id
-      - hold_type
-      - amount
-      - currency
-      - captured_amount
-      - status
-      - idempotency_key
-      type: object
-    HoldCreate:
-      properties:
-        amount:
-          description: Held amount (can be incremented)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Narrative
-          maxLength: 500
-          type: string
-        expires_at:
-          description: Automatic release time
-          format: date-time
-          type: string
-        hold_type:
-          description: Reason for the hold
-          enum:
-          - CARD_AUTHORIZATION
-          - PAYMENT
-          - MANUAL
-          - LEGAL
-          - CHEQUE
-          - RESERVATION
-          type: string
-        ledger_account_id:
-          description: Account the funds are reserved on
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        source_id:
-          description: Business object id
-          format: uuid
-          type: string
-        source_type:
-          description: Business object type, e.g. CARD_AUTHORIZATION
-          maxLength: 64
-          type: string
-      required:
-      - ledger_account_id
-      - hold_type
-      - amount
-      - currency
-      type: object
-    HoldEvent:
-      description: Immutable history of a hold (placed, incremented, captured, released, expired)
-      properties:
-        amount:
-          description: Amount affected by this event
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        event_type:
-          description: PLACED, INCREMENTED, CAPTURED, PARTIALLY_CAPTURED, RELEASED, EXPIRED
-          maxLength: 32
-          type: string
-        hold_id:
-          description: Hold
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Posting created on capture
-          format: uuid
-          type:
-          - string
-          - 'null'
-        reason:
-          description: Reason supplied by the caller
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - hold_id
-      - event_type
-      - amount
-      type: object
-    HoldEventPage:
-      description: One page of HoldEvent results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/HoldEvent'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    HoldPage:
-      description: One page of Hold results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Hold'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    HoldsCaptureRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        counter_account_id:
-          format: uuid
-          type: string
-        description:
-          maxLength: 500
-          type: string
-        release_remainder:
-          type: boolean
-      required:
-      - amount
-      - counter_account_id
-      type: object
-    HoldsIncrementRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - amount
-      type: object
-    HoldsReleaseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    JournalEntriesBatchRequest:
-      properties:
-        entries:
-          items: {}
-          type: array
-      required:
-      - entries
-      type: object
-    JournalEntriesReverseRequest:
-      properties:
-        effective_at:
-          format: date-time
-          type: string
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    JournalEntry:
-      description: One balanced, atomic set of ledger entries (a ledger transaction). Append-only.
-      properties:
-        booked_at:
-          description: Time the ledger committed the entry
-          format: date-time
-          readOnly: true
-          type: string
-        correlation_id:
-          description: Trace / saga correlation id
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Narrative shown on statements
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        effective_at:
-          description: 'Economic time of the transaction (default: now)'
-          format: date-time
-          type: string
-        entries:
-          description: Debit and credit lines; must balance per currency
-          items:
-            $ref: '#/components/schemas/LedgerEntry'
-          readOnly: true
-          type: array
-        entry_count:
-          description: Number of ledger entries
-          format: int32
-          readOnly: true
-          type: integer
-        entry_type:
-          description: Business classification
-          enum:
-          - STANDARD
-          - REVERSAL
-          - ADJUSTMENT
-          - ACCRUAL
-          - FEE
-          - INTEREST
-          - FX
-          - TRANSFER
-          - CARD_SETTLEMENT
-          - PAYMENT
-          - LOAN
-          - OPENING_BALANCE
-          - MIGRATION
-          - CORRECTION
-          type: string
-        hash:
-          description: SHA-256 over this entry and the previous hash (tamper evidence)
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Taken from the Idempotency-Key header; a replay returns the original entry
-          maxLength: 128
-          readOnly: true
-          type: string
-        ledger_id:
-          description: Ledger book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        prev_hash:
-          description: Hash of the previous journal entry in the ledger
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        reference:
-          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
-            to every ledger entry
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        reversal_of_id:
-          description: Entry this one reverses (set by POST /{id}/reverse)
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        source_id:
-          description: Business object id
-          format: uuid
-          type:
-          - string
-          - 'null'
-        source_service:
-          description: Service or client that requested the posting (from the caller identity)
-          maxLength: 64
-          readOnly: true
-          type: string
-        source_type:
-          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        total_debits:
-          description: Sum of debits in base currency (equals credits)
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        value_date:
-          description: 'Date interest starts or stops counting (default: today)'
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - ledger_id
-      - idempotency_key
-      - entry_type
-      - effective_at
-      - value_date
-      - booked_at
-      - source_service
-      - entry_count
-      - total_debits
-      type: object
-    JournalEntryCreate:
-      properties:
-        correlation_id:
-          description: Trace / saga correlation id
-          maxLength: 128
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Narrative shown on statements
-          maxLength: 500
-          type: string
-        effective_at:
-          description: 'Economic time of the transaction (default: now)'
-          format: date-time
-          type: string
-        entries:
-          description: Debit and credit lines; must balance per currency
-          items:
-            $ref: '#/components/schemas/LedgerEntryCreate'
-          minItems: 1
-          type: array
-        entry_type:
-          description: Business classification
-          enum:
-          - STANDARD
-          - REVERSAL
-          - ADJUSTMENT
-          - ACCRUAL
-          - FEE
-          - INTEREST
-          - FX
-          - TRANSFER
-          - CARD_SETTLEMENT
-          - PAYMENT
-          - LOAN
-          - OPENING_BALANCE
-          - MIGRATION
-          - CORRECTION
-          type: string
-        ledger_id:
-          description: Ledger book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        reference:
-          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
-            to every ledger entry
-          maxLength: 128
-          type: string
-        source_id:
-          description: Business object id
-          format: uuid
-          type: string
-        source_type:
-          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
-          maxLength: 64
-          type: string
-        value_date:
-          description: 'Date interest starts or stops counting (default: today)'
-          format: date
-          type: string
-      required:
-      - ledger_id
-      - entries
-      type: object
-    JournalEntryPage:
-      description: One page of JournalEntry results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/JournalEntry'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    Ledger:
-      description: A book of accounts for one legal entity (a tenant may run several ledgers)
-      properties:
-        base_currency:
-          description: Reporting currency for base-amount conversion (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        code:
-          description: Short unique code, e.g. MAIN-USD
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Free-text description
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_entity_id:
-          description: Legal entity that owns this book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Lifecycle status
-          enum:
-          - ACTIVE
-          - LOCKED
-          - ARCHIVED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - legal_entity_id
-      - base_currency
-      - status
-      type: object
-    LedgerAccount:
-      description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
-      properties:
-        account_type:
-          description: Accounting class
-          enum:
-          - ASSET
-          - LIABILITY
-          - EQUITY
-          - INCOME
-          - EXPENSE
-          - OFF_BALANCE
-          type: string
-        allow_negative:
-          description: Whether available balance may go below zero
-          type: boolean
-        closed_at:
-          description: Closing time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        code:
-          description: Account code / number inside the ledger
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Account currency (single-currency accounts) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        gl_account_id:
-          description: GL control account this account rolls up to
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_id:
-          description: Ledger book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        min_balance:
-          description: Minimum balance that must remain
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        normal_balance:
-          description: Side that increases the balance
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        opened_at:
-          description: Opening time
-          format: date-time
-          type: string
-        overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        owner_id:
-          description: Id of the owning business object in its service
-          format: uuid
-          type:
-          - string
-          - 'null'
-        owner_type:
-          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        parent_id:
-          description: Parent for hierarchies, sub-ledgers and virtual accounts
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Posting restrictions (changed by /freeze, /unfreeze, /close)
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - ledger_id
-      - code
-      - name
-      - account_type
-      - normal_balance
-      - currency
-      - status
-      - allow_negative
-      - overdraft_limit
-      - min_balance
-      - opened_at
-      type: object
-    LedgerAccountCreate:
-      properties:
-        account_type:
-          description: Accounting class
-          enum:
-          - ASSET
-          - LIABILITY
-          - EQUITY
-          - INCOME
-          - EXPENSE
-          - OFF_BALANCE
-          type: string
-        allow_negative:
-          description: Whether available balance may go below zero
-          type: boolean
-        closed_at:
-          description: Closing time
-          format: date-time
-          type: string
-        code:
-          description: Account code / number inside the ledger
-          maxLength: 64
-          type: string
-        currency:
-          description: Account currency (single-currency accounts) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        gl_account_id:
-          description: GL control account this account rolls up to
-          format: uuid
-          type: string
-        ledger_id:
-          description: Ledger book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        min_balance:
-          description: Minimum balance that must remain
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        normal_balance:
-          description: Side that increases the balance
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        opened_at:
-          description: Opening time
-          format: date-time
-          type: string
-        overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        owner_id:
-          description: Id of the owning business object in its service
-          format: uuid
-          type: string
-        owner_type:
-          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
-          maxLength: 40
-          type: string
-        parent_id:
-          description: Parent for hierarchies, sub-ledgers and virtual accounts
-          format: uuid
-          type: string
-      required:
-      - ledger_id
-      - code
-      - name
-      - account_type
-      - normal_balance
-      - currency
-      type: object
-    LedgerAccountPage:
-      description: One page of LedgerAccount results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LedgerAccount'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LedgerAccountUpdate:
-      properties:
-        account_type:
-          description: Accounting class
-          enum:
-          - ASSET
-          - LIABILITY
-          - EQUITY
-          - INCOME
-          - EXPENSE
-          - OFF_BALANCE
-          type: string
-        allow_negative:
-          description: Whether available balance may go below zero
-          type: boolean
-        closed_at:
-          description: Closing time
-          format: date-time
-          type: string
-        code:
-          description: Account code / number inside the ledger
-          maxLength: 64
-          type: string
-        currency:
-          description: Account currency (single-currency accounts) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        gl_account_id:
-          description: GL control account this account rolls up to
-          format: uuid
-          type: string
-        ledger_id:
-          description: Ledger book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        min_balance:
-          description: Minimum balance that must remain
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        normal_balance:
-          description: Side that increases the balance
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        opened_at:
-          description: Opening time
-          format: date-time
-          type: string
-        overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        owner_id:
-          description: Id of the owning business object in its service
-          format: uuid
-          type: string
-        owner_type:
-          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
-          maxLength: 40
-          type: string
-        parent_id:
-          description: Parent for hierarchies, sub-ledgers and virtual accounts
-          format: uuid
-          type: string
-      type: object
-    LedgerAccountsCloseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    LedgerAccountsFreezeRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-        status:
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
-          type: string
-      required:
-      - status
-      - reason
-      type: object
-    LedgerAccountsOverdraftLimitRequest:
-      properties:
-        limit:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - limit
-      type: object
-    LedgerAccountsUnfreezeRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    LedgerCreate:
-      properties:
-        base_currency:
-          description: Reporting currency for base-amount conversion (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        code:
-          description: Short unique code, e.g. MAIN-USD
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Free-text description
-          type: string
-        legal_entity_id:
-          description: Legal entity that owns this book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - ACTIVE
-          - LOCKED
-          - ARCHIVED
-          type: string
-      required:
-      - code
-      - name
-      - legal_entity_id
-      - base_currency
-      type: object
-    LedgerEntry:
-      description: One debit or credit line of a journal entry against one ledger account. Append-only.
-      properties:
-        account_version:
-          description: Account balance version after this entry (gapless per account)
-          format: int64
-          readOnly: true
-          type: integer
-        amount:
-          description: Positive amount in the account currency
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        balance_after:
-          description: Posted balance of the account after this entry
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        base_amount:
-          description: Amount in ledger base currency (amount x fx_rate)
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Line narrative
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        direction:
-          description: Debit or credit
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        effective_at:
-          description: Copied from the journal entry for range queries
-          format: date-time
-          readOnly: true
-          type: string
-        fx_rate:
-          description: Rate to ledger base currency at posting time
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Parent journal entry
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_account_id:
-          description: Account posted to
-          format: uuid
-          type: string
-        line_no:
-          description: Line number within the journal entry (order sent)
-          format: int32
-          readOnly: true
-          type: integer
-        reference:
-          description: Copied from the journal entry (reconciliation matches on reference)
-          maxLength: 128
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        value_date:
-          description: Copied from the journal entry (reconciliation matches on value date)
-          format: date
-          readOnly: true
-          type: string
-      required:
-      - id
-      - created_at
-      - journal_entry_id
-      - ledger_account_id
-      - line_no
-      - direction
-      - amount
-      - currency
-      - base_amount
-      - effective_at
-      - value_date
-      - account_version
-      - balance_after
-      type: object
-    LedgerEntryCreate:
-      properties:
-        amount:
-          description: Positive amount in the account currency
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Line narrative
-          maxLength: 500
-          type: string
-        direction:
-          description: Debit or credit
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        fx_rate:
-          description: Rate to ledger base currency at posting time
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        ledger_account_id:
-          description: Account posted to
-          format: uuid
-          type: string
-      required:
-      - ledger_account_id
-      - direction
-      - amount
-      - currency
-      type: object
-    LedgerEntryPage:
-      description: One page of LedgerEntry results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LedgerEntry'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LedgerEodRun:
-      description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
-      properties:
-        business_date:
-          description: Business date closed
-          format: date
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        error:
-          description: Failure detail
-          type:
-          - string
-          - 'null'
-        finished_at:
-          description: End time
-          format: date-time
-          type: string
-        holds_expired:
-          description: Holds released because they passed expires_at
-          format: int32
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_id:
-          description: Ledger processed
-          format: uuid
-          type: string
-        snapshots_skipped:
-          description: Accounts already snapshotted for the date (idempotent rerun)
-          format: int32
-          type: integer
-        snapshots_written:
-          description: Balance snapshots written
-          format: int32
-          type: integer
-        started_at:
-          description: Start time
-          format: date-time
-          type: string
-        status:
-          description: Outcome
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          type: string
-      required:
-      - id
-      - created_at
-      - ledger_id
-      - business_date
-      - status
-      - holds_expired
-      - snapshots_written
-      - snapshots_skipped
-      - started_at
-      - finished_at
-      type: object
-    LedgerEodRunPage:
-      description: One page of LedgerEodRun results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LedgerEodRun'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LedgerPage:
-      description: One page of Ledger results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Ledger'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LedgerUpdate:
-      properties:
-        base_currency:
-          description: Reporting currency for base-amount conversion (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        code:
-          description: Short unique code, e.g. MAIN-USD
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Free-text description
-          type: string
-        legal_entity_id:
-          description: Legal entity that owns this book
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - ACTIVE
-          - LOCKED
-          - ARCHIVED
-          type: string
-      type: object
-    LedgerVerification:
-      description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
-      properties:
-        accounts_checked:
-          description: Accounts whose balance was recomputed from entries
-          format: int32
-          type: integer
-        balance_mismatches:
-          description: Accounts whose stored balance differs from the sum of entries
-          format: int32
-          type: integer
-        chain_head:
-          description: SHA-256 chain over all entry hashes in booking order
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        details:
-          additionalProperties: true
-          description: First findings per check (capped)
-          type:
-          - object
-          - 'null'
-        entries_checked:
-          description: Journal entries checked
-          format: int32
-          type: integer
-        hash_mismatches:
-          description: Journal entries whose content hash no longer matches (tampering)
-          format: int32
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_id:
-          description: Ledger verified
-          format: uuid
-          type: string
-        passed:
-          description: True when every check passed
-          type: boolean
-        unbalanced_entries:
-          description: Journal entries whose debits and credits differ in a currency
-          format: int32
-          type: integer
-        version_gaps:
-          description: Accounts with non-consecutive entry versions
-          format: int32
-          type: integer
-      required:
-      - id
-      - created_at
-      - ledger_id
-      - accounts_checked
-      - entries_checked
-      - balance_mismatches
-      - version_gaps
-      - unbalanced_entries
-      - hash_mismatches
-      - chain_head
-      - passed
-      type: object
-    LedgerVerificationPage:
-      description: One page of LedgerVerification results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LedgerVerification'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LedgersEodRequest:
-      properties:
-        business_date:
-          format: date
-          type: string
-      required:
-      - business_date
-      type: object
-    LedgersLockRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            ledger:read: Read Ledger and Accounting
-            ledger:write: Change Ledger and Accounting
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            ledger:read: Read Ledger and Accounting
-            ledger:write: Change Ledger and Accounting
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — ledger-service
+  version: 1.0.0
   description: 'The single source of truth for money. A real-time, append-only double-entry ledger that every other service
     posts through, the general ledger and period close, and automated reconciliation.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — ledger-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Ledgers
+  description: A book of accounts for one legal entity (a tenant may run several ledgers)
+- name: Ledger Accounts
+  description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
+- name: Journal Entries
+  description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
+- name: Ledger Entries
+  description: One debit or credit line of a journal entry against one ledger account. Append-only.
+- name: Holds
+  description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
+- name: Ledger Eod Runs
+  description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+- name: Ledger Verifications
+  description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+- name: Balance Snapshots
+  description: End-of-day balance per account; used for statements, interest and point-in-time queries
 paths:
   /v1/ledgers:
     get:
@@ -4333,27 +2080,2280 @@ paths:
       x-table: balance_snapshot
       x-crud: true
       x-crud-get: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A book of accounts for one legal entity (a tenant may run several ledgers)
-  name: Ledgers
-- description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
-  name: Ledger Accounts
-- description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
-  name: Journal Entries
-- description: One debit or credit line of a journal entry against one ledger account. Append-only.
-  name: Ledger Entries
-- description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
-  name: Holds
-- description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
-  name: Ledger Eod Runs
-- description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
-  name: Ledger Verifications
-- description: End-of-day balance per account; used for statements, interest and point-in-time queries
-  name: Balance Snapshots
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    LedgerPage:
+      type: object
+      description: One page of Ledger results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ledger'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgersLockRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    LedgersEodRequest:
+      type: object
+      properties:
+        business_date:
+          type: string
+          format: date
+      required:
+      - business_date
+    LedgerAccountPage:
+      type: object
+      description: One page of LedgerAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BalanceSnapshotPage:
+      type: object
+      description: One page of BalanceSnapshot results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSnapshot'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerEntryPage:
+      type: object
+      description: One page of LedgerEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerAccountsFreezeRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - status
+      - reason
+    LedgerAccountsUnfreezeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    LedgerAccountsOverdraftLimitRequest:
+      type: object
+      properties:
+        limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - limit
+    LedgerAccountsCloseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    JournalEntryPage:
+      type: object
+      description: One page of JournalEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    JournalEntriesReverseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        effective_at:
+          type: string
+          format: date-time
+      required:
+      - reason
+    JournalEntriesBatchRequest:
+      type: object
+      properties:
+        entries:
+          type: array
+          items: {}
+      required:
+      - entries
+    HoldPage:
+      type: object
+      description: One page of Hold results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hold'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    HoldsIncrementRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - amount
+    HoldsCaptureRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        counter_account_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 500
+        release_remainder:
+          type: boolean
+      required:
+      - amount
+      - counter_account_id
+    HoldsReleaseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    HoldEventPage:
+      type: object
+      description: One page of HoldEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoldEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerEodRunPage:
+      type: object
+      description: One page of LedgerEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerVerificationPage:
+      type: object
+      description: One page of LedgerVerification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerVerification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AccountBalance:
+      type: object
+      description: Current balances per ledger account, updated in the same transaction as each posting
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        posted_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lifetime posted debits
+          readOnly: true
+        posted_credits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lifetime posted credits
+          readOnly: true
+        posted_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Posted (ledger) balance in normal-balance terms
+          readOnly: true
+        pending_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Active holds and pending debits
+          readOnly: true
+        pending_credits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Pending credits not yet available
+          readOnly: true
+        available_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Posted - pending debits + overdraft limit
+          readOnly: true
+        account_version:
+          type: integer
+          format: int64
+          description: Last applied ledger entry version
+          readOnly: true
+        last_entry_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last posting
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_account_id
+      - currency
+      - posted_debits
+      - posted_credits
+      - posted_balance
+      - pending_debits
+      - pending_credits
+      - available_balance
+      - account_version
+    BalanceSnapshot:
+      type: object
+      description: End-of-day balance per account; used for statements, interest and point-in-time queries
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account
+        as_of_date:
+          type: string
+          format: date
+          description: Business date of the snapshot
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        opening_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance at start of day
+        total_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Debits during the day
+        total_credits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Credits during the day
+        closing_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance at end of day
+        available_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Available balance at end of day
+        account_version:
+          type: integer
+          format: int64
+          description: Last entry version included
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_account_id
+      - as_of_date
+      - currency
+      - opening_balance
+      - total_debits
+      - total_credits
+      - closing_balance
+      - available_balance
+      - account_version
+    Hold:
+      type: object
+      description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account the funds are reserved on
+        hold_type:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - MANUAL
+          - LEGAL
+          - CHEQUE
+          - RESERVATION
+          description: Reason for the hold
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Held amount (can be incremented)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        captured_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount converted into postings
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - PARTIALLY_CAPTURED
+          - CAPTURED
+          - RELEASED
+          - EXPIRED
+          description: Lifecycle status
+          readOnly: true
+        source_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Business object type, e.g. CARD_AUTHORIZATION
+        source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Business object id
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Taken from the Idempotency-Key header
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Narrative
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Automatic release time
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time released or expired
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_account_id
+      - hold_type
+      - amount
+      - currency
+      - captured_amount
+      - status
+      - idempotency_key
+    HoldCreate:
+      type: object
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account the funds are reserved on
+        hold_type:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - MANUAL
+          - LEGAL
+          - CHEQUE
+          - RESERVATION
+          description: Reason for the hold
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Held amount (can be incremented)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        source_type:
+          type: string
+          maxLength: 64
+          description: Business object type, e.g. CARD_AUTHORIZATION
+        source_id:
+          type: string
+          format: uuid
+          description: Business object id
+        description:
+          type: string
+          maxLength: 500
+          description: Narrative
+        expires_at:
+          type: string
+          format: date-time
+          description: Automatic release time
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - ledger_account_id
+      - hold_type
+      - amount
+      - currency
+    HoldEvent:
+      type: object
+      description: Immutable history of a hold (placed, incremented, captured, released, expired)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        hold_id:
+          type: string
+          format: uuid
+          description: Hold
+        event_type:
+          type: string
+          maxLength: 32
+          description: PLACED, INCREMENTED, CAPTURED, PARTIALLY_CAPTURED, RELEASED, EXPIRED
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount affected by this event
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Posting created on capture
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason supplied by the caller
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - hold_id
+      - event_type
+      - amount
+    JournalEntry:
+      type: object
+      description: One balanced, atomic set of ledger entries (a ledger transaction). Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Taken from the Idempotency-Key header; a replay returns the original entry
+          readOnly: true
+        entry_type:
+          type: string
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          description: Business classification
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Narrative shown on statements
+        effective_at:
+          type: string
+          format: date-time
+          description: 'Economic time of the transaction (default: now)'
+        value_date:
+          type: string
+          format: date
+          description: 'Date interest starts or stops counting (default: today)'
+        booked_at:
+          type: string
+          format: date-time
+          description: Time the ledger committed the entry
+          readOnly: true
+        reversal_of_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Entry this one reverses (set by POST /{id}/reverse)
+          readOnly: true
+        source_service:
+          type: string
+          maxLength: 64
+          description: Service or client that requested the posting (from the caller identity)
+          readOnly: true
+        source_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
+        source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Business object id
+        correlation_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Trace / saga correlation id
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
+        entry_count:
+          type: integer
+          format: int32
+          description: Number of ledger entries
+          readOnly: true
+        total_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sum of debits in base currency (equals credits)
+          readOnly: true
+        hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 over this entry and the previous hash (tamper evidence)
+          readOnly: true
+        prev_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the previous journal entry in the ledger
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+          readOnly: true
+          description: Debit and credit lines; must balance per currency
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - idempotency_key
+      - entry_type
+      - effective_at
+      - value_date
+      - booked_at
+      - source_service
+      - entry_count
+      - total_debits
+    JournalEntryCreate:
+      type: object
+      properties:
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book
+        entry_type:
+          type: string
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          description: Business classification
+        description:
+          type: string
+          maxLength: 500
+          description: Narrative shown on statements
+        effective_at:
+          type: string
+          format: date-time
+          description: 'Economic time of the transaction (default: now)'
+        value_date:
+          type: string
+          format: date
+          description: 'Date interest starts or stops counting (default: today)'
+        source_type:
+          type: string
+          maxLength: 64
+          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
+        source_id:
+          type: string
+          format: uuid
+          description: Business object id
+        correlation_id:
+          type: string
+          maxLength: 128
+          description: Trace / saga correlation id
+        reference:
+          type: string
+          maxLength: 128
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntryCreate'
+          minItems: 1
+          description: Debit and credit lines; must balance per currency
+      required:
+      - ledger_id
+      - entries
+    Ledger:
+      type: object
+      description: A book of accounts for one legal entity (a tenant may run several ledgers)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Short unique code, e.g. MAIN-USD
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity that owns this book
+        base_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reporting currency for base-amount conversion (ISO 4217)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          description: Lifecycle status
+        description:
+          type:
+          - string
+          - 'null'
+          description: Free-text description
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - legal_entity_id
+      - base_currency
+      - status
+    LedgerCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Short unique code, e.g. MAIN-USD
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity that owns this book
+        base_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reporting currency for base-amount conversion (ISO 4217)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          description: Lifecycle status
+        description:
+          type: string
+          description: Free-text description
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - legal_entity_id
+      - base_currency
+    LedgerUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Short unique code, e.g. MAIN-USD
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity that owns this book
+        base_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reporting currency for base-amount conversion (ISO 4217)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          description: Lifecycle status
+        description:
+          type: string
+          description: Free-text description
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LedgerAccount:
+      type: object
+      description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book
+        code:
+          type: string
+          maxLength: 64
+          description: Account code / number inside the ledger
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        account_type:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          description: Accounting class
+        normal_balance:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side that increases the balance
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (single-currency accounts) (ISO 4217)
+        parent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+        gl_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: GL control account this account rolls up to
+        owner_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+        owner_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the owning business object in its service
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+          description: Posting restrictions (changed by /freeze, /unfreeze, /close)
+          readOnly: true
+        allow_negative:
+          type: boolean
+          description: Whether available balance may go below zero
+        overdraft_limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain
+        opened_at:
+          type: string
+          format: date-time
+          description: Opening time
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Closing time
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_id
+      - code
+      - name
+      - account_type
+      - normal_balance
+      - currency
+      - status
+      - allow_negative
+      - overdraft_limit
+      - min_balance
+      - opened_at
+    LedgerAccountCreate:
+      type: object
+      properties:
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book
+        code:
+          type: string
+          maxLength: 64
+          description: Account code / number inside the ledger
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        account_type:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          description: Accounting class
+        normal_balance:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side that increases the balance
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (single-currency accounts) (ISO 4217)
+        parent_id:
+          type: string
+          format: uuid
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+        gl_account_id:
+          type: string
+          format: uuid
+          description: GL control account this account rolls up to
+        owner_type:
+          type: string
+          maxLength: 40
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+        owner_id:
+          type: string
+          format: uuid
+          description: Id of the owning business object in its service
+        allow_negative:
+          type: boolean
+          description: Whether available balance may go below zero
+        overdraft_limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain
+        opened_at:
+          type: string
+          format: date-time
+          description: Opening time
+        closed_at:
+          type: string
+          format: date-time
+          description: Closing time
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - ledger_id
+      - code
+      - name
+      - account_type
+      - normal_balance
+      - currency
+    LedgerAccountUpdate:
+      type: object
+      properties:
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book
+        code:
+          type: string
+          maxLength: 64
+          description: Account code / number inside the ledger
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        account_type:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          description: Accounting class
+        normal_balance:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side that increases the balance
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (single-currency accounts) (ISO 4217)
+        parent_id:
+          type: string
+          format: uuid
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+        gl_account_id:
+          type: string
+          format: uuid
+          description: GL control account this account rolls up to
+        owner_type:
+          type: string
+          maxLength: 40
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+        owner_id:
+          type: string
+          format: uuid
+          description: Id of the owning business object in its service
+        allow_negative:
+          type: boolean
+          description: Whether available balance may go below zero
+        overdraft_limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain
+        opened_at:
+          type: string
+          format: date-time
+          description: Opening time
+        closed_at:
+          type: string
+          format: date-time
+          description: Closing time
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LedgerEntry:
+      type: object
+      description: One debit or credit line of a journal entry against one ledger account. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        journal_entry_id:
+          type: string
+          format: uuid
+          description: Parent journal entry
+          readOnly: true
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account posted to
+        line_no:
+          type: integer
+          format: int32
+          description: Line number within the journal entry (order sent)
+          readOnly: true
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Positive amount in the account currency
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        fx_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate to ledger base currency at posting time
+        base_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in ledger base currency (amount x fx_rate)
+          readOnly: true
+        effective_at:
+          type: string
+          format: date-time
+          description: Copied from the journal entry for range queries
+          readOnly: true
+        value_date:
+          type: string
+          format: date
+          description: Copied from the journal entry (reconciliation matches on value date)
+          readOnly: true
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Copied from the journal entry (reconciliation matches on reference)
+          readOnly: true
+        account_version:
+          type: integer
+          format: int64
+          description: Account balance version after this entry (gapless per account)
+          readOnly: true
+        balance_after:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Posted balance of the account after this entry
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Line narrative
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - journal_entry_id
+      - ledger_account_id
+      - line_no
+      - direction
+      - amount
+      - currency
+      - base_amount
+      - effective_at
+      - value_date
+      - account_version
+      - balance_after
+    LedgerEntryCreate:
+      type: object
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account posted to
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Positive amount in the account currency
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        fx_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate to ledger base currency at posting time
+        description:
+          type: string
+          maxLength: 500
+          description: Line narrative
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - ledger_account_id
+      - direction
+      - amount
+      - currency
+    LedgerEodRun:
+      type: object
+      description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger processed
+        business_date:
+          type: string
+          format: date
+          description: Business date closed
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Outcome
+        holds_expired:
+          type: integer
+          format: int32
+          description: Holds released because they passed expires_at
+        snapshots_written:
+          type: integer
+          format: int32
+          description: Balance snapshots written
+        snapshots_skipped:
+          type: integer
+          format: int32
+          description: Accounts already snapshotted for the date (idempotent rerun)
+        started_at:
+          type: string
+          format: date-time
+          description: Start time
+        finished_at:
+          type: string
+          format: date-time
+          description: End time
+        error:
+          type:
+          - string
+          - 'null'
+          description: Failure detail
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - business_date
+      - status
+      - holds_expired
+      - snapshots_written
+      - snapshots_skipped
+      - started_at
+      - finished_at
+    LedgerVerification:
+      type: object
+      description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger verified
+        accounts_checked:
+          type: integer
+          format: int32
+          description: Accounts whose balance was recomputed from entries
+        entries_checked:
+          type: integer
+          format: int32
+          description: Journal entries checked
+        balance_mismatches:
+          type: integer
+          format: int32
+          description: Accounts whose stored balance differs from the sum of entries
+        version_gaps:
+          type: integer
+          format: int32
+          description: Accounts with non-consecutive entry versions
+        unbalanced_entries:
+          type: integer
+          format: int32
+          description: Journal entries whose debits and credits differ in a currency
+        hash_mismatches:
+          type: integer
+          format: int32
+          description: Journal entries whose content hash no longer matches (tampering)
+        chain_head:
+          type: string
+          maxLength: 64
+          description: SHA-256 chain over all entry hashes in booking order
+        passed:
+          type: boolean
+          description: True when every check passed
+        details:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: First findings per check (capped)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - accounts_checked
+      - entries_checked
+      - balance_mismatches
+      - version_gaps
+      - unbalanced_entries
+      - hash_mismatches
+      - chain_head
+      - passed
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting

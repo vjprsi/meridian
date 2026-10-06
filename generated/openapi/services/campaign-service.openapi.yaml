@@ -1,1903 +1,36 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    Campaign:
-      description: A marketing campaign targeting one or more customer segments across channels
-      properties:
-        approved_at:
-          description: Approval time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: Checker
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        budget_amount:
-          description: Budget
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        channels:
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
-          type: object
-        code:
-          description: Campaign code
-          maxLength: 32
-          type: string
-        control_group_pct:
-          description: Hold-out share for uplift measurement
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Budget currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        end_at:
-          description: End
-          format: date-time
-          type:
-          - string
-          - 'null'
-        exclusion_segment_ids:
-          additionalProperties: true
-          description: Segments excluded
-          type:
-          - object
-          - 'null'
-        frequency_cap:
-          description: Max messages per customer per week
-          format: int32
-          type:
-          - integer
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        objective:
-          description: Business objective
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        owner_user_id:
-          description: Campaign owner
-          format: uuid
-          type:
-          - string
-          - 'null'
-        requires_marketing_consent:
-          description: Only customers with marketing consent
-          type: boolean
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        segment_ids:
-          additionalProperties: true
-          description: Target customer_segment ids
-          type: object
-        send_window:
-          additionalProperties: true
-          description: Allowed send hours per channel and timezone
-          type:
-          - object
-          - 'null'
-        start_at:
-          description: Start
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - SCHEDULED
-          - RUNNING
-          - PAUSED
-          - COMPLETED
-          - CANCELLED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - status
-      - segment_ids
-      - channels
-      - start_at
-      - control_group_pct
-      - requires_marketing_consent
-      type: object
-    CampaignAudienceMember:
-      description: Customer selected into a campaign run with variant or control-group allocation
-      properties:
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type: string
-        campaign_variant_id:
-          description: Variant (empty = control group)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        clicked_at:
-          description: Click time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        converted_at:
-          description: Conversion time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_control:
-          description: Hold-out member
-          type: boolean
-        marketing_consent_snapshot_id:
-          description: Consent evidence
-          format: uuid
-          type:
-          - string
-          - 'null'
-        notification_id:
-          description: Message sent
-          format: uuid
-          type:
-          - string
-          - 'null'
-        opened_at:
-          description: Open time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sent_at:
-          description: Send time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        unsubscribed_at:
-          description: Opt-out from this campaign
-          format: date-time
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - campaign_id
-      - customer_id
-      - is_control
-      type: object
-    CampaignAudienceMemberPage:
-      description: One page of CampaignAudienceMember results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CampaignAudienceMember'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CampaignCreate:
-      properties:
-        budget_amount:
-          description: Budget
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channels:
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
-          type: object
-        code:
-          description: Campaign code
-          maxLength: 32
-          type: string
-        control_group_pct:
-          description: Hold-out share for uplift measurement
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Budget currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        end_at:
-          description: End
-          format: date-time
-          type: string
-        exclusion_segment_ids:
-          additionalProperties: true
-          description: Segments excluded
-          type: object
-        frequency_cap:
-          description: Max messages per customer per week
-          format: int32
-          type: integer
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        objective:
-          description: Business objective
-          maxLength: 255
-          type: string
-        owner_user_id:
-          description: Campaign owner
-          format: uuid
-          type: string
-        requires_marketing_consent:
-          description: Only customers with marketing consent
-          type: boolean
-        segment_ids:
-          additionalProperties: true
-          description: Target customer_segment ids
-          type: object
-        send_window:
-          additionalProperties: true
-          description: Allowed send hours per channel and timezone
-          type: object
-        start_at:
-          description: Start
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - SCHEDULED
-          - RUNNING
-          - PAUSED
-          - COMPLETED
-          - CANCELLED
-          type: string
-      required:
-      - code
-      - name
-      - segment_ids
-      - channels
-      - start_at
-      type: object
-    CampaignMetric:
-      description: Daily performance metrics per campaign and variant. Append-only.
-      properties:
-        audience:
-          description: Members targeted
-          format: int32
-          type: integer
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type: string
-        campaign_variant_id:
-          description: Variant (empty = total)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        clicked:
-          description: Clicked
-          format: int32
-          type: integer
-        converted:
-          description: Converted
-          format: int32
-          type: integer
-        cost:
-          description: Spend
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        delivered:
-          description: Delivered
-          format: int32
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        metric_date:
-          description: Day
-          format: date
-          type: string
-        opened:
-          description: Opened
-          format: int32
-          type: integer
-        revenue:
-          description: Attributed revenue
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        sent:
-          description: Messages sent
-          format: int32
-          type: integer
-        unsubscribed:
-          description: Opt-outs
-          format: int32
-          type: integer
-        uplift_pct:
-          description: Conversion uplift vs control group
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - campaign_id
-      - metric_date
-      - audience
-      - sent
-      - delivered
-      - opened
-      - clicked
-      - converted
-      - unsubscribed
-      - revenue
-      - cost
-      type: object
-    CampaignMetricPage:
-      description: One page of CampaignMetric results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CampaignMetric'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CampaignOffer:
-      description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
-      properties:
-        acceptance_flow:
-          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        code:
-          description: Offer code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        disclosure_document_id:
-          description: Regulatory disclosure
-          format: uuid
-          type:
-          - string
-          - 'null'
-        eligibility_rules:
-          additionalProperties: true
-          description: Eligibility (segments, scores, balances)
-          type:
-          - object
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        max_amount:
-          description: Maximum amount for credit offers
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        offer_type:
-          description: Offer type
-          enum:
-          - PRE_APPROVED_LOAN
-          - CREDIT_LIMIT_INCREASE
-          - CARD_UPGRADE
-          - RATE_PROMOTION
-          - FEE_WAIVER
-          - CASHBACK_BOOST
-          - PRODUCT_CROSS_SELL
-          - OVERDRAFT
-          type: string
-        product_id:
-          description: Product offered
-          format: uuid
-          type:
-          - string
-          - 'null'
-        product_version_id:
-          description: Product version
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - EXPIRED
-          - WITHDRAWN
-          type: string
-        terms:
-          additionalProperties: true
-          description: Offer terms (amount, rate, fee waiver, duration)
-          type: object
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Valid from
-          format: date-time
-          type: string
-        valid_to:
-          description: Valid to
-          format: date-time
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - offer_type
-      - status
-      - terms
-      - valid_from
-      - valid_to
-      type: object
-    CampaignOfferCreate:
-      properties:
-        acceptance_flow:
-          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
-          maxLength: 40
-          type: string
-        code:
-          description: Offer code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        disclosure_document_id:
-          description: Regulatory disclosure
-          format: uuid
-          type: string
-        eligibility_rules:
-          additionalProperties: true
-          description: Eligibility (segments, scores, balances)
-          type: object
-        max_amount:
-          description: Maximum amount for credit offers
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        offer_type:
-          description: Offer type
-          enum:
-          - PRE_APPROVED_LOAN
-          - CREDIT_LIMIT_INCREASE
-          - CARD_UPGRADE
-          - RATE_PROMOTION
-          - FEE_WAIVER
-          - CASHBACK_BOOST
-          - PRODUCT_CROSS_SELL
-          - OVERDRAFT
-          type: string
-        product_id:
-          description: Product offered
-          format: uuid
-          type: string
-        product_version_id:
-          description: Product version
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - EXPIRED
-          - WITHDRAWN
-          type: string
-        terms:
-          additionalProperties: true
-          description: Offer terms (amount, rate, fee waiver, duration)
-          type: object
-        valid_from:
-          description: Valid from
-          format: date-time
-          type: string
-        valid_to:
-          description: Valid to
-          format: date-time
-          type: string
-      required:
-      - code
-      - name
-      - offer_type
-      - terms
-      - valid_from
-      - valid_to
-      type: object
-    CampaignOfferPage:
-      description: One page of CampaignOffer results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CampaignOffer'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CampaignOfferUpdate:
-      properties:
-        acceptance_flow:
-          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
-          maxLength: 40
-          type: string
-        code:
-          description: Offer code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        disclosure_document_id:
-          description: Regulatory disclosure
-          format: uuid
-          type: string
-        eligibility_rules:
-          additionalProperties: true
-          description: Eligibility (segments, scores, balances)
-          type: object
-        max_amount:
-          description: Maximum amount for credit offers
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        offer_type:
-          description: Offer type
-          enum:
-          - PRE_APPROVED_LOAN
-          - CREDIT_LIMIT_INCREASE
-          - CARD_UPGRADE
-          - RATE_PROMOTION
-          - FEE_WAIVER
-          - CASHBACK_BOOST
-          - PRODUCT_CROSS_SELL
-          - OVERDRAFT
-          type: string
-        product_id:
-          description: Product offered
-          format: uuid
-          type: string
-        product_version_id:
-          description: Product version
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - EXPIRED
-          - WITHDRAWN
-          type: string
-        terms:
-          additionalProperties: true
-          description: Offer terms (amount, rate, fee waiver, duration)
-          type: object
-        valid_from:
-          description: Valid from
-          format: date-time
-          type: string
-        valid_to:
-          description: Valid to
-          format: date-time
-          type: string
-      type: object
-    CampaignOffersAssignRequest:
-      properties:
-        customer_ids:
-          additionalProperties: true
-          type: object
-        expires_at:
-          format: date-time
-          type: string
-        segment_id:
-          format: uuid
-          type: string
-      required:
-      - expires_at
-      type: object
-    CampaignOffersWithdrawRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    CampaignPage:
-      description: One page of Campaign results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Campaign'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CampaignUpdate:
-      properties:
-        budget_amount:
-          description: Budget
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channels:
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
-          type: object
-        code:
-          description: Campaign code
-          maxLength: 32
-          type: string
-        control_group_pct:
-          description: Hold-out share for uplift measurement
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Budget currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        end_at:
-          description: End
-          format: date-time
-          type: string
-        exclusion_segment_ids:
-          additionalProperties: true
-          description: Segments excluded
-          type: object
-        frequency_cap:
-          description: Max messages per customer per week
-          format: int32
-          type: integer
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        objective:
-          description: Business objective
-          maxLength: 255
-          type: string
-        owner_user_id:
-          description: Campaign owner
-          format: uuid
-          type: string
-        requires_marketing_consent:
-          description: Only customers with marketing consent
-          type: boolean
-        segment_ids:
-          additionalProperties: true
-          description: Target customer_segment ids
-          type: object
-        send_window:
-          additionalProperties: true
-          description: Allowed send hours per channel and timezone
-          type: object
-        start_at:
-          description: Start
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - SCHEDULED
-          - RUNNING
-          - PAUSED
-          - COMPLETED
-          - CANCELLED
-          type: string
-      type: object
-    CampaignVariant:
-      description: A/B variant of a campaign with its message content per channel
-      properties:
-        body:
-          description: Message body with placeholders
-          type:
-          - string
-          - 'null'
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - IN_APP
-          - WHATSAPP
-          - USSD
-          - BRANCH
-          - CALL_CENTER
-          type: string
-        code:
-          description: Variant code (A, B, ...)
-          maxLength: 16
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        deeplink:
-          description: Call-to-action deep link
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        image_document_id:
-          description: Creative
-          format: uuid
-          type:
-          - string
-          - 'null'
-        notification_template_code:
-          description: Notification template used
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        offer_id:
-          description: Offer promoted (campaign_offer)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        subject:
-          description: Subject / title
-          maxLength: 200
-          type:
-          - string
-          - 'null'
-        traffic_share:
-          description: Share of the audience
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - campaign_id
-      - code
-      - traffic_share
-      - channel
-      type: object
-    CampaignVariantCreate:
-      properties:
-        body:
-          description: Message body with placeholders
-          type: string
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - IN_APP
-          - WHATSAPP
-          - USSD
-          - BRANCH
-          - CALL_CENTER
-          type: string
-        code:
-          description: Variant code (A, B, ...)
-          maxLength: 16
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        deeplink:
-          description: Call-to-action deep link
-          maxLength: 500
-          type: string
-        image_document_id:
-          description: Creative
-          format: uuid
-          type: string
-        notification_template_code:
-          description: Notification template used
-          maxLength: 64
-          type: string
-        offer_id:
-          description: Offer promoted (campaign_offer)
-          format: uuid
-          type: string
-        subject:
-          description: Subject / title
-          maxLength: 200
-          type: string
-        traffic_share:
-          description: Share of the audience
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - campaign_id
-      - code
-      - traffic_share
-      - channel
-      type: object
-    CampaignVariantPage:
-      description: One page of CampaignVariant results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CampaignVariant'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CampaignVariantUpdate:
-      properties:
-        body:
-          description: Message body with placeholders
-          type: string
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - IN_APP
-          - WHATSAPP
-          - USSD
-          - BRANCH
-          - CALL_CENTER
-          type: string
-        code:
-          description: Variant code (A, B, ...)
-          maxLength: 16
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        deeplink:
-          description: Call-to-action deep link
-          maxLength: 500
-          type: string
-        image_document_id:
-          description: Creative
-          format: uuid
-          type: string
-        notification_template_code:
-          description: Notification template used
-          maxLength: 64
-          type: string
-        offer_id:
-          description: Offer promoted (campaign_offer)
-          format: uuid
-          type: string
-        subject:
-          description: Subject / title
-          maxLength: 200
-          type: string
-        traffic_share:
-          description: Share of the audience
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    CampaignVariantsTestSendRequest:
-      properties:
-        recipient:
-          maxLength: 320
-          type: string
-      required:
-      - recipient
-      type: object
-    CampaignsApproveRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    CampaignsCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    CampaignsPauseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    CampaignsScheduleRequest:
-      properties:
-        start_at:
-          format: date-time
-          type: string
-      required:
-      - start_at
-      type: object
-    MarketingConsentSnapshot:
-      description: Immutable record of the customer's marketing consent at the time a campaign targeted them
-      properties:
-        campaign_id:
-          description: Campaign
-          format: uuid
-          type:
-          - string
-          - 'null'
-        channel:
-          description: Channel checked
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - IN_APP
-          - WHATSAPP
-          - USSD
-          - BRANCH
-          - CALL_CENTER
-          type: string
-        checked_at:
-          description: Check time
-          format: date-time
-          type: string
-        consent_id:
-          description: Consent record evaluated
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_permitted:
-          description: Whether contact was allowed
-          type: boolean
-        reason:
-          description: Why not permitted (opt-out, quiet hours, frequency cap)
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - customer_id
-      - channel
-      - is_permitted
-      - checked_at
-      type: object
-    MarketingConsentSnapshotPage:
-      description: One page of MarketingConsentSnapshot results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/MarketingConsentSnapshot'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    OfferAssignment:
-      description: An offer assigned to a specific customer, tracked from shown to accepted or expired
-      properties:
-        assigned_at:
-          description: Assignment time
-          format: date-time
-          type: string
-        campaign_id:
-          description: Campaign that assigned it
-          format: uuid
-          type:
-          - string
-          - 'null'
-        campaign_offer_id:
-          description: Offer
-          format: uuid
-          type: string
-        clicked_at:
-          description: First clicked
-          format: date-time
-          type:
-          - string
-          - 'null'
-        consent_snapshot_id:
-          description: Marketing consent snapshot proving permission
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        expires_at:
-          description: Expiry
-          format: date-time
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        model_version:
-          description: Model used
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        personalised_terms:
-          additionalProperties: true
-          description: Customer-specific terms (approved amount, rate)
-          type:
-          - object
-          - 'null'
-        responded_at:
-          description: Accept or decline time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        resulting_object_id:
-          description: Object created on acceptance
-          format: uuid
-          type:
-          - string
-          - 'null'
-        resulting_object_type:
-          description: LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        score:
-          description: Propensity / risk score at assignment
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        shown_at:
-          description: First shown
-          format: date-time
-          type:
-          - string
-          - 'null'
-        status:
-          description: Response status
-          enum:
-          - ASSIGNED
-          - SHOWN
-          - CLICKED
-          - ACCEPTED
-          - DECLINED
-          - EXPIRED
-          - WITHDRAWN
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - campaign_offer_id
-      - customer_id
-      - status
-      - assigned_at
-      - expires_at
-      type: object
-    OfferAssignmentPage:
-      description: One page of OfferAssignment results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/OfferAssignment'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    OfferAssignmentsDeclineRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
-            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
-            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — campaign-service
+  version: 1.0.0
   description: 'Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and personal
     finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — campaign-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Campaigns
+  description: A marketing campaign targeting one or more customer segments across channels
+- name: Campaign Variants
+  description: A/B variant of a campaign with its message content per channel
+- name: Campaign Offers
+  description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
+- name: Offer Assignments
+  description: An offer assigned to a specific customer, tracked from shown to accepted or expired
+- name: Marketing Consent Snapshots
+  description: Immutable record of the customer's marketing consent at the time a campaign targeted them
+- name: Campaign Audience
+  description: Customer selected into a campaign run with variant or control-group allocation
+- name: Campaign Metrics
+  description: Daily performance metrics per campaign and variant. Append-only.
 paths:
   /v1/campaigns:
     get:
@@ -3770,25 +1903,1892 @@ paths:
       x-table: campaign_metric
       x-crud: true
       x-crud-get: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A marketing campaign targeting one or more customer segments across channels
-  name: Campaigns
-- description: A/B variant of a campaign with its message content per channel
-  name: Campaign Variants
-- description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
-  name: Campaign Offers
-- description: An offer assigned to a specific customer, tracked from shown to accepted or expired
-  name: Offer Assignments
-- description: Immutable record of the customer's marketing consent at the time a campaign targeted them
-  name: Marketing Consent Snapshots
-- description: Customer selected into a campaign run with variant or control-group allocation
-  name: Campaign Audience
-- description: Daily performance metrics per campaign and variant. Append-only.
-  name: Campaign Metrics
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CampaignPage:
+      type: object
+      description: One page of Campaign results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    CampaignsScheduleRequest:
+      type: object
+      properties:
+        start_at:
+          type: string
+          format: date-time
+      required:
+      - start_at
+    CampaignsPauseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CampaignsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CampaignVariantPage:
+      type: object
+      description: One page of CampaignVariant results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignVariant'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignMetricPage:
+      type: object
+      description: One page of CampaignMetric results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignMetric'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignAudienceMemberPage:
+      type: object
+      description: One page of CampaignAudienceMember results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignAudienceMember'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignVariantsTestSendRequest:
+      type: object
+      properties:
+        recipient:
+          type: string
+          maxLength: 320
+      required:
+      - recipient
+    CampaignOfferPage:
+      type: object
+      description: One page of CampaignOffer results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignOffer'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignOffersWithdrawRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CampaignOffersAssignRequest:
+      type: object
+      properties:
+        customer_ids:
+          type: object
+          additionalProperties: true
+        segment_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+    OfferAssignmentPage:
+      type: object
+      description: One page of OfferAssignment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferAssignment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    OfferAssignmentsDeclineRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    MarketingConsentSnapshotPage:
+      type: object
+      description: One page of MarketingConsentSnapshot results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketingConsentSnapshot'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    Campaign:
+      type: object
+      description: A marketing campaign targeting one or more customer segments across channels
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Campaign code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        objective:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Business objective
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - SCHEDULED
+          - RUNNING
+          - PAUSED
+          - COMPLETED
+          - CANCELLED
+          description: Status
+        segment_ids:
+          type: object
+          additionalProperties: true
+          description: Target customer_segment ids
+        exclusion_segment_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Segments excluded
+        channels:
+          type: object
+          additionalProperties: true
+          description: Channels used (CampaignChannel values)
+        start_at:
+          type: string
+          format: date-time
+          description: Start
+        end_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+        send_window:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Allowed send hours per channel and timezone
+        frequency_cap:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Max messages per customer per week
+        budget_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Budget
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Budget currency (ISO 4217)
+        control_group_pct:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Hold-out share for uplift measurement
+        requires_marketing_consent:
+          type: boolean
+          description: Only customers with marketing consent
+        owner_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Campaign owner
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - status
+      - segment_ids
+      - channels
+      - start_at
+      - control_group_pct
+      - requires_marketing_consent
+    CampaignCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Campaign code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        objective:
+          type: string
+          maxLength: 255
+          description: Business objective
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - SCHEDULED
+          - RUNNING
+          - PAUSED
+          - COMPLETED
+          - CANCELLED
+          description: Status
+        segment_ids:
+          type: object
+          additionalProperties: true
+          description: Target customer_segment ids
+        exclusion_segment_ids:
+          type: object
+          additionalProperties: true
+          description: Segments excluded
+        channels:
+          type: object
+          additionalProperties: true
+          description: Channels used (CampaignChannel values)
+        start_at:
+          type: string
+          format: date-time
+          description: Start
+        end_at:
+          type: string
+          format: date-time
+          description: End
+        send_window:
+          type: object
+          additionalProperties: true
+          description: Allowed send hours per channel and timezone
+        frequency_cap:
+          type: integer
+          format: int32
+          description: Max messages per customer per week
+        budget_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Budget
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Budget currency (ISO 4217)
+        control_group_pct:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Hold-out share for uplift measurement
+        requires_marketing_consent:
+          type: boolean
+          description: Only customers with marketing consent
+        owner_user_id:
+          type: string
+          format: uuid
+          description: Campaign owner
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - segment_ids
+      - channels
+      - start_at
+    CampaignUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Campaign code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        objective:
+          type: string
+          maxLength: 255
+          description: Business objective
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - SCHEDULED
+          - RUNNING
+          - PAUSED
+          - COMPLETED
+          - CANCELLED
+          description: Status
+        segment_ids:
+          type: object
+          additionalProperties: true
+          description: Target customer_segment ids
+        exclusion_segment_ids:
+          type: object
+          additionalProperties: true
+          description: Segments excluded
+        channels:
+          type: object
+          additionalProperties: true
+          description: Channels used (CampaignChannel values)
+        start_at:
+          type: string
+          format: date-time
+          description: Start
+        end_at:
+          type: string
+          format: date-time
+          description: End
+        send_window:
+          type: object
+          additionalProperties: true
+          description: Allowed send hours per channel and timezone
+        frequency_cap:
+          type: integer
+          format: int32
+          description: Max messages per customer per week
+        budget_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Budget
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Budget currency (ISO 4217)
+        control_group_pct:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Hold-out share for uplift measurement
+        requires_marketing_consent:
+          type: boolean
+          description: Only customers with marketing consent
+        owner_user_id:
+          type: string
+          format: uuid
+          description: Campaign owner
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CampaignAudienceMember:
+      type: object
+      description: Customer selected into a campaign run with variant or control-group allocation
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        campaign_id:
+          type: string
+          format: uuid
+          description: Campaign
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        campaign_variant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Variant (empty = control group)
+        is_control:
+          type: boolean
+          description: Hold-out member
+        marketing_consent_snapshot_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Consent evidence
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Message sent
+        sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Send time
+        opened_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Open time
+        clicked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Click time
+        converted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Conversion time
+        unsubscribed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Opt-out from this campaign
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - campaign_id
+      - customer_id
+      - is_control
+    CampaignMetric:
+      type: object
+      description: Daily performance metrics per campaign and variant. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        campaign_id:
+          type: string
+          format: uuid
+          description: Campaign
+        campaign_variant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Variant (empty = total)
+        metric_date:
+          type: string
+          format: date
+          description: Day
+        audience:
+          type: integer
+          format: int32
+          description: Members targeted
+        sent:
+          type: integer
+          format: int32
+          description: Messages sent
+        delivered:
+          type: integer
+          format: int32
+          description: Delivered
+        opened:
+          type: integer
+          format: int32
+          description: Opened
+        clicked:
+          type: integer
+          format: int32
+          description: Clicked
+        converted:
+          type: integer
+          format: int32
+          description: Converted
+        unsubscribed:
+          type: integer
+          format: int32
+          description: Opt-outs
+        revenue:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Attributed revenue
+        cost:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Spend
+        uplift_pct:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Conversion uplift vs control group
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - campaign_id
+      - metric_date
+      - audience
+      - sent
+      - delivered
+      - opened
+      - clicked
+      - converted
+      - unsubscribed
+      - revenue
+      - cost
+    CampaignOffer:
+      type: object
+      description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Offer code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        offer_type:
+          type: string
+          enum:
+          - PRE_APPROVED_LOAN
+          - CREDIT_LIMIT_INCREASE
+          - CARD_UPGRADE
+          - RATE_PROMOTION
+          - FEE_WAIVER
+          - CASHBACK_BOOST
+          - PRODUCT_CROSS_SELL
+          - OVERDRAFT
+          description: Offer type
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - EXPIRED
+          - WITHDRAWN
+          description: Status
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product offered
+        product_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product version
+        eligibility_rules:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Eligibility (segments, scores, balances)
+        terms:
+          type: object
+          additionalProperties: true
+          description: Offer terms (amount, rate, fee waiver, duration)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount for credit offers
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        valid_from:
+          type: string
+          format: date-time
+          description: Valid from
+        valid_to:
+          type: string
+          format: date-time
+          description: Valid to
+        acceptance_flow:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
+        disclosure_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Regulatory disclosure
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - offer_type
+      - status
+      - terms
+      - valid_from
+      - valid_to
+    CampaignOfferCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Offer code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        offer_type:
+          type: string
+          enum:
+          - PRE_APPROVED_LOAN
+          - CREDIT_LIMIT_INCREASE
+          - CARD_UPGRADE
+          - RATE_PROMOTION
+          - FEE_WAIVER
+          - CASHBACK_BOOST
+          - PRODUCT_CROSS_SELL
+          - OVERDRAFT
+          description: Offer type
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - EXPIRED
+          - WITHDRAWN
+          description: Status
+        product_id:
+          type: string
+          format: uuid
+          description: Product offered
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version
+        eligibility_rules:
+          type: object
+          additionalProperties: true
+          description: Eligibility (segments, scores, balances)
+        terms:
+          type: object
+          additionalProperties: true
+          description: Offer terms (amount, rate, fee waiver, duration)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount for credit offers
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        valid_from:
+          type: string
+          format: date-time
+          description: Valid from
+        valid_to:
+          type: string
+          format: date-time
+          description: Valid to
+        acceptance_flow:
+          type: string
+          maxLength: 40
+          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
+        disclosure_document_id:
+          type: string
+          format: uuid
+          description: Regulatory disclosure
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - offer_type
+      - terms
+      - valid_from
+      - valid_to
+    CampaignOfferUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Offer code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        offer_type:
+          type: string
+          enum:
+          - PRE_APPROVED_LOAN
+          - CREDIT_LIMIT_INCREASE
+          - CARD_UPGRADE
+          - RATE_PROMOTION
+          - FEE_WAIVER
+          - CASHBACK_BOOST
+          - PRODUCT_CROSS_SELL
+          - OVERDRAFT
+          description: Offer type
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - EXPIRED
+          - WITHDRAWN
+          description: Status
+        product_id:
+          type: string
+          format: uuid
+          description: Product offered
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version
+        eligibility_rules:
+          type: object
+          additionalProperties: true
+          description: Eligibility (segments, scores, balances)
+        terms:
+          type: object
+          additionalProperties: true
+          description: Offer terms (amount, rate, fee waiver, duration)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount for credit offers
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        valid_from:
+          type: string
+          format: date-time
+          description: Valid from
+        valid_to:
+          type: string
+          format: date-time
+          description: Valid to
+        acceptance_flow:
+          type: string
+          maxLength: 40
+          description: IN_APP_ONE_TAP, APPLICATION, BRANCH
+        disclosure_document_id:
+          type: string
+          format: uuid
+          description: Regulatory disclosure
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CampaignVariant:
+      type: object
+      description: A/B variant of a campaign with its message content per channel
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        campaign_id:
+          type: string
+          format: uuid
+          description: Campaign
+        code:
+          type: string
+          maxLength: 16
+          description: Variant code (A, B, ...)
+        traffic_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the audience
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - IN_APP
+          - WHATSAPP
+          - USSD
+          - BRANCH
+          - CALL_CENTER
+          description: Channel
+        notification_template_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Notification template used
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          description: Subject / title
+        body:
+          type:
+          - string
+          - 'null'
+          description: Message body with placeholders
+        image_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Creative
+        deeplink:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Call-to-action deep link
+        offer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Offer promoted (campaign_offer)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - campaign_id
+      - code
+      - traffic_share
+      - channel
+    CampaignVariantCreate:
+      type: object
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+          description: Campaign
+        code:
+          type: string
+          maxLength: 16
+          description: Variant code (A, B, ...)
+        traffic_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the audience
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - IN_APP
+          - WHATSAPP
+          - USSD
+          - BRANCH
+          - CALL_CENTER
+          description: Channel
+        notification_template_code:
+          type: string
+          maxLength: 64
+          description: Notification template used
+        subject:
+          type: string
+          maxLength: 200
+          description: Subject / title
+        body:
+          type: string
+          description: Message body with placeholders
+        image_document_id:
+          type: string
+          format: uuid
+          description: Creative
+        deeplink:
+          type: string
+          maxLength: 500
+          description: Call-to-action deep link
+        offer_id:
+          type: string
+          format: uuid
+          description: Offer promoted (campaign_offer)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - campaign_id
+      - code
+      - traffic_share
+      - channel
+    CampaignVariantUpdate:
+      type: object
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+          description: Campaign
+        code:
+          type: string
+          maxLength: 16
+          description: Variant code (A, B, ...)
+        traffic_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the audience
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - IN_APP
+          - WHATSAPP
+          - USSD
+          - BRANCH
+          - CALL_CENTER
+          description: Channel
+        notification_template_code:
+          type: string
+          maxLength: 64
+          description: Notification template used
+        subject:
+          type: string
+          maxLength: 200
+          description: Subject / title
+        body:
+          type: string
+          description: Message body with placeholders
+        image_document_id:
+          type: string
+          format: uuid
+          description: Creative
+        deeplink:
+          type: string
+          maxLength: 500
+          description: Call-to-action deep link
+        offer_id:
+          type: string
+          format: uuid
+          description: Offer promoted (campaign_offer)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    MarketingConsentSnapshot:
+      type: object
+      description: Immutable record of the customer's marketing consent at the time a campaign targeted them
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        consent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Consent record evaluated
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Campaign
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - IN_APP
+          - WHATSAPP
+          - USSD
+          - BRANCH
+          - CALL_CENTER
+          description: Channel checked
+        is_permitted:
+          type: boolean
+          description: Whether contact was allowed
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why not permitted (opt-out, quiet hours, frequency cap)
+        checked_at:
+          type: string
+          format: date-time
+          description: Check time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - customer_id
+      - channel
+      - is_permitted
+      - checked_at
+    OfferAssignment:
+      type: object
+      description: An offer assigned to a specific customer, tracked from shown to accepted or expired
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        campaign_offer_id:
+          type: string
+          format: uuid
+          description: Offer
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Campaign that assigned it
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        status:
+          type: string
+          enum:
+          - ASSIGNED
+          - SHOWN
+          - CLICKED
+          - ACCEPTED
+          - DECLINED
+          - EXPIRED
+          - WITHDRAWN
+          description: Response status
+        personalised_terms:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Customer-specific terms (approved amount, rate)
+        score:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Propensity / risk score at assignment
+        model_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Model used
+        consent_snapshot_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Marketing consent snapshot proving permission
+        assigned_at:
+          type: string
+          format: date-time
+          description: Assignment time
+        shown_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: First shown
+        clicked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: First clicked
+        responded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Accept or decline time
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry
+        resulting_object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT
+        resulting_object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object created on acceptance
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - campaign_offer_id
+      - customer_id
+      - status
+      - assigned_at
+      - expires_at
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'

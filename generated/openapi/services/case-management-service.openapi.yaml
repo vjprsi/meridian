@@ -1,1867 +1,33 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    AmlCase:
-      description: An AML / fraud / sanctions investigation case consolidating related alerts
-      properties:
-        ai_summary:
-          description: AI-generated case summary with citations
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        assigned_to:
-          description: Investigator
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        case_number:
-          description: Human-readable case number
-          maxLength: 32
-          readOnly: true
-          type: string
-        case_type:
-          description: Case type
-          enum:
-          - AML
-          - FRAUD
-          - SANCTIONS
-          - KYC
-          - MULE
-          - TERRORIST_FINANCING
-          - BRIBERY_CORRUPTION
-          type: string
-        closed_at:
-          description: Closed
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Primary subject
-          format: uuid
-          type:
-          - string
-          - 'null'
-        description:
-          description: Investigation scope
-          type:
-          - string
-          - 'null'
-        due_at:
-          description: Regulatory / internal deadline
-          format: date-time
-          type:
-          - string
-          - 'null'
-        escalated_to:
-          description: MLRO or senior reviewer
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        opened_at:
-          description: Opened
-          format: date-time
-          readOnly: true
-          type: string
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - CRITICAL
-          type: string
-        risk_score:
-          description: Aggregate risk score 0-1000
-          format: int32
-          type:
-          - integer
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - PENDING_APPROVAL
-          - ESCALATED
-          - SAR_FILED
-          - CLOSED
-          type: string
-        tags:
-          additionalProperties: true
-          description: Free tags
-          type:
-          - object
-          - 'null'
-        team:
-          description: Team / queue
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        title:
-          description: Short summary
-          maxLength: 255
-          type: string
-        total_amount:
-          description: Total suspicious amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - case_number
-      - case_type
-      - status
-      - priority
-      - title
-      - opened_at
-      type: object
-    AmlCaseAlert:
-      description: Link between a case and an alert or referral that contributed to it
-      properties:
-        added_reason:
-          description: Why it was added
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        alert_id:
-          description: Alert / result id in its service
-          format: uuid
-          type:
-          - string
-          - 'null'
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source:
-          description: Alert source
-          enum:
-          - FRAUD_ALERT
-          - TM_ALERT
-          - SCREENING_RESULT
-          - MANUAL_REFERRAL
-          - LAW_ENFORCEMENT_REQUEST
-          - WHISTLEBLOWER
-          type: string
-        summary:
-          description: Alert summary
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - aml_case_id
-      - source
-      type: object
-    AmlCaseAlertPage:
-      description: One page of AmlCaseAlert results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCaseAlert'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCaseCreate:
-      properties:
-        assigned_to:
-          description: Investigator
-          maxLength: 64
-          type: string
-        case_type:
-          description: Case type
-          enum:
-          - AML
-          - FRAUD
-          - SANCTIONS
-          - KYC
-          - MULE
-          - TERRORIST_FINANCING
-          - BRIBERY_CORRUPTION
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Primary subject
-          format: uuid
-          type: string
-        description:
-          description: Investigation scope
-          type: string
-        due_at:
-          description: Regulatory / internal deadline
-          format: date-time
-          type: string
-        escalated_to:
-          description: MLRO or senior reviewer
-          maxLength: 64
-          type: string
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - CRITICAL
-          type: string
-        risk_score:
-          description: Aggregate risk score 0-1000
-          format: int32
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - PENDING_APPROVAL
-          - ESCALATED
-          - SAR_FILED
-          - CLOSED
-          type: string
-        tags:
-          additionalProperties: true
-          description: Free tags
-          type: object
-        team:
-          description: Team / queue
-          maxLength: 64
-          type: string
-        title:
-          description: Short summary
-          maxLength: 255
-          type: string
-        total_amount:
-          description: Total suspicious amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - case_type
-      - title
-      type: object
-    AmlCaseDisposition:
-      description: Final decision on a case with rationale and approval. Append-only.
-      properties:
-        actions_taken:
-          additionalProperties: true
-          description: Restrictions applied, relationship exit, monitoring changes
-          type:
-          - object
-          - 'null'
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        approved_by:
-          description: MLRO (checker)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decided_at:
-          description: Decision time
-          format: date-time
-          type: string
-        decided_by:
-          description: Investigator (maker)
-          maxLength: 64
-          type: string
-        disposition:
-          description: Decision
-          enum:
-          - NO_SUSPICION
-          - SAR_FILED
-          - EXIT_RELATIONSHIP
-          - ENHANCED_MONITORING
-          - ACCOUNT_RESTRICTED
-          - REFERRED_TO_LAW_ENFORCEMENT
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        rationale:
-          description: Rationale
-          type: string
-      required:
-      - id
-      - created_at
-      - aml_case_id
-      - disposition
-      - rationale
-      - decided_by
-      - decided_at
-      type: object
-    AmlCaseDispositionPage:
-      description: One page of AmlCaseDisposition results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCaseDisposition'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCaseDispositionsApproveRequest:
-      properties:
-        comment:
-          type: string
-      type: object
-    AmlCaseEvidence:
-      description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Description
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: Stored document
-          format: uuid
-          type: string
-        evidence_type:
-          description: STATEMENT, KYC_DOCUMENT, SCREENSHOT, GRAPH_EXPORT, CORRESPONDENCE, OTHER
-          maxLength: 40
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sha256:
-          description: Hash for chain of custody
-          maxLength: 64
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - aml_case_id
-      - document_id
-      - evidence_type
-      - sha256
-      type: object
-    AmlCaseEvidenceCreate:
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Description
-          maxLength: 500
-          type: string
-        document_id:
-          description: Stored document
-          format: uuid
-          type: string
-        evidence_type:
-          description: STATEMENT, KYC_DOCUMENT, SCREENSHOT, GRAPH_EXPORT, CORRESPONDENCE, OTHER
-          maxLength: 40
-          type: string
-        sha256:
-          description: Hash for chain of custody
-          maxLength: 64
-          type: string
-      required:
-      - aml_case_id
-      - document_id
-      - evidence_type
-      - sha256
-      type: object
-    AmlCaseEvidencePage:
-      description: One page of AmlCaseEvidence results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCaseEvidence'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCaseNote:
-      description: Investigator note on a case. Append-only.
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        attachments:
-          additionalProperties: true
-          description: Document ids
-          type:
-          - object
-          - 'null'
-        author:
-          description: Author
-          maxLength: 64
-          type: string
-        body:
-          description: Note text
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        visibility:
-          description: INTERNAL or RESTRICTED (tipping-off protection)
-          maxLength: 16
-          type: string
-      required:
-      - id
-      - created_at
-      - aml_case_id
-      - author
-      - body
-      - visibility
-      type: object
-    AmlCaseNotePage:
-      description: One page of AmlCaseNote results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCaseNote'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCasePage:
-      description: One page of AmlCase results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCase'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCaseTask:
-      description: Investigation task (request for information, account review, customer outreach)
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        assigned_to:
-          description: Assignee
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        completed_at:
-          description: Completed
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Details
-          type:
-          - string
-          - 'null'
-        due_at:
-          description: Due
-          format: date-time
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - DONE
-          - CANCELLED
-          type: string
-        title:
-          description: Task
-          maxLength: 255
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - aml_case_id
-      - title
-      - status
-      type: object
-    AmlCaseTaskCreate:
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        assigned_to:
-          description: Assignee
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Details
-          type: string
-        due_at:
-          description: Due
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - DONE
-          - CANCELLED
-          type: string
-        title:
-          description: Task
-          maxLength: 255
-          type: string
-      required:
-      - aml_case_id
-      - title
-      type: object
-    AmlCaseTaskPage:
-      description: One page of AmlCaseTask results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AmlCaseTask'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AmlCaseTaskUpdate:
-      properties:
-        aml_case_id:
-          description: Case
-          format: uuid
-          type: string
-        assigned_to:
-          description: Assignee
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Details
-          type: string
-        due_at:
-          description: Due
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - DONE
-          - CANCELLED
-          type: string
-        title:
-          description: Task
-          maxLength: 255
-          type: string
-      type: object
-    AmlCaseTasksCompleteRequest:
-      properties:
-        note:
-          type: string
-      type: object
-    AmlCaseUpdate:
-      properties:
-        assigned_to:
-          description: Investigator
-          maxLength: 64
-          type: string
-        case_type:
-          description: Case type
-          enum:
-          - AML
-          - FRAUD
-          - SANCTIONS
-          - KYC
-          - MULE
-          - TERRORIST_FINANCING
-          - BRIBERY_CORRUPTION
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Primary subject
-          format: uuid
-          type: string
-        description:
-          description: Investigation scope
-          type: string
-        due_at:
-          description: Regulatory / internal deadline
-          format: date-time
-          type: string
-        escalated_to:
-          description: MLRO or senior reviewer
-          maxLength: 64
-          type: string
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - CRITICAL
-          type: string
-        risk_score:
-          description: Aggregate risk score 0-1000
-          format: int32
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - PENDING_APPROVAL
-          - ESCALATED
-          - SAR_FILED
-          - CLOSED
-          type: string
-        tags:
-          additionalProperties: true
-          description: Free tags
-          type: object
-        team:
-          description: Team / queue
-          maxLength: 64
-          type: string
-        title:
-          description: Short summary
-          maxLength: 255
-          type: string
-        total_amount:
-          description: Total suspicious amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    AmlCasesAlertsRequest:
-      properties:
-        added_reason:
-          maxLength: 255
-          type: string
-        alert_id:
-          format: uuid
-          type: string
-        source:
-          enum:
-          - FRAUD_ALERT
-          - TM_ALERT
-          - SCREENING_RESULT
-          - MANUAL_REFERRAL
-          - LAW_ENFORCEMENT_REQUEST
-          - WHISTLEBLOWER
-          type: string
-        summary:
-          maxLength: 500
-          type: string
-      required:
-      - source
-      type: object
-    AmlCasesAssignRequest:
-      properties:
-        assigned_to:
-          maxLength: 64
-          type: string
-        team:
-          maxLength: 64
-          type: string
-      required:
-      - assigned_to
-      type: object
-    AmlCasesCloseRequest:
-      properties:
-        actions_taken:
-          additionalProperties: true
-          type: object
-        disposition:
-          enum:
-          - NO_SUSPICION
-          - SAR_FILED
-          - EXIT_RELATIONSHIP
-          - ENHANCED_MONITORING
-          - ACCOUNT_RESTRICTED
-          - REFERRED_TO_LAW_ENFORCEMENT
-          type: string
-        rationale:
-          type: string
-      required:
-      - disposition
-      - rationale
-      type: object
-    AmlCasesEscalateRequest:
-      properties:
-        escalated_to:
-          maxLength: 64
-          type: string
-        reason:
-          type: string
-      required:
-      - escalated_to
-      - reason
-      type: object
-    AmlCasesNotesRequest:
-      properties:
-        attachments:
-          additionalProperties: true
-          type: object
-        body:
-          type: string
-        visibility:
-          maxLength: 16
-          type: string
-      required:
-      - body
-      type: object
-    AmlCasesReopenRequest:
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    SarReport:
-      description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
-      properties:
-        acknowledged_at:
-          description: FIU acknowledgement time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        activity_end:
-          description: Suspicious activity end
-          format: date
-          type:
-          - string
-          - 'null'
-        activity_start:
-          description: Suspicious activity start
-          format: date
-          type:
-          - string
-          - 'null'
-        ai_draft_narrative:
-          description: AI-drafted narrative for the investigator to edit
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        aml_case_id:
-          description: Case (empty for threshold reports such as CTR)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: MLRO approval
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        export_document_id:
-          description: goAML XML / FinCEN BSA XML file
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        filing_deadline:
-          description: Regulatory deadline
-          format: date
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        jurisdiction:
-          description: Filing jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        narrative:
-          description: Final narrative
-          type:
-          - string
-          - 'null'
-        prepared_by:
-          description: Preparer
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        regulator:
-          description: FIU, e.g. FinCEN, NCA, FIC
-          maxLength: 64
-          type: string
-        regulator_reference:
-          description: FIU reference number
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        rejection_reason:
-          description: FIU rejection reason
-          type:
-          - string
-          - 'null'
-        report_type:
-          description: Report type
-          enum:
-          - SAR
-          - STR
-          - CTR
-          - LCTR
-          - EFTR
-          - TFR
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - REJECTED
-          type: string
-        subjects:
-          additionalProperties: true
-          description: Persons and entities reported
-          type:
-          - object
-          - 'null'
-        submitted_at:
-          description: Submission time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        suspicious_amount:
-          description: Amount involved
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        transactions:
-          additionalProperties: true
-          description: Transactions reported
-          type:
-          - object
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - report_type
-      - jurisdiction
-      - regulator
-      - status
-      type: object
-    SarReportCreate:
-      properties:
-        activity_end:
-          description: Suspicious activity end
-          format: date
-          type: string
-        activity_start:
-          description: Suspicious activity start
-          format: date
-          type: string
-        aml_case_id:
-          description: Case (empty for threshold reports such as CTR)
-          format: uuid
-          type: string
-        approved_by:
-          description: MLRO approval
-          maxLength: 64
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        filing_deadline:
-          description: Regulatory deadline
-          format: date
-          type: string
-        jurisdiction:
-          description: Filing jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        narrative:
-          description: Final narrative
-          type: string
-        prepared_by:
-          description: Preparer
-          maxLength: 64
-          type: string
-        regulator:
-          description: FIU, e.g. FinCEN, NCA, FIC
-          maxLength: 64
-          type: string
-        regulator_reference:
-          description: FIU reference number
-          maxLength: 128
-          type: string
-        rejection_reason:
-          description: FIU rejection reason
-          type: string
-        report_type:
-          description: Report type
-          enum:
-          - SAR
-          - STR
-          - CTR
-          - LCTR
-          - EFTR
-          - TFR
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - REJECTED
-          type: string
-        subjects:
-          additionalProperties: true
-          description: Persons and entities reported
-          type: object
-        suspicious_amount:
-          description: Amount involved
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        transactions:
-          additionalProperties: true
-          description: Transactions reported
-          type: object
-      required:
-      - report_type
-      - jurisdiction
-      - regulator
-      type: object
-    SarReportPage:
-      description: One page of SarReport results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/SarReport'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    SarReportUpdate:
-      properties:
-        activity_end:
-          description: Suspicious activity end
-          format: date
-          type: string
-        activity_start:
-          description: Suspicious activity start
-          format: date
-          type: string
-        aml_case_id:
-          description: Case (empty for threshold reports such as CTR)
-          format: uuid
-          type: string
-        approved_by:
-          description: MLRO approval
-          maxLength: 64
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        filing_deadline:
-          description: Regulatory deadline
-          format: date
-          type: string
-        jurisdiction:
-          description: Filing jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        narrative:
-          description: Final narrative
-          type: string
-        prepared_by:
-          description: Preparer
-          maxLength: 64
-          type: string
-        regulator:
-          description: FIU, e.g. FinCEN, NCA, FIC
-          maxLength: 64
-          type: string
-        regulator_reference:
-          description: FIU reference number
-          maxLength: 128
-          type: string
-        rejection_reason:
-          description: FIU rejection reason
-          type: string
-        report_type:
-          description: Report type
-          enum:
-          - SAR
-          - STR
-          - CTR
-          - LCTR
-          - EFTR
-          - TFR
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - REJECTED
-          type: string
-        subjects:
-          additionalProperties: true
-          description: Persons and entities reported
-          type: object
-        suspicious_amount:
-          description: Amount involved
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        transactions:
-          additionalProperties: true
-          description: Transactions reported
-          type: object
-      type: object
-    SarReportsAcknowledgeRequest:
-      properties:
-        regulator_reference:
-          maxLength: 128
-          type: string
-      required:
-      - regulator_reference
-      type: object
-    SarReportsApproveRequest:
-      properties:
-        comment:
-          type: string
-      type: object
-    SarReportsFileRequest:
-      properties:
-        channel:
-          maxLength: 16
-          type: string
-      required:
-      - channel
-      type: object
-    SarReportsRecordRejectionRequest:
-      properties:
-        rejection_reason:
-          type: string
-      required:
-      - rejection_reason
-      type: object
-    SarReportsSubmitForApprovalRequest:
-      properties:
-        comment:
-          type: string
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — case-management-service
+  version: 1.0.0
   description: 'Real-time fraud scoring, transaction monitoring, sanctions and PEP screening, AML case management with SAR/STR
     filing, and the limits engine. Every payment, card authorisation and wallet movement is scored, screened and limit-checked
     before money moves.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — case-management-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Aml Cases
+  description: An AML / fraud / sanctions investigation case consolidating related alerts
+- name: Aml Case Tasks
+  description: Investigation task (request for information, account review, customer outreach)
+- name: Aml Case Evidence
+  description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
+- name: Aml Case Dispositions
+  description: Final decision on a case with rationale and approval. Append-only.
+- name: Sar Reports
+  description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
 paths:
   /v1/risk/cases:
     get:
@@ -3552,21 +1718,1855 @@ paths:
       x-service: case-management-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
       x-table: sar_report
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: An AML / fraud / sanctions investigation case consolidating related alerts
-  name: Aml Cases
-- description: Investigation task (request for information, account review, customer outreach)
-  name: Aml Case Tasks
-- description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
-  name: Aml Case Evidence
-- description: Final decision on a case with rationale and approval. Append-only.
-  name: Aml Case Dispositions
-- description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
-  name: Sar Reports
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    AmlCasePage:
+      type: object
+      description: One page of AmlCase results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCase'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCasesAssignRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          maxLength: 64
+        team:
+          type: string
+          maxLength: 64
+      required:
+      - assigned_to
+    AmlCasesEscalateRequest:
+      type: object
+      properties:
+        escalated_to:
+          type: string
+          maxLength: 64
+        reason:
+          type: string
+      required:
+      - escalated_to
+      - reason
+    AmlCasesCloseRequest:
+      type: object
+      properties:
+        disposition:
+          type: string
+          enum:
+          - NO_SUSPICION
+          - SAR_FILED
+          - EXIT_RELATIONSHIP
+          - ENHANCED_MONITORING
+          - ACCOUNT_RESTRICTED
+          - REFERRED_TO_LAW_ENFORCEMENT
+        rationale:
+          type: string
+        actions_taken:
+          type: object
+          additionalProperties: true
+      required:
+      - disposition
+      - rationale
+    AmlCasesReopenRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    AmlCaseAlertPage:
+      type: object
+      description: One page of AmlCaseAlert results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCaseAlert'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCasesAlertsRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum:
+          - FRAUD_ALERT
+          - TM_ALERT
+          - SCREENING_RESULT
+          - MANUAL_REFERRAL
+          - LAW_ENFORCEMENT_REQUEST
+          - WHISTLEBLOWER
+        alert_id:
+          type: string
+          format: uuid
+        summary:
+          type: string
+          maxLength: 500
+        added_reason:
+          type: string
+          maxLength: 255
+      required:
+      - source
+    AmlCaseNotePage:
+      type: object
+      description: One page of AmlCaseNote results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCaseNote'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCasesNotesRequest:
+      type: object
+      properties:
+        body:
+          type: string
+        visibility:
+          type: string
+          maxLength: 16
+        attachments:
+          type: object
+          additionalProperties: true
+      required:
+      - body
+    AmlCaseTaskPage:
+      type: object
+      description: One page of AmlCaseTask results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCaseTask'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCaseTasksCompleteRequest:
+      type: object
+      properties:
+        note:
+          type: string
+    AmlCaseEvidencePage:
+      type: object
+      description: One page of AmlCaseEvidence results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCaseEvidence'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCaseDispositionPage:
+      type: object
+      description: One page of AmlCaseDisposition results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmlCaseDisposition'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AmlCaseDispositionsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    SarReportPage:
+      type: object
+      description: One page of SarReport results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SarReport'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SarReportsSubmitForApprovalRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    SarReportsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    SarReportsFileRequest:
+      type: object
+      properties:
+        channel:
+          type: string
+          maxLength: 16
+      required:
+      - channel
+    SarReportsAcknowledgeRequest:
+      type: object
+      properties:
+        regulator_reference:
+          type: string
+          maxLength: 128
+      required:
+      - regulator_reference
+    SarReportsRecordRejectionRequest:
+      type: object
+      properties:
+        rejection_reason:
+          type: string
+      required:
+      - rejection_reason
+    AmlCase:
+      type: object
+      description: An AML / fraud / sanctions investigation case consolidating related alerts
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        case_number:
+          type: string
+          maxLength: 32
+          description: Human-readable case number
+          readOnly: true
+        case_type:
+          type: string
+          enum:
+          - AML
+          - FRAUD
+          - SANCTIONS
+          - KYC
+          - MULE
+          - TERRORIST_FINANCING
+          - BRIBERY_CORRUPTION
+          description: Case type
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - PENDING_APPROVAL
+          - ESCALATED
+          - SAR_FILED
+          - CLOSED
+          description: Status
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          description: Priority
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Primary subject
+        title:
+          type: string
+          maxLength: 255
+          description: Short summary
+        description:
+          type:
+          - string
+          - 'null'
+          description: Investigation scope
+        risk_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Aggregate risk score 0-1000
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total suspicious amount
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Investigator
+        team:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Team / queue
+        opened_at:
+          type: string
+          format: date-time
+          description: Opened
+          readOnly: true
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Regulatory / internal deadline
+        escalated_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO or senior reviewer
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Closed
+          readOnly: true
+        ai_summary:
+          type:
+          - string
+          - 'null'
+          description: AI-generated case summary with citations
+          readOnly: true
+        tags:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Free tags
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - case_number
+      - case_type
+      - status
+      - priority
+      - title
+      - opened_at
+    AmlCaseCreate:
+      type: object
+      properties:
+        case_type:
+          type: string
+          enum:
+          - AML
+          - FRAUD
+          - SANCTIONS
+          - KYC
+          - MULE
+          - TERRORIST_FINANCING
+          - BRIBERY_CORRUPTION
+          description: Case type
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - PENDING_APPROVAL
+          - ESCALATED
+          - SAR_FILED
+          - CLOSED
+          description: Status
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          description: Priority
+        customer_id:
+          type: string
+          format: uuid
+          description: Primary subject
+        title:
+          type: string
+          maxLength: 255
+          description: Short summary
+        description:
+          type: string
+          description: Investigation scope
+        risk_score:
+          type: integer
+          format: int32
+          description: Aggregate risk score 0-1000
+        total_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total suspicious amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Investigator
+        team:
+          type: string
+          maxLength: 64
+          description: Team / queue
+        due_at:
+          type: string
+          format: date-time
+          description: Regulatory / internal deadline
+        escalated_to:
+          type: string
+          maxLength: 64
+          description: MLRO or senior reviewer
+        tags:
+          type: object
+          additionalProperties: true
+          description: Free tags
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - case_type
+      - title
+    AmlCaseUpdate:
+      type: object
+      properties:
+        case_type:
+          type: string
+          enum:
+          - AML
+          - FRAUD
+          - SANCTIONS
+          - KYC
+          - MULE
+          - TERRORIST_FINANCING
+          - BRIBERY_CORRUPTION
+          description: Case type
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - PENDING_APPROVAL
+          - ESCALATED
+          - SAR_FILED
+          - CLOSED
+          description: Status
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          description: Priority
+        customer_id:
+          type: string
+          format: uuid
+          description: Primary subject
+        title:
+          type: string
+          maxLength: 255
+          description: Short summary
+        description:
+          type: string
+          description: Investigation scope
+        risk_score:
+          type: integer
+          format: int32
+          description: Aggregate risk score 0-1000
+        total_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total suspicious amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Investigator
+        team:
+          type: string
+          maxLength: 64
+          description: Team / queue
+        due_at:
+          type: string
+          format: date-time
+          description: Regulatory / internal deadline
+        escalated_to:
+          type: string
+          maxLength: 64
+          description: MLRO or senior reviewer
+        tags:
+          type: object
+          additionalProperties: true
+          description: Free tags
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    AmlCaseAlert:
+      type: object
+      description: Link between a case and an alert or referral that contributed to it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        source:
+          type: string
+          enum:
+          - FRAUD_ALERT
+          - TM_ALERT
+          - SCREENING_RESULT
+          - MANUAL_REFERRAL
+          - LAW_ENFORCEMENT_REQUEST
+          - WHISTLEBLOWER
+          description: Alert source
+        alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Alert / result id in its service
+        summary:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Alert summary
+        added_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was added
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - aml_case_id
+      - source
+    AmlCaseDisposition:
+      type: object
+      description: Final decision on a case with rationale and approval. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        disposition:
+          type: string
+          enum:
+          - NO_SUSPICION
+          - SAR_FILED
+          - EXIT_RELATIONSHIP
+          - ENHANCED_MONITORING
+          - ACCOUNT_RESTRICTED
+          - REFERRED_TO_LAW_ENFORCEMENT
+          description: Decision
+        rationale:
+          type: string
+          description: Rationale
+        decided_by:
+          type: string
+          maxLength: 64
+          description: Investigator (maker)
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO (checker)
+        decided_at:
+          type: string
+          format: date-time
+          description: Decision time
+        actions_taken:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Restrictions applied, relationship exit, monitoring changes
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - aml_case_id
+      - disposition
+      - rationale
+      - decided_by
+      - decided_at
+    AmlCaseEvidence:
+      type: object
+      description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        document_id:
+          type: string
+          format: uuid
+          description: Stored document
+        evidence_type:
+          type: string
+          maxLength: 40
+          description: STATEMENT, KYC_DOCUMENT, SCREENSHOT, GRAPH_EXPORT, CORRESPONDENCE, OTHER
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Description
+        sha256:
+          type: string
+          maxLength: 64
+          description: Hash for chain of custody
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - aml_case_id
+      - document_id
+      - evidence_type
+      - sha256
+    AmlCaseEvidenceCreate:
+      type: object
+      properties:
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        document_id:
+          type: string
+          format: uuid
+          description: Stored document
+        evidence_type:
+          type: string
+          maxLength: 40
+          description: STATEMENT, KYC_DOCUMENT, SCREENSHOT, GRAPH_EXPORT, CORRESPONDENCE, OTHER
+        description:
+          type: string
+          maxLength: 500
+          description: Description
+        sha256:
+          type: string
+          maxLength: 64
+          description: Hash for chain of custody
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - aml_case_id
+      - document_id
+      - evidence_type
+      - sha256
+    AmlCaseNote:
+      type: object
+      description: Investigator note on a case. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        author:
+          type: string
+          maxLength: 64
+          description: Author
+        body:
+          type: string
+          description: Note text
+        visibility:
+          type: string
+          maxLength: 16
+          description: INTERNAL or RESTRICTED (tipping-off protection)
+        attachments:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Document ids
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - aml_case_id
+      - author
+      - body
+      - visibility
+    AmlCaseTask:
+      type: object
+      description: Investigation task (request for information, account review, customer outreach)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        title:
+          type: string
+          maxLength: 255
+          description: Task
+        description:
+          type:
+          - string
+          - 'null'
+          description: Details
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Assignee
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - DONE
+          - CANCELLED
+          description: Status
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Due
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completed
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - aml_case_id
+      - title
+      - status
+    AmlCaseTaskCreate:
+      type: object
+      properties:
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        title:
+          type: string
+          maxLength: 255
+          description: Task
+        description:
+          type: string
+          description: Details
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Assignee
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - DONE
+          - CANCELLED
+          description: Status
+        due_at:
+          type: string
+          format: date-time
+          description: Due
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - aml_case_id
+      - title
+    AmlCaseTaskUpdate:
+      type: object
+      properties:
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        title:
+          type: string
+          maxLength: 255
+          description: Task
+        description:
+          type: string
+          description: Details
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Assignee
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - DONE
+          - CANCELLED
+          description: Status
+        due_at:
+          type: string
+          format: date-time
+          description: Due
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    SarReport:
+      type: object
+      description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Case (empty for threshold reports such as CTR)
+        report_type:
+          type: string
+          enum:
+          - SAR
+          - STR
+          - CTR
+          - LCTR
+          - EFTR
+          - TFR
+          description: Report type
+        jurisdiction:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Filing jurisdiction (ISO 3166-1 alpha-2)
+        regulator:
+          type: string
+          maxLength: 64
+          description: FIU, e.g. FinCEN, NCA, FIC
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACKNOWLEDGED
+          - REJECTED
+          description: Status
+        narrative:
+          type:
+          - string
+          - 'null'
+          description: Final narrative
+        ai_draft_narrative:
+          type:
+          - string
+          - 'null'
+          description: AI-drafted narrative for the investigator to edit
+          readOnly: true
+        suspicious_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount involved
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        activity_start:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Suspicious activity start
+        activity_end:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Suspicious activity end
+        subjects:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Persons and entities reported
+        transactions:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Transactions reported
+        filing_deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Regulatory deadline
+        export_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: goAML XML / FinCEN BSA XML file
+          readOnly: true
+        regulator_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: FIU reference number
+        prepared_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Preparer
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO approval
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        acknowledged_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: FIU acknowledgement time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: FIU rejection reason
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - report_type
+      - jurisdiction
+      - regulator
+      - status
+    SarReportCreate:
+      type: object
+      properties:
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case (empty for threshold reports such as CTR)
+        report_type:
+          type: string
+          enum:
+          - SAR
+          - STR
+          - CTR
+          - LCTR
+          - EFTR
+          - TFR
+          description: Report type
+        jurisdiction:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Filing jurisdiction (ISO 3166-1 alpha-2)
+        regulator:
+          type: string
+          maxLength: 64
+          description: FIU, e.g. FinCEN, NCA, FIC
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACKNOWLEDGED
+          - REJECTED
+          description: Status
+        narrative:
+          type: string
+          description: Final narrative
+        suspicious_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount involved
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        activity_start:
+          type: string
+          format: date
+          description: Suspicious activity start
+        activity_end:
+          type: string
+          format: date
+          description: Suspicious activity end
+        subjects:
+          type: object
+          additionalProperties: true
+          description: Persons and entities reported
+        transactions:
+          type: object
+          additionalProperties: true
+          description: Transactions reported
+        filing_deadline:
+          type: string
+          format: date
+          description: Regulatory deadline
+        regulator_reference:
+          type: string
+          maxLength: 128
+          description: FIU reference number
+        prepared_by:
+          type: string
+          maxLength: 64
+          description: Preparer
+        approved_by:
+          type: string
+          maxLength: 64
+          description: MLRO approval
+        rejection_reason:
+          type: string
+          description: FIU rejection reason
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - report_type
+      - jurisdiction
+      - regulator
+    SarReportUpdate:
+      type: object
+      properties:
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case (empty for threshold reports such as CTR)
+        report_type:
+          type: string
+          enum:
+          - SAR
+          - STR
+          - CTR
+          - LCTR
+          - EFTR
+          - TFR
+          description: Report type
+        jurisdiction:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Filing jurisdiction (ISO 3166-1 alpha-2)
+        regulator:
+          type: string
+          maxLength: 64
+          description: FIU, e.g. FinCEN, NCA, FIC
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACKNOWLEDGED
+          - REJECTED
+          description: Status
+        narrative:
+          type: string
+          description: Final narrative
+        suspicious_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount involved
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        activity_start:
+          type: string
+          format: date
+          description: Suspicious activity start
+        activity_end:
+          type: string
+          format: date
+          description: Suspicious activity end
+        subjects:
+          type: object
+          additionalProperties: true
+          description: Persons and entities reported
+        transactions:
+          type: object
+          additionalProperties: true
+          description: Transactions reported
+        filing_deadline:
+          type: string
+          format: date
+          description: Regulatory deadline
+        regulator_reference:
+          type: string
+          maxLength: 128
+          description: FIU reference number
+        prepared_by:
+          type: string
+          maxLength: 64
+          description: Preparer
+        approved_by:
+          type: string
+          maxLength: 64
+          description: MLRO approval
+        rejection_reason:
+          type: string
+          description: FIU rejection reason
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits

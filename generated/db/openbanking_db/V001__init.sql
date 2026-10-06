@@ -33,6 +33,7 @@ CREATE TABLE ob_standard_profile (
   directory_url                varchar(500),
   sca_approaches               jsonb NOT NULL,
   consent_max_days             integer NOT NULL DEFAULT 90,
+  authorisation_ttl_minutes    integer NOT NULL DEFAULT 15,
   settings                     jsonb,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
@@ -56,6 +57,7 @@ COMMENT ON COLUMN ob_standard_profile.base_path IS 'Public base path for the pro
 COMMENT ON COLUMN ob_standard_profile.directory_url IS 'Trust directory / registry endpoint';
 COMMENT ON COLUMN ob_standard_profile.sca_approaches IS 'Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)';
 COMMENT ON COLUMN ob_standard_profile.consent_max_days IS 'Maximum AIS consent validity';
+COMMENT ON COLUMN ob_standard_profile.authorisation_ttl_minutes IS 'Validity of an SCA authorisation session';
 COMMENT ON COLUMN ob_standard_profile.settings IS 'Profile settings and field mappings';
 COMMENT ON COLUMN ob_standard_profile.is_active IS 'Active';
 COMMENT ON COLUMN ob_standard_profile.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -84,11 +86,13 @@ CREATE TABLE tpp (
   country                      char(2) NOT NULL,
   roles                        jsonb NOT NULL,
   directory_id                 varchar(128),
+  software_id                  varchar(128),
   client_id                    varchar(128),
   redirect_uris                jsonb,
   logo_uri                     varchar(500),
   contact_email                varchar(320),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'SUSPENDED', 'REVOKED')),
+  status_reason                varchar(255),
   last_verified_at             timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -112,11 +116,13 @@ COMMENT ON COLUMN tpp.competent_authority IS 'National competent authority (e.g.
 COMMENT ON COLUMN tpp.country IS 'Home country';
 COMMENT ON COLUMN tpp.roles IS 'PSD2 roles: AISP, PISP, CBPII';
 COMMENT ON COLUMN tpp.directory_id IS 'Id in the trust directory';
+COMMENT ON COLUMN tpp.software_id IS 'Software statement id (dynamic client registration)';
 COMMENT ON COLUMN tpp.client_id IS 'OAuth client id issued via dynamic client registration';
 COMMENT ON COLUMN tpp.redirect_uris IS 'Registered redirect URIs';
 COMMENT ON COLUMN tpp.logo_uri IS 'Logo shown on the consent screen';
 COMMENT ON COLUMN tpp.contact_email IS 'Technical contact';
 COMMENT ON COLUMN tpp.status IS 'Status';
+COMMENT ON COLUMN tpp.status_reason IS 'Reason of the last status change';
 COMMENT ON COLUMN tpp.last_verified_at IS 'Last regulator / directory check';
 COMMENT ON COLUMN tpp.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tpp.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -128,7 +134,7 @@ ALTER TABLE tpp ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON tpp USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_tpp_touch BEFORE UPDATE ON tpp FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- tpp_certificate: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+-- tpp_certificate: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload
 CREATE TABLE tpp_certificate (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -139,13 +145,19 @@ CREATE TABLE tpp_certificate (
   row_version                  integer NOT NULL DEFAULT 1,
   tpp_id                       uuid NOT NULL REFERENCES tpp(id),
   certificate_type             varchar(40) NOT NULL CHECK (certificate_type IN ('QWAC', 'QSEAL', 'OBWAC', 'OBSEAL', 'MTLS_CLIENT')),
+  certificate_pem              text NOT NULL,
   subject_dn                   varchar(500) NOT NULL,
   issuer_dn                    varchar(500) NOT NULL,
   serial_number                varchar(128) NOT NULL,
   fingerprint_sha256           varchar(64) NOT NULL,
+  organization_identifier      varchar(128),
+  psd2_roles                   jsonb,
+  nca_name                     varchar(256),
+  nca_id                       varchar(16),
   valid_from                   timestamptz NOT NULL,
   valid_to                     timestamptz NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'VALID' CHECK (status IN ('VALID', 'EXPIRED', 'REVOKED')),
+  revocation_reason            varchar(255),
   last_ocsp_check_at           timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -154,7 +166,7 @@ CREATE TABLE tpp_certificate (
   custom_field_5               varchar(500),
   CONSTRAINT uq_tpp_certificate_fingerprint_sha256 UNIQUE (tenant_id, fingerprint_sha256)
 );
-COMMENT ON TABLE tpp_certificate IS 'Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)';
+COMMENT ON TABLE tpp_certificate IS 'Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload';
 COMMENT ON COLUMN tpp_certificate.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN tpp_certificate.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN tpp_certificate.created_at IS 'Creation time';
@@ -164,13 +176,19 @@ COMMENT ON COLUMN tpp_certificate.updated_by IS 'Principal that last updated the
 COMMENT ON COLUMN tpp_certificate.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN tpp_certificate.tpp_id IS 'TPP';
 COMMENT ON COLUMN tpp_certificate.certificate_type IS 'Type';
+COMMENT ON COLUMN tpp_certificate.certificate_pem IS 'X.509 certificate (PEM)';
 COMMENT ON COLUMN tpp_certificate.subject_dn IS 'Subject distinguished name';
 COMMENT ON COLUMN tpp_certificate.issuer_dn IS 'Issuer';
-COMMENT ON COLUMN tpp_certificate.serial_number IS 'Serial number';
+COMMENT ON COLUMN tpp_certificate.serial_number IS 'Serial number (hex)';
 COMMENT ON COLUMN tpp_certificate.fingerprint_sha256 IS 'Fingerprint';
+COMMENT ON COLUMN tpp_certificate.organization_identifier IS 'eIDAS organisation identifier (2.5.4.97), e.g. PSDGB-FCA-123456';
+COMMENT ON COLUMN tpp_certificate.psd2_roles IS 'PSD2 roles from the eIDAS QCStatement (PSP_AS, PSP_PI, PSP_AI, PSP_IC)';
+COMMENT ON COLUMN tpp_certificate.nca_name IS 'Competent authority name from the QCStatement';
+COMMENT ON COLUMN tpp_certificate.nca_id IS 'Competent authority id from the QCStatement (e.g. GB-FCA)';
 COMMENT ON COLUMN tpp_certificate.valid_from IS 'Not before';
 COMMENT ON COLUMN tpp_certificate.valid_to IS 'Not after';
 COMMENT ON COLUMN tpp_certificate.status IS 'Status (OCSP / CRL checked)';
+COMMENT ON COLUMN tpp_certificate.revocation_reason IS 'Reason when revoked';
 COMMENT ON COLUMN tpp_certificate.last_ocsp_check_at IS 'Last revocation check';
 COMMENT ON COLUMN tpp_certificate.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tpp_certificate.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -202,12 +220,14 @@ CREATE TABLE ob_consent (
   transaction_to               timestamptz,
   frequency_per_day            integer,
   recurring                    boolean NOT NULL DEFAULT true,
+  initiation                   jsonb,
   vrp_control_parameters       jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'AWAITING_AUTHORISATION' CHECK (status IN ('AWAITING_AUTHORISATION', 'AUTHORISED', 'REJECTED', 'REVOKED', 'EXPIRED', 'CONSUMED')),
   authorised_at                timestamptz,
   expires_at                   timestamptz,
   revoked_at                   timestamptz,
   revoked_by                   varchar(16),
+  status_reason                varchar(255),
   last_accessed_at             timestamptz,
   risk                         jsonb,
   custom_field_1               varchar(500),
@@ -228,19 +248,21 @@ COMMENT ON COLUMN ob_consent.row_version IS 'Optimistic lock version; send as If
 COMMENT ON COLUMN ob_consent.tpp_id IS 'TPP';
 COMMENT ON COLUMN ob_consent.ob_standard_profile_id IS 'Standard used';
 COMMENT ON COLUMN ob_consent.consent_type IS 'Consent type';
-COMMENT ON COLUMN ob_consent.external_consent_id IS 'Consent id exposed to the TPP';
+COMMENT ON COLUMN ob_consent.external_consent_id IS 'Consent id exposed to the TPP (server-generated)';
 COMMENT ON COLUMN ob_consent.customer_id IS 'Customer who authorised (set on authorisation)';
 COMMENT ON COLUMN ob_consent.permissions IS 'Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)';
 COMMENT ON COLUMN ob_consent.transaction_from IS 'Earliest transaction date visible';
 COMMENT ON COLUMN ob_consent.transaction_to IS 'Latest transaction date visible';
 COMMENT ON COLUMN ob_consent.frequency_per_day IS 'Allowed unattended accesses per day (Berlin Group)';
 COMMENT ON COLUMN ob_consent.recurring IS 'Recurring access';
+COMMENT ON COLUMN ob_consent.initiation IS 'Payment details for PIS consents (instructed_amount, currency, creditor_name, creditor_account, remittance_information)';
 COMMENT ON COLUMN ob_consent.vrp_control_parameters IS 'Variable recurring payment limits (VRP)';
 COMMENT ON COLUMN ob_consent.status IS 'Status';
 COMMENT ON COLUMN ob_consent.authorised_at IS 'Authorisation time';
-COMMENT ON COLUMN ob_consent.expires_at IS 'Expiry';
+COMMENT ON COLUMN ob_consent.expires_at IS 'Expiry (defaults to the profile maximum for AIS)';
 COMMENT ON COLUMN ob_consent.revoked_at IS 'Revocation time';
 COMMENT ON COLUMN ob_consent.revoked_by IS 'CUSTOMER, TPP or ASPSP';
+COMMENT ON COLUMN ob_consent.status_reason IS 'Reason of rejection or revocation';
 COMMENT ON COLUMN ob_consent.last_accessed_at IS 'Last access by the TPP';
 COMMENT ON COLUMN ob_consent.risk IS 'Payment context / risk indicators supplied by the TPP';
 COMMENT ON COLUMN ob_consent.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -316,6 +338,7 @@ CREATE TABLE ob_authorisation (
   code_challenge               varchar(128),
   status                       varchar(40) NOT NULL DEFAULT 'STARTED' CHECK (status IN ('STARTED', 'SCA_REQUIRED', 'AUTHENTICATED', 'ACCOUNTS_SELECTED', 'FINALISED', 'FAILED', 'EXPIRED')),
   customer_id                  uuid,
+  selected_account_ids         jsonb,
   authentication_method        varchar(32),
   failure_reason               varchar(255),
   expires_at                   timestamptz NOT NULL,
@@ -341,6 +364,7 @@ COMMENT ON COLUMN ob_authorisation.state IS 'OAuth state';
 COMMENT ON COLUMN ob_authorisation.code_challenge IS 'PKCE code challenge';
 COMMENT ON COLUMN ob_authorisation.status IS 'Status';
 COMMENT ON COLUMN ob_authorisation.customer_id IS 'Authenticated customer';
+COMMENT ON COLUMN ob_authorisation.selected_account_ids IS 'Accounts the customer selected';
 COMMENT ON COLUMN ob_authorisation.authentication_method IS 'Method used (passkey, app push, OTP)';
 COMMENT ON COLUMN ob_authorisation.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN ob_authorisation.expires_at IS 'Session expiry';
@@ -370,12 +394,14 @@ CREATE TABLE ob_payment_initiation (
   tpp_id                       uuid NOT NULL REFERENCES tpp(id),
   external_payment_id          varchar(128) NOT NULL,
   payment_id                   uuid,
+  debtor_account_id            uuid,
   payment_product              varchar(64) NOT NULL,
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   creditor_name                varchar(140) NOT NULL,
   creditor_account             varchar(64) NOT NULL,
   remittance_information       varchar(140),
+  requested_execution_date     date,
   status                       varchar(40) NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED', 'PENDING', 'ACCEPTED', 'REJECTED', 'EXECUTED', 'CANCELLED')),
   status_reason                varchar(255),
   custom_field_1               varchar(500),
@@ -395,14 +421,16 @@ COMMENT ON COLUMN ob_payment_initiation.updated_by IS 'Principal that last updat
 COMMENT ON COLUMN ob_payment_initiation.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN ob_payment_initiation.ob_consent_id IS 'Consent';
 COMMENT ON COLUMN ob_payment_initiation.tpp_id IS 'Initiating TPP';
-COMMENT ON COLUMN ob_payment_initiation.external_payment_id IS 'Payment id exposed to the TPP';
+COMMENT ON COLUMN ob_payment_initiation.external_payment_id IS 'Payment id exposed to the TPP (server-generated)';
 COMMENT ON COLUMN ob_payment_initiation.payment_id IS 'Core payment created';
+COMMENT ON COLUMN ob_payment_initiation.debtor_account_id IS 'Debtor account selected under the consent';
 COMMENT ON COLUMN ob_payment_initiation.payment_product IS 'Product, e.g. domestic-payments, sepa-credit-transfers, instant';
 COMMENT ON COLUMN ob_payment_initiation.amount IS 'Amount';
 COMMENT ON COLUMN ob_payment_initiation.currency IS 'Currency';
 COMMENT ON COLUMN ob_payment_initiation.creditor_name IS 'Creditor name [PII]';
 COMMENT ON COLUMN ob_payment_initiation.creditor_account IS 'Creditor account [PII]';
 COMMENT ON COLUMN ob_payment_initiation.remittance_information IS 'Remittance information';
+COMMENT ON COLUMN ob_payment_initiation.requested_execution_date IS 'Future execution date (empty = immediate)';
 COMMENT ON COLUMN ob_payment_initiation.status IS 'Status';
 COMMENT ON COLUMN ob_payment_initiation.status_reason IS 'Status reason';
 COMMENT ON COLUMN ob_payment_initiation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -414,6 +442,7 @@ CREATE INDEX ix_ob_payment_initiation_tenant ON ob_payment_initiation (tenant_id
 CREATE INDEX ix_ob_payment_initiation_ob_consent_id ON ob_payment_initiation (ob_consent_id);
 CREATE INDEX ix_ob_payment_initiation_tpp_id ON ob_payment_initiation (tpp_id);
 CREATE INDEX ix_ob_payment_initiation_payment_id ON ob_payment_initiation (payment_id);
+CREATE INDEX ix_ob_payment_initiation_debtor_account_id ON ob_payment_initiation (debtor_account_id);
 ALTER TABLE ob_payment_initiation ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ob_payment_initiation USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_ob_payment_initiation_touch BEFORE UPDATE ON ob_payment_initiation FOR EACH ROW EXECUTE FUNCTION touch_row();

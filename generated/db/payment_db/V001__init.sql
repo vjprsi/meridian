@@ -43,6 +43,7 @@ CREATE TABLE payee (
   phone                        varchar(20),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_VERIFICATION' CHECK (status IN ('PENDING_VERIFICATION', 'ACTIVE', 'BLOCKED', 'DELETED')),
   verification_result          varchar(40) CHECK (verification_result IN ('MATCH', 'CLOSE_MATCH', 'NO_MATCH', 'ACCOUNT_NOT_FOUND', 'ACCOUNT_CLOSED', 'NOT_AVAILABLE')),
+  blocked_reason               varchar(255),
   verified_at                  timestamptz,
   trusted                      boolean NOT NULL DEFAULT false,
   cooling_off_until            timestamptz,
@@ -78,6 +79,7 @@ COMMENT ON COLUMN payee.email IS 'Beneficiary email for notifications [PII]';
 COMMENT ON COLUMN payee.phone IS 'Beneficiary phone [PII]';
 COMMENT ON COLUMN payee.status IS 'Status';
 COMMENT ON COLUMN payee.verification_result IS 'Last Confirmation of Payee result';
+COMMENT ON COLUMN payee.blocked_reason IS 'Reason the payee was blocked';
 COMMENT ON COLUMN payee.verified_at IS 'Last verification time';
 COMMENT ON COLUMN payee.trusted IS 'Trusted payee (skips step-up authentication)';
 COMMENT ON COLUMN payee.cooling_off_until IS 'New payee limit window end';
@@ -112,8 +114,12 @@ CREATE TABLE payee_alias (
   is_default                   boolean NOT NULL DEFAULT true,
   registry                     varchar(32),
   registry_ref                 varchar(64),
-  status                       varchar(16) NOT NULL DEFAULT 'ACTIVE',
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'PORTING', 'DELETED')),
   verified_at                  timestamptz,
+  otp_hash                     varchar(64),
+  otp_expires_at               timestamptz,
+  otp_attempts                 integer NOT NULL DEFAULT 0,
+  donor_institution            varchar(140),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -138,8 +144,12 @@ COMMENT ON COLUMN payee_alias.display_name IS 'Masked name returned on lookup [P
 COMMENT ON COLUMN payee_alias.is_default IS 'Default destination for this alias';
 COMMENT ON COLUMN payee_alias.registry IS 'External registry (PIX DICT, UPI, PayNow, national proxy)';
 COMMENT ON COLUMN payee_alias.registry_ref IS 'Registration id at the external registry';
-COMMENT ON COLUMN payee_alias.status IS 'ACTIVE, PENDING, PORTING, DELETED';
+COMMENT ON COLUMN payee_alias.status IS 'Lifecycle status (PENDING until ownership is verified)';
 COMMENT ON COLUMN payee_alias.verified_at IS 'Ownership verification time';
+COMMENT ON COLUMN payee_alias.otp_hash IS 'Hash of the ownership one-time password';
+COMMENT ON COLUMN payee_alias.otp_expires_at IS 'Expiry of the one-time password';
+COMMENT ON COLUMN payee_alias.otp_attempts IS 'Failed OTP attempts';
+COMMENT ON COLUMN payee_alias.donor_institution IS 'Institution the alias is being ported from';
 COMMENT ON COLUMN payee_alias.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payee_alias.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payee_alias.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -178,7 +188,10 @@ CREATE TABLE bulk_payment (
   currency                     char(3) NOT NULL,
   control_sum                  numeric(28,8),
   hold_id                      uuid,
+  submitted_by                 varchar(64),
   submitted_at                 timestamptz,
+  settled_count                integer NOT NULL DEFAULT 0,
+  rejection_reason             varchar(255),
   completed_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -210,7 +223,10 @@ COMMENT ON COLUMN bulk_payment.total_amount IS 'Sum of item amounts';
 COMMENT ON COLUMN bulk_payment.currency IS 'Batch currency';
 COMMENT ON COLUMN bulk_payment.control_sum IS 'Control sum declared in the file';
 COMMENT ON COLUMN bulk_payment.hold_id IS 'Ledger hold for the whole batch';
+COMMENT ON COLUMN bulk_payment.submitted_by IS 'Principal that submitted the batch (cannot approve it)';
 COMMENT ON COLUMN bulk_payment.submitted_at IS 'Submission time';
+COMMENT ON COLUMN bulk_payment.settled_count IS 'Items settled';
+COMMENT ON COLUMN bulk_payment.rejection_reason IS 'Reason when rejected or cancelled';
 COMMENT ON COLUMN bulk_payment.completed_at IS 'Completion time';
 COMMENT ON COLUMN bulk_payment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN bulk_payment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -399,9 +415,9 @@ CREATE TABLE payment (
   debtor_agent_clearing_id     varchar(35),
   debtor_country               char(2),
   payee_id                     uuid REFERENCES payee(id),
-  creditor_name                varchar(140) NOT NULL,
-  creditor_account_id_type     varchar(40) NOT NULL CHECK (creditor_account_id_type IN ('IBAN', 'BBAN', 'ACCOUNT_NUMBER', 'WALLET', 'PROXY', 'CARD_PAN_TOKEN', 'INTERNAL')),
-  creditor_account_number      varchar(64) NOT NULL,
+  creditor_name                varchar(140),
+  creditor_account_id_type     varchar(40) CHECK (creditor_account_id_type IN ('IBAN', 'BBAN', 'ACCOUNT_NUMBER', 'WALLET', 'PROXY', 'CARD_PAN_TOKEN', 'INTERNAL')),
+  creditor_account_number      varchar(64),
   creditor_agent_bic           varchar(11),
   creditor_agent_clearing_id   varchar(35),
   creditor_country             char(2),
@@ -437,6 +453,7 @@ CREATE TABLE payment (
   hold_id                      uuid,
   journal_entry_id             uuid,
   screening_result_id          uuid,
+  limit_check_id               uuid,
   fraud_score                  numeric(18,10),
   rejection_code               varchar(8),
   rejection_reason             varchar(255),
@@ -474,7 +491,7 @@ COMMENT ON COLUMN payment.idempotency_key IS 'Client key; a replay returns the o
 COMMENT ON COLUMN payment.customer_id IS 'Initiating or receiving customer';
 COMMENT ON COLUMN payment.debtor_account_id IS 'Internal source account (outbound / internal)';
 COMMENT ON COLUMN payment.debtor_wallet_id IS 'Internal source wallet';
-COMMENT ON COLUMN payment.debtor_ledger_account_id IS 'Ledger account debited';
+COMMENT ON COLUMN payment.debtor_ledger_account_id IS 'Ledger account debited (resolved from the debtor account)';
 COMMENT ON COLUMN payment.debtor_name IS 'Debtor (payer) name [PII]';
 COMMENT ON COLUMN payment.debtor_account_id_type IS 'Scheme of debtor account identifier';
 COMMENT ON COLUMN payment.debtor_account_number IS 'Debtor IBAN / account number / wallet id [PII]';
@@ -482,8 +499,8 @@ COMMENT ON COLUMN payment.debtor_agent_bic IS 'Debtor agent BIC';
 COMMENT ON COLUMN payment.debtor_agent_clearing_id IS 'Debtor agent clearing id (sort code, ABA, IFSC)';
 COMMENT ON COLUMN payment.debtor_country IS 'Debtor country';
 COMMENT ON COLUMN payment.payee_id IS 'Saved payee used, if any';
-COMMENT ON COLUMN payment.creditor_name IS 'Creditor (payee) name [PII]';
-COMMENT ON COLUMN payment.creditor_account_id_type IS 'Scheme of creditor account identifier';
+COMMENT ON COLUMN payment.creditor_name IS 'Creditor (payee) name (required unless payee_id or creditor_account_id is given) [PII]';
+COMMENT ON COLUMN payment.creditor_account_id_type IS 'Scheme of creditor account identifier (required with creditor_account_number)';
 COMMENT ON COLUMN payment.creditor_account_number IS 'Creditor IBAN / account number / wallet id / proxy [PII]';
 COMMENT ON COLUMN payment.creditor_agent_bic IS 'Creditor agent BIC';
 COMMENT ON COLUMN payment.creditor_agent_clearing_id IS 'Creditor agent clearing id (sort code, ABA, IFSC)';
@@ -503,9 +520,9 @@ COMMENT ON COLUMN payment.fx_rate IS 'Applied FX rate';
 COMMENT ON COLUMN payment.fee_amount IS 'Fee charged to the debtor';
 COMMENT ON COLUMN payment.fee_currency IS 'Fee currency';
 COMMENT ON COLUMN payment.charge_bearer IS 'Who bears charges (ISO 20022 ChrgBr)';
-COMMENT ON COLUMN payment.end_to_end_id IS 'ISO 20022 end-to-end id (shown to the creditor)';
-COMMENT ON COLUMN payment.uetr IS 'SWIFT gpi unique end-to-end transaction reference';
-COMMENT ON COLUMN payment.instruction_id IS 'Instruction id between instructing parties';
+COMMENT ON COLUMN payment.end_to_end_id IS 'ISO 20022 end-to-end id (server-generated; shown to the creditor)';
+COMMENT ON COLUMN payment.uetr IS 'SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4)';
+COMMENT ON COLUMN payment.instruction_id IS 'Instruction id between instructing parties (server-generated)';
 COMMENT ON COLUMN payment.transaction_id IS 'Interbank transaction id assigned on submission';
 COMMENT ON COLUMN payment.clearing_system_ref IS 'Reference returned by the clearing system';
 COMMENT ON COLUMN payment.purpose_code IS 'ISO 20022 external purpose code';
@@ -520,6 +537,7 @@ COMMENT ON COLUMN payment.rail_code IS 'Rail code at submission time';
 COMMENT ON COLUMN payment.hold_id IS 'Ledger hold placed on the debtor account';
 COMMENT ON COLUMN payment.journal_entry_id IS 'Ledger posting on settlement';
 COMMENT ON COLUMN payment.screening_result_id IS 'Sanctions screening result';
+COMMENT ON COLUMN payment.limit_check_id IS 'Limits reservation (committed on settlement, released on failure)';
 COMMENT ON COLUMN payment.fraud_score IS 'Fraud score 0..1 at initiation';
 COMMENT ON COLUMN payment.rejection_code IS 'ISO 20022 status reason code';
 COMMENT ON COLUMN payment.rejection_reason IS 'Human-readable rejection reason';
@@ -554,6 +572,7 @@ CREATE INDEX ix_payment_rail_id ON payment (rail_id);
 CREATE INDEX ix_payment_hold_id ON payment (hold_id);
 CREATE INDEX ix_payment_journal_entry_id ON payment (journal_entry_id);
 CREATE INDEX ix_payment_screening_result_id ON payment (screening_result_id);
+CREATE INDEX ix_payment_limit_check_id ON payment (limit_check_id);
 CREATE INDEX ix_payment_bulk_payment_id ON payment (bulk_payment_id);
 CREATE INDEX ix_payment_mandate_id ON payment (mandate_id);
 CREATE INDEX ix_payment_request_to_pay_id ON payment (request_to_pay_id);
@@ -627,6 +646,7 @@ CREATE TABLE payment_return (
   currency                     char(3) NOT NULL,
   fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
   return_id                    varchar(35),
+  journal_entry_id             uuid,
   completed_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -652,6 +672,7 @@ COMMENT ON COLUMN payment_return.amount IS 'Returned amount';
 COMMENT ON COLUMN payment_return.currency IS 'Currency';
 COMMENT ON COLUMN payment_return.fee_amount IS 'Return fee deducted';
 COMMENT ON COLUMN payment_return.return_id IS 'Return identification on the rail';
+COMMENT ON COLUMN payment_return.journal_entry_id IS 'Ledger posting moving the funds back';
 COMMENT ON COLUMN payment_return.completed_at IS 'Completion time';
 COMMENT ON COLUMN payment_return.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payment_return.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -661,6 +682,7 @@ COMMENT ON COLUMN payment_return.custom_field_5 IS 'Tenant-defined custom field 
 CREATE INDEX ix_payment_return_tenant ON payment_return (tenant_id, created_at);
 CREATE INDEX ix_payment_return_payment_id ON payment_return (payment_id);
 CREATE INDEX ix_payment_return_return_payment_id ON payment_return (return_payment_id);
+CREATE INDEX ix_payment_return_journal_entry_id ON payment_return (journal_entry_id);
 ALTER TABLE payment_return ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON payment_return USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_payment_return_touch BEFORE UPDATE ON payment_return FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -756,7 +778,7 @@ COMMENT ON COLUMN payment_repair.status IS 'Status';
 COMMENT ON COLUMN payment_repair.error_code IS 'Error code that sent it to repair';
 COMMENT ON COLUMN payment_repair.error_detail IS 'Error detail';
 COMMENT ON COLUMN payment_repair.suggested_fix IS 'Suggested corrections (e.g. BIC from IBAN, name normalisation)';
-COMMENT ON COLUMN payment_repair.corrections IS 'Corrections applied by the operator';
+COMMENT ON COLUMN payment_repair.corrections IS 'Corrections applied by the operator (set by resubmit)';
 COMMENT ON COLUMN payment_repair.assigned_to IS 'Operator';
 COMMENT ON COLUMN payment_repair.resubmitted_at IS 'Time resubmitted';
 COMMENT ON COLUMN payment_repair.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -786,6 +808,9 @@ CREATE TABLE payment_approval (
   approver_level               integer NOT NULL DEFAULT 1,
   required_approvals           integer NOT NULL DEFAULT 1,
   approver_user_id             uuid,
+  approvals_received           integer NOT NULL DEFAULT 0,
+  approved_by                  jsonb,
+  decided_by                   varchar(64),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED')),
   comment                      varchar(500),
   decided_at                   timestamptz,
@@ -809,7 +834,10 @@ COMMENT ON COLUMN payment_approval.bulk_payment_id IS 'Bulk payment';
 COMMENT ON COLUMN payment_approval.approval_request_id IS 'Platform approval request';
 COMMENT ON COLUMN payment_approval.approver_level IS 'Level in the approval matrix';
 COMMENT ON COLUMN payment_approval.required_approvals IS 'Approvals needed at this level';
-COMMENT ON COLUMN payment_approval.approver_user_id IS 'User who decided';
+COMMENT ON COLUMN payment_approval.approver_user_id IS 'User who decided last';
+COMMENT ON COLUMN payment_approval.approvals_received IS 'Approvals collected at this level';
+COMMENT ON COLUMN payment_approval.approved_by IS 'Principals who approved at this level (distinct, never the initiator)';
+COMMENT ON COLUMN payment_approval.decided_by IS 'Principal that made the final decision';
 COMMENT ON COLUMN payment_approval.status IS 'Status';
 COMMENT ON COLUMN payment_approval.comment IS 'Approver comment';
 COMMENT ON COLUMN payment_approval.decided_at IS 'Decision time';
@@ -841,6 +869,7 @@ CREATE TABLE payee_verification (
   account_number               varchar(64) NOT NULL,
   agent_clearing_id            varchar(35),
   result                       varchar(40) NOT NULL CHECK (result IN ('MATCH', 'CLOSE_MATCH', 'NO_MATCH', 'ACCOUNT_NOT_FOUND', 'ACCOUNT_CLOSED', 'NOT_AVAILABLE')),
+  match_score                  numeric(18,10),
   matched_name                 varchar(140),
   provider                     varchar(32) NOT NULL,
   provider_ref                 varchar(64),
@@ -862,8 +891,9 @@ COMMENT ON COLUMN payee_verification.account_id_type IS 'Account identifier sche
 COMMENT ON COLUMN payee_verification.account_number IS 'Account checked [PII]';
 COMMENT ON COLUMN payee_verification.agent_clearing_id IS 'Clearing id checked';
 COMMENT ON COLUMN payee_verification.result IS 'Outcome';
+COMMENT ON COLUMN payee_verification.match_score IS 'Name similarity 0..1 (default thresholds MATCH >= 0.98, CLOSE_MATCH >= 0.80)';
 COMMENT ON COLUMN payee_verification.matched_name IS 'Name returned on close match [PII]';
-COMMENT ON COLUMN payee_verification.provider IS 'Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry)';
+COMMENT ON COLUMN payee_verification.provider IS 'Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry, ON_US)';
 COMMENT ON COLUMN payee_verification.provider_ref IS 'Provider reference';
 COMMENT ON COLUMN payee_verification.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payee_verification.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -895,7 +925,7 @@ CREATE TABLE bulk_payment_item (
   creditor_agent_clearing_id   varchar(35),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
-  end_to_end_id                varchar(35) NOT NULL,
+  end_to_end_id                varchar(35),
   remittance_unstructured      varchar(140),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'VALID', 'INVALID', 'SUBMITTED', 'SETTLED', 'FAILED', 'CANCELLED')),
   validation_errors            jsonb,
@@ -916,7 +946,7 @@ COMMENT ON COLUMN bulk_payment_item.updated_at IS 'Last update time';
 COMMENT ON COLUMN bulk_payment_item.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN bulk_payment_item.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN bulk_payment_item.bulk_payment_id IS 'Batch';
-COMMENT ON COLUMN bulk_payment_item.line_no IS 'Line number in the file';
+COMMENT ON COLUMN bulk_payment_item.line_no IS 'Line number in the file (assigned in order)';
 COMMENT ON COLUMN bulk_payment_item.creditor_name IS 'Beneficiary name [PII]';
 COMMENT ON COLUMN bulk_payment_item.creditor_account_id_type IS 'Account identifier scheme';
 COMMENT ON COLUMN bulk_payment_item.creditor_account_number IS 'Beneficiary account [PII]';
@@ -924,10 +954,10 @@ COMMENT ON COLUMN bulk_payment_item.creditor_agent_bic IS 'Beneficiary bank BIC'
 COMMENT ON COLUMN bulk_payment_item.creditor_agent_clearing_id IS 'Beneficiary clearing id';
 COMMENT ON COLUMN bulk_payment_item.amount IS 'Amount';
 COMMENT ON COLUMN bulk_payment_item.currency IS 'Currency';
-COMMENT ON COLUMN bulk_payment_item.end_to_end_id IS 'End-to-end id';
+COMMENT ON COLUMN bulk_payment_item.end_to_end_id IS 'End-to-end id from the file (generated when empty)';
 COMMENT ON COLUMN bulk_payment_item.remittance_unstructured IS 'Remittance information';
 COMMENT ON COLUMN bulk_payment_item.status IS 'Status';
-COMMENT ON COLUMN bulk_payment_item.validation_errors IS 'Validation errors';
+COMMENT ON COLUMN bulk_payment_item.validation_errors IS 'Validation errors ({field, code, message})';
 COMMENT ON COLUMN bulk_payment_item.payment_id IS 'Payment created for this line';
 COMMENT ON COLUMN bulk_payment_item.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN bulk_payment_item.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -960,6 +990,7 @@ CREATE TABLE direct_debit_collection (
   status                       varchar(40) NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'SUBMITTED', 'COLLECTED', 'FAILED', 'RETURNED', 'CANCELLED')),
   return_reason_code           varchar(8),
   collected_at                 timestamptz,
+  failure_reason               varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -984,6 +1015,7 @@ COMMENT ON COLUMN direct_debit_collection.pre_notification_sent_at IS 'Time the 
 COMMENT ON COLUMN direct_debit_collection.status IS 'Status';
 COMMENT ON COLUMN direct_debit_collection.return_reason_code IS 'R-transaction reason';
 COMMENT ON COLUMN direct_debit_collection.collected_at IS 'Collection time';
+COMMENT ON COLUMN direct_debit_collection.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN direct_debit_collection.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN direct_debit_collection.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN direct_debit_collection.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -1043,7 +1075,7 @@ COMMENT ON COLUMN payment_link.customer_id IS 'Owner (customer or business)';
 COMMENT ON COLUMN payment_link.merchant_id IS 'Owner merchant';
 COMMENT ON COLUMN payment_link.credit_account_id IS 'Account credited';
 COMMENT ON COLUMN payment_link.credit_wallet_id IS 'Wallet credited';
-COMMENT ON COLUMN payment_link.slug IS 'Short code used in the URL';
+COMMENT ON COLUMN payment_link.slug IS 'Short code used in the URL (server-generated)';
 COMMENT ON COLUMN payment_link.url IS 'Public URL';
 COMMENT ON COLUMN payment_link.title IS 'Title shown to payers';
 COMMENT ON COLUMN payment_link.amount IS 'Fixed amount (empty = payer enters amount)';
@@ -1053,7 +1085,7 @@ COMMENT ON COLUMN payment_link.max_amount IS 'Maximum amount when open';
 COMMENT ON COLUMN payment_link.reusable IS 'Can be paid many times';
 COMMENT ON COLUMN payment_link.max_payments IS 'Cap on payments when reusable';
 COMMENT ON COLUMN payment_link.payment_count IS 'Payments received';
-COMMENT ON COLUMN payment_link.allowed_methods IS 'Payment methods offered (account, wallet, card, QR)';
+COMMENT ON COLUMN payment_link.allowed_methods IS 'Payment methods offered (ACCOUNT, WALLET, CARD, QR)';
 COMMENT ON COLUMN payment_link.expires_at IS 'Expiry';
 COMMENT ON COLUMN payment_link.status IS 'Status';
 COMMENT ON COLUMN payment_link.last_payment_id IS 'Latest payment received';
@@ -1088,6 +1120,9 @@ CREATE TABLE payment_qr_code (
   credit_wallet_id             uuid,
   scheme                       varchar(32) NOT NULL,
   payload                      text NOT NULL,
+  merchant_name                varchar(25) NOT NULL,
+  merchant_city                varchar(15) NOT NULL,
+  country_code                 char(2) NOT NULL,
   image_uri                    varchar(500),
   amount                       numeric(28,8),
   currency                     char(3) NOT NULL,
@@ -1116,7 +1151,10 @@ COMMENT ON COLUMN payment_qr_code.customer_id IS 'Customer presenting the QR (P2
 COMMENT ON COLUMN payment_qr_code.credit_account_id IS 'Account credited';
 COMMENT ON COLUMN payment_qr_code.credit_wallet_id IS 'Wallet credited';
 COMMENT ON COLUMN payment_qr_code.scheme IS 'EMVCO, PIX, UPI, PAYNOW, PROMPTPAY, DUITNOW, BHARAT_QR, INTERNAL';
-COMMENT ON COLUMN payment_qr_code.payload IS 'Encoded EMVCo TLV payload';
+COMMENT ON COLUMN payment_qr_code.payload IS 'Encoded EMVCo TLV payload (with CRC16-CCITT)';
+COMMENT ON COLUMN payment_qr_code.merchant_name IS 'Merchant / payee name encoded in the QR (EMVCo tag 59)';
+COMMENT ON COLUMN payment_qr_code.merchant_city IS 'Merchant city (EMVCo tag 60)';
+COMMENT ON COLUMN payment_qr_code.country_code IS 'Merchant country (EMVCo tag 58)';
 COMMENT ON COLUMN payment_qr_code.image_uri IS 'Rendered PNG/SVG location';
 COMMENT ON COLUMN payment_qr_code.amount IS 'Amount (dynamic QR)';
 COMMENT ON COLUMN payment_qr_code.currency IS 'Currency';

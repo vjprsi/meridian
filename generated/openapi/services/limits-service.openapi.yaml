@@ -1,1771 +1,33 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    LimitCheck:
-      description: Result of a limit check; a reservation is committed or released when the transaction completes
-      properties:
-        action:
-          description: Action when a limit was breached
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          type:
-          - string
-          - 'null'
-        allowed:
-          description: Whether the transaction is within limits
-          type: boolean
-        amount:
-          description: Amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        breached_rule_ids:
-          additionalProperties: true
-          description: Rules breached
-          type:
-          - object
-          - 'null'
-        channel:
-          description: Channel
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type:
-          - string
-          - 'null'
-        correlation_id:
-          description: Business transaction / saga id
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type:
-          - string
-          - 'null'
-        evaluated_rule_ids:
-          additionalProperties: true
-          description: Rules evaluated
-          type: object
-        expires_at:
-          description: Reservation expiry (auto-release)
-          format: date-time
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Client key
-          maxLength: 128
-          readOnly: true
-          type: string
-        latency_ms:
-          description: Evaluation time
-          format: int32
-          type:
-          - integer
-          - 'null'
-        remaining:
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
-          type:
-          - object
-          - 'null'
-        status:
-          description: Reservation status at creation
-          enum:
-          - RESERVED
-          - COMMITTED
-          - RELEASED
-          - REJECTED
-          - DRY_RUN
-          type: string
-        subject_id:
-          description: Primary subject
-          format: uuid
-          type: string
-        subject_type:
-          description: Primary subject type
-          maxLength: 32
-          type: string
-        transaction_type:
-          description: Transaction type
-          maxLength: 40
-          type: string
-      required:
-      - id
-      - created_at
-      - subject_type
-      - subject_id
-      - transaction_type
-      - amount
-      - currency
-      - allowed
-      - status
-      - evaluated_rule_ids
-      - idempotency_key
-      type: object
-    LimitCheckCreate:
-      properties:
-        action:
-          description: Action when a limit was breached
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          type: string
-        allowed:
-          description: Whether the transaction is within limits
-          type: boolean
-        amount:
-          description: Amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        breached_rule_ids:
-          additionalProperties: true
-          description: Rules breached
-          type: object
-        channel:
-          description: Channel
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type: string
-        correlation_id:
-          description: Business transaction / saga id
-          maxLength: 128
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        evaluated_rule_ids:
-          additionalProperties: true
-          description: Rules evaluated
-          type: object
-        expires_at:
-          description: Reservation expiry (auto-release)
-          format: date-time
-          type: string
-        latency_ms:
-          description: Evaluation time
-          format: int32
-          type: integer
-        remaining:
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
-          type: object
-        status:
-          description: Reservation status at creation
-          enum:
-          - RESERVED
-          - COMMITTED
-          - RELEASED
-          - REJECTED
-          - DRY_RUN
-          type: string
-        subject_id:
-          description: Primary subject
-          format: uuid
-          type: string
-        subject_type:
-          description: Primary subject type
-          maxLength: 32
-          type: string
-        transaction_type:
-          description: Transaction type
-          maxLength: 40
-          type: string
-      required:
-      - subject_type
-      - subject_id
-      - transaction_type
-      - amount
-      - currency
-      - allowed
-      - status
-      - evaluated_rule_ids
-      type: object
-    LimitCheckPage:
-      description: One page of LimitCheck results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LimitCheck'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LimitChecksCommitRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    LimitChecksEvaluateRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        subject_id:
-          format: uuid
-          type: string
-        subject_type:
-          maxLength: 32
-          type: string
-        transaction_type:
-          maxLength: 40
-          type: string
-      required:
-      - subject_type
-      - subject_id
-      - transaction_type
-      - amount
-      - currency
-      type: object
-    LimitChecksReleaseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    LimitOverride:
-      description: Temporary limit increase or decrease for one subject, approved by a checker
-      properties:
-        approval_request_id:
-          description: Approval workflow
-          format: uuid
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: Checker
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        limit_rule_id:
-          description: Limit overridden
-          format: uuid
-          type: string
-        max_amount:
-          description: Overridden amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        max_count:
-          description: Overridden count
-          format: int32
-          type:
-          - integer
-          - 'null'
-        reason:
-          description: Justification
-          type: string
-        requested_by:
-          description: Maker
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING_APPROVAL
-          - ACTIVE
-          - REJECTED
-          - EXPIRED
-          - REVOKED
-          readOnly: true
-          type: string
-        subject_id:
-          description: Subject
-          format: uuid
-          type: string
-        subject_type:
-          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
-          maxLength: 32
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to (overrides are always temporary)
-          format: date-time
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - limit_rule_id
-      - subject_type
-      - subject_id
-      - reason
-      - status
-      - valid_from
-      - valid_to
-      type: object
-    LimitOverrideCreate:
-      properties:
-        approval_request_id:
-          description: Approval workflow
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        limit_rule_id:
-          description: Limit overridden
-          format: uuid
-          type: string
-        max_amount:
-          description: Overridden amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        max_count:
-          description: Overridden count
-          format: int32
-          type: integer
-        reason:
-          description: Justification
-          type: string
-        subject_id:
-          description: Subject
-          format: uuid
-          type: string
-        subject_type:
-          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
-          maxLength: 32
-          type: string
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to (overrides are always temporary)
-          format: date-time
-          type: string
-      required:
-      - limit_rule_id
-      - subject_type
-      - subject_id
-      - reason
-      - valid_from
-      - valid_to
-      type: object
-    LimitOverridePage:
-      description: One page of LimitOverride results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LimitOverride'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LimitOverridesApproveRequest:
-      properties:
-        comment:
-          type: string
-      type: object
-    LimitOverridesRejectRequest:
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-      type: object
-    LimitOverridesRevokeRequest:
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-      type: object
-    LimitRule:
-      description: A limit definition; the most specific matching rule wins, then the lowest priority number
-      properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type:
-          - string
-          - 'null'
-        breach_action:
-          description: Action on breach
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          type: string
-        channel:
-          description: Channel (empty = all)
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type:
-          - string
-          - 'null'
-        code:
-          description: Limit code
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency of max_amount (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_regulatory:
-          description: Regulatory limit (cannot be overridden)
-          type: boolean
-        max_amount:
-          description: Maximum amount per period
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        max_count:
-          description: Maximum transactions per period
-          format: int32
-          type:
-          - integer
-          - 'null'
-        measure:
-          description: Amount, count or balance cap
-          enum:
-          - AMOUNT
-          - COUNT
-          - BALANCE
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        period:
-          description: Period
-          enum:
-          - PER_TRANSACTION
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          - YEARLY
-          - LIFETIME
-          - ROLLING_24H
-          - ROLLING_7D
-          - ROLLING_30D
-          type: string
-        priority:
-          description: Tie-breaker between equally specific rules
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        scope:
-          description: Level the limit applies to
-          enum:
-          - GLOBAL
-          - TENANT
-          - PRODUCT
-          - KYC_TIER
-          - CUSTOMER_SEGMENT
-          - CUSTOMER
-          - ACCOUNT
-          - CARD
-          - WALLET
-          - AGENT
-          - MERCHANT
-          type: string
-        scope_ref:
-          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        transaction_type:
-          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date-time
-          type:
-          - string
-          - 'null'
-        valid_to:
-          description: Effective to
-          format: date-time
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - scope
-      - period
-      - measure
-      - breach_action
-      - priority
-      - status
-      - is_regulatory
-      type: object
-    LimitRuleCreate:
-      properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type: string
-        breach_action:
-          description: Action on breach
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          type: string
-        channel:
-          description: Channel (empty = all)
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type: string
-        code:
-          description: Limit code
-          maxLength: 64
-          type: string
-        currency:
-          description: Currency of max_amount (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_regulatory:
-          description: Regulatory limit (cannot be overridden)
-          type: boolean
-        max_amount:
-          description: Maximum amount per period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        max_count:
-          description: Maximum transactions per period
-          format: int32
-          type: integer
-        measure:
-          description: Amount, count or balance cap
-          enum:
-          - AMOUNT
-          - COUNT
-          - BALANCE
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        period:
-          description: Period
-          enum:
-          - PER_TRANSACTION
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          - YEARLY
-          - LIFETIME
-          - ROLLING_24H
-          - ROLLING_7D
-          - ROLLING_30D
-          type: string
-        priority:
-          description: Tie-breaker between equally specific rules
-          format: int32
-          type: integer
-        scope:
-          description: Level the limit applies to
-          enum:
-          - GLOBAL
-          - TENANT
-          - PRODUCT
-          - KYC_TIER
-          - CUSTOMER_SEGMENT
-          - CUSTOMER
-          - ACCOUNT
-          - CARD
-          - WALLET
-          - AGENT
-          - MERCHANT
-          type: string
-        scope_ref:
-          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
-          maxLength: 128
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        transaction_type:
-          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
-          maxLength: 40
-          type: string
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to
-          format: date-time
-          type: string
-      required:
-      - code
-      - name
-      - scope
-      - period
-      - measure
-      type: object
-    LimitRulePage:
-      description: One page of LimitRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LimitRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LimitRuleUpdate:
-      properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type: string
-        breach_action:
-          description: Action on breach
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          type: string
-        channel:
-          description: Channel (empty = all)
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type: string
-        code:
-          description: Limit code
-          maxLength: 64
-          type: string
-        currency:
-          description: Currency of max_amount (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_regulatory:
-          description: Regulatory limit (cannot be overridden)
-          type: boolean
-        max_amount:
-          description: Maximum amount per period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        max_count:
-          description: Maximum transactions per period
-          format: int32
-          type: integer
-        measure:
-          description: Amount, count or balance cap
-          enum:
-          - AMOUNT
-          - COUNT
-          - BALANCE
-          type: string
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        period:
-          description: Period
-          enum:
-          - PER_TRANSACTION
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          - YEARLY
-          - LIFETIME
-          - ROLLING_24H
-          - ROLLING_7D
-          - ROLLING_30D
-          type: string
-        priority:
-          description: Tie-breaker between equally specific rules
-          format: int32
-          type: integer
-        scope:
-          description: Level the limit applies to
-          enum:
-          - GLOBAL
-          - TENANT
-          - PRODUCT
-          - KYC_TIER
-          - CUSTOMER_SEGMENT
-          - CUSTOMER
-          - ACCOUNT
-          - CARD
-          - WALLET
-          - AGENT
-          - MERCHANT
-          type: string
-        scope_ref:
-          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
-          maxLength: 128
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        transaction_type:
-          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
-          maxLength: 40
-          type: string
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to
-          format: date-time
-          type: string
-      type: object
-    LimitRulesActivateRequest:
-      properties:
-        comment:
-          type: string
-      type: object
-    LimitRulesDeactivateRequest:
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-      type: object
-    LimitRulesSimulateRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          enum:
-          - MOBILE_APP
-          - WEB
-          - API
-          - USSD
-          - AGENT
-          - BRANCH
-          - POS
-          - ATM
-          - ECOMMERCE
-          - CONTACTLESS
-          - OPEN_BANKING
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        subject_id:
-          format: uuid
-          type: string
-        subject_type:
-          maxLength: 32
-          type: string
-        transaction_type:
-          maxLength: 40
-          type: string
-      required:
-      - subject_type
-      - subject_id
-      - transaction_type
-      - amount
-      - currency
-      type: object
-    LimitUsage:
-      description: Usage counter of a limit for one subject and period
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        limit_rule_id:
-          description: Limit
-          format: uuid
-          type: string
-        period_end:
-          description: Period end
-          format: date-time
-          type: string
-        period_start:
-          description: Period start
-          format: date-time
-          type: string
-        reserved_amount:
-          description: Reserved, not yet committed
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        reserved_count:
-          description: Reserved count
-          format: int32
-          readOnly: true
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        subject_id:
-          description: Subject
-          format: uuid
-          type: string
-        subject_type:
-          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
-          maxLength: 32
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        used_amount:
-          description: Committed amount
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        used_count:
-          description: Committed count
-          format: int32
-          readOnly: true
-          type: integer
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - limit_rule_id
-      - subject_type
-      - subject_id
-      - period_start
-      - period_end
-      - used_amount
-      - used_count
-      - reserved_amount
-      - reserved_count
-      type: object
-    LimitUsagePage:
-      description: One page of LimitUsage results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LimitUsage'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LimitUsagesResetRequest:
-      properties:
-        reason:
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    RiskAppetiteMetric:
-      description: Board-approved risk appetite metric with amber/red thresholds and its latest value
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        current_value:
-          description: Latest value
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
-          type: string
-        measured_at:
-          description: Time of latest measurement
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        metric_code:
-          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
-          maxLength: 64
-          type: string
-        name:
-          description: Metric name
-          maxLength: 160
-          type: string
-        owner:
-          description: Accountable owner
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Traffic-light status
-          enum:
-          - GREEN
-          - AMBER
-          - RED
-          readOnly: true
-          type: string
-        threshold_amber:
-          description: Amber threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        threshold_red:
-          description: Red threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        unit:
-          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
-          maxLength: 16
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - legal_entity_id
-      - metric_code
-      - name
-      - unit
-      - threshold_amber
-      - threshold_red
-      - status
-      type: object
-    RiskAppetiteMetricCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
-          type: string
-        metric_code:
-          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
-          maxLength: 64
-          type: string
-        name:
-          description: Metric name
-          maxLength: 160
-          type: string
-        owner:
-          description: Accountable owner
-          maxLength: 64
-          type: string
-        threshold_amber:
-          description: Amber threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        threshold_red:
-          description: Red threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        unit:
-          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
-          maxLength: 16
-          type: string
-      required:
-      - legal_entity_id
-      - metric_code
-      - name
-      - unit
-      - threshold_amber
-      - threshold_red
-      type: object
-    RiskAppetiteMetricPage:
-      description: One page of RiskAppetiteMetric results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RiskAppetiteMetric'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RiskAppetiteMetricUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
-          type: string
-        metric_code:
-          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
-          maxLength: 64
-          type: string
-        name:
-          description: Metric name
-          maxLength: 160
-          type: string
-        owner:
-          description: Accountable owner
-          maxLength: 64
-          type: string
-        threshold_amber:
-          description: Amber threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        threshold_red:
-          description: Red threshold
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        unit:
-          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
-          maxLength: 16
-          type: string
-      type: object
-    RiskAppetiteMetricsMeasurementsRequest:
-      properties:
-        current_value:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        measured_at:
-          format: date-time
-          type: string
-      required:
-      - current_value
-      - measured_at
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — limits-service
+  version: 1.0.0
   description: 'Real-time fraud scoring, transaction monitoring, sanctions and PEP screening, AML case management with SAR/STR
     filing, and the limits engine. Every payment, card authorisation and wallet movement is scored, screened and limit-checked
     before money moves.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — limits-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Limit Rules
+  description: A limit definition; the most specific matching rule wins, then the lowest priority number
+- name: Limit Usages
+  description: Usage counter of a limit for one subject and period
+- name: Limit Overrides
+  description: Temporary limit increase or decrease for one subject, approved by a checker
+- name: Limit Checks
+  description: Check limits and reserve usage atomically; commit on success or release on failure.
+- name: Risk Appetite Metrics
+  description: Board-approved risk appetite metric with amber/red thresholds and its latest value
 paths:
   /v1/risk/limits/rules:
     get:
@@ -3124,21 +1386,1759 @@ paths:
       x-service: limits-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-table: risk_appetite_metric
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A limit definition; the most specific matching rule wins, then the lowest priority number
-  name: Limit Rules
-- description: Usage counter of a limit for one subject and period
-  name: Limit Usages
-- description: Temporary limit increase or decrease for one subject, approved by a checker
-  name: Limit Overrides
-- description: Check limits and reserve usage atomically; commit on success or release on failure.
-  name: Limit Checks
-- description: Board-approved risk appetite metric with amber/red thresholds and its latest value
-  name: Risk Appetite Metrics
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    LimitRulePage:
+      type: object
+      description: One page of LimitRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LimitRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LimitRulesActivateRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    LimitRulesDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    LimitRulesSimulateRequest:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          maxLength: 32
+        subject_id:
+          type: string
+          format: uuid
+        transaction_type:
+          type: string
+          maxLength: 40
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - subject_type
+      - subject_id
+      - transaction_type
+      - amount
+      - currency
+    LimitUsagePage:
+      type: object
+      description: One page of LimitUsage results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LimitUsage'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LimitUsagesResetRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    LimitOverridePage:
+      type: object
+      description: One page of LimitOverride results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LimitOverride'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LimitOverridesApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    LimitOverridesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    LimitOverridesRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    LimitCheckPage:
+      type: object
+      description: One page of LimitCheck results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LimitCheck'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LimitChecksCommitRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+    LimitChecksReleaseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    LimitChecksEvaluateRequest:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          maxLength: 32
+        subject_id:
+          type: string
+          format: uuid
+        transaction_type:
+          type: string
+          maxLength: 40
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - subject_type
+      - subject_id
+      - transaction_type
+      - amount
+      - currency
+    RiskAppetiteMetricPage:
+      type: object
+      description: One page of RiskAppetiteMetric results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskAppetiteMetric'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RiskAppetiteMetricsMeasurementsRequest:
+      type: object
+      properties:
+        current_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        measured_at:
+          type: string
+          format: date-time
+      required:
+      - current_value
+      - measured_at
+    LimitCheck:
+      type: object
+      description: Result of a limit check; a reservation is committed or released when the transaction completes
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        subject_type:
+          type: string
+          maxLength: 32
+          description: Primary subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Primary subject
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: Transaction type
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        allowed:
+          type: boolean
+          description: Whether the transaction is within limits
+        status:
+          type: string
+          enum:
+          - RESERVED
+          - COMMITTED
+          - RELEASED
+          - REJECTED
+          - DRY_RUN
+          description: Reservation status at creation
+        action:
+          type:
+          - string
+          - 'null'
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action when a limit was breached
+        evaluated_rule_ids:
+          type: object
+          additionalProperties: true
+          description: Rules evaluated
+        breached_rule_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Rules breached
+        remaining:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Remaining amount/count per rule and period
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        correlation_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Business transaction / saga id
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Reservation expiry (auto-release)
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Evaluation time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - subject_type
+      - subject_id
+      - transaction_type
+      - amount
+      - currency
+      - allowed
+      - status
+      - evaluated_rule_ids
+      - idempotency_key
+    LimitCheckCreate:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          maxLength: 32
+          description: Primary subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Primary subject
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        allowed:
+          type: boolean
+          description: Whether the transaction is within limits
+        status:
+          type: string
+          enum:
+          - RESERVED
+          - COMMITTED
+          - RELEASED
+          - REJECTED
+          - DRY_RUN
+          description: Reservation status at creation
+        action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action when a limit was breached
+        evaluated_rule_ids:
+          type: object
+          additionalProperties: true
+          description: Rules evaluated
+        breached_rule_ids:
+          type: object
+          additionalProperties: true
+          description: Rules breached
+        remaining:
+          type: object
+          additionalProperties: true
+          description: Remaining amount/count per rule and period
+        correlation_id:
+          type: string
+          maxLength: 128
+          description: Business transaction / saga id
+        expires_at:
+          type: string
+          format: date-time
+          description: Reservation expiry (auto-release)
+        latency_ms:
+          type: integer
+          format: int32
+          description: Evaluation time
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - subject_type
+      - subject_id
+      - transaction_type
+      - amount
+      - currency
+      - allowed
+      - status
+      - evaluated_rule_ids
+    LimitOverride:
+      type: object
+      description: Temporary limit increase or decrease for one subject, approved by a checker
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        limit_rule_id:
+          type: string
+          format: uuid
+          description: Limit overridden
+        subject_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Overridden amount
+        max_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Overridden count
+        reason:
+          type: string
+          description: Justification
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - REJECTED
+          - EXPIRED
+          - REVOKED
+          description: Status
+          readOnly: true
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to (overrides are always temporary)
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval workflow
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - limit_rule_id
+      - subject_type
+      - subject_id
+      - reason
+      - status
+      - valid_from
+      - valid_to
+    LimitOverrideCreate:
+      type: object
+      properties:
+        limit_rule_id:
+          type: string
+          format: uuid
+          description: Limit overridden
+        subject_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Overridden amount
+        max_count:
+          type: integer
+          format: int32
+          description: Overridden count
+        reason:
+          type: string
+          description: Justification
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to (overrides are always temporary)
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Approval workflow
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - limit_rule_id
+      - subject_type
+      - subject_id
+      - reason
+      - valid_from
+      - valid_to
+    LimitRule:
+      type: object
+      description: A limit definition; the most specific matching rule wins, then the lowest priority number
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Limit code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        scope:
+          type: string
+          enum:
+          - GLOBAL
+          - TENANT
+          - PRODUCT
+          - KYC_TIER
+          - CUSTOMER_SEGMENT
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - WALLET
+          - AGENT
+          - MERCHANT
+          description: Level the limit applies to
+        scope_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
+        transaction_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel (empty = all)
+        period:
+          type: string
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          - ROLLING_24H
+          - ROLLING_7D
+          - ROLLING_30D
+          description: Period
+        measure:
+          type: string
+          enum:
+          - AMOUNT
+          - COUNT
+          - BALANCE
+          description: Amount, count or balance cap
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of max_amount (ISO 4217)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per period
+        max_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum transactions per period
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker between equally specific rules
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        is_regulatory:
+          type: boolean
+          description: Regulatory limit (cannot be overridden)
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - scope
+      - period
+      - measure
+      - breach_action
+      - priority
+      - status
+      - is_regulatory
+    LimitRuleCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Limit code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        scope:
+          type: string
+          enum:
+          - GLOBAL
+          - TENANT
+          - PRODUCT
+          - KYC_TIER
+          - CUSTOMER_SEGMENT
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - WALLET
+          - AGENT
+          - MERCHANT
+          description: Level the limit applies to
+        scope_ref:
+          type: string
+          maxLength: 128
+          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel (empty = all)
+        period:
+          type: string
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          - ROLLING_24H
+          - ROLLING_7D
+          - ROLLING_30D
+          description: Period
+        measure:
+          type: string
+          enum:
+          - AMOUNT
+          - COUNT
+          - BALANCE
+          description: Amount, count or balance cap
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of max_amount (ISO 4217)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per period
+        max_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per period
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker between equally specific rules
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        is_regulatory:
+          type: boolean
+          description: Regulatory limit (cannot be overridden)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - scope
+      - period
+      - measure
+    LimitRuleUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Limit code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        scope:
+          type: string
+          enum:
+          - GLOBAL
+          - TENANT
+          - PRODUCT
+          - KYC_TIER
+          - CUSTOMER_SEGMENT
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - WALLET
+          - AGENT
+          - MERCHANT
+          description: Level the limit applies to
+        scope_ref:
+          type: string
+          maxLength: 128
+          description: 'Scope value: tier code, product id, customer id, ... (empty for GLOBAL)'
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all)
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel (empty = all)
+        period:
+          type: string
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          - ROLLING_24H
+          - ROLLING_7D
+          - ROLLING_30D
+          description: Period
+        measure:
+          type: string
+          enum:
+          - AMOUNT
+          - COUNT
+          - BALANCE
+          description: Amount, count or balance cap
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of max_amount (ISO 4217)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per period
+        max_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per period
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker between equally specific rules
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        is_regulatory:
+          type: boolean
+          description: Regulatory limit (cannot be overridden)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LimitUsage:
+      type: object
+      description: Usage counter of a limit for one subject and period
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        limit_rule_id:
+          type: string
+          format: uuid
+          description: Limit
+        subject_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        period_start:
+          type: string
+          format: date-time
+          description: Period start
+        period_end:
+          type: string
+          format: date-time
+          description: Period end
+        used_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Committed amount
+          readOnly: true
+        used_count:
+          type: integer
+          format: int32
+          description: Committed count
+          readOnly: true
+        reserved_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reserved, not yet committed
+          readOnly: true
+        reserved_count:
+          type: integer
+          format: int32
+          description: Reserved count
+          readOnly: true
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - limit_rule_id
+      - subject_type
+      - subject_id
+      - period_start
+      - period_end
+      - used_amount
+      - used_count
+      - reserved_amount
+      - reserved_count
+    RiskAppetiteMetric:
+      type: object
+      description: Board-approved risk appetite metric with amber/red thresholds and its latest value
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        metric_code:
+          type: string
+          maxLength: 64
+          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
+        name:
+          type: string
+          maxLength: 160
+          description: Metric name
+        unit:
+          type: string
+          maxLength: 16
+          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
+        threshold_amber:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amber threshold
+        threshold_red:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Red threshold
+        current_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Latest value
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - GREEN
+          - AMBER
+          - RED
+          description: Traffic-light status
+          readOnly: true
+        measured_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of latest measurement
+          readOnly: true
+        owner:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Accountable owner
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - metric_code
+      - name
+      - unit
+      - threshold_amber
+      - threshold_red
+      - status
+    RiskAppetiteMetricCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        metric_code:
+          type: string
+          maxLength: 64
+          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
+        name:
+          type: string
+          maxLength: 160
+          description: Metric name
+        unit:
+          type: string
+          maxLength: 16
+          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
+        threshold_amber:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amber threshold
+        threshold_red:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Red threshold
+        owner:
+          type: string
+          maxLength: 64
+          description: Accountable owner
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - legal_entity_id
+      - metric_code
+      - name
+      - unit
+      - threshold_amber
+      - threshold_red
+    RiskAppetiteMetricUpdate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        metric_code:
+          type: string
+          maxLength: 64
+          description: e.g. FRAUD_LOSS_BPS, SAR_BACKLOG_DAYS, HIGH_RISK_CUSTOMER_PCT
+        name:
+          type: string
+          maxLength: 160
+          description: Metric name
+        unit:
+          type: string
+          maxLength: 16
+          description: PERCENT, BPS, DAYS, AMOUNT, COUNT
+        threshold_amber:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amber threshold
+        threshold_red:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Red threshold
+        owner:
+          type: string
+          maxLength: 64
+          description: Accountable owner
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits

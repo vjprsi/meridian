@@ -1,839 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    AuditEvent:
-      description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
-      properties:
-        action:
-          description: Action, e.g. payments.payment.approve
-          maxLength: 128
-          type: string
-        actor_display:
-          description: Actor display name at the time
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        actor_id:
-          description: Actor id
-          maxLength: 64
-          type: string
-        actor_type:
-          description: Actor type
-          enum:
-          - STAFF_USER
-          - CUSTOMER
-          - API_CLIENT
-          - SERVICE
-          - SYSTEM
-          - PLATFORM_OPERATOR
-          - AGENT
-          type: string
-        after_state:
-          additionalProperties: true
-          description: State after (PII masked)
-          type:
-          - object
-          - 'null'
-        approval_request_id:
-          description: Approval, if maker-checker
-          format: uuid
-          type:
-          - string
-          - 'null'
-        before_state:
-          additionalProperties: true
-          description: State before (PII masked)
-          type:
-          - object
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        hash:
-          description: SHA-256 over this event and prev_hash
-          maxLength: 64
-          readOnly: true
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        impersonator_id:
-          description: Operator acting on behalf of the actor
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        ip_address:
-          description: Client IP (IPv4 or IPv6 address)
-          type:
-          - string
-          - 'null'
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
-          type:
-          - string
-          - 'null'
-        occurred_at:
-          description: Time of the action
-          format: date-time
-          type: string
-        outcome:
-          description: Outcome
-          enum:
-          - SUCCESS
-          - FAILURE
-          - DENIED
-          type: string
-        prev_hash:
-          description: Hash of the previous event
-          maxLength: 64
-          readOnly: true
-          type: string
-        reason:
-          description: Reason or justification
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        request_id:
-          description: Request id
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        resource_id:
-          description: Resource id
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        resource_type:
-          description: Resource type
-          maxLength: 64
-          type: string
-        sequence_no:
-          description: Gapless sequence per tenant
-          format: int64
-          readOnly: true
-          type: integer
-        service_name:
-          description: Service that emitted the event
-          maxLength: 64
-          type: string
-        session_id:
-          description: Session id
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        source_event_id:
-          description: CloudEvents id of the consumed domain event (de-duplication)
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        trace_id:
-          description: Trace id
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        user_agent:
-          description: User agent
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - occurred_at
-      - sequence_no
-      - actor_type
-      - actor_id
-      - action
-      - resource_type
-      - outcome
-      - service_name
-      - hash
-      - prev_hash
-      type: object
-    AuditEventPage:
-      description: One page of AuditEvent results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AuditEvent'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AuditEventsSearchRequest:
-      properties:
-        query:
-          additionalProperties: true
-          type: object
-      required:
-      - query
-      type: object
-    AuditEventsVerifyChainRequest:
-      properties:
-        from_sequence:
-          format: int64
-          type: integer
-        to_sequence:
-          format: int64
-          type: integer
-      required:
-      - from_sequence
-      - to_sequence
-      type: object
-    AuditRetentionPolicy:
-      description: Retention rule for audit and business records per resource type and jurisdiction
-      properties:
-        archive_after_days:
-          description: Move to cold storage after
-          format: int32
-          type: integer
-        country:
-          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_basis:
-          description: Regulation requiring retention
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        resource_type:
-          description: Resource type (or * for default)
-          maxLength: 64
-          type: string
-        retention_years:
-          description: Years to retain
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - resource_type
-      - retention_years
-      - archive_after_days
-      type: object
-    AuditRetentionPolicyCreate:
-      properties:
-        archive_after_days:
-          description: Move to cold storage after
-          format: int32
-          type: integer
-        country:
-          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        legal_basis:
-          description: Regulation requiring retention
-          maxLength: 255
-          type: string
-        resource_type:
-          description: Resource type (or * for default)
-          maxLength: 64
-          type: string
-        retention_years:
-          description: Years to retain
-          format: int32
-          type: integer
-      required:
-      - resource_type
-      type: object
-    AuditRetentionPolicyPage:
-      description: One page of AuditRetentionPolicy results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AuditRetentionPolicy'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AuditRetentionPolicyUpdate:
-      properties:
-        archive_after_days:
-          description: Move to cold storage after
-          format: int32
-          type: integer
-        country:
-          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        legal_basis:
-          description: Regulation requiring retention
-          maxLength: 255
-          type: string
-        resource_type:
-          description: Resource type (or * for default)
-          maxLength: 64
-          type: string
-        retention_years:
-          description: Years to retain
-          format: int32
-          type: integer
-      type: object
-    DataExportRequest:
-      description: Export of audit or personal data for regulators, auditors or data-subject requests
-      properties:
-        approval_request_id:
-          description: Approval (four-eyes)
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: Export file
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        due_date:
-          description: Legal deadline (e.g. 30 days for DSAR)
-          format: date
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Download link expiry
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        export_type:
-          description: Kind of export
-          enum:
-          - AUDIT_LOG
-          - DATA_SUBJECT_ACCESS
-          - DATA_PORTABILITY
-          - REGULATOR_EXTRACT
-          - LEGAL_DISCOVERY
-          type: string
-        filters:
-          additionalProperties: true
-          description: Additional filters
-          type:
-          - object
-          - 'null'
-        from_time:
-          description: Range start
-          format: date-time
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        requested_for:
-          description: Recipient, e.g. Central Bank inspection team
-          maxLength: 255
-          type: string
-        row_count:
-          description: Rows exported
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        subject_id:
-          description: Subject id
-          format: uuid
-          type:
-          - string
-          - 'null'
-        subject_type:
-          description: Subject type for DSAR (CUSTOMER)
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        to_time:
-          description: Range end
-          format: date-time
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - export_type
-      - requested_for
-      - status
-      type: object
-    DataExportRequestCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        due_date:
-          description: Legal deadline (e.g. 30 days for DSAR)
-          format: date
-          type: string
-        export_type:
-          description: Kind of export
-          enum:
-          - AUDIT_LOG
-          - DATA_SUBJECT_ACCESS
-          - DATA_PORTABILITY
-          - REGULATOR_EXTRACT
-          - LEGAL_DISCOVERY
-          type: string
-        filters:
-          additionalProperties: true
-          description: Additional filters
-          type: object
-        from_time:
-          description: Range start
-          format: date-time
-          type: string
-        requested_for:
-          description: Recipient, e.g. Central Bank inspection team
-          maxLength: 255
-          type: string
-        subject_id:
-          description: Subject id
-          format: uuid
-          type: string
-        subject_type:
-          description: Subject type for DSAR (CUSTOMER)
-          maxLength: 40
-          type: string
-        to_time:
-          description: Range end
-          format: date-time
-          type: string
-      required:
-      - export_type
-      - requested_for
-      type: object
-    DataExportRequestPage:
-      description: One page of DataExportRequest results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/DataExportRequest'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    DataExportsCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — audit-service
+  version: 1.0.0
   description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
     and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
     and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
@@ -841,11 +9,22 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — audit-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Audit Events
+  description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+- name: Audit Retention Policies
+  description: Retention rule for audit and business records per resource type and jurisdiction
+- name: Data Exports
+  description: Export of audit or personal data for regulators, auditors or data-subject requests
 paths:
   /v1/audit-events:
     get:
@@ -1507,17 +686,838 @@ paths:
       x-service: audit-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: data_export_request
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
-  name: Audit Events
-- description: Retention rule for audit and business records per resource type and jurisdiction
-  name: Audit Retention Policies
-- description: Export of audit or personal data for regulators, auditors or data-subject requests
-  name: Data Exports
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    AuditEventPage:
+      type: object
+      description: One page of AuditEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AuditEventsVerifyChainRequest:
+      type: object
+      properties:
+        from_sequence:
+          type: integer
+          format: int64
+        to_sequence:
+          type: integer
+          format: int64
+      required:
+      - from_sequence
+      - to_sequence
+    AuditEventsSearchRequest:
+      type: object
+      properties:
+        query:
+          type: object
+          additionalProperties: true
+      required:
+      - query
+    AuditRetentionPolicyPage:
+      type: object
+      description: One page of AuditRetentionPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRetentionPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DataExportRequestPage:
+      type: object
+      description: One page of DataExportRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataExportRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DataExportsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    AuditEvent:
+      type: object
+      description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          description: Time of the action
+        sequence_no:
+          type: integer
+          format: int64
+          description: Gapless sequence per tenant
+          readOnly: true
+        actor_type:
+          type: string
+          enum:
+          - STAFF_USER
+          - CUSTOMER
+          - API_CLIENT
+          - SERVICE
+          - SYSTEM
+          - PLATFORM_OPERATOR
+          - AGENT
+          description: Actor type
+        actor_id:
+          type: string
+          maxLength: 64
+          description: Actor id
+        actor_display:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Actor display name at the time
+        impersonator_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator acting on behalf of the actor
+        action:
+          type: string
+          maxLength: 128
+          description: Action, e.g. payments.payment.approve
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type
+        resource_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Resource id
+        outcome:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+          - DENIED
+          description: Outcome
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason or justification
+        before_state:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: State before (PII masked)
+        after_state:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: State after (PII masked)
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval, if maker-checker
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client IP (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: User agent
+        session_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Session id
+        request_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Request id
+        trace_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Trace id
+        service_name:
+          type: string
+          maxLength: 64
+          description: Service that emitted the event
+        source_event_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: CloudEvents id of the consumed domain event (de-duplication)
+          readOnly: true
+        hash:
+          type: string
+          maxLength: 64
+          description: SHA-256 over this event and prev_hash
+          readOnly: true
+        prev_hash:
+          type: string
+          maxLength: 64
+          description: Hash of the previous event
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - occurred_at
+      - sequence_no
+      - actor_type
+      - actor_id
+      - action
+      - resource_type
+      - outcome
+      - service_name
+      - hash
+      - prev_hash
+    AuditRetentionPolicy:
+      type: object
+      description: Retention rule for audit and business records per resource type and jurisdiction
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type (or * for default)
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+        retention_years:
+          type: integer
+          format: int32
+          description: Years to retain
+        archive_after_days:
+          type: integer
+          format: int32
+          description: Move to cold storage after
+        legal_basis:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Regulation requiring retention
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - retention_years
+      - archive_after_days
+    AuditRetentionPolicyCreate:
+      type: object
+      properties:
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type (or * for default)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+        retention_years:
+          type: integer
+          format: int32
+          description: Years to retain
+        archive_after_days:
+          type: integer
+          format: int32
+          description: Move to cold storage after
+        legal_basis:
+          type: string
+          maxLength: 255
+          description: Regulation requiring retention
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - resource_type
+    AuditRetentionPolicyUpdate:
+      type: object
+      properties:
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type (or * for default)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+        retention_years:
+          type: integer
+          format: int32
+          description: Years to retain
+        archive_after_days:
+          type: integer
+          format: int32
+          description: Move to cold storage after
+        legal_basis:
+          type: string
+          maxLength: 255
+          description: Regulation requiring retention
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    DataExportRequest:
+      type: object
+      description: Export of audit or personal data for regulators, auditors or data-subject requests
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        export_type:
+          type: string
+          enum:
+          - AUDIT_LOG
+          - DATA_SUBJECT_ACCESS
+          - DATA_PORTABILITY
+          - REGULATOR_EXTRACT
+          - LEGAL_DISCOVERY
+          description: Kind of export
+        requested_for:
+          type: string
+          maxLength: 255
+          description: Recipient, e.g. Central Bank inspection team
+        subject_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Subject type for DSAR (CUSTOMER)
+        subject_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Subject id
+        from_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Range start
+        to_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Range end
+        filters:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Additional filters
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval (four-eyes)
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        row_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Rows exported
+          readOnly: true
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Export file
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Download link expiry
+          readOnly: true
+        due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Legal deadline (e.g. 30 days for DSAR)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - export_type
+      - requested_for
+      - status
+    DataExportRequestCreate:
+      type: object
+      properties:
+        export_type:
+          type: string
+          enum:
+          - AUDIT_LOG
+          - DATA_SUBJECT_ACCESS
+          - DATA_PORTABILITY
+          - REGULATOR_EXTRACT
+          - LEGAL_DISCOVERY
+          description: Kind of export
+        requested_for:
+          type: string
+          maxLength: 255
+          description: Recipient, e.g. Central Bank inspection team
+        subject_type:
+          type: string
+          maxLength: 40
+          description: Subject type for DSAR (CUSTOMER)
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject id
+        from_time:
+          type: string
+          format: date-time
+          description: Range start
+        to_time:
+          type: string
+          format: date-time
+          description: Range end
+        filters:
+          type: object
+          additionalProperties: true
+          description: Additional filters
+        due_date:
+          type: string
+          format: date
+          description: Legal deadline (e.g. 30 days for DSAR)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - export_type
+      - requested_for
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration

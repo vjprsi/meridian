@@ -23,7 +23,7 @@ tags:
 - name: Tpps
   description: Registered third-party provider (AISP, PISP, CBPII)
 - name: Tpp Certificates
-  description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+  description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload
 - name: Ob Consents
   description: Customer consent given to a TPP for account information, payment initiation or funds confirmation
 - name: Ob Authorisations
@@ -33,7 +33,7 @@ tags:
 - name: Ob Funds Confirmations
   description: Confirmation of funds check by a CBPII. Append-only.
 - name: Ob Access Logs
-  description: Every TPP API call under a consent, for audit, regulatory reporting and customer dashboards. Append-only.
+  description: Append-only access log; the gateway records every TPP call, services record consent-scoped calls.
 paths:
   /v1/open-banking/profiles:
     get:
@@ -228,6 +228,42 @@ paths:
       x-table: ob_standard_profile
       x-crud: true
       x-crud-update: true
+  /v1/open-banking/profiles/{id}/discovery:
+    get:
+      operationId: obStandardProfilesDiscovery
+      summary: Well-known discovery document of the profile (endpoints, SCA approaches, limits)
+      tags:
+      - Ob Standard Profiles
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("openbanking:read")'
+      x-table: ob_standard_profile
   /v1/open-banking/tpps:
     get:
       operationId: tppsList
@@ -261,6 +297,11 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: client_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
       - name: custom_field_1
         in: query
         schema:
@@ -423,7 +464,7 @@ paths:
   /v1/open-banking/tpps/register:
     post:
       operationId: tppsRegister
-      summary: Dynamic client registration with a signed software statement
+      summary: Dynamic client registration with a software statement (JWS) signed by the TPP's QSEAL / directory certificate
       tags:
       - Tpps
       security:
@@ -462,7 +503,7 @@ paths:
   /v1/open-banking/tpps/{id}/verify:
     post:
       operationId: tppsVerify
-      summary: Re-verify the TPP against the regulator register and directory
+      summary: Re-verify the TPP against the regulator register and its certificates; activates a pending TPP
       tags:
       - Tpps
       security:
@@ -577,6 +618,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppsReactivateRequest'
       x-requirements:
       - OBK-01
       x-service: openbanking-service
@@ -772,6 +819,51 @@ paths:
       x-table: tpp_certificate
       x-crud: true
       x-crud-get: true
+  /v1/open-banking/tpp-certificates/{id}/revoke:
+    post:
+      operationId: tppCertificatesRevoke
+      summary: Mark the certificate revoked (OCSP / CRL result or TPP request)
+      tags:
+      - Tpp Certificates
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppCertificate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppCertificatesRevokeRequest'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("openbanking:write")'
+      x-table: tpp_certificate
   /v1/open-banking/consents:
     get:
       operationId: obConsentsList
@@ -817,6 +909,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: external_consent_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
       - name: custom_field_1
         in: query
         schema:
@@ -994,7 +1091,7 @@ paths:
   /v1/open-banking/consents/{id}/revoke:
     post:
       operationId: obConsentsRevoke
-      summary: Revoke a consent (customer or TPP)
+      summary: Revoke a consent (customer, TPP or ASPSP)
       tags:
       - Ob Consents
       security:
@@ -1031,6 +1128,44 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ObConsentsRevokeRequest'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("openbanking:write")'
+      x-table: ob_consent
+  /v1/open-banking/consents/expire-due:
+    post:
+      operationId: obConsentsExpireDue
+      summary: Expire consents and authorisation sessions past their expiry (scheduler)
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - CIF-04
       - OBK-01
@@ -1156,7 +1291,7 @@ paths:
   /v1/open-banking/authorisations/{id}/select-accounts:
     post:
       operationId: obAuthorisationsSelectAccounts
-      summary: Customer selects accounts to share
+      summary: Authenticated customer selects the accounts to share (ownership checked)
       tags:
       - Ob Authorisations
       security:
@@ -1232,6 +1367,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObAuthorisationsApproveRequest'
       x-requirements:
       - OBK-01
       x-service: openbanking-service
@@ -1442,6 +1583,46 @@ paths:
       x-table: ob_payment_initiation
       x-crud: true
       x-crud-get: true
+  /v1/open-banking/payment-initiations/{id}/refresh-status:
+    post:
+      operationId: obPaymentInitiationsRefreshStatus
+      summary: Refresh the status from the core payment
+      tags:
+      - Ob Payment Initiations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObPaymentInitiation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OBK-03
+      - PAY-01
+      x-service: openbanking-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("openbanking:write")'
+      x-table: ob_payment_initiation
   /v1/open-banking/payment-initiations/{id}/cancel:
     post:
       operationId: obPaymentInitiationsCancel
@@ -1712,6 +1893,45 @@ paths:
       x-table: ob_access_log
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: obAccessLogsCreate
+      summary: Create ob access log
+      tags:
+      - Ob Access Logs
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAccessLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObAccessLogCreate'
+      x-requirements:
+      - ADM-03
+      - OBK-02
+      x-service: openbanking-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("openbanking:write")'
+      x-table: ob_access_log
+      x-crud: true
+      x-crud-create: true
   /v1/open-banking/access-logs/{id}:
     get:
       operationId: obAccessLogsGet
@@ -1750,127 +1970,43 @@ paths:
       x-crud: true
       x-crud-get: true
 components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
   schemas:
     Problem:
+      type: object
       description: RFC 9457 problem details
       properties:
-        code:
-          description: Stable machine-readable error code
+        type:
           type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
         detail:
           type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
         instance:
           type: string
         request_id:
           type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
       required:
       - type
       - title
       - status
       - code
-      type: object
     ObStandardProfilePage:
       type: object
       description: One page of ObStandardProfile results (newest first)
@@ -1912,8 +2048,11 @@ components:
       properties:
         software_statement:
           type: string
+        certificate_pem:
+          type: string
       required:
       - software_statement
+      - certificate_pem
     TppsSuspendRequest:
       type: object
       properties:
@@ -1922,6 +2061,12 @@ components:
           maxLength: 255
       required:
       - reason
+    TppsReactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     TppCertificatePage:
       type: object
       description: One page of TppCertificate results (newest first)
@@ -1940,6 +2085,14 @@ components:
       required:
       - data
       - has_more
+    TppCertificatesRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     ObConsentPage:
       type: object
       description: One page of ObConsent results (newest first)
@@ -1981,6 +2134,9 @@ components:
         revoked_by:
           type: string
           maxLength: 16
+        reason:
+          type: string
+          maxLength: 255
       required:
       - revoked_by
     ObConsentAccountPage:
@@ -2022,11 +2178,23 @@ components:
     ObAuthorisationsSelectAccountsRequest:
       type: object
       properties:
+        customer_id:
+          type: string
+          format: uuid
         account_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
+      - customer_id
       - account_ids
+    ObAuthorisationsApproveRequest:
+      type: object
+      properties:
+        authentication_method:
+          type: string
+          maxLength: 32
+      required:
+      - authentication_method
     ObAuthorisationsDenyRequest:
       type: object
       properties:
@@ -2188,6 +2356,76 @@ components:
       - http_method
       - http_status
       - psu_present
+    ObAccessLogCreate:
+      type: object
+      properties:
+        tpp_id:
+          type: string
+          format: uuid
+          description: TPP
+        ob_consent_id:
+          type: string
+          format: uuid
+          description: Consent
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        endpoint:
+          type: string
+          maxLength: 255
+          description: Standard endpoint called
+        http_method:
+          type: string
+          maxLength: 8
+          description: HTTP method
+        http_status:
+          type: integer
+          format: int32
+          description: Response status
+        psu_present:
+          type: boolean
+          description: Customer present (PSU-IP-Address supplied)
+        psu_ip_address:
+          type: string
+          description: Customer IP when present (IPv4 or IPv6 address)
+        interaction_id:
+          type: string
+          maxLength: 64
+          description: x-fapi-interaction-id
+        latency_ms:
+          type: integer
+          format: int32
+          description: Response time
+        records_returned:
+          type: integer
+          format: int32
+          description: Records returned
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - tpp_id
+      - endpoint
+      - http_method
+      - http_status
     ObAuthorisation:
       type: object
       description: SCA authorisation session for a consent (redirect, decoupled or embedded)
@@ -2270,6 +2508,14 @@ components:
           - 'null'
           format: uuid
           description: Authenticated customer
+          readOnly: true
+        selected_account_ids:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Accounts the customer selected
+          readOnly: true
         authentication_method:
           type:
           - string
@@ -2288,6 +2534,7 @@ components:
           type: string
           format: date-time
           description: Session expiry
+          readOnly: true
         completed_at:
           type:
           - string
@@ -2392,16 +2639,18 @@ components:
         external_consent_id:
           type: string
           maxLength: 128
-          description: Consent id exposed to the TPP
+          description: Consent id exposed to the TPP (server-generated)
+          readOnly: true
         customer_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Customer who authorised (set on authorisation)
+          readOnly: true
         permissions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)
         transaction_from:
           type:
@@ -2424,6 +2673,12 @@ components:
         recurring:
           type: boolean
           description: Recurring access
+        initiation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Payment details for PIS consents (instructed_amount, currency, creditor_name, creditor_account, remittance_information)
         vrp_control_parameters:
           type:
           - object
@@ -2453,7 +2708,7 @@ components:
           - string
           - 'null'
           format: date-time
-          description: Expiry
+          description: Expiry (defaults to the profile maximum for AIS)
         revoked_at:
           type:
           - string
@@ -2467,6 +2722,13 @@ components:
           - 'null'
           maxLength: 16
           description: CUSTOMER, TPP or ASPSP
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of rejection or revocation
           readOnly: true
         last_accessed_at:
           type:
@@ -2543,17 +2805,9 @@ components:
           - VRP
           - FDX_DATA
           description: Consent type
-        external_consent_id:
-          type: string
-          maxLength: 128
-          description: Consent id exposed to the TPP
-        customer_id:
-          type: string
-          format: uuid
-          description: Customer who authorised (set on authorisation)
         permissions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)
         transaction_from:
           type: string
@@ -2570,6 +2824,10 @@ components:
         recurring:
           type: boolean
           description: Recurring access
+        initiation:
+          type: object
+          additionalProperties: true
+          description: Payment details for PIS consents (instructed_amount, currency, creditor_name, creditor_account, remittance_information)
         vrp_control_parameters:
           type: object
           additionalProperties: true
@@ -2577,7 +2835,7 @@ components:
         expires_at:
           type: string
           format: date-time
-          description: Expiry
+          description: Expiry (defaults to the profile maximum for AIS)
         risk:
           type: object
           additionalProperties: true
@@ -2606,7 +2864,6 @@ components:
       - tpp_id
       - ob_standard_profile_id
       - consent_type
-      - external_consent_id
       - permissions
     ObConsentAccount:
       type: object
@@ -2660,9 +2917,9 @@ components:
           description: Account id exposed to the TPP
         permissions:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Account-level permission overrides
         custom_field_1:
           type:
@@ -2748,6 +3005,7 @@ components:
         funds_available:
           type: boolean
           description: Result
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2812,9 +3070,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        funds_available:
-          type: boolean
-          description: Result
         custom_field_1:
           type: string
           maxLength: 500
@@ -2841,7 +3096,6 @@ components:
       - account_id
       - amount
       - currency
-      - funds_available
     ObPaymentInitiation:
       type: object
       description: Payment initiated by a PISP under a consent; links to the core payment
@@ -2891,13 +3145,22 @@ components:
         external_payment_id:
           type: string
           maxLength: 128
-          description: Payment id exposed to the TPP
+          description: Payment id exposed to the TPP (server-generated)
+          readOnly: true
         payment_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Core payment created
+          readOnly: true
+        debtor_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Debtor account selected under the consent
+          readOnly: true
         payment_product:
           type: string
           maxLength: 64
@@ -2926,6 +3189,12 @@ components:
           - 'null'
           maxLength: 140
           description: Remittance information
+        requested_execution_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Future execution date (empty = immediate)
         status:
           type: string
           enum:
@@ -2999,14 +3268,6 @@ components:
           type: string
           format: uuid
           description: Initiating TPP
-        external_payment_id:
-          type: string
-          maxLength: 128
-          description: Payment id exposed to the TPP
-        payment_id:
-          type: string
-          format: uuid
-          description: Core payment created
         payment_product:
           type: string
           maxLength: 64
@@ -3033,6 +3294,10 @@ components:
           type: string
           maxLength: 140
           description: Remittance information
+        requested_execution_date:
+          type: string
+          format: date
+          description: Future execution date (empty = immediate)
         custom_field_1:
           type: string
           maxLength: 500
@@ -3056,7 +3321,6 @@ components:
       required:
       - ob_consent_id
       - tpp_id
-      - external_payment_id
       - payment_product
       - amount
       - currency
@@ -3126,13 +3390,17 @@ components:
           maxLength: 500
           description: Trust directory / registry endpoint
         sca_approaches:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
         consent_max_days:
           type: integer
           format: int32
           description: Maximum AIS consent validity
+        authorisation_ttl_minutes:
+          type: integer
+          format: int32
+          description: Validity of an SCA authorisation session
         settings:
           type:
           - object
@@ -3182,6 +3450,7 @@ components:
       - base_path
       - sca_approaches
       - consent_max_days
+      - authorisation_ttl_minutes
       - is_active
     ObStandardProfileCreate:
       type: object
@@ -3210,13 +3479,17 @@ components:
           maxLength: 500
           description: Trust directory / registry endpoint
         sca_approaches:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
         consent_max_days:
           type: integer
           format: int32
           description: Maximum AIS consent validity
+        authorisation_ttl_minutes:
+          type: integer
+          format: int32
+          description: Validity of an SCA authorisation session
         settings:
           type: object
           additionalProperties: true
@@ -3276,13 +3549,17 @@ components:
           maxLength: 500
           description: Trust directory / registry endpoint
         sca_approaches:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
         consent_max_days:
           type: integer
           format: int32
           description: Maximum AIS consent validity
+        authorisation_ttl_minutes:
+          type: integer
+          format: int32
+          description: Validity of an SCA authorisation session
         settings:
           type: object
           additionalProperties: true
@@ -3371,8 +3648,8 @@ components:
           pattern: ^[A-Z]{2}$
           description: Home country (ISO 3166-1 alpha-2)
         roles:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'PSD2 roles: AISP, PISP, CBPII'
         directory_id:
           type:
@@ -3380,17 +3657,25 @@ components:
           - 'null'
           maxLength: 128
           description: Id in the trust directory
+        software_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Software statement id (dynamic client registration)
+          readOnly: true
         client_id:
           type:
           - string
           - 'null'
           maxLength: 128
           description: OAuth client id issued via dynamic client registration
+          readOnly: true
         redirect_uris:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Registered redirect URIs
         logo_uri:
           type:
@@ -3413,6 +3698,14 @@ components:
           - SUSPENDED
           - REVOKED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last status change
+          readOnly: true
         last_verified_at:
           type:
           - string
@@ -3485,20 +3778,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Home country (ISO 3166-1 alpha-2)
         roles:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'PSD2 roles: AISP, PISP, CBPII'
         directory_id:
           type: string
           maxLength: 128
           description: Id in the trust directory
-        client_id:
-          type: string
-          maxLength: 128
-          description: OAuth client id issued via dynamic client registration
         redirect_uris:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Registered redirect URIs
         logo_uri:
           type: string
@@ -3509,14 +3798,6 @@ components:
           format: email
           maxLength: 320
           description: Technical contact
-        status:
-          type: string
-          enum:
-          - PENDING
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -3567,20 +3848,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Home country (ISO 3166-1 alpha-2)
         roles:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'PSD2 roles: AISP, PISP, CBPII'
         directory_id:
           type: string
           maxLength: 128
           description: Id in the trust directory
-        client_id:
-          type: string
-          maxLength: 128
-          description: OAuth client id issued via dynamic client registration
         redirect_uris:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Registered redirect URIs
         logo_uri:
           type: string
@@ -3591,14 +3868,6 @@ components:
           format: email
           maxLength: 320
           description: Technical contact
-        status:
-          type: string
-          enum:
-          - PENDING
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -3621,7 +3890,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     TppCertificate:
       type: object
-      description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+      description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload
       properties:
         id:
           type: string
@@ -3670,30 +3939,67 @@ components:
           - OBSEAL
           - MTLS_CLIENT
           description: Type
+        certificate_pem:
+          type: string
+          description: X.509 certificate (PEM)
         subject_dn:
           type: string
           maxLength: 500
           description: Subject distinguished name
+          readOnly: true
         issuer_dn:
           type: string
           maxLength: 500
           description: Issuer
+          readOnly: true
         serial_number:
           type: string
           maxLength: 128
-          description: Serial number
+          description: Serial number (hex)
+          readOnly: true
         fingerprint_sha256:
           type: string
           maxLength: 64
           description: Fingerprint
+          readOnly: true
+        organization_identifier:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: eIDAS organisation identifier (2.5.4.97), e.g. PSDGB-FCA-123456
+          readOnly: true
+        psd2_roles:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: PSD2 roles from the eIDAS QCStatement (PSP_AS, PSP_PI, PSP_AI, PSP_IC)
+          readOnly: true
+        nca_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 256
+          description: Competent authority name from the QCStatement
+          readOnly: true
+        nca_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Competent authority id from the QCStatement (e.g. GB-FCA)
+          readOnly: true
         valid_from:
           type: string
           format: date-time
           description: Not before
+          readOnly: true
         valid_to:
           type: string
           format: date-time
           description: Not after
+          readOnly: true
         status:
           type: string
           enum:
@@ -3701,6 +4007,13 @@ components:
           - EXPIRED
           - REVOKED
           description: Status (OCSP / CRL checked)
+          readOnly: true
+        revocation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason when revoked
           readOnly: true
         last_ocsp_check_at:
           type:
@@ -3746,6 +4059,7 @@ components:
       - row_version
       - tpp_id
       - certificate_type
+      - certificate_pem
       - subject_dn
       - issuer_dn
       - serial_number
@@ -3769,30 +4083,9 @@ components:
           - OBSEAL
           - MTLS_CLIENT
           description: Type
-        subject_dn:
+        certificate_pem:
           type: string
-          maxLength: 500
-          description: Subject distinguished name
-        issuer_dn:
-          type: string
-          maxLength: 500
-          description: Issuer
-        serial_number:
-          type: string
-          maxLength: 128
-          description: Serial number
-        fingerprint_sha256:
-          type: string
-          maxLength: 64
-          description: Fingerprint
-        valid_from:
-          type: string
-          format: date-time
-          description: Not before
-        valid_to:
-          type: string
-          format: date-time
-          description: Not after
+          description: X.509 certificate (PEM)
         custom_field_1:
           type: string
           maxLength: 500
@@ -3816,24 +4109,103 @@ components:
       required:
       - tpp_id
       - certificate_type
-      - subject_dn
-      - issuer_dn
-      - serial_number
-      - fingerprint_sha256
-      - valid_from
-      - valid_to
+      - certificate_pem
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
   securitySchemes:
     oauth2:
+      type: oauth2
       flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            openbanking:read: Read Open Banking
+            openbanking:write: Change Open Banking
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
             openbanking:read: Read Open Banking
             openbanking:write: Change Open Banking
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            openbanking:read: Read Open Banking
-            openbanking:write: Change Open Banking
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2

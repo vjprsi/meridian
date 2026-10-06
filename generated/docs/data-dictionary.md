@@ -5240,6 +5240,7 @@ API: /v1/open-banking/profiles · Requirements: OBK-01
 | directory_url | varchar(500) | yes |  | directory_url | Trust directory / registry endpoint |
 | sca_approaches | jsonb | no |  | sca_approaches | Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED) |
 | consent_max_days | integer | no |  | consent_max_days | Maximum AIS consent validity |
+| authorisation_ttl_minutes | integer | no |  | authorisation_ttl_minutes | Validity of an SCA authorisation session |
 | settings | jsonb | yes |  | settings | Profile settings and field mappings |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -5270,11 +5271,13 @@ API: /v1/open-banking/tpps · Requirements: OBK-01
 | country | char(2) | no |  | country | Home country |
 | roles | jsonb | no |  | roles | PSD2 roles: AISP, PISP, CBPII |
 | directory_id | varchar(128) | yes |  | directory_id | Id in the trust directory |
-| client_id | varchar(128) | yes | UQ | client_id | OAuth client id issued via dynamic client registration |
+| software_id | varchar(128) | yes |  | software_id (read-only) | Software statement id (dynamic client registration) |
+| client_id | varchar(128) | yes | UQ | client_id (read-only) | OAuth client id issued via dynamic client registration |
 | redirect_uris | jsonb | yes |  | redirect_uris | Registered redirect URIs |
 | logo_uri | varchar(500) | yes |  | logo_uri | Logo shown on the consent screen |
 | contact_email | varchar(320) | yes |  | contact_email | Technical contact |
-| status | varchar(40) (TppStatus) | no |  | status | Status |
+| status | varchar(40) (TppStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last status change |
 | last_verified_at | timestamptz | yes |  | last_verified_at (read-only) | Last regulator / directory check |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5284,7 +5287,7 @@ API: /v1/open-banking/tpps · Requirements: OBK-01
 
 #### `tpp_certificate`
 
-Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload
 
 API: /v1/open-banking/tpp-certificates · Requirements: OBK-01
 
@@ -5299,13 +5302,19 @@ API: /v1/open-banking/tpp-certificates · Requirements: OBK-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | tpp_id | uuid | no | FK → tpp | tpp_id | TPP |
 | certificate_type | varchar(40) (ObCertificateType) | no |  | certificate_type | Type |
-| subject_dn | varchar(500) | no |  | subject_dn | Subject distinguished name |
-| issuer_dn | varchar(500) | no |  | issuer_dn | Issuer |
-| serial_number | varchar(128) | no |  | serial_number | Serial number |
-| fingerprint_sha256 | varchar(64) | no | UQ | fingerprint_sha256 | Fingerprint |
-| valid_from | timestamptz | no |  | valid_from | Not before |
-| valid_to | timestamptz | no |  | valid_to | Not after |
+| certificate_pem | text | no |  | certificate_pem | X.509 certificate (PEM) |
+| subject_dn | varchar(500) | no |  | subject_dn (read-only) | Subject distinguished name |
+| issuer_dn | varchar(500) | no |  | issuer_dn (read-only) | Issuer |
+| serial_number | varchar(128) | no |  | serial_number (read-only) | Serial number (hex) |
+| fingerprint_sha256 | varchar(64) | no | UQ | fingerprint_sha256 (read-only) | Fingerprint |
+| organization_identifier | varchar(128) | yes |  | organization_identifier (read-only) | eIDAS organisation identifier (2.5.4.97), e.g. PSDGB-FCA-123456 |
+| psd2_roles | jsonb | yes |  | psd2_roles (read-only) | PSD2 roles from the eIDAS QCStatement (PSP_AS, PSP_PI, PSP_AI, PSP_IC) |
+| nca_name | varchar(256) | yes |  | nca_name (read-only) | Competent authority name from the QCStatement |
+| nca_id | varchar(16) | yes |  | nca_id (read-only) | Competent authority id from the QCStatement (e.g. GB-FCA) |
+| valid_from | timestamptz | no |  | valid_from (read-only) | Not before |
+| valid_to | timestamptz | no |  | valid_to (read-only) | Not after |
 | status | varchar(40) (ObCertificateStatus) | no |  | status (read-only) | Status (OCSP / CRL checked) |
+| revocation_reason | varchar(255) | yes |  | revocation_reason (read-only) | Reason when revoked |
 | last_ocsp_check_at | timestamptz | yes |  | last_ocsp_check_at (read-only) | Last revocation check |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5331,19 +5340,21 @@ API: /v1/open-banking/consents · Requirements: OBK-01, OBK-02, OBK-03, CIF-04
 | tpp_id | uuid | no | FK → tpp | tpp_id | TPP |
 | ob_standard_profile_id | uuid | no | FK → ob_standard_profile | ob_standard_profile_id | Standard used |
 | consent_type | varchar(40) (ObConsentType) | no |  | consent_type | Consent type |
-| external_consent_id | varchar(128) | no | UQ | external_consent_id | Consent id exposed to the TPP |
-| customer_id | uuid | yes | ref → customer | customer_id | Customer who authorised (set on authorisation) |
+| external_consent_id | varchar(128) | no | UQ | external_consent_id (read-only) | Consent id exposed to the TPP (server-generated) |
+| customer_id | uuid | yes | ref → customer | customer_id (read-only) | Customer who authorised (set on authorisation) |
 | permissions | jsonb | no |  | permissions | Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...) |
 | transaction_from | timestamptz | yes |  | transaction_from | Earliest transaction date visible |
 | transaction_to | timestamptz | yes |  | transaction_to | Latest transaction date visible |
 | frequency_per_day | integer | yes |  | frequency_per_day | Allowed unattended accesses per day (Berlin Group) |
 | recurring | boolean | no |  | recurring | Recurring access |
+| initiation | jsonb | yes |  | initiation | Payment details for PIS consents (instructed_amount, currency, creditor_name, creditor_account, remittance_information) |
 | vrp_control_parameters | jsonb | yes |  | vrp_control_parameters | Variable recurring payment limits (VRP) |
 | status | varchar(40) (ObConsentStatus) | no |  | status (read-only) | Status |
 | authorised_at | timestamptz | yes |  | authorised_at (read-only) | Authorisation time |
-| expires_at | timestamptz | yes |  | expires_at | Expiry |
+| expires_at | timestamptz | yes |  | expires_at | Expiry (defaults to the profile maximum for AIS) |
 | revoked_at | timestamptz | yes |  | revoked_at (read-only) | Revocation time |
 | revoked_by | varchar(16) | yes |  | revoked_by (read-only) | CUSTOMER, TPP or ASPSP |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of rejection or revocation |
 | last_accessed_at | timestamptz | yes |  | last_accessed_at (read-only) | Last access by the TPP |
 | risk | jsonb | yes |  | risk | Payment context / risk indicators supplied by the TPP |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -5398,10 +5409,11 @@ API: /v1/open-banking/authorisations · Requirements: OBK-01
 | state | varchar(255) | yes |  | state | OAuth state |
 | code_challenge | varchar(128) | yes |  | code_challenge | PKCE code challenge |
 | status | varchar(40) (ObAuthorisationStatus) | no |  | status (read-only) | Status |
-| customer_id | uuid | yes | ref → customer | customer_id | Authenticated customer |
+| customer_id | uuid | yes | ref → customer | customer_id (read-only) | Authenticated customer |
+| selected_account_ids | jsonb | yes |  | selected_account_ids (read-only) | Accounts the customer selected |
 | authentication_method | varchar(32) | yes |  | authentication_method (read-only) | Method used (passkey, app push, OTP) |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
-| expires_at | timestamptz | no |  | expires_at | Session expiry |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Session expiry |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5426,14 +5438,16 @@ API: /v1/open-banking/payment-initiations · Requirements: OBK-03, PAY-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | ob_consent_id | uuid | no | FK → ob_consent | ob_consent_id | Consent |
 | tpp_id | uuid | no | FK → tpp | tpp_id | Initiating TPP |
-| external_payment_id | varchar(128) | no | UQ | external_payment_id | Payment id exposed to the TPP |
-| payment_id | uuid | yes | ref → payment | payment_id | Core payment created |
+| external_payment_id | varchar(128) | no | UQ | external_payment_id (read-only) | Payment id exposed to the TPP (server-generated) |
+| payment_id | uuid | yes | ref → payment | payment_id (read-only) | Core payment created |
+| debtor_account_id | uuid | yes | ref → deposit_account | debtor_account_id (read-only) | Debtor account selected under the consent |
 | payment_product | varchar(64) | no |  | payment_product | Product, e.g. domestic-payments, sepa-credit-transfers, instant |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
 | creditor_name | varchar(140) | no |  | creditor_name | Creditor name PII |
 | creditor_account | varchar(64) | no |  | creditor_account | Creditor account PII |
 | remittance_information | varchar(140) | yes |  | remittance_information | Remittance information |
+| requested_execution_date | date | yes |  | requested_execution_date | Future execution date (empty = immediate) |
 | status | varchar(40) (ObPaymentInitiationStatus) | no |  | status (read-only) | Status |
 | status_reason | varchar(255) | yes |  | status_reason (read-only) | Status reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -5459,7 +5473,7 @@ API: /v1/open-banking/funds-confirmations · Requirements: OBK-01
 | account_id | uuid | no | ref → deposit_account | account_id | Account checked |
 | amount | numeric(28,8) | no |  | amount | Amount checked |
 | currency | char(3) | no |  | currency | Currency |
-| funds_available | boolean | no |  | funds_available | Result |
+| funds_available | boolean | no |  | funds_available (read-only) | Result |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7354,7 +7368,7 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | customer_id | uuid | yes | ref → customer | customer_id | Initiating or receiving customer |
 | debtor_account_id | uuid | yes | ref → deposit_account | debtor_account_id | Internal source account (outbound / internal) |
 | debtor_wallet_id | uuid | yes | ref → wallet | debtor_wallet_id | Internal source wallet |
-| debtor_ledger_account_id | uuid | yes | ref → ledger_account | debtor_ledger_account_id | Ledger account debited |
+| debtor_ledger_account_id | uuid | yes | ref → ledger_account | debtor_ledger_account_id (read-only) | Ledger account debited (resolved from the debtor account) |
 | debtor_name | varchar(140) | yes |  | debtor_name | Debtor (payer) name PII |
 | debtor_account_id_type | varchar(40) (PaymentAccountIdType) | yes |  | debtor_account_id_type | Scheme of debtor account identifier |
 | debtor_account_number | varchar(64) | yes |  | debtor_account_number | Debtor IBAN / account number / wallet id PII |
@@ -7362,9 +7376,9 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | debtor_agent_clearing_id | varchar(35) | yes |  | debtor_agent_clearing_id | Debtor agent clearing id (sort code, ABA, IFSC) |
 | debtor_country | char(2) | yes |  | debtor_country | Debtor country |
 | payee_id | uuid | yes | FK → payee | payee_id | Saved payee used, if any |
-| creditor_name | varchar(140) | no |  | creditor_name | Creditor (payee) name PII |
-| creditor_account_id_type | varchar(40) (PaymentAccountIdType) | no |  | creditor_account_id_type | Scheme of creditor account identifier |
-| creditor_account_number | varchar(64) | no |  | creditor_account_number | Creditor IBAN / account number / wallet id / proxy PII |
+| creditor_name | varchar(140) | yes |  | creditor_name | Creditor (payee) name (required unless payee_id or creditor_account_id is given) PII |
+| creditor_account_id_type | varchar(40) (PaymentAccountIdType) | yes |  | creditor_account_id_type | Scheme of creditor account identifier (required with creditor_account_number) |
+| creditor_account_number | varchar(64) | yes |  | creditor_account_number | Creditor IBAN / account number / wallet id / proxy PII |
 | creditor_agent_bic | varchar(11) | yes |  | creditor_agent_bic | Creditor agent BIC |
 | creditor_agent_clearing_id | varchar(35) | yes |  | creditor_agent_clearing_id | Creditor agent clearing id (sort code, ABA, IFSC) |
 | creditor_country | char(2) | yes |  | creditor_country | Creditor country |
@@ -7383,9 +7397,9 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | fee_amount | numeric(28,8) | yes |  | fee_amount (read-only) | Fee charged to the debtor |
 | fee_currency | char(3) | yes |  | fee_currency (read-only) | Fee currency |
 | charge_bearer | varchar(40) (ChargeBearer) | no |  | charge_bearer | Who bears charges (ISO 20022 ChrgBr) |
-| end_to_end_id | varchar(35) | no |  | end_to_end_id | ISO 20022 end-to-end id (shown to the creditor) |
-| uetr | uuid | yes |  | uetr | SWIFT gpi unique end-to-end transaction reference |
-| instruction_id | varchar(35) | yes |  | instruction_id | Instruction id between instructing parties |
+| end_to_end_id | varchar(35) | no |  | end_to_end_id (read-only) | ISO 20022 end-to-end id (server-generated; shown to the creditor) |
+| uetr | uuid | yes |  | uetr (read-only) | SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4) |
+| instruction_id | varchar(35) | yes |  | instruction_id (read-only) | Instruction id between instructing parties (server-generated) |
 | transaction_id | varchar(35) | yes |  | transaction_id (read-only) | Interbank transaction id assigned on submission |
 | clearing_system_ref | varchar(64) | yes |  | clearing_system_ref (read-only) | Reference returned by the clearing system |
 | purpose_code | varchar(4) | yes |  | purpose_code | ISO 20022 external purpose code |
@@ -7395,11 +7409,12 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | reference | varchar(35) | yes |  | reference | Payer reference shown on statements |
 | requested_execution_date | date | yes |  | requested_execution_date | Requested execution date (future-dated payments) |
 | value_date | date | yes |  | value_date (read-only) | Interbank value date |
-| rail_id | uuid | yes | ref → payment_rail | rail_id | Rail chosen by routing |
+| rail_id | uuid | yes | ref → payment_rail | rail_id (read-only) | Rail chosen by routing |
 | rail_code | varchar(32) | yes |  | rail_code (read-only) | Rail code at submission time |
 | hold_id | uuid | yes | ref → hold | hold_id (read-only) | Ledger hold placed on the debtor account |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting on settlement |
 | screening_result_id | uuid | yes | ref → screening_result | screening_result_id (read-only) | Sanctions screening result |
+| limit_check_id | uuid | yes | ref → limit_check | limit_check_id (read-only) | Limits reservation (committed on settlement, released on failure) |
 | fraud_score | numeric(18,10) | yes |  | fraud_score (read-only) | Fraud score 0..1 at initiation |
 | rejection_code | varchar(8) | yes |  | rejection_code (read-only) | ISO 20022 status reason code |
 | rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Human-readable rejection reason |
@@ -7408,7 +7423,7 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | request_to_pay_id | uuid | yes | FK → request_to_pay | request_to_pay_id | Request-to-pay being paid |
 | original_payment_id | uuid | yes | FK → payment | original_payment_id | Original payment for returns and refunds |
 | ob_consent_id | uuid | yes | ref → ob_consent | ob_consent_id | Open banking consent (PIS) |
-| initiated_by | varchar(64) | yes |  | initiated_by | Principal that initiated the payment |
+| initiated_by | varchar(64) | yes |  | initiated_by (read-only) | Principal that initiated the payment |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Time submitted to the rail |
 | accepted_at | timestamptz | yes |  | accepted_at (read-only) | Time accepted by the rail / creditor agent |
 | settled_at | timestamptz | yes |  | settled_at (read-only) | Time settled |
@@ -7469,6 +7484,7 @@ API: /v1/payment-returns · Requirements: PAY-04
 | currency | char(3) | no |  | currency | Currency |
 | fee_amount | numeric(28,8) | no |  | fee_amount | Return fee deducted |
 | return_id | varchar(35) | yes |  | return_id (read-only) | Return identification on the rail |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting moving the funds back |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -7522,12 +7538,12 @@ API: /v1/payment-repairs · Requirements: PAY-04
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| payment_id | uuid | no | FK → payment | payment_id | Payment to repair |
-| status | varchar(40) (PaymentRepairStatus) | no |  | status | Status |
-| error_code | varchar(32) | no |  | error_code | Error code that sent it to repair |
-| error_detail | text | yes |  | error_detail | Error detail |
+| payment_id | uuid | no | FK → payment | payment_id (read-only) | Payment to repair |
+| status | varchar(40) (PaymentRepairStatus) | no |  | status (read-only) | Status |
+| error_code | varchar(32) | no |  | error_code (read-only) | Error code that sent it to repair |
+| error_detail | text | yes |  | error_detail (read-only) | Error detail |
 | suggested_fix | jsonb | yes |  | suggested_fix (read-only) | Suggested corrections (e.g. BIC from IBAN, name normalisation) |
-| corrections | jsonb | yes |  | corrections | Corrections applied by the operator |
+| corrections | jsonb | yes |  | corrections (read-only) | Corrections applied by the operator (set by resubmit) |
 | assigned_to | varchar(64) | yes |  | assigned_to | Operator |
 | resubmitted_at | timestamptz | yes |  | resubmitted_at (read-only) | Time resubmitted |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -7554,9 +7570,12 @@ API: /v1/payment-approvals · Requirements: PAY-01, LIM-02
 | payment_id | uuid | yes | FK → payment | payment_id | Payment (or empty when approving a bulk payment) |
 | bulk_payment_id | uuid | yes | FK → bulk_payment | bulk_payment_id | Bulk payment |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Platform approval request |
-| approver_level | integer | no |  | approver_level | Level in the approval matrix |
-| required_approvals | integer | no |  | required_approvals | Approvals needed at this level |
-| approver_user_id | uuid | yes | ref → app_user | approver_user_id | User who decided |
+| approver_level | integer | no |  | approver_level (read-only) | Level in the approval matrix |
+| required_approvals | integer | no |  | required_approvals (read-only) | Approvals needed at this level |
+| approver_user_id | uuid | yes | ref → app_user | approver_user_id (read-only) | User who decided last |
+| approvals_received | integer | no |  | approvals_received (read-only) | Approvals collected at this level |
+| approved_by | jsonb | yes |  | approved_by (read-only) | Principals who approved at this level (distinct, never the initiator) |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Principal that made the final decision |
 | status | varchar(40) (PaymentApprovalStatus) | no |  | status (read-only) | Status |
 | comment | varchar(500) | yes |  | comment | Approver comment |
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
@@ -7598,6 +7617,7 @@ API: /v1/payees · Requirements: PAY-01, PAY-06
 | phone | varchar(20) | yes |  | phone | Beneficiary phone PII |
 | status | varchar(40) (PayeeStatus) | no |  | status (read-only) | Status |
 | verification_result | varchar(40) (PayeeVerificationResult) | yes |  | verification_result (read-only) | Last Confirmation of Payee result |
+| blocked_reason | varchar(255) | yes |  | blocked_reason (read-only) | Reason the payee was blocked |
 | verified_at | timestamptz | yes |  | verified_at (read-only) | Last verification time |
 | trusted | boolean | no |  | trusted | Trusted payee (skips step-up authentication) |
 | cooling_off_until | timestamptz | yes |  | cooling_off_until (read-only) | New payee limit window end |
@@ -7633,8 +7653,12 @@ API: /v1/payee-aliases · Requirements: PAY-01, PAY-07
 | is_default | boolean | no |  | is_default | Default destination for this alias |
 | registry | varchar(32) | yes |  | registry | External registry (PIX DICT, UPI, PayNow, national proxy) |
 | registry_ref | varchar(64) | yes |  | registry_ref (read-only) | Registration id at the external registry |
-| status | varchar(16) | no |  | status | ACTIVE, PENDING, PORTING, DELETED |
+| status | varchar(40) (PayeeAliasStatus) | no |  | status (read-only) | Lifecycle status (PENDING until ownership is verified) |
 | verified_at | timestamptz | yes |  | verified_at (read-only) | Ownership verification time |
+| otp_hash | varchar(64) | yes |  | — | Hash of the ownership one-time password |
+| otp_expires_at | timestamptz | yes |  | — | Expiry of the one-time password |
+| otp_attempts | integer | no |  | — | Failed OTP attempts |
+| donor_institution | varchar(140) | yes |  | donor_institution (read-only) | Institution the alias is being ported from |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7659,10 +7683,11 @@ API: /v1/payee-verifications · Requirements: PAY-04, FRM-01
 | account_id_type | varchar(40) (PaymentAccountIdType) | no |  | account_id_type | Account identifier scheme |
 | account_number | varchar(64) | no |  | account_number | Account checked PII |
 | agent_clearing_id | varchar(35) | yes |  | agent_clearing_id | Clearing id checked |
-| result | varchar(40) (PayeeVerificationResult) | no |  | result | Outcome |
-| matched_name | varchar(140) | yes |  | matched_name | Name returned on close match PII |
-| provider | varchar(32) | no |  | provider | Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry) |
-| provider_ref | varchar(64) | yes |  | provider_ref | Provider reference |
+| result | varchar(40) (PayeeVerificationResult) | no |  | result (read-only) | Outcome |
+| match_score | numeric(18,10) | yes |  | match_score (read-only) | Name similarity 0..1 (default thresholds MATCH >= 0.98, CLOSE_MATCH >= 0.80) |
+| matched_name | varchar(140) | yes |  | matched_name (read-only) | Name returned on close match PII |
+| provider | varchar(32) | no |  | provider (read-only) | Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry, ON_US) |
+| provider_ref | varchar(64) | yes |  | provider_ref (read-only) | Provider reference |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7700,7 +7725,10 @@ API: /v1/bulk-payments · Requirements: PAY-01
 | currency | char(3) | no |  | currency | Batch currency |
 | control_sum | numeric(28,8) | yes |  | control_sum | Control sum declared in the file |
 | hold_id | uuid | yes | ref → hold | hold_id (read-only) | Ledger hold for the whole batch |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Principal that submitted the batch (cannot approve it) |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| settled_count | integer | no |  | settled_count (read-only) | Items settled |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason when rejected or cancelled |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -7723,8 +7751,8 @@ API: /v1/bulk-payment-items · Requirements: PAY-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| bulk_payment_id | uuid | no | FK → bulk_payment | bulk_payment_id | Batch |
-| line_no | integer | no |  | line_no | Line number in the file |
+| bulk_payment_id | uuid | no | FK → bulk_payment | bulk_payment_id (read-only) | Batch |
+| line_no | integer | no |  | line_no (read-only) | Line number in the file (assigned in order) |
 | creditor_name | varchar(140) | no |  | creditor_name | Beneficiary name PII |
 | creditor_account_id_type | varchar(40) (PaymentAccountIdType) | no |  | creditor_account_id_type | Account identifier scheme |
 | creditor_account_number | varchar(64) | no |  | creditor_account_number | Beneficiary account PII |
@@ -7732,11 +7760,11 @@ API: /v1/bulk-payment-items · Requirements: PAY-01
 | creditor_agent_clearing_id | varchar(35) | yes |  | creditor_agent_clearing_id | Beneficiary clearing id |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
-| end_to_end_id | varchar(35) | no |  | end_to_end_id | End-to-end id |
+| end_to_end_id | varchar(35) | yes |  | end_to_end_id | End-to-end id from the file (generated when empty) |
 | remittance_unstructured | varchar(140) | yes |  | remittance_unstructured | Remittance information |
 | status | varchar(40) (BulkPaymentItemStatus) | no |  | status (read-only) | Status |
-| validation_errors | jsonb | yes |  | validation_errors (read-only) | Validation errors |
-| payment_id | uuid | yes | FK → payment | payment_id | Payment created for this line |
+| validation_errors | jsonb | yes |  | validation_errors (read-only) | Validation errors ({field, code, message}) |
+| payment_id | uuid | yes | FK → payment | payment_id (read-only) | Payment created for this line |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7801,7 +7829,7 @@ API: /v1/direct-debit-collections · Requirements: PAY-07
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | mandate_id | uuid | no | FK → payment_mandate | mandate_id | Mandate |
-| payment_id | uuid | yes | FK → payment | payment_id | Payment created for the collection |
+| payment_id | uuid | yes | FK → payment | payment_id (read-only) | Payment created for the collection |
 | amount | numeric(28,8) | no |  | amount | Amount to collect |
 | currency | char(3) | no |  | currency | Currency |
 | due_date | date | no |  | due_date | Due date |
@@ -7810,6 +7838,7 @@ API: /v1/direct-debit-collections · Requirements: PAY-07
 | status | varchar(40) (DirectDebitCollectionStatus) | no |  | status (read-only) | Status |
 | return_reason_code | varchar(8) | yes |  | return_reason_code (read-only) | R-transaction reason |
 | collected_at | timestamptz | yes |  | collected_at (read-only) | Collection time |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7871,7 +7900,7 @@ API: /v1/payment-links · Requirements: PAY-07, WAL-06
 | merchant_id | uuid | yes | ref → merchant | merchant_id | Owner merchant |
 | credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account credited |
 | credit_wallet_id | uuid | yes | ref → wallet | credit_wallet_id | Wallet credited |
-| slug | varchar(64) | no | UQ | slug | Short code used in the URL |
+| slug | varchar(64) | no | UQ | slug (read-only) | Short code used in the URL (server-generated) |
 | url | varchar(500) | no |  | url (read-only) | Public URL |
 | title | varchar(140) | no |  | title | Title shown to payers |
 | amount | numeric(28,8) | yes |  | amount | Fixed amount (empty = payer enters amount) |
@@ -7881,7 +7910,7 @@ API: /v1/payment-links · Requirements: PAY-07, WAL-06
 | reusable | boolean | no |  | reusable | Can be paid many times |
 | max_payments | integer | yes |  | max_payments | Cap on payments when reusable |
 | payment_count | integer | no |  | payment_count (read-only) | Payments received |
-| allowed_methods | jsonb | yes |  | allowed_methods | Payment methods offered (account, wallet, card, QR) |
+| allowed_methods | jsonb | yes |  | allowed_methods | Payment methods offered (ACCOUNT, WALLET, CARD, QR) |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
 | status | varchar(40) (PaymentLinkStatus) | no |  | status (read-only) | Status |
 | last_payment_id | uuid | yes | FK → payment | last_payment_id (read-only) | Latest payment received |
@@ -7912,7 +7941,10 @@ API: /v1/payment-qr-codes · Requirements: PAY-07, WAL-06
 | credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account credited |
 | credit_wallet_id | uuid | yes | ref → wallet | credit_wallet_id | Wallet credited |
 | scheme | varchar(32) | no |  | scheme | EMVCO, PIX, UPI, PAYNOW, PROMPTPAY, DUITNOW, BHARAT_QR, INTERNAL |
-| payload | text | no |  | payload (read-only) | Encoded EMVCo TLV payload |
+| payload | text | no |  | payload (read-only) | Encoded EMVCo TLV payload (with CRC16-CCITT) |
+| merchant_name | varchar(25) | no |  | merchant_name | Merchant / payee name encoded in the QR (EMVCo tag 59) |
+| merchant_city | varchar(15) | no |  | merchant_city | Merchant city (EMVCo tag 60) |
+| country_code | char(2) | no |  | country_code | Merchant country (EMVCo tag 58) |
 | image_uri | varchar(500) | yes |  | image_uri (read-only) | Rendered PNG/SVG location |
 | amount | numeric(28,8) | yes |  | amount | Amount (dynamic QR) |
 | currency | char(3) | no |  | currency | Currency |
@@ -7951,17 +7983,22 @@ API: /v1/payment-rails · Requirements: PAY-02, PAY-05
 | name | varchar(120) | no |  | name | Display name |
 | rail_type | varchar(40) (RailType) | no |  | rail_type | Kind of rail |
 | country | char(2) | yes |  | country | Country (empty for regional / global rails) |
-| currencies | jsonb | no |  | currencies | Supported currencies |
+| currencies | jsonb | no |  | currencies | Supported currencies (ISO 4217 codes) |
 | message_standard | varchar(32) | no |  | message_standard | ISO20022, ISO8583, NACHA, BACS, PROPRIETARY |
 | max_amount | numeric(28,8) | yes |  | max_amount | Scheme maximum per payment |
 | settlement_model | varchar(32) | no |  | settlement_model | RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT |
 | is_instant | boolean | no |  | is_instant | Real-time rail |
 | operating_hours | jsonb | yes |  | operating_hours | Opening hours (24x7 or windows) |
 | holiday_calendar_id | uuid | yes | ref → holiday_calendar | holiday_calendar_id | Calendar used for business days |
-| settlement_account_id | uuid | yes | ref → ledger_account | settlement_account_id | Ledger settlement account |
-| status | varchar(40) (RailStatus) | no |  | status | Status |
+| settlement_account_id | uuid | yes | ref → ledger_account | settlement_account_id | Ledger settlement (clearing) account credited for outbound payments |
+| cost_per_payment | numeric(28,8) | no |  | cost_per_payment | Scheme and sponsor cost per payment (routing cost factor) |
+| settlement_minutes | integer | yes |  | settlement_minutes | Typical end-to-end settlement time in minutes |
+| participant_bic | varchar(11) | yes |  | participant_bic | Our BIC / participant id on the rail (instructing agent) |
+| status | varchar(40) (RailStatus) | no |  | status (read-only) | Status (changed by suspend / resume) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last status change |
 | success_rate_7d | numeric(18,10) | yes |  | success_rate_7d (read-only) | Success rate over the last 7 days |
 | p95_latency_ms | integer | yes |  | p95_latency_ms (read-only) | p95 end-to-end latency |
+| metrics_updated_at | timestamptz | yes |  | metrics_updated_at (read-only) | Time the performance metrics were last recorded |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -7990,10 +8027,14 @@ API: /v1/rail-adapters · Requirements: PAY-02
 | participant_id | varchar(35) | yes |  | participant_id | Our participant / member id on the rail |
 | endpoint_url | varchar(500) | yes |  | endpoint_url | Endpoint |
 | credentials_ref | varchar(255) | yes |  | — | Vault path of credentials and keys secret |
+| previous_credentials_ref | varchar(255) | yes |  | — | Previous vault path, valid during the rotation grace period secret |
+| credentials_version | integer | no |  | credentials_version (read-only) | Credentials generation (incremented on rotation) |
+| credentials_rotated_at | timestamptz | yes |  | credentials_rotated_at (read-only) | Last rotation time |
 | config | jsonb | yes |  | config | Adapter-specific configuration |
 | is_primary | boolean | no |  | is_primary | Primary adapter for the rail |
 | status | varchar(40) (RailStatus) | no |  | status | Status |
 | last_heartbeat_at | timestamptz | yes |  | last_heartbeat_at (read-only) | Last successful heartbeat |
+| last_test_result | jsonb | yes |  | last_test_result (read-only) | Result of the last connection test |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8020,7 +8061,7 @@ API: /v1/rail-cutoffs · Requirements: PAY-05
 | currency | char(3) | yes |  | currency | Currency (empty = all) |
 | cutoff_time | varchar(5) | no |  | cutoff_time | Local time HH:MM |
 | timezone | varchar(64) | no |  | timezone | IANA timezone |
-| days_of_week | jsonb | yes |  | days_of_week | Days it applies to |
+| days_of_week | jsonb | yes |  | days_of_week | Days it applies to (MONDAY..SUNDAY; empty = every business day) |
 | next_day_rollover | boolean | no |  | next_day_rollover | After cut-off, roll to next business day |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -8045,7 +8086,7 @@ API: /v1/routing-rules · Requirements: PAY-08, PAY-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(120) | no |  | name | Rule name |
 | priority | integer | no |  | priority | Lower evaluated first |
-| conditions | jsonb | no |  | conditions | Match conditions (payment_type, currency, country, amount band, priority, customer segment) |
+| conditions | jsonb | no |  | conditions | Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions) |
 | strategy | varchar(40) (RoutingStrategy) | no |  | strategy | Selection strategy among candidate rails |
 | candidate_rail_ids | jsonb | no |  | candidate_rail_ids | Ordered candidate rails |
 | fallback_rail_id | uuid | yes | FK → payment_rail | fallback_rail_id | Rail if candidates are unavailable |
@@ -8075,11 +8116,14 @@ API: /v1/rail-messages · Requirements: PAY-03
 | direction | varchar(40) (RailMessageDirection) | no |  | direction | Inbound or outbound |
 | message_type | varchar(32) | no |  | message_type | e.g. pacs.008.001.08, pacs.002, camt.056, pain.001 |
 | message_id | varchar(64) | no |  | message_id | Message id (MsgId) |
+| end_to_end_id | varchar(35) | yes |  | end_to_end_id | End-to-end id of the (original) transaction |
 | payment_id | uuid | yes | ref → payment | payment_id | Related payment |
 | rail_settlement_batch_id | uuid | yes | FK → rail_settlement_batch | rail_settlement_batch_id | Batch, for batch rails |
+| replay_of_id | uuid | yes | FK → rail_message | replay_of_id | Message this one replays |
 | status | varchar(40) (RailMessageStatus) | no |  | status | Processing status |
 | payload_uri | varchar(500) | no |  | payload_uri | Encrypted payload location (object storage) |
 | payload_hash | varchar(64) | no |  | payload_hash | SHA-256 of the payload |
+| payload | text | yes |  | — | Raw payload (served only through GET /payload) |
 | signature_valid | boolean | yes |  | signature_valid | Signature verification result |
 | error | text | yes |  | error | Error detail |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -8113,6 +8157,7 @@ API: /v1/rail-settlement-batches · Requirements: PAY-02, PAY-05, REC-01
 | debit_total | numeric(28,8) | no |  | debit_total (read-only) | Sum of debits |
 | credit_total | numeric(28,8) | no |  | credit_total (read-only) | Sum of credits |
 | net_position | numeric(28,8) | no |  | net_position (read-only) | Net settlement position |
+| settlement_file_id | uuid | yes | ref → rail_message | settlement_file_id (read-only) | Settlement file generated on close (logical ref: a FK would cycle with rail_message.rail_settlement_batch_id) |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Settlement posting |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Time closed |
 | settled_at | timestamptz | yes |  | settled_at (read-only) | Time settled |
@@ -8234,16 +8279,22 @@ API: /v1/fx/quotes · Requirements: PAY-06, LED-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | customer_id | uuid | yes | ref → customer | customer_id | Customer (pricing segment) |
+| segment | varchar(32) | yes |  | segment | Customer segment used for margin rules |
+| channel | varchar(40) (PaymentChannel) | yes |  | channel | Channel used for margin rules |
 | sell_currency | char(3) | no |  | sell_currency | Currency the customer sells |
 | buy_currency | char(3) | no |  | buy_currency | Currency the customer buys |
-| sell_amount | numeric(28,8) | yes |  | sell_amount | Amount sold (fix one side) |
-| buy_amount | numeric(28,8) | yes |  | buy_amount | Amount bought (fix one side) |
-| mid_rate | numeric(18,10) | no |  | mid_rate (read-only) | Market mid rate |
+| sell_amount | numeric(28,8) | yes |  | sell_amount | Amount sold (fix one side; computed when buy_amount is fixed) |
+| buy_amount | numeric(28,8) | yes |  | buy_amount | Amount bought (fix one side; computed when sell_amount is fixed) |
+| mid_rate | numeric(18,10) | no |  | mid_rate (read-only) | Market mid rate (buy units per 1 sell unit) |
 | customer_rate | numeric(18,10) | no |  | customer_rate (read-only) | Rate offered to the customer |
 | margin_bps | integer | no |  | margin_bps (read-only) | Margin in basis points |
+| fx_margin_rule_id | uuid | yes | FK → fx_margin_rule | fx_margin_rule_id (read-only) | Margin rule applied |
 | fee_amount | numeric(28,8) | no |  | fee_amount (read-only) | Fee |
-| fee_currency | char(3) | yes |  | fee_currency | Fee currency |
-| remittance_corridor_id | uuid | yes | FK → remittance_corridor | remittance_corridor_id | Corridor (remittances) |
+| fee_currency | char(3) | yes |  | fee_currency (read-only) | Fee currency |
+| remittance_corridor_id | uuid | yes | FK → remittance_corridor | remittance_corridor_id (read-only) | Corridor (remittances) |
+| remittance_partner_id | uuid | yes | FK → remittance_partner | remittance_partner_id (read-only) | Payout partner (remittances) |
+| delivery_eta_minutes | integer | yes |  | delivery_eta_minutes (read-only) | Expected delivery time (remittances) |
+| total_debit | numeric(28,8) | yes |  | total_debit (read-only) | Sell amount plus fee |
 | rate_source | varchar(32) | yes |  | rate_source (read-only) | Rate provider |
 | expires_at | timestamptz | no |  | expires_at (read-only) | Expiry |
 | status | varchar(40) (FxQuoteStatus) | no |  | status (read-only) | Status |
@@ -8268,18 +8319,19 @@ API: /v1/fx/deals · Requirements: PAY-06, LED-03
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| fx_quote_id | uuid | no | FK → fx_quote | fx_quote_id | Quote accepted |
-| payment_id | uuid | yes | ref → payment | payment_id | Payment funded by the deal |
-| side | varchar(40) (FxSide) | no |  | side | Buy or sell from the bank's view |
-| sell_currency | char(3) | no |  | sell_currency | Sold currency |
-| sell_amount | numeric(28,8) | no |  | sell_amount | Sold amount |
-| buy_currency | char(3) | no |  | buy_currency | Bought currency |
-| buy_amount | numeric(28,8) | no |  | buy_amount | Bought amount |
-| rate | numeric(18,10) | no |  | rate | Deal rate |
-| value_date | date | no |  | value_date | Settlement value date |
+| fx_quote_id | uuid | no | FK → fx_quote | fx_quote_id (read-only) | Quote accepted |
+| payment_id | uuid | yes | ref → payment | payment_id (read-only) | Payment funded by the deal |
+| side | varchar(40) (FxSide) | no |  | side (read-only) | Bank side on the sell currency: BUY (bank buys what the customer sells) |
+| sell_currency | char(3) | no |  | sell_currency (read-only) | Sold currency |
+| sell_amount | numeric(28,8) | no |  | sell_amount (read-only) | Sold amount |
+| buy_currency | char(3) | no |  | buy_currency (read-only) | Bought currency |
+| buy_amount | numeric(28,8) | no |  | buy_amount (read-only) | Bought amount |
+| rate | numeric(18,10) | no |  | rate (read-only) | Deal rate |
+| value_date | date | no |  | value_date (read-only) | Settlement value date |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | liquidity_provider | varchar(64) | yes |  | liquidity_provider | Cover counterparty |
 | status | varchar(40) (FxDealStatus) | no |  | status (read-only) | Status |
+| cancellation_reason | varchar(255) | yes |  | cancellation_reason (read-only) | Reason when cancelled |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8301,11 +8353,11 @@ API: /v1/fx/margin-rules · Requirements: PAY-06, PRC-04
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| currency_pair | varchar(7) | no |  | currency_pair | e.g. USD/EUR (or */EUR) |
+| currency_pair | varchar(7) | no |  | currency_pair | e.g. USD/EUR (or */EUR, USD/*) |
 | segment | varchar(32) | yes |  | segment | Customer segment (empty = all) |
 | channel | varchar(40) (PaymentChannel) | yes |  | channel | Channel (empty = all) |
-| min_amount | numeric(28,8) | yes |  | min_amount | Amount band start |
-| max_amount | numeric(28,8) | yes |  | max_amount | Amount band end |
+| min_amount | numeric(28,8) | yes |  | min_amount | Amount band start (sell amount) |
+| max_amount | numeric(28,8) | yes |  | max_amount | Amount band end (sell amount) |
 | margin_bps | integer | no |  | margin_bps | Margin in basis points |
 | min_fee | numeric(28,8) | yes |  | min_fee | Minimum fee |
 | priority | integer | no |  | priority | Lower wins |
@@ -8372,10 +8424,12 @@ API: /v1/remittance/corridors · Requirements: PAY-06, PAY-08
 | min_amount | numeric(28,8) | no |  | min_amount | Minimum send amount |
 | max_amount | numeric(28,8) | no |  | max_amount | Maximum send amount |
 | fixed_fee | numeric(28,8) | no |  | fixed_fee | Fixed fee |
-| percent_fee | numeric(18,10) | no |  | percent_fee | Percentage fee |
+| percent_fee | numeric(18,10) | no |  | percent_fee | Percentage fee (0.01 = 1%) |
+| margin_bps | integer | yes |  | margin_bps | Corridor FX margin in basis points (overrides margin rules) |
 | required_fields | jsonb | yes |  | required_fields | Beneficiary fields required by the destination |
 | delivery_eta_minutes | integer | yes |  | delivery_eta_minutes | Typical delivery time |
-| status | varchar(40) (CorridorStatus) | no |  | status | Status |
+| status | varchar(40) (CorridorStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last status change |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

@@ -1,2407 +1,40 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    CollectionAction:
-      description: A contact or action taken on a case. Append-only.
-      properties:
-        action_type:
-          description: Action
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        collection_strategy_step_id:
-          description: Step that triggered it (empty if manual)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        contact_channel_address:
-          description: Phone / email used
-          maxLength: 320
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        notes:
-          description: Notes
-          type:
-          - string
-          - 'null'
-        notification_id:
-          description: Notification sent
-          format: uuid
-          type:
-          - string
-          - 'null'
-        outcome:
-          description: Outcome
-          enum:
-          - SENT
-          - DELIVERED
-          - FAILED
-          - NO_ANSWER
-          - RIGHT_PARTY_CONTACT
-          - WRONG_PARTY
-          - PROMISE_MADE
-          - REFUSED
-          - PAID
-          - DISPUTED
-          type: string
-        performed_at:
-          description: Time
-          format: date-time
-          type: string
-        performed_by:
-          description: Collector or SYSTEM
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        recording_document_id:
-          description: Call recording / letter copy
-          format: uuid
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - collection_case_id
-      - action_type
-      - outcome
-      - performed_at
-      type: object
-    CollectionActionPage:
-      description: One page of CollectionAction results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CollectionAction'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CollectionCase:
-      description: A collections case for one delinquent exposure
-      properties:
-        agency_name:
-          description: External agency if outsourced
-          maxLength: 120
-          type:
-          - string
-          - 'null'
-        assigned_to:
-          description: Collector
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        case_number:
-          description: Case number
-          maxLength: 32
-          readOnly: true
-          type: string
-        collection_queue_id:
-          description: Queue
-          format: uuid
-          type:
-          - string
-          - 'null'
-        collection_strategy_id:
-          description: Strategy in force
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        days_past_due:
-          description: Current DPD
-          format: int32
-          readOnly: true
-          type: integer
-        delinquency_bucket:
-          description: Bucket
-          enum:
-          - CURRENT
-          - DPD_1_29
-          - DPD_30_59
-          - DPD_60_89
-          - DPD_90_119
-          - DPD_120_179
-          - DPD_180_PLUS
-          readOnly: true
-          type: string
-        exposure_id:
-          description: Loan, credit line, card account or overdraft id
-          format: uuid
-          type: string
-        exposure_type:
-          description: Exposure type
-          enum:
-          - LOAN
-          - CREDIT_LINE
-          - CARD
-          - OVERDRAFT
-          - BNPL
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_disputed:
-          description: Customer disputes the debt
-          type: boolean
-        is_vulnerable:
-          description: Vulnerable-customer flag (adjusted treatment)
-          type: boolean
-        last_contact_at:
-          description: Last contact attempt
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        next_action_at:
-          description: Next scheduled action
-          format: date-time
-          type:
-          - string
-          - 'null'
-        opened_at:
-          description: Opening time
-          format: date-time
-          readOnly: true
-          type: string
-        overdue_amount:
-          description: Overdue amount
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        priority_score:
-          description: AI / rules priority for working the queue
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        resolution:
-          description: CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD
-          maxLength: 40
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        resolved_at:
-          description: Resolution time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - PROMISE_ACTIVE
-          - PLAN_ACTIVE
-          - LEGAL
-          - RESOLVED
-          - CLOSED
-          - WRITTEN_OFF
-          type: string
-        total_outstanding:
-          description: Total outstanding
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - case_number
-      - customer_id
-      - exposure_type
-      - exposure_id
-      - status
-      - days_past_due
-      - delinquency_bucket
-      - overdue_amount
-      - total_outstanding
-      - currency
-      - is_disputed
-      - is_vulnerable
-      - opened_at
-      type: object
-    CollectionCasePage:
-      description: One page of CollectionCase results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CollectionCase'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CollectionCaseUpdate:
-      properties:
-        agency_name:
-          description: External agency if outsourced
-          maxLength: 120
-          type: string
-        assigned_to:
-          description: Collector
-          maxLength: 64
-          type: string
-        collection_queue_id:
-          description: Queue
-          format: uuid
-          type: string
-        collection_strategy_id:
-          description: Strategy in force
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        exposure_id:
-          description: Loan, credit line, card account or overdraft id
-          format: uuid
-          type: string
-        exposure_type:
-          description: Exposure type
-          enum:
-          - LOAN
-          - CREDIT_LINE
-          - CARD
-          - OVERDRAFT
-          - BNPL
-          type: string
-        is_disputed:
-          description: Customer disputes the debt
-          type: boolean
-        is_vulnerable:
-          description: Vulnerable-customer flag (adjusted treatment)
-          type: boolean
-        next_action_at:
-          description: Next scheduled action
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - PROMISE_ACTIVE
-          - PLAN_ACTIVE
-          - LEGAL
-          - RESOLVED
-          - CLOSED
-          - WRITTEN_OFF
-          type: string
-      type: object
-    CollectionCasesAssignRequest:
-      properties:
-        assigned_to:
-          maxLength: 64
-          type: string
-        collection_queue_id:
-          format: uuid
-          type: string
-      type: object
-    CollectionCasesCloseRequest:
-      properties:
-        resolution:
-          maxLength: 40
-          type: string
-      required:
-      - resolution
-      type: object
-    CollectionCasesLogActionRequest:
-      properties:
-        action_type:
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        notes:
-          type: string
-        outcome:
-          enum:
-          - SENT
-          - DELIVERED
-          - FAILED
-          - NO_ANSWER
-          - RIGHT_PARTY_CONTACT
-          - WRONG_PARTY
-          - PROMISE_MADE
-          - REFUSED
-          - PAID
-          - DISPUTED
-          type: string
-      required:
-      - action_type
-      - outcome
-      type: object
-    CollectionCasesMarkDisputeRequest:
-      properties:
-        is_disputed:
-          type: boolean
-        notes:
-          type: string
-      required:
-      - is_disputed
-      type: object
-    CollectionCasesPaymentPlanRequest:
-      properties:
-        frequency:
-          enum:
-          - DAILY
-          - WEEKLY
-          - FORTNIGHTLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          - AT_MATURITY
-          type: string
-        installment_count:
-          format: int32
-          type: integer
-        interest_frozen:
-          type: boolean
-        start_date:
-          format: date
-          type: string
-      required:
-      - installment_count
-      - frequency
-      - start_date
-      type: object
-    CollectionCasesPromiseRequest:
-      properties:
-        channel:
-          maxLength: 32
-          type: string
-        promised_amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        promised_date:
-          format: date
-          type: string
-      required:
-      - promised_amount
-      - promised_date
-      type: object
-    CollectionCasesSendToAgencyRequest:
-      properties:
-        agency_name:
-          maxLength: 120
-          type: string
-      required:
-      - agency_name
-      type: object
-    CollectionCasesStartLegalRequest:
-      properties:
-        claim_amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - claim_amount
-      type: object
-    CollectionQueue:
-      description: A work queue for collectors
-      properties:
-        agent_user_ids:
-          additionalProperties: true
-          description: Collectors assigned (app_user ids)
-          type:
-          - object
-          - 'null'
-        assignment_mode:
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
-          maxLength: 16
-          type: string
-        code:
-          description: Queue code
-          maxLength: 40
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        team:
-          description: Team
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - assignment_mode
-      - is_active
-      type: object
-    CollectionQueueCreate:
-      properties:
-        agent_user_ids:
-          additionalProperties: true
-          description: Collectors assigned (app_user ids)
-          type: object
-        assignment_mode:
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
-          maxLength: 16
-          type: string
-        code:
-          description: Queue code
-          maxLength: 40
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        team:
-          description: Team
-          maxLength: 64
-          type: string
-      required:
-      - code
-      - name
-      type: object
-    CollectionQueuePage:
-      description: One page of CollectionQueue results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CollectionQueue'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CollectionQueueUpdate:
-      properties:
-        agent_user_ids:
-          additionalProperties: true
-          description: Collectors assigned (app_user ids)
-          type: object
-        assignment_mode:
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
-          maxLength: 16
-          type: string
-        code:
-          description: Queue code
-          maxLength: 40
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        team:
-          description: Team
-          maxLength: 64
-          type: string
-      type: object
-    CollectionStrategy:
-      description: A collection strategy for a segment and DPD range
-      properties:
-        code:
-          description: Strategy code
-          maxLength: 40
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        exposure_type:
-          description: Exposure type (empty = any)
-          enum:
-          - LOAN
-          - CREDIT_LINE
-          - CARD
-          - OVERDRAFT
-          - BNPL
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        max_contacts_per_week:
-          description: Contact-frequency cap (conduct rules)
-          format: int32
-          type: integer
-        max_dpd:
-          description: Upper DPD bound
-          format: int32
-          type:
-          - integer
-          - 'null'
-        min_dpd:
-          description: Lower DPD bound
-          format: int32
-          type: integer
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower wins when several match
-          format: int32
-          type: integer
-        quiet_hours:
-          additionalProperties: true
-          description: Hours when no contact is allowed
-          type:
-          - object
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        segment_rules:
-          additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
-          type: object
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - segment_rules
-      - min_dpd
-      - priority
-      - max_contacts_per_week
-      - is_active
-      type: object
-    CollectionStrategyCreate:
-      properties:
-        code:
-          description: Strategy code
-          maxLength: 40
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        exposure_type:
-          description: Exposure type (empty = any)
-          enum:
-          - LOAN
-          - CREDIT_LINE
-          - CARD
-          - OVERDRAFT
-          - BNPL
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        max_contacts_per_week:
-          description: Contact-frequency cap (conduct rules)
-          format: int32
-          type: integer
-        max_dpd:
-          description: Upper DPD bound
-          format: int32
-          type: integer
-        min_dpd:
-          description: Lower DPD bound
-          format: int32
-          type: integer
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower wins when several match
-          format: int32
-          type: integer
-        quiet_hours:
-          additionalProperties: true
-          description: Hours when no contact is allowed
-          type: object
-        segment_rules:
-          additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
-          type: object
-      required:
-      - code
-      - name
-      - segment_rules
-      type: object
-    CollectionStrategyPage:
-      description: One page of CollectionStrategy results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CollectionStrategy'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CollectionStrategyStep:
-      description: An action of a strategy triggered at a DPD or after an event
-      properties:
-        action_type:
-          description: Action
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        collection_strategy_id:
-          description: Strategy
-          format: uuid
-          type: string
-        condition:
-          additionalProperties: true
-          description: Extra condition, e.g. no active promise
-          type:
-          - object
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        fee_code:
-          description: Fee to charge, if any
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        queue_id:
-          description: Queue for manual actions
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        step_no:
-          description: Order
-          format: int32
-          type: integer
-        template_code:
-          description: Notification / letter template
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        trigger_dpd:
-          description: DPD at which the step runs
-          format: int32
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - collection_strategy_id
-      - step_no
-      - trigger_dpd
-      - action_type
-      type: object
-    CollectionStrategyStepCreate:
-      properties:
-        action_type:
-          description: Action
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        collection_strategy_id:
-          description: Strategy
-          format: uuid
-          type: string
-        condition:
-          additionalProperties: true
-          description: Extra condition, e.g. no active promise
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fee_code:
-          description: Fee to charge, if any
-          maxLength: 40
-          type: string
-        queue_id:
-          description: Queue for manual actions
-          format: uuid
-          type: string
-        step_no:
-          description: Order
-          format: int32
-          type: integer
-        template_code:
-          description: Notification / letter template
-          maxLength: 64
-          type: string
-        trigger_dpd:
-          description: DPD at which the step runs
-          format: int32
-          type: integer
-      required:
-      - collection_strategy_id
-      - step_no
-      - trigger_dpd
-      - action_type
-      type: object
-    CollectionStrategyStepPage:
-      description: One page of CollectionStrategyStep results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CollectionStrategyStep'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CollectionStrategyStepUpdate:
-      properties:
-        action_type:
-          description: Action
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        collection_strategy_id:
-          description: Strategy
-          format: uuid
-          type: string
-        condition:
-          additionalProperties: true
-          description: Extra condition, e.g. no active promise
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fee_code:
-          description: Fee to charge, if any
-          maxLength: 40
-          type: string
-        queue_id:
-          description: Queue for manual actions
-          format: uuid
-          type: string
-        step_no:
-          description: Order
-          format: int32
-          type: integer
-        template_code:
-          description: Notification / letter template
-          maxLength: 64
-          type: string
-        trigger_dpd:
-          description: DPD at which the step runs
-          format: int32
-          type: integer
-      type: object
-    CollectionStrategyUpdate:
-      properties:
-        code:
-          description: Strategy code
-          maxLength: 40
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        exposure_type:
-          description: Exposure type (empty = any)
-          enum:
-          - LOAN
-          - CREDIT_LINE
-          - CARD
-          - OVERDRAFT
-          - BNPL
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        max_contacts_per_week:
-          description: Contact-frequency cap (conduct rules)
-          format: int32
-          type: integer
-        max_dpd:
-          description: Upper DPD bound
-          format: int32
-          type: integer
-        min_dpd:
-          description: Lower DPD bound
-          format: int32
-          type: integer
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower wins when several match
-          format: int32
-          type: integer
-        quiet_hours:
-          additionalProperties: true
-          description: Hours when no contact is allowed
-          type: object
-        segment_rules:
-          additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
-          type: object
-      type: object
-    LegalProceeding:
-      description: Legal action on a collections case
-      properties:
-        approval_request_id:
-          description: Approval to litigate
-          format: uuid
-          type:
-          - string
-          - 'null'
-        case_reference:
-          description: Court case reference
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        claim_amount:
-          description: Amount claimed
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        court:
-          description: Court / tribunal
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        filed_at:
-          description: Filing date
-          format: date
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        judgement_amount:
-          description: Judgement amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        law_firm:
-          description: Panel law firm
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        legal_costs:
-          description: Costs incurred
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        next_hearing_date:
-          description: Next hearing
-          format: date
-          type:
-          - string
-          - 'null'
-        notes:
-          description: Notes
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - INITIATED
-          - FILED
-          - HEARING
-          - JUDGEMENT
-          - ENFORCEMENT
-          - SETTLED
-          - CLOSED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - collection_case_id
-      - claim_amount
-      - legal_costs
-      - currency
-      - status
-      type: object
-    LegalProceedingPage:
-      description: One page of LegalProceeding results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LegalProceeding'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LegalProceedingUpdate:
-      properties:
-        approval_request_id:
-          description: Approval to litigate
-          format: uuid
-          type: string
-        case_reference:
-          description: Court case reference
-          maxLength: 128
-          type: string
-        claim_amount:
-          description: Amount claimed
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        court:
-          description: Court / tribunal
-          maxLength: 160
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        filed_at:
-          description: Filing date
-          format: date
-          type: string
-        judgement_amount:
-          description: Judgement amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        law_firm:
-          description: Panel law firm
-          maxLength: 160
-          type: string
-        legal_costs:
-          description: Costs incurred
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        next_hearing_date:
-          description: Next hearing
-          format: date
-          type: string
-        notes:
-          description: Notes
-          type: string
-        status:
-          description: Status
-          enum:
-          - INITIATED
-          - FILED
-          - HEARING
-          - JUDGEMENT
-          - ENFORCEMENT
-          - SETTLED
-          - CLOSED
-          type: string
-      type: object
-    NextBestAction:
-      description: AI-suggested next action for a case (channel, time, offer) with explanation
-      properties:
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decided_by:
-          description: Collector who accepted or rejected
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Suggestion expiry
-          format: date-time
-          type:
-          - string
-          - 'null'
-        explanation:
-          description: Why the model suggests this
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        model_version:
-          description: Model version
-          maxLength: 32
-          type: string
-        propensity_to_pay:
-          description: Model propensity to pay
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - SUGGESTED
-          - ACCEPTED
-          - REJECTED
-          - EXECUTED
-          - EXPIRED
-          type: string
-        suggested_action:
-          description: Suggested action
-          enum:
-          - SMS
-          - PUSH
-          - EMAIL
-          - WHATSAPP
-          - CALL
-          - FIELD_VISIT
-          - LETTER
-          - LEGAL_NOTICE
-          - AUTO_DEBIT_RETRY
-          - SKIP_TRACE
-          type: string
-        suggested_at_time:
-          description: Best time to contact
-          format: date-time
-          type:
-          - string
-          - 'null'
-        suggested_offer:
-          additionalProperties: true
-          description: Offer, e.g. settlement discount or plan terms
-          type:
-          - object
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - collection_case_id
-      - suggested_action
-      - model_version
-      - status
-      type: object
-    NextBestActionPage:
-      description: One page of NextBestAction results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NextBestAction'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NextBestActionsRejectRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    PaymentPlan:
-      description: An arrangement to clear arrears in instalments
-      properties:
-        approval_request_id:
-          description: Approval if outside policy
-          format: uuid
-          type:
-          - string
-          - 'null'
-        broken_at:
-          description: When the plan broke
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        frequency:
-          description: Frequency
-          enum:
-          - DAILY
-          - WEEKLY
-          - FORTNIGHTLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          - AT_MATURITY
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        installment_count:
-          description: Number of instalments
-          format: int32
-          type: integer
-        installments:
-          additionalProperties: true
-          description: Planned instalments (date, amount, paid)
-          type: object
-        interest_frozen:
-          description: Interest frozen during the plan
-          type: boolean
-        paid_amount:
-          description: Paid to date
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        start_date:
-          description: First instalment
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - PROPOSED
-          - ACTIVE
-          - COMPLETED
-          - BROKEN
-          - CANCELLED
-          readOnly: true
-          type: string
-        total_amount:
-          description: Total covered
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - collection_case_id
-      - total_amount
-      - currency
-      - installment_count
-      - frequency
-      - start_date
-      - installments
-      - paid_amount
-      - status
-      - interest_frozen
-      type: object
-    PaymentPlanPage:
-      description: One page of PaymentPlan results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PaymentPlan'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PaymentPlanUpdate:
-      properties:
-        approval_request_id:
-          description: Approval if outside policy
-          format: uuid
-          type: string
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        frequency:
-          description: Frequency
-          enum:
-          - DAILY
-          - WEEKLY
-          - FORTNIGHTLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          - AT_MATURITY
-          type: string
-        installment_count:
-          description: Number of instalments
-          format: int32
-          type: integer
-        installments:
-          additionalProperties: true
-          description: Planned instalments (date, amount, paid)
-          type: object
-        interest_frozen:
-          description: Interest frozen during the plan
-          type: boolean
-        start_date:
-          description: First instalment
-          format: date
-          type: string
-        total_amount:
-          description: Total covered
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    PaymentPlansCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    PromiseToPay:
-      description: A customer's promise to pay an amount by a date
-      properties:
-        channel:
-          description: How the promise was made
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        paid_amount:
-          description: Paid against the promise
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        promised_amount:
-          description: Amount promised
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        promised_date:
-          description: Date promised
-          format: date
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - KEPT
-          - PARTIALLY_KEPT
-          - BROKEN
-          - CANCELLED
-          readOnly: true
-          type: string
-        taken_by:
-          description: Collector
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - collection_case_id
-      - promised_amount
-      - currency
-      - promised_date
-      - paid_amount
-      - status
-      type: object
-    PromiseToPayPage:
-      description: One page of PromiseToPay results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PromiseToPay'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PromiseToPayUpdate:
-      properties:
-        channel:
-          description: How the promise was made
-          maxLength: 32
-          type: string
-        collection_case_id:
-          description: Case
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        promised_amount:
-          description: Amount promised
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        promised_date:
-          description: Date promised
-          format: date
-          type: string
-        taken_by:
-          description: Collector
-          maxLength: 64
-          type: string
-      type: object
-    PromisesToPayCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            lending:read: Read Lending and Collections
-            lending:write: Change Lending and Collections
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            lending:read: Read Lending and Collections
-            lending:write: Change Lending and Collections
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — collections-service
+  version: 1.0.0
   description: 'Loan origination with bureau, scoring and explainable decisions; loan servicing for instalment loans, revolving
     credit lines, BNPL and nano-loans; collateral management; and collections and recovery.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — collections-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Collection Strategies
+  description: A collection strategy for a segment and DPD range
+- name: Collection Strategy Steps
+  description: An action of a strategy triggered at a DPD or after an event
+- name: Collection Queues
+  description: A work queue for collectors
+- name: Collection Cases
+  description: A collections case for one delinquent exposure
+- name: Collection Actions
+  description: A contact or action taken on a case. Append-only.
+- name: Promises To Pay
+  description: A customer's promise to pay an amount by a date
+- name: Payment Plans
+  description: An arrangement to clear arrears in instalments
+- name: Next Best Actions
+  description: AI-suggested next action for a case (channel, time, offer) with explanation
+- name: Legal Proceedings
+  description: Legal action on a collections case
 paths:
   /v1/collections/strategies:
     get:
@@ -4670,29 +2303,2396 @@ paths:
       x-table: legal_proceeding
       x-crud: true
       x-crud-update: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A collection strategy for a segment and DPD range
-  name: Collection Strategies
-- description: An action of a strategy triggered at a DPD or after an event
-  name: Collection Strategy Steps
-- description: A work queue for collectors
-  name: Collection Queues
-- description: A collections case for one delinquent exposure
-  name: Collection Cases
-- description: A contact or action taken on a case. Append-only.
-  name: Collection Actions
-- description: A customer's promise to pay an amount by a date
-  name: Promises To Pay
-- description: An arrangement to clear arrears in instalments
-  name: Payment Plans
-- description: AI-suggested next action for a case (channel, time, offer) with explanation
-  name: Next Best Actions
-- description: Legal action on a collections case
-  name: Legal Proceedings
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CollectionStrategyPage:
+      type: object
+      description: One page of CollectionStrategy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionStrategy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionStrategyStepPage:
+      type: object
+      description: One page of CollectionStrategyStep results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionStrategyStep'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionQueuePage:
+      type: object
+      description: One page of CollectionQueue results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionQueue'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionCasePage:
+      type: object
+      description: One page of CollectionCase results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionCase'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionCasesAssignRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          maxLength: 64
+        collection_queue_id:
+          type: string
+          format: uuid
+    CollectionCasesLogActionRequest:
+      type: object
+      properties:
+        action_type:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+        outcome:
+          type: string
+          enum:
+          - SENT
+          - DELIVERED
+          - FAILED
+          - NO_ANSWER
+          - RIGHT_PARTY_CONTACT
+          - WRONG_PARTY
+          - PROMISE_MADE
+          - REFUSED
+          - PAID
+          - DISPUTED
+        notes:
+          type: string
+      required:
+      - action_type
+      - outcome
+    CollectionCasesPromiseRequest:
+      type: object
+      properties:
+        promised_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        promised_date:
+          type: string
+          format: date
+        channel:
+          type: string
+          maxLength: 32
+      required:
+      - promised_amount
+      - promised_date
+    CollectionCasesPaymentPlanRequest:
+      type: object
+      properties:
+        installment_count:
+          type: integer
+          format: int32
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+        start_date:
+          type: string
+          format: date
+        interest_frozen:
+          type: boolean
+      required:
+      - installment_count
+      - frequency
+      - start_date
+    CollectionCasesSendToAgencyRequest:
+      type: object
+      properties:
+        agency_name:
+          type: string
+          maxLength: 120
+      required:
+      - agency_name
+    CollectionCasesStartLegalRequest:
+      type: object
+      properties:
+        claim_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - claim_amount
+    CollectionCasesMarkDisputeRequest:
+      type: object
+      properties:
+        is_disputed:
+          type: boolean
+        notes:
+          type: string
+      required:
+      - is_disputed
+    CollectionCasesCloseRequest:
+      type: object
+      properties:
+        resolution:
+          type: string
+          maxLength: 40
+      required:
+      - resolution
+    CollectionActionPage:
+      type: object
+      description: One page of CollectionAction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionAction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PromiseToPayPage:
+      type: object
+      description: One page of PromiseToPay results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromiseToPay'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PromisesToPayCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    PaymentPlanPage:
+      type: object
+      description: One page of PaymentPlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentPlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PaymentPlansCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    NextBestActionPage:
+      type: object
+      description: One page of NextBestAction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NextBestAction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NextBestActionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    LegalProceedingPage:
+      type: object
+      description: One page of LegalProceeding results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalProceeding'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionAction:
+      type: object
+      description: A contact or action taken on a case. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        action_type:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+          description: Action
+        collection_strategy_step_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Step that triggered it (empty if manual)
+        performed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Collector or SYSTEM
+        outcome:
+          type: string
+          enum:
+          - SENT
+          - DELIVERED
+          - FAILED
+          - NO_ANSWER
+          - RIGHT_PARTY_CONTACT
+          - WRONG_PARTY
+          - PROMISE_MADE
+          - REFUSED
+          - PAID
+          - DISPUTED
+          description: Outcome
+        contact_channel_address:
+          type:
+          - string
+          - 'null'
+          maxLength: 320
+          description: Phone / email used
+        notes:
+          type:
+          - string
+          - 'null'
+          description: Notes
+        recording_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Call recording / letter copy
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Notification sent
+        performed_at:
+          type: string
+          format: date-time
+          description: Time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - collection_case_id
+      - action_type
+      - outcome
+      - performed_at
+    CollectionCase:
+      type: object
+      description: A collections case for one delinquent exposure
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        case_number:
+          type: string
+          maxLength: 32
+          description: Case number
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        exposure_type:
+          type: string
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+          description: Exposure type
+        exposure_id:
+          type: string
+          format: uuid
+          description: Loan, credit line, card account or overdraft id
+        collection_strategy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Strategy in force
+        collection_queue_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Queue
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Collector
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - PROMISE_ACTIVE
+          - PLAN_ACTIVE
+          - LEGAL
+          - RESOLVED
+          - CLOSED
+          - WRITTEN_OFF
+          description: Status
+        days_past_due:
+          type: integer
+          format: int32
+          description: Current DPD
+          readOnly: true
+        delinquency_bucket:
+          type: string
+          enum:
+          - CURRENT
+          - DPD_1_29
+          - DPD_30_59
+          - DPD_60_89
+          - DPD_90_119
+          - DPD_120_179
+          - DPD_180_PLUS
+          description: Bucket
+          readOnly: true
+        overdue_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Overdue amount
+          readOnly: true
+        total_outstanding:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total outstanding
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        priority_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: AI / rules priority for working the queue
+          readOnly: true
+        last_contact_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last contact attempt
+          readOnly: true
+        next_action_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next scheduled action
+        is_disputed:
+          type: boolean
+          description: Customer disputes the debt
+        is_vulnerable:
+          type: boolean
+          description: Vulnerable-customer flag (adjusted treatment)
+        agency_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: External agency if outsourced
+        opened_at:
+          type: string
+          format: date-time
+          description: Opening time
+          readOnly: true
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Resolution time
+          readOnly: true
+        resolution:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - case_number
+      - customer_id
+      - exposure_type
+      - exposure_id
+      - status
+      - days_past_due
+      - delinquency_bucket
+      - overdue_amount
+      - total_outstanding
+      - currency
+      - is_disputed
+      - is_vulnerable
+      - opened_at
+    CollectionCaseUpdate:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        exposure_type:
+          type: string
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+          description: Exposure type
+        exposure_id:
+          type: string
+          format: uuid
+          description: Loan, credit line, card account or overdraft id
+        collection_strategy_id:
+          type: string
+          format: uuid
+          description: Strategy in force
+        collection_queue_id:
+          type: string
+          format: uuid
+          description: Queue
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Collector
+        status:
+          type: string
+          enum:
+          - OPEN
+          - IN_PROGRESS
+          - PROMISE_ACTIVE
+          - PLAN_ACTIVE
+          - LEGAL
+          - RESOLVED
+          - CLOSED
+          - WRITTEN_OFF
+          description: Status
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        next_action_at:
+          type: string
+          format: date-time
+          description: Next scheduled action
+        is_disputed:
+          type: boolean
+          description: Customer disputes the debt
+        is_vulnerable:
+          type: boolean
+          description: Vulnerable-customer flag (adjusted treatment)
+        agency_name:
+          type: string
+          maxLength: 120
+          description: External agency if outsourced
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CollectionQueue:
+      type: object
+      description: A work queue for collectors
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+          description: Queue code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        team:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Team
+        assignment_mode:
+          type: string
+          maxLength: 16
+          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+        agent_user_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Collectors assigned (app_user ids)
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - assignment_mode
+      - is_active
+    CollectionQueueCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 40
+          description: Queue code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        team:
+          type: string
+          maxLength: 64
+          description: Team
+        assignment_mode:
+          type: string
+          maxLength: 16
+          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+        agent_user_ids:
+          type: object
+          additionalProperties: true
+          description: Collectors assigned (app_user ids)
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+    CollectionQueueUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 40
+          description: Queue code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        team:
+          type: string
+          maxLength: 64
+          description: Team
+        assignment_mode:
+          type: string
+          maxLength: 16
+          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+        agent_user_ids:
+          type: object
+          additionalProperties: true
+          description: Collectors assigned (app_user ids)
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CollectionStrategy:
+      type: object
+      description: A collection strategy for a segment and DPD range
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+          description: Strategy code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        exposure_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+          description: Exposure type (empty = any)
+        segment_rules:
+          type: object
+          additionalProperties: true
+          description: Segment criteria (product, risk grade, balance, customer type)
+        min_dpd:
+          type: integer
+          format: int32
+          description: Lower DPD bound
+        max_dpd:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Upper DPD bound
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several match
+        max_contacts_per_week:
+          type: integer
+          format: int32
+          description: Contact-frequency cap (conduct rules)
+        quiet_hours:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Hours when no contact is allowed
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - segment_rules
+      - min_dpd
+      - priority
+      - max_contacts_per_week
+      - is_active
+    CollectionStrategyCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 40
+          description: Strategy code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        exposure_type:
+          type: string
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+          description: Exposure type (empty = any)
+        segment_rules:
+          type: object
+          additionalProperties: true
+          description: Segment criteria (product, risk grade, balance, customer type)
+        min_dpd:
+          type: integer
+          format: int32
+          description: Lower DPD bound
+        max_dpd:
+          type: integer
+          format: int32
+          description: Upper DPD bound
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several match
+        max_contacts_per_week:
+          type: integer
+          format: int32
+          description: Contact-frequency cap (conduct rules)
+        quiet_hours:
+          type: object
+          additionalProperties: true
+          description: Hours when no contact is allowed
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - segment_rules
+    CollectionStrategyUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 40
+          description: Strategy code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        exposure_type:
+          type: string
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+          description: Exposure type (empty = any)
+        segment_rules:
+          type: object
+          additionalProperties: true
+          description: Segment criteria (product, risk grade, balance, customer type)
+        min_dpd:
+          type: integer
+          format: int32
+          description: Lower DPD bound
+        max_dpd:
+          type: integer
+          format: int32
+          description: Upper DPD bound
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several match
+        max_contacts_per_week:
+          type: integer
+          format: int32
+          description: Contact-frequency cap (conduct rules)
+        quiet_hours:
+          type: object
+          additionalProperties: true
+          description: Hours when no contact is allowed
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CollectionStrategyStep:
+      type: object
+      description: An action of a strategy triggered at a DPD or after an event
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        collection_strategy_id:
+          type: string
+          format: uuid
+          description: Strategy
+        step_no:
+          type: integer
+          format: int32
+          description: Order
+        trigger_dpd:
+          type: integer
+          format: int32
+          description: DPD at which the step runs
+        action_type:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+          description: Action
+        template_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Notification / letter template
+        queue_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Queue for manual actions
+        condition:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Extra condition, e.g. no active promise
+        fee_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Fee to charge, if any
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - collection_strategy_id
+      - step_no
+      - trigger_dpd
+      - action_type
+    CollectionStrategyStepCreate:
+      type: object
+      properties:
+        collection_strategy_id:
+          type: string
+          format: uuid
+          description: Strategy
+        step_no:
+          type: integer
+          format: int32
+          description: Order
+        trigger_dpd:
+          type: integer
+          format: int32
+          description: DPD at which the step runs
+        action_type:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+          description: Action
+        template_code:
+          type: string
+          maxLength: 64
+          description: Notification / letter template
+        queue_id:
+          type: string
+          format: uuid
+          description: Queue for manual actions
+        condition:
+          type: object
+          additionalProperties: true
+          description: Extra condition, e.g. no active promise
+        fee_code:
+          type: string
+          maxLength: 40
+          description: Fee to charge, if any
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - collection_strategy_id
+      - step_no
+      - trigger_dpd
+      - action_type
+    CollectionStrategyStepUpdate:
+      type: object
+      properties:
+        collection_strategy_id:
+          type: string
+          format: uuid
+          description: Strategy
+        step_no:
+          type: integer
+          format: int32
+          description: Order
+        trigger_dpd:
+          type: integer
+          format: int32
+          description: DPD at which the step runs
+        action_type:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+          description: Action
+        template_code:
+          type: string
+          maxLength: 64
+          description: Notification / letter template
+        queue_id:
+          type: string
+          format: uuid
+          description: Queue for manual actions
+        condition:
+          type: object
+          additionalProperties: true
+          description: Extra condition, e.g. no active promise
+        fee_code:
+          type: string
+          maxLength: 40
+          description: Fee to charge, if any
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LegalProceeding:
+      type: object
+      description: Legal action on a collections case
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        court:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Court / tribunal
+        case_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Court case reference
+        law_firm:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Panel law firm
+        claim_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount claimed
+        legal_costs:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Costs incurred
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - FILED
+          - HEARING
+          - JUDGEMENT
+          - ENFORCEMENT
+          - SETTLED
+          - CLOSED
+          description: Status
+        filed_at:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Filing date
+        next_hearing_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next hearing
+        judgement_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Judgement amount
+        notes:
+          type:
+          - string
+          - 'null'
+          description: Notes
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval to litigate
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - collection_case_id
+      - claim_amount
+      - legal_costs
+      - currency
+      - status
+    LegalProceedingUpdate:
+      type: object
+      properties:
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        court:
+          type: string
+          maxLength: 160
+          description: Court / tribunal
+        case_reference:
+          type: string
+          maxLength: 128
+          description: Court case reference
+        law_firm:
+          type: string
+          maxLength: 160
+          description: Panel law firm
+        claim_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount claimed
+        legal_costs:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Costs incurred
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - FILED
+          - HEARING
+          - JUDGEMENT
+          - ENFORCEMENT
+          - SETTLED
+          - CLOSED
+          description: Status
+        filed_at:
+          type: string
+          format: date
+          description: Filing date
+        next_hearing_date:
+          type: string
+          format: date
+          description: Next hearing
+        judgement_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Judgement amount
+        notes:
+          type: string
+          description: Notes
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Approval to litigate
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    NextBestAction:
+      type: object
+      description: AI-suggested next action for a case (channel, time, offer) with explanation
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        suggested_action:
+          type: string
+          enum:
+          - SMS
+          - PUSH
+          - EMAIL
+          - WHATSAPP
+          - CALL
+          - FIELD_VISIT
+          - LETTER
+          - LEGAL_NOTICE
+          - AUTO_DEBIT_RETRY
+          - SKIP_TRACE
+          description: Suggested action
+        suggested_at_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Best time to contact
+        suggested_offer:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Offer, e.g. settlement discount or plan terms
+        propensity_to_pay:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Model propensity to pay
+        explanation:
+          type:
+          - string
+          - 'null'
+          description: Why the model suggests this
+        model_version:
+          type: string
+          maxLength: 32
+          description: Model version
+        status:
+          type: string
+          enum:
+          - SUGGESTED
+          - ACCEPTED
+          - REJECTED
+          - EXECUTED
+          - EXPIRED
+          description: Status
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Collector who accepted or rejected
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Suggestion expiry
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - collection_case_id
+      - suggested_action
+      - model_version
+      - status
+    PaymentPlan:
+      type: object
+      description: An arrangement to clear arrears in instalments
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        total_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total covered
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        installment_count:
+          type: integer
+          format: int32
+          description: Number of instalments
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          description: Frequency
+        start_date:
+          type: string
+          format: date
+          description: First instalment
+        installments:
+          type: object
+          additionalProperties: true
+          description: Planned instalments (date, amount, paid)
+        paid_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Paid to date
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PROPOSED
+          - ACTIVE
+          - COMPLETED
+          - BROKEN
+          - CANCELLED
+          description: Status
+          readOnly: true
+        interest_frozen:
+          type: boolean
+          description: Interest frozen during the plan
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval if outside policy
+        broken_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the plan broke
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - collection_case_id
+      - total_amount
+      - currency
+      - installment_count
+      - frequency
+      - start_date
+      - installments
+      - paid_amount
+      - status
+      - interest_frozen
+    PaymentPlanUpdate:
+      type: object
+      properties:
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        total_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total covered
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        installment_count:
+          type: integer
+          format: int32
+          description: Number of instalments
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          description: Frequency
+        start_date:
+          type: string
+          format: date
+          description: First instalment
+        installments:
+          type: object
+          additionalProperties: true
+          description: Planned instalments (date, amount, paid)
+        interest_frozen:
+          type: boolean
+          description: Interest frozen during the plan
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Approval if outside policy
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PromiseToPay:
+      type: object
+      description: A customer's promise to pay an amount by a date
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        promised_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount promised
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        promised_date:
+          type: string
+          format: date
+          description: Date promised
+        paid_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Paid against the promise
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - KEPT
+          - PARTIALLY_KEPT
+          - BROKEN
+          - CANCELLED
+          description: Status
+          readOnly: true
+        channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: How the promise was made
+        taken_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Collector
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - collection_case_id
+      - promised_amount
+      - currency
+      - promised_date
+      - paid_amount
+      - status
+    PromiseToPayUpdate:
+      type: object
+      properties:
+        collection_case_id:
+          type: string
+          format: uuid
+          description: Case
+        promised_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount promised
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        promised_date:
+          type: string
+          format: date
+          description: Date promised
+        channel:
+          type: string
+          maxLength: 32
+          description: How the promise was made
+        taken_by:
+          type: string
+          maxLength: 64
+          description: Collector
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            lending:read: Read Lending and Collections
+            lending:write: Change Lending and Collections
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            lending:read: Read Lending and Collections
+            lending:write: Change Lending and Collections

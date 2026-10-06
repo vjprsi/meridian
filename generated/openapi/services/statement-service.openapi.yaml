@@ -1,1161 +1,29 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    Statement:
-      description: Account statement for a period
-      properties:
-        checksum:
-          description: SHA-256 of the file
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        closing_balance:
-          description: Closing balance
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        delivered_at:
-          description: Delivery time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        deposit_account_id:
-          description: Account
-          format: uuid
-          type: string
-        document_id:
-          description: Generated file registered with document-service
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        failure_reason:
-          description: Why generation failed (status FAILED)
-          maxLength: 500
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        fees_charged:
-          description: Fees in period
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        format:
-          description: Format
-          enum:
-          - PDF
-          - CSV
-          - CAMT_053
-          - MT940
-          - OFX
-          - JSON
-          type: string
-        generated_at:
-          description: Generation time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        interest_earned:
-          description: Interest credited in period
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        is_on_demand:
-          description: Requested outside the cycle
-          type: boolean
-        language:
-          description: Language
-          maxLength: 10
-          type: string
-        line_count:
-          description: Number of lines
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        opening_balance:
-          description: Opening balance
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        period_end:
-          description: Last day
-          format: date
-          type: string
-        period_start:
-          description: First day
-          format: date
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        statement_no:
-          description: Sequential statement number per account (server-assigned; shared by all formats of one period)
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Generation status
-          enum:
-          - PENDING
-          - GENERATING
-          - READY
-          - DELIVERED
-          - FAILED
-          readOnly: true
-          type: string
-        total_credits:
-          description: Credits in period
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        total_debits:
-          description: Debits in period
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - deposit_account_id
-      - statement_no
-      - period_start
-      - period_end
-      - format
-      - language
-      - currency
-      - is_on_demand
-      - status
-      type: object
-    StatementCreate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        deposit_account_id:
-          description: Account
-          format: uuid
-          type: string
-        format:
-          description: Format
-          enum:
-          - PDF
-          - CSV
-          - CAMT_053
-          - MT940
-          - OFX
-          - JSON
-          type: string
-        is_on_demand:
-          description: Requested outside the cycle
-          type: boolean
-        language:
-          description: Language
-          maxLength: 10
-          type: string
-        period_end:
-          description: Last day
-          format: date
-          type: string
-        period_start:
-          description: First day
-          format: date
-          type: string
-      required:
-      - deposit_account_id
-      - period_start
-      - period_end
-      - currency
-      type: object
-    StatementLine:
-      description: Line of a statement, frozen at generation time. Append-only.
-      properties:
-        amount:
-          description: Amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        booking_date:
-          description: Booking date
-          format: date
-          type: string
-        counterparty:
-          description: Counterparty
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Narrative
-          maxLength: 500
-          type: string
-        direction:
-          description: Debit or credit
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_entry_id:
-          description: Source ledger entry
-          format: uuid
-          type:
-          - string
-          - 'null'
-        line_no:
-          description: Line number
-          format: int32
-          type: integer
-        reference:
-          description: Payment reference
-          maxLength: 140
-          type:
-          - string
-          - 'null'
-        running_balance:
-          description: Balance after the line
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        statement_id:
-          description: Statement
-          format: uuid
-          type: string
-        transaction_code:
-          description: ISO 20022 bank transaction code
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        value_date:
-          description: Value date
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - statement_id
-      - line_no
-      - booking_date
-      - value_date
-      - description
-      - direction
-      - amount
-      - running_balance
-      type: object
-    StatementLinePage:
-      description: One page of StatementLine results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/StatementLine'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    StatementPage:
-      description: One page of Statement results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Statement'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    StatementSchedule:
-      description: Statement delivery preferences per account
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        cycle_day:
-          description: Cycle end day
-          format: int32
-          type: integer
-        delivery_channel:
-          description: Channel
-          enum:
-          - EMAIL
-          - IN_APP
-          - POST
-          - SFTP
-          - API
-          type: string
-        deposit_account_id:
-          description: Account
-          format: uuid
-          type: string
-        email:
-          description: Override delivery email
-          format: email
-          maxLength: 320
-          type:
-          - string
-          - 'null'
-        formats:
-          description: StatementFormat values to generate, e.g. [PDF, CSV]
-          items: {}
-          type: array
-        frequency:
-          description: Cycle
-          enum:
-          - ONCE
-          - DAILY
-          - WEEKLY
-          - BIWEEKLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        password_protect:
-          description: Encrypt PDFs
-          type: boolean
-        postal_address_id:
-          description: Postal address for POST
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sftp_endpoint:
-          description: SFTP destination for business clients
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - deposit_account_id
-      - frequency
-      - cycle_day
-      - formats
-      - delivery_channel
-      - password_protect
-      - is_active
-      type: object
-    StatementScheduleCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        cycle_day:
-          description: Cycle end day
-          format: int32
-          type: integer
-        delivery_channel:
-          description: Channel
-          enum:
-          - EMAIL
-          - IN_APP
-          - POST
-          - SFTP
-          - API
-          type: string
-        deposit_account_id:
-          description: Account
-          format: uuid
-          type: string
-        email:
-          description: Override delivery email
-          format: email
-          maxLength: 320
-          type: string
-        formats:
-          description: StatementFormat values to generate, e.g. [PDF, CSV]
-          items: {}
-          type: array
-        frequency:
-          description: Cycle
-          enum:
-          - ONCE
-          - DAILY
-          - WEEKLY
-          - BIWEEKLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        password_protect:
-          description: Encrypt PDFs
-          type: boolean
-        postal_address_id:
-          description: Postal address for POST
-          format: uuid
-          type: string
-        sftp_endpoint:
-          description: SFTP destination for business clients
-          maxLength: 255
-          type: string
-      required:
-      - deposit_account_id
-      - formats
-      type: object
-    StatementSchedulePage:
-      description: One page of StatementSchedule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/StatementSchedule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    StatementScheduleUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        cycle_day:
-          description: Cycle end day
-          format: int32
-          type: integer
-        delivery_channel:
-          description: Channel
-          enum:
-          - EMAIL
-          - IN_APP
-          - POST
-          - SFTP
-          - API
-          type: string
-        deposit_account_id:
-          description: Account
-          format: uuid
-          type: string
-        email:
-          description: Override delivery email
-          format: email
-          maxLength: 320
-          type: string
-        formats:
-          description: StatementFormat values to generate, e.g. [PDF, CSV]
-          items: {}
-          type: array
-        frequency:
-          description: Cycle
-          enum:
-          - ONCE
-          - DAILY
-          - WEEKLY
-          - BIWEEKLY
-          - MONTHLY
-          - QUARTERLY
-          - SEMI_ANNUAL
-          - ANNUAL
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        password_protect:
-          description: Encrypt PDFs
-          type: boolean
-        postal_address_id:
-          description: Postal address for POST
-          format: uuid
-          type: string
-        sftp_endpoint:
-          description: SFTP destination for business clients
-          maxLength: 255
-          type: string
-      type: object
-    StatementsResendRequest:
-      properties:
-        delivery_channel:
-          enum:
-          - EMAIL
-          - IN_APP
-          - POST
-          - SFTP
-          - API
-          type: string
-        email:
-          format: email
-          maxLength: 320
-          type: string
-      type: object
-    TaxCertificate:
-      description: Interest / withholding tax certificate or annual summary for a customer
-      properties:
-        certificate_type:
-          description: Type
-          enum:
-          - INTEREST_CERTIFICATE
-          - WITHHOLDING_TAX_CERTIFICATE
-          - FORM_1099_INT
-          - ANNUAL_SUMMARY
-          - BALANCE_CONFIRMATION
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        deposit_account_id:
-          description: Account (empty = all accounts)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: Generated document
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        gross_interest:
-          description: Gross interest
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        period_end:
-          description: Period end
-          format: date
-          type: string
-        period_start:
-          description: Period start
-          format: date
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING
-          - GENERATING
-          - READY
-          - DELIVERED
-          - FAILED
-          readOnly: true
-          type: string
-        submitted_to_authority_at:
-          description: Time reported to the tax authority
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        tax_withheld:
-          description: Tax withheld
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        tax_year:
-          description: Tax year
-          format: int32
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - customer_id
-      - certificate_type
-      - tax_year
-      - period_start
-      - period_end
-      - currency
-      - status
-      type: object
-    TaxCertificateCreate:
-      properties:
-        certificate_type:
-          description: Type
-          enum:
-          - INTEREST_CERTIFICATE
-          - WITHHOLDING_TAX_CERTIFICATE
-          - FORM_1099_INT
-          - ANNUAL_SUMMARY
-          - BALANCE_CONFIRMATION
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        deposit_account_id:
-          description: Account (empty = all accounts)
-          format: uuid
-          type: string
-        period_end:
-          description: Period end
-          format: date
-          type: string
-        period_start:
-          description: Period start
-          format: date
-          type: string
-        tax_year:
-          description: Tax year
-          format: int32
-          type: integer
-      required:
-      - customer_id
-      - certificate_type
-      - tax_year
-      - period_start
-      - period_end
-      - currency
-      type: object
-    TaxCertificatePage:
-      description: One page of TaxCertificate results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TaxCertificate'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            accounts:read: Read Deposits and Accounts
-            accounts:write: Change Deposits and Accounts
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            accounts:read: Read Deposits and Accounts
-            accounts:write: Change Deposits and Accounts
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — statement-service
+  version: 1.0.0
   description: 'Deposit account servicing on top of the ledger: current, savings, call and notice accounts, term deposits,
     savings pots, sweeps, standing orders, overdrafts, holders and mandates, blocks, dormancy, closure, cheques, virtual accounts,
     daily interest accrual and capitalisation, fee charging, statements and tax certificates.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — statement-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Statements
+  description: Account statement for a period
+- name: Statement Schedules
+  description: Statement delivery preferences per account
+- name: Tax Certificates
+  description: Interest / withholding tax certificate or annual summary for a customer
 paths:
   /v1/statements:
     get:
@@ -2008,17 +876,1149 @@ paths:
       x-service: statement-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
       x-table: tax_certificate
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: Account statement for a period
-  name: Statements
-- description: Statement delivery preferences per account
-  name: Statement Schedules
-- description: Interest / withholding tax certificate or annual summary for a customer
-  name: Tax Certificates
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    StatementPage:
+      type: object
+      description: One page of Statement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Statement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StatementLinePage:
+      type: object
+      description: One page of StatementLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatementLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StatementsResendRequest:
+      type: object
+      properties:
+        delivery_channel:
+          type: string
+          enum:
+          - EMAIL
+          - IN_APP
+          - POST
+          - SFTP
+          - API
+        email:
+          type: string
+          format: email
+          maxLength: 320
+    StatementSchedulePage:
+      type: object
+      description: One page of StatementSchedule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatementSchedule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TaxCertificatePage:
+      type: object
+      description: One page of TaxCertificate results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxCertificate'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    Statement:
+      type: object
+      description: Account statement for a period
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account
+        statement_no:
+          type: integer
+          format: int32
+          description: Sequential statement number per account (server-assigned; shared by all formats of one period)
+          readOnly: true
+        period_start:
+          type: string
+          format: date
+          description: First day
+        period_end:
+          type: string
+          format: date
+          description: Last day
+        format:
+          type: string
+          enum:
+          - PDF
+          - CSV
+          - CAMT_053
+          - MT940
+          - OFX
+          - JSON
+          description: Format
+        language:
+          type: string
+          maxLength: 10
+          description: Language
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        opening_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Opening balance
+          readOnly: true
+        total_credits:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Credits in period
+          readOnly: true
+        total_debits:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Debits in period
+          readOnly: true
+        closing_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Closing balance
+          readOnly: true
+        interest_earned:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Interest credited in period
+          readOnly: true
+        fees_charged:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fees in period
+          readOnly: true
+        line_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Number of lines
+          readOnly: true
+        is_on_demand:
+          type: boolean
+          description: Requested outside the cycle
+        status:
+          type: string
+          enum:
+          - PENDING
+          - GENERATING
+          - READY
+          - DELIVERED
+          - FAILED
+          description: Generation status
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why generation failed (status FAILED)
+          readOnly: true
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Generated file registered with document-service
+          readOnly: true
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the file
+          readOnly: true
+        generated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Generation time
+          readOnly: true
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Delivery time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deposit_account_id
+      - statement_no
+      - period_start
+      - period_end
+      - format
+      - language
+      - currency
+      - is_on_demand
+      - status
+    StatementCreate:
+      type: object
+      properties:
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account
+        period_start:
+          type: string
+          format: date
+          description: First day
+        period_end:
+          type: string
+          format: date
+          description: Last day
+        format:
+          type: string
+          enum:
+          - PDF
+          - CSV
+          - CAMT_053
+          - MT940
+          - OFX
+          - JSON
+          description: Format
+        language:
+          type: string
+          maxLength: 10
+          description: Language
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_on_demand:
+          type: boolean
+          description: Requested outside the cycle
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - deposit_account_id
+      - period_start
+      - period_end
+      - currency
+    StatementLine:
+      type: object
+      description: Line of a statement, frozen at generation time. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        statement_id:
+          type: string
+          format: uuid
+          description: Statement
+        line_no:
+          type: integer
+          format: int32
+          description: Line number
+        booking_date:
+          type: string
+          format: date
+          description: Booking date
+        value_date:
+          type: string
+          format: date
+          description: Value date
+        description:
+          type: string
+          maxLength: 500
+          description: Narrative
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: Payment reference
+        counterparty:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Counterparty
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        running_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance after the line
+        ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source ledger entry
+        transaction_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: ISO 20022 bank transaction code
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - statement_id
+      - line_no
+      - booking_date
+      - value_date
+      - description
+      - direction
+      - amount
+      - running_balance
+    StatementSchedule:
+      type: object
+      description: Statement delivery preferences per account
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account
+        frequency:
+          type: string
+          enum:
+          - ONCE
+          - DAILY
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          description: Cycle
+        cycle_day:
+          type: integer
+          format: int32
+          description: Cycle end day
+        formats:
+          type: array
+          items: {}
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+        delivery_channel:
+          type: string
+          enum:
+          - EMAIL
+          - IN_APP
+          - POST
+          - SFTP
+          - API
+          description: Channel
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Override delivery email
+        postal_address_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Postal address for POST
+        sftp_endpoint:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: SFTP destination for business clients
+        password_protect:
+          type: boolean
+          description: Encrypt PDFs
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deposit_account_id
+      - frequency
+      - cycle_day
+      - formats
+      - delivery_channel
+      - password_protect
+      - is_active
+    StatementScheduleCreate:
+      type: object
+      properties:
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account
+        frequency:
+          type: string
+          enum:
+          - ONCE
+          - DAILY
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          description: Cycle
+        cycle_day:
+          type: integer
+          format: int32
+          description: Cycle end day
+        formats:
+          type: array
+          items: {}
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+        delivery_channel:
+          type: string
+          enum:
+          - EMAIL
+          - IN_APP
+          - POST
+          - SFTP
+          - API
+          description: Channel
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Override delivery email
+        postal_address_id:
+          type: string
+          format: uuid
+          description: Postal address for POST
+        sftp_endpoint:
+          type: string
+          maxLength: 255
+          description: SFTP destination for business clients
+        password_protect:
+          type: boolean
+          description: Encrypt PDFs
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - deposit_account_id
+      - formats
+    StatementScheduleUpdate:
+      type: object
+      properties:
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account
+        frequency:
+          type: string
+          enum:
+          - ONCE
+          - DAILY
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          description: Cycle
+        cycle_day:
+          type: integer
+          format: int32
+          description: Cycle end day
+        formats:
+          type: array
+          items: {}
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+        delivery_channel:
+          type: string
+          enum:
+          - EMAIL
+          - IN_APP
+          - POST
+          - SFTP
+          - API
+          description: Channel
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Override delivery email
+        postal_address_id:
+          type: string
+          format: uuid
+          description: Postal address for POST
+        sftp_endpoint:
+          type: string
+          maxLength: 255
+          description: SFTP destination for business clients
+        password_protect:
+          type: boolean
+          description: Encrypt PDFs
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TaxCertificate:
+      type: object
+      description: Interest / withholding tax certificate or annual summary for a customer
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        deposit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account (empty = all accounts)
+        certificate_type:
+          type: string
+          enum:
+          - INTEREST_CERTIFICATE
+          - WITHHOLDING_TAX_CERTIFICATE
+          - FORM_1099_INT
+          - ANNUAL_SUMMARY
+          - BALANCE_CONFIRMATION
+          description: Type
+        tax_year:
+          type: integer
+          format: int32
+          description: Tax year
+        period_start:
+          type: string
+          format: date
+          description: Period start
+        period_end:
+          type: string
+          format: date
+          description: Period end
+        gross_interest:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross interest
+          readOnly: true
+        tax_withheld:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax withheld
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - PENDING
+          - GENERATING
+          - READY
+          - DELIVERED
+          - FAILED
+          description: Status
+          readOnly: true
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Generated document
+          readOnly: true
+        submitted_to_authority_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time reported to the tax authority
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - certificate_type
+      - tax_year
+      - period_start
+      - period_end
+      - currency
+      - status
+    TaxCertificateCreate:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account (empty = all accounts)
+        certificate_type:
+          type: string
+          enum:
+          - INTEREST_CERTIFICATE
+          - WITHHOLDING_TAX_CERTIFICATE
+          - FORM_1099_INT
+          - ANNUAL_SUMMARY
+          - BALANCE_CONFIRMATION
+          description: Type
+        tax_year:
+          type: integer
+          format: int32
+          description: Tax year
+        period_start:
+          type: string
+          format: date
+          description: Period start
+        period_end:
+          type: string
+          format: date
+          description: Period end
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - customer_id
+      - certificate_type
+      - tax_year
+      - period_start
+      - period_end
+      - currency
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            accounts:read: Read Deposits and Accounts
+            accounts:write: Change Deposits and Accounts
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            accounts:read: Read Deposits and Accounts
+            accounts:write: Change Deposits and Accounts

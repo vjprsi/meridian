@@ -1,3228 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    AccountBalance:
-      description: Current balances per ledger account, updated in the same transaction as each posting
-      properties:
-        account_version:
-          description: Last applied ledger entry version
-          format: int64
-          readOnly: true
-          type: integer
-        available_balance:
-          description: Posted - pending debits + overdraft limit
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        last_entry_at:
-          description: Time of the last posting
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        ledger_account_id:
-          description: Account
-          format: uuid
-          type: string
-        pending_credits:
-          description: Pending credits not yet available
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        pending_debits:
-          description: Active holds and pending debits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_balance:
-          description: Posted (ledger) balance in normal-balance terms
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_credits:
-          description: Lifetime posted credits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        posted_debits:
-          description: Lifetime posted debits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - ledger_account_id
-      - currency
-      - posted_debits
-      - posted_credits
-      - posted_balance
-      - pending_debits
-      - pending_credits
-      - available_balance
-      - account_version
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    Wallet:
-      description: A stored-value account held by a customer, merchant, agent or the platform
-      properties:
-        agent_id:
-          description: Owning agent (agent, super-agent, float and commission wallets)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        alias:
-          description: Optional handle used for P2P lookup
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        closed_at:
-          description: Closing time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        credit_score:
-          description: Transaction-based score for nano-loan offers
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        currency:
-          description: Wallet currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Owning customer (customer wallets)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        display_name:
-          description: Name shown to payers for confirmation
-          maxLength: 160
-          type: string
-        dormant_since:
-          description: Time the wallet became dormant
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_default:
-          description: Default wallet of the owner for this currency
-          type: boolean
-        kyc_tier:
-          description: KYC tier (0 = phone only) driving limits
-          format: int32
-          type: integer
-        language:
-          description: Preferred language for USSD/SMS
-          maxLength: 8
-          type:
-          - string
-          - 'null'
-        last_activity_at:
-          description: Last customer-initiated transaction
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        ledger_account_id:
-          description: Ledger account holding the balance
-          format: uuid
-          type: string
-        merchant_id:
-          description: Owning merchant (merchant wallets)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        msisdn:
-          description: Mobile number bound to the wallet (E.164) (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type:
-          - string
-          - 'null'
-        opened_by_agent_id:
-          description: Agent who registered the wallet
-          format: uuid
-          type:
-          - string
-          - 'null'
-        opened_channel:
-          description: Channel the wallet was opened on
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type:
-          - string
-          - 'null'
-        pin_locked_until:
-          description: PIN locked until this time after too many failures
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        product_id:
-          description: Wallet product
-          format: uuid
-          type:
-          - string
-          - 'null'
-        product_version_id:
-          description: Product version the wallet is on
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Lifecycle status
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          type: string
-        status_reason:
-          description: Reason for the current status
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        wallet_number:
-          description: Public wallet number
-          maxLength: 32
-          type: string
-        wallet_type:
-          description: Kind of wallet
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - wallet_number
-      - wallet_type
-      - display_name
-      - currency
-      - ledger_account_id
-      - kyc_tier
-      - status
-      - is_default
-      type: object
-    WalletBankLink:
-      description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
-      properties:
-        account_name:
-          description: Account holder name returned by name enquiry
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        account_number:
-          description: Account number or IBAN
-          maxLength: 34
-          type: string
-        bank_code:
-          description: Bank / sort code / IFSC / BIC
-          maxLength: 32
-          type: string
-        bank_name:
-          description: Bank name
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        deposit_account_id:
-          description: Internal deposit account when held on Meridian
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_default:
-          description: Default link
-          type: boolean
-        mandate_reference:
-          description: Direct-debit mandate for bank-to-wallet pulls
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - REMOVED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        verification_method:
-          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        verified_at:
-          description: Verification time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - wallet_id
-      - bank_code
-      - account_number
-      - currency
-      - status
-      - is_default
-      type: object
-    WalletBankLinkCreate:
-      properties:
-        account_name:
-          description: Account holder name returned by name enquiry
-          maxLength: 160
-          type: string
-        account_number:
-          description: Account number or IBAN
-          maxLength: 34
-          type: string
-        bank_code:
-          description: Bank / sort code / IFSC / BIC
-          maxLength: 32
-          type: string
-        bank_name:
-          description: Bank name
-          maxLength: 160
-          type: string
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        deposit_account_id:
-          description: Internal deposit account when held on Meridian
-          format: uuid
-          type: string
-        is_default:
-          description: Default link
-          type: boolean
-        mandate_reference:
-          description: Direct-debit mandate for bank-to-wallet pulls
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - REMOVED
-          type: string
-        verification_method:
-          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
-          maxLength: 32
-          type: string
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      required:
-      - wallet_id
-      - bank_code
-      - account_number
-      - currency
-      type: object
-    WalletBankLinkPage:
-      description: One page of WalletBankLink results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletBankLink'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletBankLinkUpdate:
-      properties:
-        account_name:
-          description: Account holder name returned by name enquiry
-          maxLength: 160
-          type: string
-        account_number:
-          description: Account number or IBAN
-          maxLength: 34
-          type: string
-        bank_code:
-          description: Bank / sort code / IFSC / BIC
-          maxLength: 32
-          type: string
-        bank_name:
-          description: Bank name
-          maxLength: 160
-          type: string
-        currency:
-          description: Account currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        deposit_account_id:
-          description: Internal deposit account when held on Meridian
-          format: uuid
-          type: string
-        is_default:
-          description: Default link
-          type: boolean
-        mandate_reference:
-          description: Direct-debit mandate for bank-to-wallet pulls
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - REMOVED
-          type: string
-        verification_method:
-          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
-          maxLength: 32
-          type: string
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      type: object
-    WalletBankLinksRemoveRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    WalletBankLinksVerifyRequest:
-      properties:
-        verification_code:
-          maxLength: 16
-          type: string
-      type: object
-    WalletCreate:
-      properties:
-        agent_id:
-          description: Owning agent (agent, super-agent, float and commission wallets)
-          format: uuid
-          type: string
-        alias:
-          description: Optional handle used for P2P lookup
-          maxLength: 64
-          type: string
-        currency:
-          description: Wallet currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Owning customer (customer wallets)
-          format: uuid
-          type: string
-        display_name:
-          description: Name shown to payers for confirmation
-          maxLength: 160
-          type: string
-        is_default:
-          description: Default wallet of the owner for this currency
-          type: boolean
-        kyc_tier:
-          description: KYC tier (0 = phone only) driving limits
-          format: int32
-          type: integer
-        language:
-          description: Preferred language for USSD/SMS
-          maxLength: 8
-          type: string
-        ledger_account_id:
-          description: Ledger account holding the balance
-          format: uuid
-          type: string
-        merchant_id:
-          description: Owning merchant (merchant wallets)
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        msisdn:
-          description: Mobile number bound to the wallet (E.164) (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        opened_by_agent_id:
-          description: Agent who registered the wallet
-          format: uuid
-          type: string
-        opened_channel:
-          description: Channel the wallet was opened on
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        product_id:
-          description: Wallet product
-          format: uuid
-          type: string
-        product_version_id:
-          description: Product version the wallet is on
-          format: uuid
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          type: string
-        status_reason:
-          description: Reason for the current status
-          maxLength: 255
-          type: string
-        wallet_number:
-          description: Public wallet number
-          maxLength: 32
-          type: string
-        wallet_type:
-          description: Kind of wallet
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      required:
-      - wallet_number
-      - wallet_type
-      - display_name
-      - currency
-      - ledger_account_id
-      type: object
-    WalletFavorite:
-      description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
-      properties:
-        account_reference:
-          description: Meter / account number at the biller
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        biller_id:
-          description: Saved biller
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        favorite_type:
-          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
-          maxLength: 32
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        merchant_id:
-          description: Saved merchant
-          format: uuid
-          type:
-          - string
-          - 'null'
-        nickname:
-          description: Display name
-          maxLength: 64
-          type: string
-        payee_id:
-          description: Saved bank payee
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        target_msisdn:
-          description: Saved mobile number (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type:
-          - string
-          - 'null'
-        target_wallet_id:
-          description: Saved wallet
-          format: uuid
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        wallet_id:
-          description: Owner wallet
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - wallet_id
-      - nickname
-      - favorite_type
-      type: object
-    WalletFavoriteCreate:
-      properties:
-        account_reference:
-          description: Meter / account number at the biller
-          maxLength: 64
-          type: string
-        biller_id:
-          description: Saved biller
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        favorite_type:
-          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
-          maxLength: 32
-          type: string
-        merchant_id:
-          description: Saved merchant
-          format: uuid
-          type: string
-        nickname:
-          description: Display name
-          maxLength: 64
-          type: string
-        payee_id:
-          description: Saved bank payee
-          format: uuid
-          type: string
-        target_msisdn:
-          description: Saved mobile number (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        target_wallet_id:
-          description: Saved wallet
-          format: uuid
-          type: string
-        wallet_id:
-          description: Owner wallet
-          format: uuid
-          type: string
-      required:
-      - wallet_id
-      - nickname
-      - favorite_type
-      type: object
-    WalletFavoritePage:
-      description: One page of WalletFavorite results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletFavorite'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletFavoriteUpdate:
-      properties:
-        account_reference:
-          description: Meter / account number at the biller
-          maxLength: 64
-          type: string
-        biller_id:
-          description: Saved biller
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        favorite_type:
-          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
-          maxLength: 32
-          type: string
-        merchant_id:
-          description: Saved merchant
-          format: uuid
-          type: string
-        nickname:
-          description: Display name
-          maxLength: 64
-          type: string
-        payee_id:
-          description: Saved bank payee
-          format: uuid
-          type: string
-        target_msisdn:
-          description: Saved mobile number (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        target_wallet_id:
-          description: Saved wallet
-          format: uuid
-          type: string
-        wallet_id:
-          description: Owner wallet
-          format: uuid
-          type: string
-      type: object
-    WalletPage:
-      description: One page of Wallet results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Wallet'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletPinReset:
-      description: A PIN reset request verified by OTP, agent or ID check
-      properties:
-        agent_id:
-          description: Agent who verified the customer
-          format: uuid
-          type:
-          - string
-          - 'null'
-        channel:
-          description: Channel of the request
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        completed_at:
-          description: Completion time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: ID document captured
-          format: uuid
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Request expiry
-          format: date-time
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        otp_attempts:
-          description: OTP attempts used
-          format: int32
-          readOnly: true
-          type: integer
-        rejected_reason:
-          description: Rejection reason
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - REQUESTED
-          - VERIFIED
-          - COMPLETED
-          - REJECTED
-          - EXPIRED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        verification_method:
-          description: OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS
-          maxLength: 32
-          type: string
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - wallet_id
-      - channel
-      - status
-      - verification_method
-      - otp_attempts
-      - expires_at
-      type: object
-    WalletPinResetCreate:
-      properties:
-        agent_id:
-          description: Agent who verified the customer
-          format: uuid
-          type: string
-        channel:
-          description: Channel of the request
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        document_id:
-          description: ID document captured
-          format: uuid
-          type: string
-        expires_at:
-          description: Request expiry
-          format: date-time
-          type: string
-        verification_method:
-          description: OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS
-          maxLength: 32
-          type: string
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      required:
-      - wallet_id
-      - channel
-      - verification_method
-      - expires_at
-      type: object
-    WalletPinResetPage:
-      description: One page of WalletPinReset results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletPinReset'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletPinResetsCompleteRequest:
-      properties:
-        new_pin:
-          maxLength: 12
-          type: string
-      required:
-      - new_pin
-      type: object
-    WalletPinResetsRejectRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    WalletPinResetsVerifyRequest:
-      properties:
-        document_id:
-          format: uuid
-          type: string
-        otp:
-          maxLength: 8
-          type: string
-      type: object
-    WalletStatusHistory:
-      description: Immutable history of wallet status changes
-      properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type:
-          - string
-          - 'null'
-        changed_by:
-          description: Principal
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        from_status:
-          description: Previous status
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        reason:
-          description: Reason
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        to_status:
-          description: New status
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          type: string
-        wallet_id:
-          description: Wallet
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - wallet_id
-      - to_status
-      type: object
-    WalletStatusHistoryPage:
-      description: One page of WalletStatusHistory results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletStatusHistory'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletTierLimit:
-      description: Balance and transaction limits per KYC tier, wallet type and transaction type
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        daily_amount:
-          description: Maximum amount per day
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        daily_count:
-          description: Maximum transactions per day
-          format: int32
-          type:
-          - integer
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        kyc_tier:
-          description: KYC tier
-          format: int32
-          type: integer
-        max_balance:
-          description: Maximum wallet balance
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        monthly_amount:
-          description: Maximum amount per month
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        monthly_count:
-          description: Maximum transactions per month
-          format: int32
-          type:
-          - integer
-          - 'null'
-        per_txn_max:
-          description: Maximum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        per_txn_min:
-          description: Minimum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        txn_type:
-          description: Transaction type (empty = all)
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-        wallet_type:
-          description: Wallet type
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - kyc_tier
-      - wallet_type
-      - currency
-      - valid_from
-      type: object
-    WalletTierLimitCreate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        daily_amount:
-          description: Maximum amount per day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        daily_count:
-          description: Maximum transactions per day
-          format: int32
-          type: integer
-        kyc_tier:
-          description: KYC tier
-          format: int32
-          type: integer
-        max_balance:
-          description: Maximum wallet balance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        monthly_amount:
-          description: Maximum amount per month
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        monthly_count:
-          description: Maximum transactions per month
-          format: int32
-          type: integer
-        per_txn_max:
-          description: Maximum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        per_txn_min:
-          description: Minimum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        txn_type:
-          description: Transaction type (empty = all)
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        wallet_type:
-          description: Wallet type
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      required:
-      - kyc_tier
-      - wallet_type
-      - currency
-      - valid_from
-      type: object
-    WalletTierLimitPage:
-      description: One page of WalletTierLimit results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletTierLimit'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletTierLimitUpdate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        daily_amount:
-          description: Maximum amount per day
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        daily_count:
-          description: Maximum transactions per day
-          format: int32
-          type: integer
-        kyc_tier:
-          description: KYC tier
-          format: int32
-          type: integer
-        max_balance:
-          description: Maximum wallet balance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        monthly_amount:
-          description: Maximum amount per month
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        monthly_count:
-          description: Maximum transactions per month
-          format: int32
-          type: integer
-        per_txn_max:
-          description: Maximum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        per_txn_min:
-          description: Minimum amount per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        txn_type:
-          description: Transaction type (empty = all)
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        wallet_type:
-          description: Wallet type
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      type: object
-    WalletTransaction:
-      description: A wallet money movement of any type, with its full lifecycle
-      properties:
-        agent_id:
-          description: Agent involved (cash-in / cash-out)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        agent_outlet_id:
-          description: Outlet where the transaction took place
-          format: uuid
-          type:
-          - string
-          - 'null'
-        amount:
-          description: Principal amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        bill_payment_id:
-          description: Bill payment
-          format: uuid
-          type:
-          - string
-          - 'null'
-        channel:
-          description: Initiating channel
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        commission_amount:
-          description: Total commission generated
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        completed_at:
-          description: Completion time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        confirmation_expires_at:
-          description: Deadline for PIN/OTP confirmation
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_note:
-          description: Note from payer to payee
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        description:
-          description: Narrative
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        device_id:
-          description: Device used
-          format: uuid
-          type:
-          - string
-          - 'null'
-        disbursement_beneficiary_id:
-          description: Bulk disbursement line
-          format: uuid
-          type:
-          - string
-          - 'null'
-        failure_code:
-          description: Stable failure code
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        failure_reason:
-          description: Failure description
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        fee_amount:
-          description: Fee charged to the payer
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        fx_rate:
-          description: FX rate applied for cross-currency transfers
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        geo_lat:
-          description: Latitude at initiation
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        geo_lon:
-          description: Longitude at initiation
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        hold_id:
-          description: Funds hold while pending confirmation
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Client key
-          maxLength: 128
-          readOnly: true
-          type: string
-        initiated_by:
-          description: Principal that initiated the transaction
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        initiator_type:
-          description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
-          maxLength: 32
-          type: string
-        interop_transfer_id:
-          description: Interoperable transfer
-          format: uuid
-          type:
-          - string
-          - 'null'
-        ip_address:
-          description: Source IP (app / web) (IPv4 or IPv6 address)
-          type:
-          - string
-          - 'null'
-        journal_entry_id:
-          description: Ledger posting
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        loan_id:
-          description: Nano-loan disbursed or repaid
-          format: uuid
-          type:
-          - string
-          - 'null'
-        merchant_id:
-          description: Merchant paid
-          format: uuid
-          type:
-          - string
-          - 'null'
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type:
-          - object
-          - 'null'
-        original_transaction_id:
-          description: Transaction reversed or refunded
-          format: uuid
-          type:
-          - string
-          - 'null'
-        payee_external_ref:
-          description: External account / meter / bank reference
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        payee_msisdn:
-          description: Payee mobile number as entered (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type:
-          - string
-          - 'null'
-        payee_name:
-          description: Payee name shown for confirmation
-          maxLength: 160
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        payee_wallet_id:
-          description: Credited wallet
-          format: uuid
-          type:
-          - string
-          - 'null'
-        payer_wallet_id:
-          description: Debited wallet
-          format: uuid
-          type:
-          - string
-          - 'null'
-        payment_id:
-          description: Bank payment (wallet-to-bank / bank-to-wallet)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        reference:
-          description: Human-readable transaction reference shown on receipts
-          maxLength: 32
-          type: string
-        risk_score:
-          description: Fraud score 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        settlement_amount:
-          description: Amount credited in the payee currency
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        settlement_currency:
-          description: Payee currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Lifecycle status
-          enum:
-          - INITIATED
-          - PENDING_CONFIRMATION
-          - PENDING_APPROVAL
-          - PROCESSING
-          - COMPLETED
-          - FAILED
-          - REVERSED
-          - EXPIRED
-          - CANCELLED
-          readOnly: true
-          type: string
-        tax_amount:
-          description: Tax on the fee
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        total_debit_amount:
-          description: Amount + fee + tax debited from the payer
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        txn_type:
-          description: Transaction type
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - reference
-      - txn_type
-      - status
-      - channel
-      - amount
-      - currency
-      - fee_amount
-      - tax_amount
-      - commission_amount
-      - initiator_type
-      - idempotency_key
-      type: object
-    WalletTransactionCreate:
-      properties:
-        agent_id:
-          description: Agent involved (cash-in / cash-out)
-          format: uuid
-          type: string
-        agent_outlet_id:
-          description: Outlet where the transaction took place
-          format: uuid
-          type: string
-        amount:
-          description: Principal amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        bill_payment_id:
-          description: Bill payment
-          format: uuid
-          type: string
-        channel:
-          description: Initiating channel
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_note:
-          description: Note from payer to payee
-          maxLength: 160
-          type: string
-        description:
-          description: Narrative
-          maxLength: 255
-          type: string
-        device_id:
-          description: Device used
-          format: uuid
-          type: string
-        disbursement_beneficiary_id:
-          description: Bulk disbursement line
-          format: uuid
-          type: string
-        geo_lat:
-          description: Latitude at initiation
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        geo_lon:
-          description: Longitude at initiation
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        initiated_by:
-          description: Principal that initiated the transaction
-          maxLength: 64
-          type: string
-        initiator_type:
-          description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
-          maxLength: 32
-          type: string
-        interop_transfer_id:
-          description: Interoperable transfer
-          format: uuid
-          type: string
-        ip_address:
-          description: Source IP (app / web) (IPv4 or IPv6 address)
-          type: string
-        loan_id:
-          description: Nano-loan disbursed or repaid
-          format: uuid
-          type: string
-        merchant_id:
-          description: Merchant paid
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        original_transaction_id:
-          description: Transaction reversed or refunded
-          format: uuid
-          type: string
-        payee_external_ref:
-          description: External account / meter / bank reference
-          maxLength: 64
-          type: string
-        payee_msisdn:
-          description: Payee mobile number as entered (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        payee_wallet_id:
-          description: Credited wallet
-          format: uuid
-          type: string
-        payer_wallet_id:
-          description: Debited wallet
-          format: uuid
-          type: string
-        payment_id:
-          description: Bank payment (wallet-to-bank / bank-to-wallet)
-          format: uuid
-          type: string
-        reference:
-          description: Human-readable transaction reference shown on receipts
-          maxLength: 32
-          type: string
-        txn_type:
-          description: Transaction type
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-      required:
-      - reference
-      - txn_type
-      - channel
-      - amount
-      - currency
-      - initiator_type
-      type: object
-    WalletTransactionLeg:
-      description: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
-      properties:
-        amount:
-          description: Amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        beneficiary_type:
-          description: AGENT, SUPER_AGENT, PLATFORM, BILLER, TAX_AUTHORITY
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Narrative
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        direction:
-          description: Debit or credit
-          enum:
-          - DEBIT
-          - CREDIT
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        ledger_account_id:
-          description: Ledger account posted
-          format: uuid
-          type: string
-        leg_no:
-          description: Leg number
-          format: int32
-          type: integer
-        role:
-          description: Purpose of the leg
-          enum:
-          - PAYER
-          - PAYEE
-          - FEE
-          - COMMISSION
-          - TAX
-          - FLOAT
-          type: string
-        wallet_id:
-          description: Wallet affected (empty for internal accounts)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        wallet_transaction_id:
-          description: Parent transaction
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - wallet_transaction_id
-      - leg_no
-      - role
-      - ledger_account_id
-      - direction
-      - amount
-      - currency
-      type: object
-    WalletTransactionLegPage:
-      description: One page of WalletTransactionLeg results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletTransactionLeg'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletTransactionPage:
-      description: One page of WalletTransaction results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WalletTransaction'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WalletTransactionsBankToWalletRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        payee_wallet_id:
-          format: uuid
-          type: string
-        wallet_bank_link_id:
-          format: uuid
-          type: string
-      required:
-      - payee_wallet_id
-      - wallet_bank_link_id
-      - amount
-      - currency
-      type: object
-    WalletTransactionsCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    WalletTransactionsCashInRequest:
-      properties:
-        agent_outlet_id:
-          format: uuid
-          type: string
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        payee_msisdn:
-          description: E.164
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-      required:
-      - agent_outlet_id
-      - payee_msisdn
-      - amount
-      - currency
-      type: object
-    WalletTransactionsCashOutRequest:
-      properties:
-        agent_outlet_id:
-          format: uuid
-          type: string
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        payer_wallet_id:
-          format: uuid
-          type: string
-      required:
-      - agent_outlet_id
-      - payer_wallet_id
-      - amount
-      - currency
-      type: object
-    WalletTransactionsConfirmRequest:
-      properties:
-        otp:
-          maxLength: 8
-          type: string
-        pin:
-          maxLength: 12
-          type: string
-      type: object
-    WalletTransactionsP2pRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        description:
-          maxLength: 255
-          type: string
-        payee_msisdn:
-          description: E.164
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        payee_wallet_id:
-          format: uuid
-          type: string
-        payer_wallet_id:
-          format: uuid
-          type: string
-        pin:
-          maxLength: 12
-          type: string
-      required:
-      - payer_wallet_id
-      - amount
-      - currency
-      type: object
-    WalletTransactionsQuoteRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        payee_msisdn:
-          description: E.164
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        payee_wallet_id:
-          format: uuid
-          type: string
-        payer_wallet_id:
-          format: uuid
-          type: string
-        txn_type:
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-      required:
-      - txn_type
-      - amount
-      - currency
-      - payer_wallet_id
-      type: object
-    WalletTransactionsReverseRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    WalletTransactionsWalletToBankRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        payer_wallet_id:
-          format: uuid
-          type: string
-        pin:
-          maxLength: 12
-          type: string
-        wallet_bank_link_id:
-          format: uuid
-          type: string
-      required:
-      - payer_wallet_id
-      - wallet_bank_link_id
-      - amount
-      - currency
-      type: object
-    WalletUpdate:
-      properties:
-        agent_id:
-          description: Owning agent (agent, super-agent, float and commission wallets)
-          format: uuid
-          type: string
-        alias:
-          description: Optional handle used for P2P lookup
-          maxLength: 64
-          type: string
-        currency:
-          description: Wallet currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Owning customer (customer wallets)
-          format: uuid
-          type: string
-        display_name:
-          description: Name shown to payers for confirmation
-          maxLength: 160
-          type: string
-        is_default:
-          description: Default wallet of the owner for this currency
-          type: boolean
-        kyc_tier:
-          description: KYC tier (0 = phone only) driving limits
-          format: int32
-          type: integer
-        language:
-          description: Preferred language for USSD/SMS
-          maxLength: 8
-          type: string
-        ledger_account_id:
-          description: Ledger account holding the balance
-          format: uuid
-          type: string
-        merchant_id:
-          description: Owning merchant (merchant wallets)
-          format: uuid
-          type: string
-        metadata:
-          additionalProperties: true
-          description: Client-defined key/value metadata
-          type: object
-        msisdn:
-          description: Mobile number bound to the wallet (E.164) (E.164)
-          pattern: ^\+[1-9]\d{6,14}$
-          type: string
-        opened_by_agent_id:
-          description: Agent who registered the wallet
-          format: uuid
-          type: string
-        opened_channel:
-          description: Channel the wallet was opened on
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        product_id:
-          description: Wallet product
-          format: uuid
-          type: string
-        product_version_id:
-          description: Product version the wallet is on
-          format: uuid
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          type: string
-        status_reason:
-          description: Reason for the current status
-          maxLength: 255
-          type: string
-        wallet_number:
-          description: Public wallet number
-          maxLength: 32
-          type: string
-        wallet_type:
-          description: Kind of wallet
-          enum:
-          - CUSTOMER
-          - MERCHANT
-          - AGENT
-          - SUPER_AGENT
-          - FLOAT
-          - COMMISSION
-          - ESCROW
-          - G2P
-          - TREASURY
-          type: string
-      type: object
-    WalletsActivateRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    WalletsBlockRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    WalletsCloseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-        sweep_to_wallet_id:
-          format: uuid
-          type: string
-      required:
-      - reason
-      type: object
-    WalletsReactivateRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    WalletsSetPinRequest:
-      properties:
-        current_pin:
-          maxLength: 12
-          type: string
-        new_pin:
-          maxLength: 12
-          type: string
-      required:
-      - new_pin
-      type: object
-    WalletsStatementsRequest:
-      properties:
-        format:
-          maxLength: 8
-          type: string
-        from_date:
-          format: date
-          type: string
-        to_date:
-          format: date
-          type: string
-      required:
-      - from_date
-      - to_date
-      type: object
-    WalletsSuspendRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    WalletsUpgradeTierRequest:
-      properties:
-        kyc_profile_id:
-          format: uuid
-          type: string
-        kyc_tier:
-          format: int32
-          type: integer
-      required:
-      - kyc_tier
-      - kyc_profile_id
-      type: object
-    WalletsVerifyPinRequest:
-      properties:
-        pin:
-          maxLength: 12
-          type: string
-      required:
-      - pin
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            wallets:read: Read Wallets, Agents and Merchants
-            wallets:write: Change Wallets, Agents and Merchants
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            wallets:read: Read Wallets, Agents and Merchants
-            wallets:write: Change Wallets, Agents and Merchants
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — wallet-service
+  version: 1.0.0
   description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
     with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
     bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
@@ -3231,11 +10,28 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — wallet-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Wallets
+  description: A stored-value account held by a customer, merchant, agent or the platform
+- name: Wallet Transactions
+  description: A wallet money movement of any type, with its full lifecycle
+- name: Wallet Tier Limits
+  description: Balance and transaction limits per KYC tier, wallet type and transaction type
+- name: Wallet Bank Links
+  description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
+- name: Wallet Pin Resets
+  description: A PIN reset request verified by OTP, agent or ID check
+- name: Wallet Favorites
+  description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
 paths:
   /v1/wallets:
     get:
@@ -5847,23 +2643,3227 @@ paths:
       x-table: wallet_favorite
       x-crud: true
       x-crud-delete: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A stored-value account held by a customer, merchant, agent or the platform
-  name: Wallets
-- description: A wallet money movement of any type, with its full lifecycle
-  name: Wallet Transactions
-- description: Balance and transaction limits per KYC tier, wallet type and transaction type
-  name: Wallet Tier Limits
-- description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
-  name: Wallet Bank Links
-- description: A PIN reset request verified by OTP, agent or ID check
-  name: Wallet Pin Resets
-- description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
-  name: Wallet Favorites
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    WalletPage:
+      type: object
+      description: One page of Wallet results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Wallet'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTransactionPage:
+      type: object
+      description: One page of WalletTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTierLimitPage:
+      type: object
+      description: One page of WalletTierLimit results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTierLimit'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletStatusHistoryPage:
+      type: object
+      description: One page of WalletStatusHistory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletStatusHistory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletsUpgradeTierRequest:
+      type: object
+      properties:
+        kyc_tier:
+          type: integer
+          format: int32
+        kyc_profile_id:
+          type: string
+          format: uuid
+      required:
+      - kyc_tier
+      - kyc_profile_id
+    WalletsActivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    WalletsSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    WalletsBlockRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    WalletsReactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    WalletsCloseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        sweep_to_wallet_id:
+          type: string
+          format: uuid
+      required:
+      - reason
+    WalletsSetPinRequest:
+      type: object
+      properties:
+        new_pin:
+          type: string
+          maxLength: 12
+        current_pin:
+          type: string
+          maxLength: 12
+      required:
+      - new_pin
+    WalletsVerifyPinRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          maxLength: 12
+      required:
+      - pin
+    WalletsStatementsRequest:
+      type: object
+      properties:
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        format:
+          type: string
+          maxLength: 8
+      required:
+      - from_date
+      - to_date
+    WalletTransactionsQuoteRequest:
+      type: object
+      properties:
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        payer_wallet_id:
+          type: string
+          format: uuid
+        payee_wallet_id:
+          type: string
+          format: uuid
+        payee_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+      required:
+      - txn_type
+      - amount
+      - currency
+      - payer_wallet_id
+    WalletTransactionsP2pRequest:
+      type: object
+      properties:
+        payer_wallet_id:
+          type: string
+          format: uuid
+        payee_wallet_id:
+          type: string
+          format: uuid
+        payee_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        description:
+          type: string
+          maxLength: 255
+        pin:
+          type: string
+          maxLength: 12
+      required:
+      - payer_wallet_id
+      - amount
+      - currency
+    WalletTransactionsCashInRequest:
+      type: object
+      properties:
+        agent_outlet_id:
+          type: string
+          format: uuid
+        payee_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - agent_outlet_id
+      - payee_msisdn
+      - amount
+      - currency
+    WalletTransactionsCashOutRequest:
+      type: object
+      properties:
+        agent_outlet_id:
+          type: string
+          format: uuid
+        payer_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - agent_outlet_id
+      - payer_wallet_id
+      - amount
+      - currency
+    WalletTransactionsWalletToBankRequest:
+      type: object
+      properties:
+        payer_wallet_id:
+          type: string
+          format: uuid
+        wallet_bank_link_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        pin:
+          type: string
+          maxLength: 12
+      required:
+      - payer_wallet_id
+      - wallet_bank_link_id
+      - amount
+      - currency
+    WalletTransactionsBankToWalletRequest:
+      type: object
+      properties:
+        payee_wallet_id:
+          type: string
+          format: uuid
+        wallet_bank_link_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - payee_wallet_id
+      - wallet_bank_link_id
+      - amount
+      - currency
+    WalletTransactionsConfirmRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          maxLength: 12
+        otp:
+          type: string
+          maxLength: 8
+    WalletTransactionsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    WalletTransactionsReverseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - reason
+    WalletTransactionLegPage:
+      type: object
+      description: One page of WalletTransactionLeg results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransactionLeg'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletBankLinkPage:
+      type: object
+      description: One page of WalletBankLink results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletBankLink'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletBankLinksVerifyRequest:
+      type: object
+      properties:
+        verification_code:
+          type: string
+          maxLength: 16
+    WalletBankLinksRemoveRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    WalletPinResetPage:
+      type: object
+      description: One page of WalletPinReset results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletPinReset'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletPinResetsVerifyRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+          maxLength: 8
+        document_id:
+          type: string
+          format: uuid
+    WalletPinResetsCompleteRequest:
+      type: object
+      properties:
+        new_pin:
+          type: string
+          maxLength: 12
+      required:
+      - new_pin
+    WalletPinResetsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    WalletFavoritePage:
+      type: object
+      description: One page of WalletFavorite results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletFavorite'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AccountBalance:
+      type: object
+      description: Current balances per ledger account, updated in the same transaction as each posting
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        posted_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lifetime posted debits
+          readOnly: true
+        posted_credits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lifetime posted credits
+          readOnly: true
+        posted_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Posted (ledger) balance in normal-balance terms
+          readOnly: true
+        pending_debits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Active holds and pending debits
+          readOnly: true
+        pending_credits:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Pending credits not yet available
+          readOnly: true
+        available_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Posted - pending debits + overdraft limit
+          readOnly: true
+        account_version:
+          type: integer
+          format: int64
+          description: Last applied ledger entry version
+          readOnly: true
+        last_entry_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last posting
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_account_id
+      - currency
+      - posted_debits
+      - posted_credits
+      - posted_balance
+      - pending_debits
+      - pending_credits
+      - available_balance
+      - account_version
+    Wallet:
+      type: object
+      description: A stored-value account held by a customer, merchant, agent or the platform
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_number:
+          type: string
+          maxLength: 32
+          description: Public wallet number
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Kind of wallet
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning customer (customer wallets)
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning agent (agent, super-agent, float and commission wallets)
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning merchant (merchant wallets)
+        msisdn:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Mobile number bound to the wallet (E.164) (E.164)
+        alias:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Optional handle used for P2P lookup
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to payers for confirmation
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Wallet currency (ISO 4217)
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet product
+        product_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product version the wallet is on
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account holding the balance
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier (0 = phone only) driving limits
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - DORMANT
+          - SUSPENDED
+          - BLOCKED
+          - CLOSED
+          description: Lifecycle status
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+        is_default:
+          type: boolean
+          description: Default wallet of the owner for this currency
+        pin_locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: PIN locked until this time after too many failures
+          readOnly: true
+        language:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Preferred language for USSD/SMS
+        opened_channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel the wallet was opened on
+        opened_by_agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who registered the wallet
+        last_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last customer-initiated transaction
+          readOnly: true
+        dormant_since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the wallet became dormant
+          readOnly: true
+        credit_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Transaction-based score for nano-loan offers
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Closing time
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_number
+      - wallet_type
+      - display_name
+      - currency
+      - ledger_account_id
+      - kyc_tier
+      - status
+      - is_default
+    WalletCreate:
+      type: object
+      properties:
+        wallet_number:
+          type: string
+          maxLength: 32
+          description: Public wallet number
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Kind of wallet
+        customer_id:
+          type: string
+          format: uuid
+          description: Owning customer (customer wallets)
+        agent_id:
+          type: string
+          format: uuid
+          description: Owning agent (agent, super-agent, float and commission wallets)
+        merchant_id:
+          type: string
+          format: uuid
+          description: Owning merchant (merchant wallets)
+        msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Mobile number bound to the wallet (E.164) (E.164)
+        alias:
+          type: string
+          maxLength: 64
+          description: Optional handle used for P2P lookup
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to payers for confirmation
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Wallet currency (ISO 4217)
+        product_id:
+          type: string
+          format: uuid
+          description: Wallet product
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version the wallet is on
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account holding the balance
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier (0 = phone only) driving limits
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - DORMANT
+          - SUSPENDED
+          - BLOCKED
+          - CLOSED
+          description: Lifecycle status
+        status_reason:
+          type: string
+          maxLength: 255
+          description: Reason for the current status
+        is_default:
+          type: boolean
+          description: Default wallet of the owner for this currency
+        language:
+          type: string
+          maxLength: 8
+          description: Preferred language for USSD/SMS
+        opened_channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel the wallet was opened on
+        opened_by_agent_id:
+          type: string
+          format: uuid
+          description: Agent who registered the wallet
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_number
+      - wallet_type
+      - display_name
+      - currency
+      - ledger_account_id
+    WalletUpdate:
+      type: object
+      properties:
+        wallet_number:
+          type: string
+          maxLength: 32
+          description: Public wallet number
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Kind of wallet
+        customer_id:
+          type: string
+          format: uuid
+          description: Owning customer (customer wallets)
+        agent_id:
+          type: string
+          format: uuid
+          description: Owning agent (agent, super-agent, float and commission wallets)
+        merchant_id:
+          type: string
+          format: uuid
+          description: Owning merchant (merchant wallets)
+        msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Mobile number bound to the wallet (E.164) (E.164)
+        alias:
+          type: string
+          maxLength: 64
+          description: Optional handle used for P2P lookup
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to payers for confirmation
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Wallet currency (ISO 4217)
+        product_id:
+          type: string
+          format: uuid
+          description: Wallet product
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version the wallet is on
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account holding the balance
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier (0 = phone only) driving limits
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - DORMANT
+          - SUSPENDED
+          - BLOCKED
+          - CLOSED
+          description: Lifecycle status
+        status_reason:
+          type: string
+          maxLength: 255
+          description: Reason for the current status
+        is_default:
+          type: boolean
+          description: Default wallet of the owner for this currency
+        language:
+          type: string
+          maxLength: 8
+          description: Preferred language for USSD/SMS
+        opened_channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel the wallet was opened on
+        opened_by_agent_id:
+          type: string
+          format: uuid
+          description: Agent who registered the wallet
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletBankLink:
+      type: object
+      description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        bank_code:
+          type: string
+          maxLength: 32
+          description: Bank / sort code / IFSC / BIC
+        bank_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Bank name
+        account_number:
+          type: string
+          maxLength: 34
+          description: Account number or IBAN
+        account_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Account holder name returned by name enquiry
+        deposit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal deposit account when held on Meridian
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Status
+        verification_method:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        mandate_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Direct-debit mandate for bank-to-wallet pulls
+        is_default:
+          type: boolean
+          description: Default link
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_id
+      - bank_code
+      - account_number
+      - currency
+      - status
+      - is_default
+    WalletBankLinkCreate:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        bank_code:
+          type: string
+          maxLength: 32
+          description: Bank / sort code / IFSC / BIC
+        bank_name:
+          type: string
+          maxLength: 160
+          description: Bank name
+        account_number:
+          type: string
+          maxLength: 34
+          description: Account number or IBAN
+        account_name:
+          type: string
+          maxLength: 160
+          description: Account holder name returned by name enquiry
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Internal deposit account when held on Meridian
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Status
+        verification_method:
+          type: string
+          maxLength: 32
+          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
+        mandate_reference:
+          type: string
+          maxLength: 64
+          description: Direct-debit mandate for bank-to-wallet pulls
+        is_default:
+          type: boolean
+          description: Default link
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_id
+      - bank_code
+      - account_number
+      - currency
+    WalletBankLinkUpdate:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        bank_code:
+          type: string
+          maxLength: 32
+          description: Bank / sort code / IFSC / BIC
+        bank_name:
+          type: string
+          maxLength: 160
+          description: Bank name
+        account_number:
+          type: string
+          maxLength: 34
+          description: Account number or IBAN
+        account_name:
+          type: string
+          maxLength: 160
+          description: Account holder name returned by name enquiry
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Internal deposit account when held on Meridian
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Status
+        verification_method:
+          type: string
+          maxLength: 32
+          description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
+        mandate_reference:
+          type: string
+          maxLength: 64
+          description: Direct-debit mandate for bank-to-wallet pulls
+        is_default:
+          type: boolean
+          description: Default link
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletFavorite:
+      type: object
+      description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_id:
+          type: string
+          format: uuid
+          description: Owner wallet
+        nickname:
+          type: string
+          maxLength: 64
+          description: Display name
+        favorite_type:
+          type: string
+          maxLength: 32
+          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
+        target_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Saved wallet
+        target_msisdn:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Saved mobile number (E.164)
+        biller_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Saved biller
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Saved merchant
+        payee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Saved bank payee
+        account_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Meter / account number at the biller
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_id
+      - nickname
+      - favorite_type
+    WalletFavoriteCreate:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+          description: Owner wallet
+        nickname:
+          type: string
+          maxLength: 64
+          description: Display name
+        favorite_type:
+          type: string
+          maxLength: 32
+          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
+        target_wallet_id:
+          type: string
+          format: uuid
+          description: Saved wallet
+        target_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Saved mobile number (E.164)
+        biller_id:
+          type: string
+          format: uuid
+          description: Saved biller
+        merchant_id:
+          type: string
+          format: uuid
+          description: Saved merchant
+        payee_id:
+          type: string
+          format: uuid
+          description: Saved bank payee
+        account_reference:
+          type: string
+          maxLength: 64
+          description: Meter / account number at the biller
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_id
+      - nickname
+      - favorite_type
+    WalletFavoriteUpdate:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+          description: Owner wallet
+        nickname:
+          type: string
+          maxLength: 64
+          description: Display name
+        favorite_type:
+          type: string
+          maxLength: 32
+          description: WALLET, BILLER, MERCHANT, BANK, AIRTIME
+        target_wallet_id:
+          type: string
+          format: uuid
+          description: Saved wallet
+        target_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Saved mobile number (E.164)
+        biller_id:
+          type: string
+          format: uuid
+          description: Saved biller
+        merchant_id:
+          type: string
+          format: uuid
+          description: Saved merchant
+        payee_id:
+          type: string
+          format: uuid
+          description: Saved bank payee
+        account_reference:
+          type: string
+          maxLength: 64
+          description: Meter / account number at the biller
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletPinReset:
+      type: object
+      description: A PIN reset request verified by OTP, agent or ID check
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel of the request
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - VERIFIED
+          - COMPLETED
+          - REJECTED
+          - EXPIRED
+          description: Status
+          readOnly: true
+        verification_method:
+          type: string
+          maxLength: 32
+          description: OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who verified the customer
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ID document captured
+        otp_attempts:
+          type: integer
+          format: int32
+          description: OTP attempts used
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Request expiry
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        rejected_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection reason
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_id
+      - channel
+      - status
+      - verification_method
+      - otp_attempts
+      - expires_at
+    WalletPinResetCreate:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel of the request
+        verification_method:
+          type: string
+          maxLength: 32
+          description: OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS
+        agent_id:
+          type: string
+          format: uuid
+          description: Agent who verified the customer
+        document_id:
+          type: string
+          format: uuid
+          description: ID document captured
+        expires_at:
+          type: string
+          format: date-time
+          description: Request expiry
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_id
+      - channel
+      - verification_method
+      - expires_at
+    WalletStatusHistory:
+      type: object
+      description: Immutable history of wallet status changes
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        wallet_id:
+          type: string
+          format: uuid
+          description: Wallet
+        from_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING
+          - ACTIVE
+          - DORMANT
+          - SUSPENDED
+          - BLOCKED
+          - CLOSED
+          description: Previous status
+        to_status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - DORMANT
+          - SUSPENDED
+          - BLOCKED
+          - CLOSED
+          description: New status
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason
+        changed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - wallet_id
+      - to_status
+    WalletTierLimit:
+      type: object
+      description: Balance and transaction limits per KYC tier, wallet type and transaction type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Wallet type
+        txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type (empty = all)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        max_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum wallet balance
+        per_txn_min:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        daily_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per day
+        daily_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum transactions per day
+        monthly_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per month
+        monthly_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum transactions per month
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - kyc_tier
+      - wallet_type
+      - currency
+      - valid_from
+    WalletTierLimitCreate:
+      type: object
+      properties:
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Wallet type
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type (empty = all)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum wallet balance
+        per_txn_min:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per day
+        daily_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per day
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per month
+        monthly_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per month
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - kyc_tier
+      - wallet_type
+      - currency
+      - valid_from
+    WalletTierLimitUpdate:
+      type: object
+      properties:
+        kyc_tier:
+          type: integer
+          format: int32
+          description: KYC tier
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Wallet type
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type (empty = all)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum wallet balance
+        per_txn_min:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per day
+        daily_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per day
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per month
+        monthly_count:
+          type: integer
+          format: int32
+          description: Maximum transactions per month
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletTransaction:
+      type: object
+      description: A wallet money movement of any type, with its full lifecycle
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable transaction reference shown on receipts
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - PENDING_CONFIRMATION
+          - PENDING_APPROVAL
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          - EXPIRED
+          - CANCELLED
+          description: Lifecycle status
+          readOnly: true
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        payer_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Debited wallet
+        payee_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Credited wallet
+        payee_msisdn:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Payee mobile number as entered (E.164)
+        payee_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Payee name shown for confirmation
+          readOnly: true
+        payee_external_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: External account / meter / bank reference
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Principal amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the payer
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        commission_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total commission generated
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the payer
+          readOnly: true
+        fx_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: FX rate applied for cross-currency transfers
+          readOnly: true
+        settlement_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount credited in the payee currency
+          readOnly: true
+        settlement_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Payee currency (ISO 4217)
+          readOnly: true
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that initiated the transaction
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent involved (cash-in / cash-out)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the transaction took place
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant paid
+        bill_payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bill payment
+        disbursement_beneficiary_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bulk disbursement line
+        interop_transfer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Interoperable transfer
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank payment (wallet-to-bank / bank-to-wallet)
+        loan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Nano-loan disbursed or repaid
+        original_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Transaction reversed or refunded
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting
+          readOnly: true
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Funds hold while pending confirmation
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        customer_note:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Note from payer to payee
+        confirmation_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Deadline for PIN/OTP confirmation
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        failure_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Stable failure code
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure description
+          readOnly: true
+        risk_score:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fraud score 0..1
+          readOnly: true
+        device_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Device used
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Source IP (app / web) (IPv4 or IPv6 address)
+        geo_lat:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Latitude at initiation
+        geo_lon:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Longitude at initiation
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - txn_type
+      - status
+      - channel
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - commission_amount
+      - initiator_type
+      - idempotency_key
+    WalletTransactionCreate:
+      type: object
+      properties:
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable transaction reference shown on receipts
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        payer_wallet_id:
+          type: string
+          format: uuid
+          description: Debited wallet
+        payee_wallet_id:
+          type: string
+          format: uuid
+          description: Credited wallet
+        payee_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Payee mobile number as entered (E.164)
+        payee_external_ref:
+          type: string
+          maxLength: 64
+          description: External account / meter / bank reference
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Principal amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
+        initiated_by:
+          type: string
+          maxLength: 64
+          description: Principal that initiated the transaction
+        agent_id:
+          type: string
+          format: uuid
+          description: Agent involved (cash-in / cash-out)
+        agent_outlet_id:
+          type: string
+          format: uuid
+          description: Outlet where the transaction took place
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant paid
+        bill_payment_id:
+          type: string
+          format: uuid
+          description: Bill payment
+        disbursement_beneficiary_id:
+          type: string
+          format: uuid
+          description: Bulk disbursement line
+        interop_transfer_id:
+          type: string
+          format: uuid
+          description: Interoperable transfer
+        payment_id:
+          type: string
+          format: uuid
+          description: Bank payment (wallet-to-bank / bank-to-wallet)
+        loan_id:
+          type: string
+          format: uuid
+          description: Nano-loan disbursed or repaid
+        original_transaction_id:
+          type: string
+          format: uuid
+          description: Transaction reversed or refunded
+        description:
+          type: string
+          maxLength: 255
+          description: Narrative
+        customer_note:
+          type: string
+          maxLength: 160
+          description: Note from payer to payee
+        device_id:
+          type: string
+          format: uuid
+          description: Device used
+        ip_address:
+          type: string
+          description: Source IP (app / web) (IPv4 or IPv6 address)
+        geo_lat:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Latitude at initiation
+        geo_lon:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Longitude at initiation
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - reference
+      - txn_type
+      - channel
+      - amount
+      - currency
+      - initiator_type
+    WalletTransactionLeg:
+      type: object
+      description: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Parent transaction
+        leg_no:
+          type: integer
+          format: int32
+          description: Leg number
+        role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - FEE
+          - COMMISSION
+          - TAX
+          - FLOAT
+          description: Purpose of the leg
+        wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet affected (empty for internal accounts)
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account posted
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        beneficiary_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: AGENT, SUPER_AGENT, PLATFORM, BILLER, TAX_AUTHORITY
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - wallet_transaction_id
+      - leg_no
+      - role
+      - ledger_account_id
+      - direction
+      - amount
+      - currency
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants

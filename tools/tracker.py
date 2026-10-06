@@ -51,14 +51,14 @@ def read_existing(path: Path) -> dict:
     if not path.exists():
         return out
     try:
-        wb = load_workbook(path)
+        wb = load_workbook(path, read_only=True, data_only=True)
     except Exception:
         return out
     for sheet, cols in KEEP.items():
         if sheet not in wb.sheetnames:
             continue
         ws = wb[sheet]
-        header = [c.value for c in ws[1]]
+        header = list(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))
         if "ID" not in header:
             continue
         idx = {h: i for i, h in enumerate(header)}

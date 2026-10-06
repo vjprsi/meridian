@@ -1,1472 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    InvoicesGenerateRequest:
-      properties:
-        period_end:
-          format: date
-          type: string
-        period_start:
-          format: date
-          type: string
-      required:
-      - period_start
-      - period_end
-      type: object
-    InvoicesRecordPaymentRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        paid_at:
-          format: date-time
-          type: string
-        reference:
-          maxLength: 64
-          type: string
-      required:
-      - amount
-      - paid_at
-      type: object
-    InvoicesVoidRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    PricePlan:
-      description: A published price plan (platform fee, per active account, per transaction tiers)
-      properties:
-        billing_period:
-          description: Billing period
-          enum:
-          - MONTHLY
-          - QUARTERLY
-          - ANNUAL
-          type: string
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        included_active_accounts:
-          description: Active accounts included
-          format: int32
-          type: integer
-        metric_prices:
-          additionalProperties: true
-          description: Tiered prices per usage metric
-          type: object
-        name:
-          description: Plan name
-          maxLength: 120
-          type: string
-        platform_fee:
-          description: Fixed fee per period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        price_per_active_account:
-          description: Price per extra active account
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        retire_reason:
-          description: Reason given on /retire
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        retired_at:
-          description: Retirement time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status (changed by /publish, /retire)
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Available from
-          format: date
-          type: string
-        valid_to:
-          description: Available to
-          format: date
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - currency
-      - billing_period
-      - platform_fee
-      - included_active_accounts
-      - price_per_active_account
-      - metric_prices
-      - status
-      - valid_from
-      type: object
-    PricePlanCreate:
-      properties:
-        billing_period:
-          description: Billing period
-          enum:
-          - MONTHLY
-          - QUARTERLY
-          - ANNUAL
-          type: string
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        included_active_accounts:
-          description: Active accounts included
-          format: int32
-          type: integer
-        metric_prices:
-          additionalProperties: true
-          description: Tiered prices per usage metric
-          type: object
-        name:
-          description: Plan name
-          maxLength: 120
-          type: string
-        platform_fee:
-          description: Fixed fee per period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        price_per_active_account:
-          description: Price per extra active account
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        valid_from:
-          description: Available from
-          format: date
-          type: string
-        valid_to:
-          description: Available to
-          format: date
-          type: string
-      required:
-      - code
-      - name
-      - currency
-      - metric_prices
-      - valid_from
-      type: object
-    PricePlanPage:
-      description: One page of PricePlan results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PricePlan'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PricePlanUpdate:
-      properties:
-        billing_period:
-          description: Billing period
-          enum:
-          - MONTHLY
-          - QUARTERLY
-          - ANNUAL
-          type: string
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        included_active_accounts:
-          description: Active accounts included
-          format: int32
-          type: integer
-        metric_prices:
-          additionalProperties: true
-          description: Tiered prices per usage metric
-          type: object
-        name:
-          description: Plan name
-          maxLength: 120
-          type: string
-        platform_fee:
-          description: Fixed fee per period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        price_per_active_account:
-          description: Price per extra active account
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        valid_from:
-          description: Available from
-          format: date
-          type: string
-        valid_to:
-          description: Available to
-          format: date
-          type: string
-      type: object
-    PricePlansRetireRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    SubscriptionsCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    SubscriptionsChangePlanRequest:
-      properties:
-        effective_date:
-          format: date
-          type: string
-        price_plan_id:
-          format: uuid
-          type: string
-      required:
-      - price_plan_id
-      - effective_date
-      type: object
-    TenantInvoice:
-      description: Invoice issued to a tenant for a billing period
-      properties:
-        amount_paid:
-          description: Paid so far
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: PDF invoice
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        due_date:
-          description: Due date
-          format: date
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        invoice_number:
-          description: Invoice number
-          maxLength: 32
-          readOnly: true
-          type: string
-        issued_at:
-          description: Issue time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        paid_at:
-          description: Fully paid time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        period_end:
-          description: Period end
-          format: date
-          type: string
-        period_start:
-          description: Period start
-          format: date
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ISSUED
-          - PAID
-          - PARTIALLY_PAID
-          - OVERDUE
-          - VOID
-          type: string
-        subtotal:
-          description: Before tax
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        tax_amount:
-          description: Tax
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        tenant_subscription_id:
-          description: Subscription
-          format: uuid
-          type: string
-        total:
-          description: Total due
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        void_reason:
-          description: Reason given on /void
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        voided_at:
-          description: Void time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - tenant_subscription_id
-      - invoice_number
-      - period_start
-      - period_end
-      - currency
-      - subtotal
-      - tax_amount
-      - total
-      - amount_paid
-      - status
-      type: object
-    TenantInvoiceLine:
-      description: A line of a tenant invoice
-      properties:
-        amount:
-          description: Line amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Description
-          maxLength: 255
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        line_no:
-          description: Line number
-          format: int32
-          type: integer
-        metric:
-          description: Metric (empty for fixed fees)
-          enum:
-          - ACTIVE_ACCOUNT
-          - API_CALL
-          - LEDGER_POSTING
-          - CARD_AUTHORIZATION
-          - PAYMENT
-          - WALLET_TRANSACTION
-          - NOTIFICATION_SMS
-          - NOTIFICATION_EMAIL
-          - KYC_CHECK
-          - SANCTIONS_SCREENING
-          - STORAGE_GB
-          - AI_TOKENS
-          type:
-          - string
-          - 'null'
-        quantity:
-          description: Quantity
-          format: int64
-          type: integer
-        tenant_invoice_id:
-          description: Invoice
-          format: uuid
-          type: string
-        tier:
-          description: Pricing tier applied
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        unit_price:
-          description: Unit price
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - id
-      - created_at
-      - tenant_invoice_id
-      - line_no
-      - description
-      - quantity
-      - unit_price
-      - amount
-      type: object
-    TenantInvoiceLinePage:
-      description: One page of TenantInvoiceLine results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TenantInvoiceLine'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TenantInvoicePage:
-      description: One page of TenantInvoice results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TenantInvoice'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TenantInvoicePayment:
-      description: A payment recorded against a tenant invoice. Append-only.
-      properties:
-        amount:
-          description: Amount paid
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        paid_at:
-          description: When the payment was made
-          format: date-time
-          type: string
-        reference:
-          description: Payment reference (e.g. wire id)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        tenant_invoice_id:
-          description: Invoice
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - tenant_invoice_id
-      - amount
-      - currency
-      - paid_at
-      type: object
-    TenantInvoicePaymentPage:
-      description: One page of TenantInvoicePayment results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TenantInvoicePayment'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TenantSubscription:
-      description: A tenant's subscription to a price plan
-      properties:
-        billing_email:
-          description: Invoice recipient
-          format: email
-          maxLength: 320
-          type: string
-        cancellation_reason:
-          description: Reason given on /cancel
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        cancelled_at:
-          description: When the cancellation was requested
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        committed_monthly_spend:
-          description: Minimum commitment
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_prices:
-          additionalProperties: true
-          description: Negotiated price overrides
-          type:
-          - object
-          - 'null'
-        discount_rate:
-          description: Negotiated discount (fraction)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        end_date:
-          description: End
-          format: date
-          type:
-          - string
-          - 'null'
-        external_customer_ref:
-          description: Customer id in the finance system
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        payment_terms_days:
-          description: Payment terms
-          format: int32
-          type: integer
-        price_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        proration_adjustments:
-          description: 'Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id,
-            amount, description'
-          items: {}
-          readOnly: true
-          type:
-          - array
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        start_date:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - TRIAL
-          - ACTIVE
-          - PAST_DUE
-          - SUSPENDED
-          - CANCELLED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - price_plan_id
-      - status
-      - start_date
-      - currency
-      - discount_rate
-      - billing_email
-      - payment_terms_days
-      type: object
-    TenantSubscriptionCreate:
-      properties:
-        billing_email:
-          description: Invoice recipient
-          format: email
-          maxLength: 320
-          type: string
-        committed_monthly_spend:
-          description: Minimum commitment
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_prices:
-          additionalProperties: true
-          description: Negotiated price overrides
-          type: object
-        discount_rate:
-          description: Negotiated discount (fraction)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        end_date:
-          description: End
-          format: date
-          type: string
-        external_customer_ref:
-          description: Customer id in the finance system
-          maxLength: 64
-          type: string
-        payment_terms_days:
-          description: Payment terms
-          format: int32
-          type: integer
-        price_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        start_date:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - TRIAL
-          - ACTIVE
-          - PAST_DUE
-          - SUSPENDED
-          - CANCELLED
-          type: string
-      required:
-      - price_plan_id
-      - start_date
-      - currency
-      - billing_email
-      type: object
-    TenantSubscriptionPage:
-      description: One page of TenantSubscription results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TenantSubscription'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TenantSubscriptionUpdate:
-      properties:
-        billing_email:
-          description: Invoice recipient
-          format: email
-          maxLength: 320
-          type: string
-        committed_monthly_spend:
-          description: Minimum commitment
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Billing currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_prices:
-          additionalProperties: true
-          description: Negotiated price overrides
-          type: object
-        discount_rate:
-          description: Negotiated discount (fraction)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        end_date:
-          description: End
-          format: date
-          type: string
-        external_customer_ref:
-          description: Customer id in the finance system
-          maxLength: 64
-          type: string
-        payment_terms_days:
-          description: Payment terms
-          format: int32
-          type: integer
-        price_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        start_date:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - TRIAL
-          - ACTIVE
-          - PAST_DUE
-          - SUSPENDED
-          - CANCELLED
-          type: string
-      type: object
-    UsageRecord:
-      description: Metered usage aggregated per day and metric. Append-only.
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        dimensions:
-          additionalProperties: true
-          description: Breakdown, e.g. by legal entity or environment
-          type:
-          - object
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Dedupe key from the reporting service
-          maxLength: 128
-          readOnly: true
-          type: string
-        metric:
-          description: Metric
-          enum:
-          - ACTIVE_ACCOUNT
-          - API_CALL
-          - LEDGER_POSTING
-          - CARD_AUTHORIZATION
-          - PAYMENT
-          - WALLET_TRANSACTION
-          - NOTIFICATION_SMS
-          - NOTIFICATION_EMAIL
-          - KYC_CHECK
-          - SANCTIONS_SCREENING
-          - STORAGE_GB
-          - AI_TOKENS
-          type: string
-        period_date:
-          description: Usage date
-          format: date
-          type: string
-        quantity:
-          description: Quantity
-          format: int64
-          type: integer
-        service_name:
-          description: Reporting service
-          maxLength: 64
-          type: string
-      required:
-      - id
-      - created_at
-      - metric
-      - period_date
-      - quantity
-      - service_name
-      - idempotency_key
-      type: object
-    UsageRecordCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        dimensions:
-          additionalProperties: true
-          description: Breakdown, e.g. by legal entity or environment
-          type: object
-        metric:
-          description: Metric
-          enum:
-          - ACTIVE_ACCOUNT
-          - API_CALL
-          - LEDGER_POSTING
-          - CARD_AUTHORIZATION
-          - PAYMENT
-          - WALLET_TRANSACTION
-          - NOTIFICATION_SMS
-          - NOTIFICATION_EMAIL
-          - KYC_CHECK
-          - SANCTIONS_SCREENING
-          - STORAGE_GB
-          - AI_TOKENS
-          type: string
-        period_date:
-          description: Usage date
-          format: date
-          type: string
-        quantity:
-          description: Quantity
-          format: int64
-          type: integer
-        service_name:
-          description: Reporting service
-          maxLength: 64
-          type: string
-      required:
-      - metric
-      - period_date
-      - quantity
-      - service_name
-      type: object
-    UsageRecordPage:
-      description: One page of UsageRecord results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/UsageRecord'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — billing-service
+  version: 1.0.0
   description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
     and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
     and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
@@ -1474,11 +9,24 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — billing-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Price Plans
+  description: A published price plan (platform fee, per active account, per transaction tiers)
+- name: Subscriptions
+  description: A tenant's subscription to a price plan
+- name: Usage
+  description: Metered usage aggregated per day and metric. Append-only.
+- name: Invoices
+  description: Invoice issued to a tenant for a billing period
 paths:
   /v1/billing/price-plans:
     get:
@@ -2602,19 +1150,1471 @@ paths:
       x-service: billing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: tenant_invoice
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A published price plan (platform fee, per active account, per transaction tiers)
-  name: Price Plans
-- description: A tenant's subscription to a price plan
-  name: Subscriptions
-- description: Metered usage aggregated per day and metric. Append-only.
-  name: Usage
-- description: Invoice issued to a tenant for a billing period
-  name: Invoices
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    PricePlanPage:
+      type: object
+      description: One page of PricePlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricePlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PricePlansRetireRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    TenantSubscriptionPage:
+      type: object
+      description: One page of TenantSubscription results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantSubscription'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SubscriptionsChangePlanRequest:
+      type: object
+      properties:
+        price_plan_id:
+          type: string
+          format: uuid
+        effective_date:
+          type: string
+          format: date
+      required:
+      - price_plan_id
+      - effective_date
+    SubscriptionsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    UsageRecordPage:
+      type: object
+      description: One page of UsageRecord results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageRecord'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TenantInvoicePage:
+      type: object
+      description: One page of TenantInvoice results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoice'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InvoicesVoidRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    InvoicesRecordPaymentRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        paid_at:
+          type: string
+          format: date-time
+        reference:
+          type: string
+          maxLength: 64
+      required:
+      - amount
+      - paid_at
+    TenantInvoiceLinePage:
+      type: object
+      description: One page of TenantInvoiceLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoiceLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TenantInvoicePaymentPage:
+      type: object
+      description: One page of TenantInvoicePayment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoicePayment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InvoicesGenerateRequest:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+      required:
+      - period_start
+      - period_end
+    PricePlan:
+      type: object
+      description: A published price plan (platform fee, per active account, per transaction tiers)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Plan name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        billing_period:
+          type: string
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          description: Billing period
+        platform_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed fee per period
+        included_active_accounts:
+          type: integer
+          format: int32
+          description: Active accounts included
+        price_per_active_account:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Price per extra active account
+        metric_prices:
+          type: object
+          additionalProperties: true
+          description: Tiered prices per usage metric
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          description: Status (changed by /publish, /retire)
+          readOnly: true
+        valid_from:
+          type: string
+          format: date
+          description: Available from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Available to
+        retire_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /retire
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - currency
+      - billing_period
+      - platform_fee
+      - included_active_accounts
+      - price_per_active_account
+      - metric_prices
+      - status
+      - valid_from
+    PricePlanCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Plan name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        billing_period:
+          type: string
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          description: Billing period
+        platform_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed fee per period
+        included_active_accounts:
+          type: integer
+          format: int32
+          description: Active accounts included
+        price_per_active_account:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Price per extra active account
+        metric_prices:
+          type: object
+          additionalProperties: true
+          description: Tiered prices per usage metric
+        valid_from:
+          type: string
+          format: date
+          description: Available from
+        valid_to:
+          type: string
+          format: date
+          description: Available to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - currency
+      - metric_prices
+      - valid_from
+    PricePlanUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Plan name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        billing_period:
+          type: string
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          description: Billing period
+        platform_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed fee per period
+        included_active_accounts:
+          type: integer
+          format: int32
+          description: Active accounts included
+        price_per_active_account:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Price per extra active account
+        metric_prices:
+          type: object
+          additionalProperties: true
+          description: Tiered prices per usage metric
+        valid_from:
+          type: string
+          format: date
+          description: Available from
+        valid_to:
+          type: string
+          format: date
+          description: Available to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TenantInvoice:
+      type: object
+      description: Invoice issued to a tenant for a billing period
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        tenant_subscription_id:
+          type: string
+          format: uuid
+          description: Subscription
+        invoice_number:
+          type: string
+          maxLength: 32
+          description: Invoice number
+          readOnly: true
+        period_start:
+          type: string
+          format: date
+          description: Period start
+        period_end:
+          type: string
+          format: date
+          description: Period end
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        subtotal:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Before tax
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax
+          readOnly: true
+        total:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total due
+          readOnly: true
+        amount_paid:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Paid so far
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ISSUED
+          - PAID
+          - PARTIALLY_PAID
+          - OVERDUE
+          - VOID
+          description: Status
+        issued_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Issue time
+          readOnly: true
+        due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Due date
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Fully paid time
+          readOnly: true
+        void_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /void
+          readOnly: true
+        voided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Void time
+          readOnly: true
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: PDF invoice
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tenant_subscription_id
+      - invoice_number
+      - period_start
+      - period_end
+      - currency
+      - subtotal
+      - tax_amount
+      - total
+      - amount_paid
+      - status
+    TenantInvoiceLine:
+      type: object
+      description: A line of a tenant invoice
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        tenant_invoice_id:
+          type: string
+          format: uuid
+          description: Invoice
+        line_no:
+          type: integer
+          format: int32
+          description: Line number
+        metric:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          description: Metric (empty for fixed fees)
+        description:
+          type: string
+          maxLength: 255
+          description: Description
+        quantity:
+          type: integer
+          format: int64
+          description: Quantity
+        unit_price:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Unit price
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Line amount
+        tier:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Pricing tier applied
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - tenant_invoice_id
+      - line_no
+      - description
+      - quantity
+      - unit_price
+      - amount
+    TenantInvoicePayment:
+      type: object
+      description: A payment recorded against a tenant invoice. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        tenant_invoice_id:
+          type: string
+          format: uuid
+          description: Invoice
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount paid
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        paid_at:
+          type: string
+          format: date-time
+          description: When the payment was made
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Payment reference (e.g. wire id)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - tenant_invoice_id
+      - amount
+      - currency
+      - paid_at
+    TenantSubscription:
+      type: object
+      description: A tenant's subscription to a price plan
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        price_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        status:
+          type: string
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          description: Status
+        start_date:
+          type: string
+          format: date
+          description: Start
+        end_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: End
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        discount_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Negotiated discount (fraction)
+        committed_monthly_spend:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum commitment
+        custom_prices:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Negotiated price overrides
+        billing_email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Invoice recipient
+        payment_terms_days:
+          type: integer
+          format: int32
+          description: Payment terms
+        external_customer_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Customer id in the finance system
+        proration_adjustments:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id,
+            amount, description'
+          readOnly: true
+        cancellation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /cancel
+          readOnly: true
+        cancelled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the cancellation was requested
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - price_plan_id
+      - status
+      - start_date
+      - currency
+      - discount_rate
+      - billing_email
+      - payment_terms_days
+    TenantSubscriptionCreate:
+      type: object
+      properties:
+        price_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        status:
+          type: string
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          description: Status
+        start_date:
+          type: string
+          format: date
+          description: Start
+        end_date:
+          type: string
+          format: date
+          description: End
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        discount_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Negotiated discount (fraction)
+        committed_monthly_spend:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum commitment
+        custom_prices:
+          type: object
+          additionalProperties: true
+          description: Negotiated price overrides
+        billing_email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Invoice recipient
+        payment_terms_days:
+          type: integer
+          format: int32
+          description: Payment terms
+        external_customer_ref:
+          type: string
+          maxLength: 64
+          description: Customer id in the finance system
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - price_plan_id
+      - start_date
+      - currency
+      - billing_email
+    TenantSubscriptionUpdate:
+      type: object
+      properties:
+        price_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        status:
+          type: string
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          description: Status
+        start_date:
+          type: string
+          format: date
+          description: Start
+        end_date:
+          type: string
+          format: date
+          description: End
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Billing currency (ISO 4217)
+        discount_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Negotiated discount (fraction)
+        committed_monthly_spend:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum commitment
+        custom_prices:
+          type: object
+          additionalProperties: true
+          description: Negotiated price overrides
+        billing_email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Invoice recipient
+        payment_terms_days:
+          type: integer
+          format: int32
+          description: Payment terms
+        external_customer_ref:
+          type: string
+          maxLength: 64
+          description: Customer id in the finance system
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    UsageRecord:
+      type: object
+      description: Metered usage aggregated per day and metric. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        metric:
+          type: string
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          description: Metric
+        period_date:
+          type: string
+          format: date
+          description: Usage date
+        quantity:
+          type: integer
+          format: int64
+          description: Quantity
+        service_name:
+          type: string
+          maxLength: 64
+          description: Reporting service
+        dimensions:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Breakdown, e.g. by legal entity or environment
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Dedupe key from the reporting service
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - metric
+      - period_date
+      - quantity
+      - service_name
+      - idempotency_key
+    UsageRecordCreate:
+      type: object
+      properties:
+        metric:
+          type: string
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          description: Metric
+        period_date:
+          type: string
+          format: date
+          description: Usage date
+        quantity:
+          type: integer
+          format: int64
+          description: Quantity
+        service_name:
+          type: string
+          maxLength: 64
+          description: Reporting service
+        dimensions:
+          type: object
+          additionalProperties: true
+          description: Breakdown, e.g. by legal entity or environment
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - metric
+      - period_date
+      - quantity
+      - service_name
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration

@@ -51,11 +51,11 @@ COMMENT ON COLUMN fx_margin_rule.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN fx_margin_rule.updated_at IS 'Last update time';
 COMMENT ON COLUMN fx_margin_rule.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN fx_margin_rule.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN fx_margin_rule.currency_pair IS 'e.g. USD/EUR (or */EUR)';
+COMMENT ON COLUMN fx_margin_rule.currency_pair IS 'e.g. USD/EUR (or */EUR, USD/*)';
 COMMENT ON COLUMN fx_margin_rule.segment IS 'Customer segment (empty = all)';
 COMMENT ON COLUMN fx_margin_rule.channel IS 'Channel (empty = all)';
-COMMENT ON COLUMN fx_margin_rule.min_amount IS 'Amount band start';
-COMMENT ON COLUMN fx_margin_rule.max_amount IS 'Amount band end';
+COMMENT ON COLUMN fx_margin_rule.min_amount IS 'Amount band start (sell amount)';
+COMMENT ON COLUMN fx_margin_rule.max_amount IS 'Amount band end (sell amount)';
 COMMENT ON COLUMN fx_margin_rule.margin_bps IS 'Margin in basis points';
 COMMENT ON COLUMN fx_margin_rule.min_fee IS 'Minimum fee';
 COMMENT ON COLUMN fx_margin_rule.priority IS 'Lower wins';
@@ -143,9 +143,11 @@ CREATE TABLE remittance_corridor (
   max_amount                   numeric(28,8) NOT NULL,
   fixed_fee                    numeric(28,8) NOT NULL DEFAULT 0,
   percent_fee                  numeric(18,10) NOT NULL DEFAULT 0,
+  margin_bps                   integer,
   required_fields              jsonb,
   delivery_eta_minutes         integer,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED')),
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -171,10 +173,12 @@ COMMENT ON COLUMN remittance_corridor.fallback_partner_id IS 'Fallback partner';
 COMMENT ON COLUMN remittance_corridor.min_amount IS 'Minimum send amount';
 COMMENT ON COLUMN remittance_corridor.max_amount IS 'Maximum send amount';
 COMMENT ON COLUMN remittance_corridor.fixed_fee IS 'Fixed fee';
-COMMENT ON COLUMN remittance_corridor.percent_fee IS 'Percentage fee';
+COMMENT ON COLUMN remittance_corridor.percent_fee IS 'Percentage fee (0.01 = 1%)';
+COMMENT ON COLUMN remittance_corridor.margin_bps IS 'Corridor FX margin in basis points (overrides margin rules)';
 COMMENT ON COLUMN remittance_corridor.required_fields IS 'Beneficiary fields required by the destination';
 COMMENT ON COLUMN remittance_corridor.delivery_eta_minutes IS 'Typical delivery time';
 COMMENT ON COLUMN remittance_corridor.status IS 'Status';
+COMMENT ON COLUMN remittance_corridor.status_reason IS 'Reason of the last status change';
 COMMENT ON COLUMN remittance_corridor.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN remittance_corridor.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN remittance_corridor.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -197,6 +201,8 @@ CREATE TABLE fx_quote (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   customer_id                  uuid,
+  segment                      varchar(32),
+  channel                      varchar(40) CHECK (channel IN ('API', 'MOBILE', 'WEB', 'BRANCH', 'USSD', 'AGENT', 'BULK_FILE', 'OPEN_BANKING', 'SCHEDULER', 'INBOUND_RAIL')),
   sell_currency                char(3) NOT NULL,
   buy_currency                 char(3) NOT NULL,
   sell_amount                  numeric(28,8),
@@ -204,9 +210,13 @@ CREATE TABLE fx_quote (
   mid_rate                     numeric(18,10) NOT NULL,
   customer_rate                numeric(18,10) NOT NULL,
   margin_bps                   integer NOT NULL,
+  fx_margin_rule_id            uuid REFERENCES fx_margin_rule(id),
   fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
   fee_currency                 char(3),
   remittance_corridor_id       uuid REFERENCES remittance_corridor(id),
+  remittance_partner_id        uuid REFERENCES remittance_partner(id),
+  delivery_eta_minutes         integer,
+  total_debit                  numeric(28,8),
   rate_source                  varchar(32),
   expires_at                   timestamptz NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ACCEPTED', 'EXPIRED', 'CANCELLED')),
@@ -225,16 +235,22 @@ COMMENT ON COLUMN fx_quote.updated_at IS 'Last update time';
 COMMENT ON COLUMN fx_quote.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN fx_quote.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN fx_quote.customer_id IS 'Customer (pricing segment)';
+COMMENT ON COLUMN fx_quote.segment IS 'Customer segment used for margin rules';
+COMMENT ON COLUMN fx_quote.channel IS 'Channel used for margin rules';
 COMMENT ON COLUMN fx_quote.sell_currency IS 'Currency the customer sells';
 COMMENT ON COLUMN fx_quote.buy_currency IS 'Currency the customer buys';
-COMMENT ON COLUMN fx_quote.sell_amount IS 'Amount sold (fix one side)';
-COMMENT ON COLUMN fx_quote.buy_amount IS 'Amount bought (fix one side)';
-COMMENT ON COLUMN fx_quote.mid_rate IS 'Market mid rate';
+COMMENT ON COLUMN fx_quote.sell_amount IS 'Amount sold (fix one side; computed when buy_amount is fixed)';
+COMMENT ON COLUMN fx_quote.buy_amount IS 'Amount bought (fix one side; computed when sell_amount is fixed)';
+COMMENT ON COLUMN fx_quote.mid_rate IS 'Market mid rate (buy units per 1 sell unit)';
 COMMENT ON COLUMN fx_quote.customer_rate IS 'Rate offered to the customer';
 COMMENT ON COLUMN fx_quote.margin_bps IS 'Margin in basis points';
+COMMENT ON COLUMN fx_quote.fx_margin_rule_id IS 'Margin rule applied';
 COMMENT ON COLUMN fx_quote.fee_amount IS 'Fee';
 COMMENT ON COLUMN fx_quote.fee_currency IS 'Fee currency';
 COMMENT ON COLUMN fx_quote.remittance_corridor_id IS 'Corridor (remittances)';
+COMMENT ON COLUMN fx_quote.remittance_partner_id IS 'Payout partner (remittances)';
+COMMENT ON COLUMN fx_quote.delivery_eta_minutes IS 'Expected delivery time (remittances)';
+COMMENT ON COLUMN fx_quote.total_debit IS 'Sell amount plus fee';
 COMMENT ON COLUMN fx_quote.rate_source IS 'Rate provider';
 COMMENT ON COLUMN fx_quote.expires_at IS 'Expiry';
 COMMENT ON COLUMN fx_quote.status IS 'Status';
@@ -245,7 +261,9 @@ COMMENT ON COLUMN fx_quote.custom_field_4 IS 'Tenant-defined custom field 4; lab
 COMMENT ON COLUMN fx_quote.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_fx_quote_tenant ON fx_quote (tenant_id, created_at);
 CREATE INDEX ix_fx_quote_customer_id ON fx_quote (customer_id);
+CREATE INDEX ix_fx_quote_fx_margin_rule_id ON fx_quote (fx_margin_rule_id);
 CREATE INDEX ix_fx_quote_remittance_corridor_id ON fx_quote (remittance_corridor_id);
+CREATE INDEX ix_fx_quote_remittance_partner_id ON fx_quote (remittance_partner_id);
 ALTER TABLE fx_quote ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON fx_quote USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_fx_quote_touch BEFORE UPDATE ON fx_quote FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -271,6 +289,7 @@ CREATE TABLE fx_deal (
   journal_entry_id             uuid,
   liquidity_provider           varchar(64),
   status                       varchar(40) NOT NULL DEFAULT 'BOOKED' CHECK (status IN ('BOOKED', 'SETTLED', 'CANCELLED', 'FAILED')),
+  cancellation_reason          varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -288,7 +307,7 @@ COMMENT ON COLUMN fx_deal.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN fx_deal.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN fx_deal.fx_quote_id IS 'Quote accepted';
 COMMENT ON COLUMN fx_deal.payment_id IS 'Payment funded by the deal';
-COMMENT ON COLUMN fx_deal.side IS 'Buy or sell from the bank''s view';
+COMMENT ON COLUMN fx_deal.side IS 'Bank side on the sell currency: BUY (bank buys what the customer sells)';
 COMMENT ON COLUMN fx_deal.sell_currency IS 'Sold currency';
 COMMENT ON COLUMN fx_deal.sell_amount IS 'Sold amount';
 COMMENT ON COLUMN fx_deal.buy_currency IS 'Bought currency';
@@ -298,6 +317,7 @@ COMMENT ON COLUMN fx_deal.value_date IS 'Settlement value date';
 COMMENT ON COLUMN fx_deal.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN fx_deal.liquidity_provider IS 'Cover counterparty';
 COMMENT ON COLUMN fx_deal.status IS 'Status';
+COMMENT ON COLUMN fx_deal.cancellation_reason IS 'Reason when cancelled';
 COMMENT ON COLUMN fx_deal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fx_deal.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fx_deal.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

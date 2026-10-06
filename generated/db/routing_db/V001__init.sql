@@ -39,9 +39,14 @@ CREATE TABLE payment_rail (
   operating_hours              jsonb,
   holiday_calendar_id          uuid,
   settlement_account_id        uuid,
+  cost_per_payment             numeric(28,8) NOT NULL DEFAULT 0,
+  settlement_minutes           integer,
+  participant_bic              varchar(11),
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DEGRADED', 'SUSPENDED', 'RETIRED')),
+  status_reason                varchar(255),
   success_rate_7d              numeric(18,10),
   p95_latency_ms               integer,
+  metrics_updated_at           timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -61,17 +66,22 @@ COMMENT ON COLUMN payment_rail.code IS 'Rail code, e.g. SEPA_INST, FPS, FEDNOW, 
 COMMENT ON COLUMN payment_rail.name IS 'Display name';
 COMMENT ON COLUMN payment_rail.rail_type IS 'Kind of rail';
 COMMENT ON COLUMN payment_rail.country IS 'Country (empty for regional / global rails)';
-COMMENT ON COLUMN payment_rail.currencies IS 'Supported currencies';
+COMMENT ON COLUMN payment_rail.currencies IS 'Supported currencies (ISO 4217 codes)';
 COMMENT ON COLUMN payment_rail.message_standard IS 'ISO20022, ISO8583, NACHA, BACS, PROPRIETARY';
 COMMENT ON COLUMN payment_rail.max_amount IS 'Scheme maximum per payment';
 COMMENT ON COLUMN payment_rail.settlement_model IS 'RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT';
 COMMENT ON COLUMN payment_rail.is_instant IS 'Real-time rail';
 COMMENT ON COLUMN payment_rail.operating_hours IS 'Opening hours (24x7 or windows)';
 COMMENT ON COLUMN payment_rail.holiday_calendar_id IS 'Calendar used for business days';
-COMMENT ON COLUMN payment_rail.settlement_account_id IS 'Ledger settlement account';
-COMMENT ON COLUMN payment_rail.status IS 'Status';
+COMMENT ON COLUMN payment_rail.settlement_account_id IS 'Ledger settlement (clearing) account credited for outbound payments';
+COMMENT ON COLUMN payment_rail.cost_per_payment IS 'Scheme and sponsor cost per payment (routing cost factor)';
+COMMENT ON COLUMN payment_rail.settlement_minutes IS 'Typical end-to-end settlement time in minutes';
+COMMENT ON COLUMN payment_rail.participant_bic IS 'Our BIC / participant id on the rail (instructing agent)';
+COMMENT ON COLUMN payment_rail.status IS 'Status (changed by suspend / resume)';
+COMMENT ON COLUMN payment_rail.status_reason IS 'Reason of the last status change';
 COMMENT ON COLUMN payment_rail.success_rate_7d IS 'Success rate over the last 7 days';
 COMMENT ON COLUMN payment_rail.p95_latency_ms IS 'p95 end-to-end latency';
+COMMENT ON COLUMN payment_rail.metrics_updated_at IS 'Time the performance metrics were last recorded';
 COMMENT ON COLUMN payment_rail.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payment_rail.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payment_rail.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -100,10 +110,14 @@ CREATE TABLE rail_adapter (
   participant_id               varchar(35),
   endpoint_url                 varchar(500),
   credentials_ref              varchar(255),
+  previous_credentials_ref     varchar(255),
+  credentials_version          integer NOT NULL DEFAULT 1,
+  credentials_rotated_at       timestamptz,
   config                       jsonb,
   is_primary                   boolean NOT NULL DEFAULT true,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DEGRADED', 'SUSPENDED', 'RETIRED')),
   last_heartbeat_at            timestamptz,
+  last_test_result             jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -125,10 +139,14 @@ COMMENT ON COLUMN rail_adapter.provider IS 'Sponsor bank or aggregator';
 COMMENT ON COLUMN rail_adapter.participant_id IS 'Our participant / member id on the rail';
 COMMENT ON COLUMN rail_adapter.endpoint_url IS 'Endpoint';
 COMMENT ON COLUMN rail_adapter.credentials_ref IS 'Vault path of credentials and keys [SECRET]';
+COMMENT ON COLUMN rail_adapter.previous_credentials_ref IS 'Previous vault path, valid during the rotation grace period [SECRET]';
+COMMENT ON COLUMN rail_adapter.credentials_version IS 'Credentials generation (incremented on rotation)';
+COMMENT ON COLUMN rail_adapter.credentials_rotated_at IS 'Last rotation time';
 COMMENT ON COLUMN rail_adapter.config IS 'Adapter-specific configuration';
 COMMENT ON COLUMN rail_adapter.is_primary IS 'Primary adapter for the rail';
 COMMENT ON COLUMN rail_adapter.status IS 'Status';
 COMMENT ON COLUMN rail_adapter.last_heartbeat_at IS 'Last successful heartbeat';
+COMMENT ON COLUMN rail_adapter.last_test_result IS 'Result of the last connection test';
 COMMENT ON COLUMN rail_adapter.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rail_adapter.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rail_adapter.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -175,7 +193,7 @@ COMMENT ON COLUMN rail_cutoff.payment_type IS 'Payment type (empty = all)';
 COMMENT ON COLUMN rail_cutoff.currency IS 'Currency (empty = all)';
 COMMENT ON COLUMN rail_cutoff.cutoff_time IS 'Local time HH:MM';
 COMMENT ON COLUMN rail_cutoff.timezone IS 'IANA timezone';
-COMMENT ON COLUMN rail_cutoff.days_of_week IS 'Days it applies to';
+COMMENT ON COLUMN rail_cutoff.days_of_week IS 'Days it applies to (MONDAY..SUNDAY; empty = every business day)';
 COMMENT ON COLUMN rail_cutoff.next_day_rollover IS 'After cut-off, roll to next business day';
 COMMENT ON COLUMN rail_cutoff.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rail_cutoff.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -223,7 +241,7 @@ COMMENT ON COLUMN payment_routing_rule.updated_by IS 'Principal that last update
 COMMENT ON COLUMN payment_routing_rule.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN payment_routing_rule.name IS 'Rule name';
 COMMENT ON COLUMN payment_routing_rule.priority IS 'Lower evaluated first';
-COMMENT ON COLUMN payment_routing_rule.conditions IS 'Match conditions (payment_type, currency, country, amount band, priority, customer segment)';
+COMMENT ON COLUMN payment_routing_rule.conditions IS 'Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)';
 COMMENT ON COLUMN payment_routing_rule.strategy IS 'Selection strategy among candidate rails';
 COMMENT ON COLUMN payment_routing_rule.candidate_rail_ids IS 'Ordered candidate rails';
 COMMENT ON COLUMN payment_routing_rule.fallback_rail_id IS 'Rail if candidates are unavailable';
@@ -261,6 +279,7 @@ CREATE TABLE rail_settlement_batch (
   debit_total                  numeric(28,8) NOT NULL DEFAULT 0,
   credit_total                 numeric(28,8) NOT NULL DEFAULT 0,
   net_position                 numeric(28,8) NOT NULL DEFAULT 0,
+  settlement_file_id           uuid,
   journal_entry_id             uuid,
   closed_at                    timestamptz,
   settled_at                   timestamptz,
@@ -289,6 +308,7 @@ COMMENT ON COLUMN rail_settlement_batch.credit_count IS 'Credits in the batch';
 COMMENT ON COLUMN rail_settlement_batch.debit_total IS 'Sum of debits';
 COMMENT ON COLUMN rail_settlement_batch.credit_total IS 'Sum of credits';
 COMMENT ON COLUMN rail_settlement_batch.net_position IS 'Net settlement position';
+COMMENT ON COLUMN rail_settlement_batch.settlement_file_id IS 'Settlement file generated on close (logical ref: a FK would cycle with rail_message.rail_settlement_batch_id)';
 COMMENT ON COLUMN rail_settlement_batch.journal_entry_id IS 'Settlement posting';
 COMMENT ON COLUMN rail_settlement_batch.closed_at IS 'Time closed';
 COMMENT ON COLUMN rail_settlement_batch.settled_at IS 'Time settled';
@@ -299,6 +319,7 @@ COMMENT ON COLUMN rail_settlement_batch.custom_field_4 IS 'Tenant-defined custom
 COMMENT ON COLUMN rail_settlement_batch.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_rail_settlement_batch_tenant ON rail_settlement_batch (tenant_id, created_at);
 CREATE INDEX ix_rail_settlement_batch_payment_rail_id ON rail_settlement_batch (payment_rail_id);
+CREATE INDEX ix_rail_settlement_batch_settlement_file_id ON rail_settlement_batch (settlement_file_id);
 CREATE INDEX ix_rail_settlement_batch_journal_entry_id ON rail_settlement_batch (journal_entry_id);
 ALTER TABLE rail_settlement_batch ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON rail_settlement_batch USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -471,11 +492,14 @@ CREATE TABLE rail_message (
   direction                    varchar(40) NOT NULL CHECK (direction IN ('INBOUND', 'OUTBOUND')),
   message_type                 varchar(32) NOT NULL,
   message_id                   varchar(64) NOT NULL,
+  end_to_end_id                varchar(35),
   payment_id                   uuid,
   rail_settlement_batch_id     uuid REFERENCES rail_settlement_batch(id),
+  replay_of_id                 uuid REFERENCES rail_message(id),
   status                       varchar(40) NOT NULL CHECK (status IN ('RECEIVED', 'PARSED', 'SENT', 'ACKNOWLEDGED', 'NACKED', 'FAILED')),
   payload_uri                  varchar(500) NOT NULL,
   payload_hash                 varchar(64) NOT NULL,
+  payload                      text,
   signature_valid              boolean,
   error                        text,
   custom_field_1               varchar(500),
@@ -493,11 +517,14 @@ COMMENT ON COLUMN rail_message.payment_rail_id IS 'Rail';
 COMMENT ON COLUMN rail_message.direction IS 'Inbound or outbound';
 COMMENT ON COLUMN rail_message.message_type IS 'e.g. pacs.008.001.08, pacs.002, camt.056, pain.001';
 COMMENT ON COLUMN rail_message.message_id IS 'Message id (MsgId)';
+COMMENT ON COLUMN rail_message.end_to_end_id IS 'End-to-end id of the (original) transaction';
 COMMENT ON COLUMN rail_message.payment_id IS 'Related payment';
 COMMENT ON COLUMN rail_message.rail_settlement_batch_id IS 'Batch, for batch rails';
+COMMENT ON COLUMN rail_message.replay_of_id IS 'Message this one replays';
 COMMENT ON COLUMN rail_message.status IS 'Processing status';
 COMMENT ON COLUMN rail_message.payload_uri IS 'Encrypted payload location (object storage)';
 COMMENT ON COLUMN rail_message.payload_hash IS 'SHA-256 of the payload';
+COMMENT ON COLUMN rail_message.payload IS 'Raw payload (served only through GET /payload)';
 COMMENT ON COLUMN rail_message.signature_valid IS 'Signature verification result';
 COMMENT ON COLUMN rail_message.error IS 'Error detail';
 COMMENT ON COLUMN rail_message.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -508,8 +535,10 @@ COMMENT ON COLUMN rail_message.custom_field_5 IS 'Tenant-defined custom field 5;
 CREATE INDEX ix_rail_message_tenant ON rail_message (tenant_id, created_at);
 CREATE INDEX ix_rail_message_payment_rail_id ON rail_message (payment_rail_id);
 CREATE INDEX ix_rail_message_message_id ON rail_message (message_id);
+CREATE INDEX ix_rail_message_end_to_end_id ON rail_message (end_to_end_id);
 CREATE INDEX ix_rail_message_payment_id ON rail_message (payment_id);
 CREATE INDEX ix_rail_message_rail_settlement_batch_id ON rail_message (rail_settlement_batch_id);
+CREATE INDEX ix_rail_message_replay_of_id ON rail_message (replay_of_id);
 ALTER TABLE rail_message ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON rail_message USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_rail_message_append_only BEFORE UPDATE OR DELETE ON rail_message FOR EACH ROW EXECUTE FUNCTION forbid_mutation();

@@ -1,1857 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    ApprovalRequest:
-      description: A pending sensitive operation awaiting checker approval (four-eyes)
-      properties:
-        action:
-          description: Action
-          maxLength: 40
-          type: string
-        amount:
-          description: Amount, for threshold routing
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        approval_policy_id:
-          description: Policy applied
-          format: uuid
-          type:
-          - string
-          - 'null'
-        approval_route:
-          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
-          items: {}
-          readOnly: true
-          type:
-          - array
-          - 'null'
-        approvals_received:
-          description: Approvals received
-          format: int32
-          readOnly: true
-          type: integer
-        cancel_reason:
-          description: Reason given by the maker when cancelling
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency of the amount (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        current_level:
-          description: Current approval level
-          format: int32
-          readOnly: true
-          type: integer
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decided_at:
-          description: Final decision time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        diff:
-          additionalProperties: true
-          description: Before/after diff for updates
-          type:
-          - object
-          - 'null'
-        executed_at:
-          description: Execution time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        execution_result:
-          additionalProperties: true
-          description: Result or error from executing the operation
-          readOnly: true
-          type:
-          - object
-          - 'null'
-        expires_at:
-          description: Expiry
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        maker:
-          description: Requesting user
-          maxLength: 64
-          readOnly: true
-          type: string
-        payload:
-          additionalProperties: true
-          description: Operation to execute once approved
-          type: object
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - NORMAL
-          - HIGH
-          - URGENT
-          type: string
-        required_approvals:
-          description: Approvals required
-          format: int32
-          readOnly: true
-          type: integer
-        resource_id:
-          description: Resource id (empty for creates)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        resource_type:
-          description: Resource type
-          maxLength: 64
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING
-          - APPROVED
-          - REJECTED
-          - CHANGES_REQUESTED
-          - CANCELLED
-          - EXPIRED
-          - EXECUTED
-          - EXECUTION_FAILED
-          readOnly: true
-          type: string
-        summary:
-          description: Human-readable description of the change
-          type:
-          - string
-          - 'null'
-        title:
-          description: Short title shown in the approvals queue
-          maxLength: 255
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - resource_type
-      - action
-      - title
-      - payload
-      - priority
-      - status
-      - maker
-      - required_approvals
-      - approvals_received
-      - current_level
-      type: object
-    ConfigChange:
-      description: Immutable history of configuration changes with diffs
-      properties:
-        approved_by:
-          description: Checker
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        change_type:
-          description: Kind of change
-          enum:
-          - CREATED
-          - ACTIVATED
-          - ROLLED_BACK
-          - PROMOTED
-          type: string
-        config_entry_id:
-          description: Version created
-          format: uuid
-          type: string
-        config_key:
-          description: Key
-          maxLength: 128
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        diff:
-          description: JSON Patch operations from the previous version
-          items: {}
-          type:
-          - array
-          - 'null'
-        from_version:
-          description: Previous version
-          format: int32
-          type:
-          - integer
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        namespace:
-          description: Namespace
-          maxLength: 64
-          type: string
-        to_version:
-          description: New version
-          format: int32
-          type: integer
-      required:
-      - id
-      - created_at
-      - config_entry_id
-      - namespace
-      - config_key
-      - to_version
-      - change_type
-      type: object
-    ConfigChangePage:
-      description: One page of ConfigChange results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ConfigChange'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ConfigEntriesExportRequest:
-      properties:
-        environment:
-          maxLength: 32
-          type: string
-        namespaces:
-          items: {}
-          type: array
-      type: object
-    ConfigEntriesImportRequest:
-      properties:
-        bundle:
-          additionalProperties: true
-          type: object
-      required:
-      - bundle
-      type: object
-    ConfigEntriesRollbackRequest:
-      properties:
-        reason:
-          maxLength: 500
-          type: string
-      required:
-      - reason
-      type: object
-    ConfigEntriesSubmitRequest:
-      properties:
-        change_reason:
-          maxLength: 500
-          type: string
-      required:
-      - change_reason
-      type: object
-    ConfigEntry:
-      description: A versioned configuration document (configuration as data); one ACTIVE version per key
-      properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        change_reason:
-          description: Why it changed
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        config_key:
-          description: Key within the namespace
-          maxLength: 128
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        effective_from:
-          description: When the version takes effect
-          format: date-time
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        namespace:
-          description: Owning area, e.g. payments, limits, onboarding
-          maxLength: 64
-          type: string
-        promoted_from_environment:
-          description: Source environment when promoted
-          maxLength: 32
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status (changed by lifecycle actions)
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - SUPERSEDED
-          - ROLLED_BACK
-          readOnly: true
-          type: string
-        submitted_at:
-          description: When the version was submitted
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        submitted_by:
-          description: Maker who submitted the version for approval
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        value:
-          additionalProperties: true
-          description: Configuration document
-          type: object
-        value_schema:
-          additionalProperties: true
-          description: JSON Schema the value must satisfy
-          type:
-          - object
-          - 'null'
-        version:
-          description: Version number
-          format: int32
-          readOnly: true
-          type: integer
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - namespace
-      - config_key
-      - version
-      - value
-      - status
-      type: object
-    ConfigEntryCreate:
-      properties:
-        change_reason:
-          description: Why it changed
-          maxLength: 500
-          type: string
-        config_key:
-          description: Key within the namespace
-          maxLength: 128
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        effective_from:
-          description: When the version takes effect
-          format: date-time
-          type: string
-        namespace:
-          description: Owning area, e.g. payments, limits, onboarding
-          maxLength: 64
-          type: string
-        value:
-          additionalProperties: true
-          description: Configuration document
-          type: object
-        value_schema:
-          additionalProperties: true
-          description: JSON Schema the value must satisfy
-          type: object
-      required:
-      - namespace
-      - config_key
-      - value
-      type: object
-    ConfigEntryPage:
-      description: One page of ConfigEntry results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ConfigEntry'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CountryPack:
-      description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
-      properties:
-        code:
-          description: Pack code, e.g. KE-2026.3
-          maxLength: 32
-          type: string
-        contents:
-          additionalProperties: true
-          description: 'Manifest: report templates, tax rules, calendars, rails, KYC tiers'
-          type: object
-        country:
-          description: Country (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Local currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Name
-          maxLength: 160
-          type: string
-        regulator:
-          description: Main regulator
-          maxLength: 160
-          type:
-          - string
-          - 'null'
-        release_notes:
-          description: Release notes
-          type:
-          - string
-          - 'null'
-        released_at:
-          description: Release time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - RELEASED
-          - DEPRECATED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        version:
-          description: Semantic version
-          maxLength: 32
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - country
-      - name
-      - version
-      - status
-      - currency
-      - contents
-      type: object
-    CountryPackPage:
-      description: One page of CountryPack results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CountryPack'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CountryPacksInstallRequest:
-      properties:
-        legal_entity_id:
-          format: uuid
-          type: string
-        overrides:
-          additionalProperties: true
-          type: object
-      required:
-      - legal_entity_id
-      type: object
-    CustomFieldDefinition:
-      description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation,
-        UI)
-      properties:
-        allowed_values:
-          description: Allowed values when data_type is ENUM
-          items: {}
-          type:
-          - array
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        data_type:
-          description: Type used to validate the stored string
-          enum:
-          - TEXT
-          - NUMBER
-          - DECIMAL
-          - BOOLEAN
-          - DATE
-          - DATETIME
-          - EMAIL
-          - PHONE
-          - URL
-          - ENUM
-          - REFERENCE
-          type: string
-        default_value:
-          description: Default applied on create
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        field_key:
-          description: Stable machine key, e.g. employer_id
-          maxLength: 64
-          type: string
-        help_text:
-          description: Help shown to users
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Disable without deleting history
-          type: boolean
-        is_pii:
-          description: Encrypt and mask like other personal data
-          type: boolean
-        is_required:
-          description: Must be provided on create
-          type: boolean
-        is_searchable:
-          description: Exposed as a list filter in the API and console
-          type: boolean
-        label:
-          description: Display label
-          maxLength: 120
-          type: string
-        label_translations:
-          additionalProperties: true
-          description: Labels per language code
-          type:
-          - object
-          - 'null'
-        max_value:
-          description: Upper bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        min_value:
-          description: Lower bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        slot:
-          description: Slot number 1..5 (maps to custom_field_<slot>)
-          format: int32
-          type: integer
-        table_name:
-          description: Table / API resource the slot belongs to, e.g. customer
-          maxLength: 64
-          type: string
-        ui_order:
-          description: Display order
-          format: int32
-          type: integer
-        ui_visible:
-          description: Shown in console and apps
-          type: boolean
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        validation_regex:
-          description: Optional pattern the value must match
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - table_name
-      - slot
-      - field_key
-      - label
-      - data_type
-      - is_required
-      - is_searchable
-      - is_pii
-      - ui_visible
-      - ui_order
-      - is_active
-      type: object
-    CustomFieldDefinitionCreate:
-      properties:
-        allowed_values:
-          description: Allowed values when data_type is ENUM
-          items: {}
-          type: array
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_type:
-          description: Type used to validate the stored string
-          enum:
-          - TEXT
-          - NUMBER
-          - DECIMAL
-          - BOOLEAN
-          - DATE
-          - DATETIME
-          - EMAIL
-          - PHONE
-          - URL
-          - ENUM
-          - REFERENCE
-          type: string
-        default_value:
-          description: Default applied on create
-          maxLength: 500
-          type: string
-        field_key:
-          description: Stable machine key, e.g. employer_id
-          maxLength: 64
-          type: string
-        help_text:
-          description: Help shown to users
-          maxLength: 500
-          type: string
-        is_active:
-          description: Disable without deleting history
-          type: boolean
-        is_pii:
-          description: Encrypt and mask like other personal data
-          type: boolean
-        is_required:
-          description: Must be provided on create
-          type: boolean
-        is_searchable:
-          description: Exposed as a list filter in the API and console
-          type: boolean
-        label:
-          description: Display label
-          maxLength: 120
-          type: string
-        label_translations:
-          additionalProperties: true
-          description: Labels per language code
-          type: object
-        max_value:
-          description: Upper bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type: string
-        min_value:
-          description: Lower bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type: string
-        slot:
-          description: Slot number 1..5 (maps to custom_field_<slot>)
-          format: int32
-          type: integer
-        table_name:
-          description: Table / API resource the slot belongs to, e.g. customer
-          maxLength: 64
-          type: string
-        ui_order:
-          description: Display order
-          format: int32
-          type: integer
-        ui_visible:
-          description: Shown in console and apps
-          type: boolean
-        validation_regex:
-          description: Optional pattern the value must match
-          maxLength: 500
-          type: string
-      required:
-      - table_name
-      - slot
-      - field_key
-      - label
-      type: object
-    CustomFieldDefinitionPage:
-      description: One page of CustomFieldDefinition results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CustomFieldDefinition'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CustomFieldDefinitionUpdate:
-      properties:
-        allowed_values:
-          description: Allowed values when data_type is ENUM
-          items: {}
-          type: array
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_type:
-          description: Type used to validate the stored string
-          enum:
-          - TEXT
-          - NUMBER
-          - DECIMAL
-          - BOOLEAN
-          - DATE
-          - DATETIME
-          - EMAIL
-          - PHONE
-          - URL
-          - ENUM
-          - REFERENCE
-          type: string
-        default_value:
-          description: Default applied on create
-          maxLength: 500
-          type: string
-        field_key:
-          description: Stable machine key, e.g. employer_id
-          maxLength: 64
-          type: string
-        help_text:
-          description: Help shown to users
-          maxLength: 500
-          type: string
-        is_active:
-          description: Disable without deleting history
-          type: boolean
-        is_pii:
-          description: Encrypt and mask like other personal data
-          type: boolean
-        is_required:
-          description: Must be provided on create
-          type: boolean
-        is_searchable:
-          description: Exposed as a list filter in the API and console
-          type: boolean
-        label:
-          description: Display label
-          maxLength: 120
-          type: string
-        label_translations:
-          additionalProperties: true
-          description: Labels per language code
-          type: object
-        max_value:
-          description: Upper bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type: string
-        min_value:
-          description: Lower bound for NUMBER, DECIMAL, DATE
-          maxLength: 64
-          type: string
-        slot:
-          description: Slot number 1..5 (maps to custom_field_<slot>)
-          format: int32
-          type: integer
-        table_name:
-          description: Table / API resource the slot belongs to, e.g. customer
-          maxLength: 64
-          type: string
-        ui_order:
-          description: Display order
-          format: int32
-          type: integer
-        ui_visible:
-          description: Shown in console and apps
-          type: boolean
-        validation_regex:
-          description: Optional pattern the value must match
-          maxLength: 500
-          type: string
-      type: object
-    CustomFieldDefinitionsValidateRequest:
-      properties:
-        table_name:
-          maxLength: 64
-          type: string
-        values:
-          additionalProperties: true
-          type: object
-      required:
-      - table_name
-      - values
-      type: object
-    InstalledCountryPacksUninstallRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    InstalledCountryPacksUpgradeRequest:
-      properties:
-        country_pack_id:
-          format: uuid
-          type: string
-      required:
-      - country_pack_id
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    TaxRateRule:
-      description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
-      properties:
-        applies_to:
-          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
-          maxLength: 64
-          type: string
-        country:
-          description: Jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        country_pack_id:
-          description: Source pack (empty = tenant-defined)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Threshold currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_segment:
-          description: Segment the rule applies to (e.g. NON_RESIDENT)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        rate:
-          description: Rate as a fraction, e.g. 0.15
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        tax_gl_code:
-          description: GL code for the tax liability
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        tax_type:
-          description: Tax type
-          enum:
-          - WITHHOLDING
-          - VAT
-          - GST
-          - STAMP_DUTY
-          - EXCISE
-          - FINANCIAL_TRANSACTION_TAX
-          - LEVY
-          type: string
-        threshold_amount:
-          description: Amount below which no tax applies
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - country
-      - tax_type
-      - name
-      - rate
-      - applies_to
-      - valid_from
-      type: object
-    TaxRateRuleCreate:
-      properties:
-        applies_to:
-          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
-          maxLength: 64
-          type: string
-        country:
-          description: Jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        country_pack_id:
-          description: Source pack (empty = tenant-defined)
-          format: uuid
-          type: string
-        currency:
-          description: Threshold currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_segment:
-          description: Segment the rule applies to (e.g. NON_RESIDENT)
-          maxLength: 64
-          type: string
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type: string
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        rate:
-          description: Rate as a fraction, e.g. 0.15
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tax_gl_code:
-          description: GL code for the tax liability
-          maxLength: 32
-          type: string
-        tax_type:
-          description: Tax type
-          enum:
-          - WITHHOLDING
-          - VAT
-          - GST
-          - STAMP_DUTY
-          - EXCISE
-          - FINANCIAL_TRANSACTION_TAX
-          - LEVY
-          type: string
-        threshold_amount:
-          description: Amount below which no tax applies
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      required:
-      - country
-      - tax_type
-      - name
-      - rate
-      - applies_to
-      - valid_from
-      type: object
-    TaxRateRulePage:
-      description: One page of TaxRateRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TaxRateRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TaxRateRuleUpdate:
-      properties:
-        applies_to:
-          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
-          maxLength: 64
-          type: string
-        country:
-          description: Jurisdiction (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        country_pack_id:
-          description: Source pack (empty = tenant-defined)
-          format: uuid
-          type: string
-        currency:
-          description: Threshold currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_segment:
-          description: Segment the rule applies to (e.g. NON_RESIDENT)
-          maxLength: 64
-          type: string
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type: string
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        rate:
-          description: Rate as a fraction, e.g. 0.15
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tax_gl_code:
-          description: GL code for the tax liability
-          maxLength: 32
-          type: string
-        tax_type:
-          description: Tax type
-          enum:
-          - WITHHOLDING
-          - VAT
-          - GST
-          - STAMP_DUTY
-          - EXCISE
-          - FINANCIAL_TRANSACTION_TAX
-          - LEVY
-          type: string
-        threshold_amount:
-          description: Amount below which no tax applies
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      type: object
-    TaxRateRulesCalculateRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        applies_to:
-          maxLength: 64
-          type: string
-        country:
-          description: ISO 3166-1 alpha-2
-          pattern: ^[A-Z]{2}$
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        customer_segment:
-          maxLength: 64
-          type: string
-        legal_entity_id:
-          format: uuid
-          type: string
-      required:
-      - country
-      - applies_to
-      - amount
-      - currency
-      type: object
-    TenantCountryPack:
-      description: A country pack installed for a tenant's legal entity, with local overrides
-      properties:
-        country_pack_id:
-          description: Installed pack version (changed by /upgrade)
-          format: uuid
-          readOnly: true
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        installed_at:
-          description: Install time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
-          readOnly: true
-          type: string
-        overrides:
-          additionalProperties: true
-          description: Tenant overrides of pack defaults
-          type:
-          - object
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - INSTALLING
-          - INSTALLED
-          - UPGRADE_AVAILABLE
-          - FAILED
-          - UNINSTALLED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - country_pack_id
-      - legal_entity_id
-      - status
-      type: object
-    TenantCountryPackPage:
-      description: One page of TenantCountryPack results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/TenantCountryPack'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    TenantCountryPackUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        overrides:
-          additionalProperties: true
-          description: Tenant overrides of pack defaults
-          type: object
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — config-service
+  version: 1.0.0
   description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
     and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
     and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
@@ -1859,11 +9,28 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — config-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Custom Field Definitions
+  description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation, UI)
+- name: Config Entries
+  description: A versioned configuration document (configuration as data); one ACTIVE version per key
+- name: Config Changes
+  description: Immutable history of configuration changes with diffs
+- name: Country Packs
+  description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
+- name: Installed Country Packs
+  description: A country pack installed for a tenant's legal entity, with local overrides
+- name: Tax Rate Rules
+  description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
 paths:
   /v1/config/custom-fields:
     get:
@@ -3367,23 +1534,1856 @@ paths:
       x-service: config-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: tax_rate_rule
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation, UI)
-  name: Custom Field Definitions
-- description: A versioned configuration document (configuration as data); one ACTIVE version per key
-  name: Config Entries
-- description: Immutable history of configuration changes with diffs
-  name: Config Changes
-- description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
-  name: Country Packs
-- description: A country pack installed for a tenant's legal entity, with local overrides
-  name: Installed Country Packs
-- description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
-  name: Tax Rate Rules
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CustomFieldDefinitionPage:
+      type: object
+      description: One page of CustomFieldDefinition results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldDefinition'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomFieldDefinitionsValidateRequest:
+      type: object
+      properties:
+        table_name:
+          type: string
+          maxLength: 64
+        values:
+          type: object
+          additionalProperties: true
+      required:
+      - table_name
+      - values
+    ConfigEntryPage:
+      type: object
+      description: One page of ConfigEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ConfigEntriesSubmitRequest:
+      type: object
+      properties:
+        change_reason:
+          type: string
+          maxLength: 500
+      required:
+      - change_reason
+    ConfigEntriesRollbackRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    ConfigChangePage:
+      type: object
+      description: One page of ConfigChange results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigChange'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ConfigEntriesExportRequest:
+      type: object
+      properties:
+        namespaces:
+          type: array
+          items: {}
+        environment:
+          type: string
+          maxLength: 32
+    ConfigEntriesImportRequest:
+      type: object
+      properties:
+        bundle:
+          type: object
+          additionalProperties: true
+      required:
+      - bundle
+    CountryPackPage:
+      type: object
+      description: One page of CountryPack results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryPack'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CountryPacksInstallRequest:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+        overrides:
+          type: object
+          additionalProperties: true
+      required:
+      - legal_entity_id
+    TenantCountryPackPage:
+      type: object
+      description: One page of TenantCountryPack results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantCountryPack'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InstalledCountryPacksUpgradeRequest:
+      type: object
+      properties:
+        country_pack_id:
+          type: string
+          format: uuid
+      required:
+      - country_pack_id
+    InstalledCountryPacksUninstallRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    TaxRateRulePage:
+      type: object
+      description: One page of TaxRateRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxRateRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TaxRateRulesCalculateRequest:
+      type: object
+      properties:
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        applies_to:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        customer_segment:
+          type: string
+          maxLength: 64
+        legal_entity_id:
+          type: string
+          format: uuid
+      required:
+      - country
+      - applies_to
+      - amount
+      - currency
+    ApprovalRequest:
+      type: object
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        approval_policy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Policy applied
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type
+        resource_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resource id (empty for creates)
+        action:
+          type: string
+          maxLength: 40
+          description: Action
+        title:
+          type: string
+          maxLength: 255
+          description: Short title shown in the approvals queue
+        summary:
+          type:
+          - string
+          - 'null'
+          description: Human-readable description of the change
+        payload:
+          type: object
+          additionalProperties: true
+          description: Operation to execute once approved
+        diff:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Before/after diff for updates
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount, for threshold routing
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of the amount (ISO 4217)
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          description: Priority
+        status:
+          type: string
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CHANGES_REQUESTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          description: Status
+          readOnly: true
+        maker:
+          type: string
+          maxLength: 64
+          description: Requesting user
+          readOnly: true
+        required_approvals:
+          type: integer
+          format: int32
+          description: Approvals required
+          readOnly: true
+        approvals_received:
+          type: integer
+          format: int32
+          description: Approvals received
+          readOnly: true
+        current_level:
+          type: integer
+          format: int32
+          description: Current approval level
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Final decision time
+          readOnly: true
+        executed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
+        execution_result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+        approval_route:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given by the maker when cancelling
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+    ConfigChange:
+      type: object
+      description: Immutable history of configuration changes with diffs
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        config_entry_id:
+          type: string
+          format: uuid
+          description: Version created
+        namespace:
+          type: string
+          maxLength: 64
+          description: Namespace
+        config_key:
+          type: string
+          maxLength: 128
+          description: Key
+        from_version:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Previous version
+        to_version:
+          type: integer
+          format: int32
+          description: New version
+        change_type:
+          type: string
+          enum:
+          - CREATED
+          - ACTIVATED
+          - ROLLED_BACK
+          - PROMOTED
+          description: Kind of change
+        diff:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: JSON Patch operations from the previous version
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - config_entry_id
+      - namespace
+      - config_key
+      - to_version
+      - change_type
+    ConfigEntry:
+      type: object
+      description: A versioned configuration document (configuration as data); one ACTIVE version per key
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        namespace:
+          type: string
+          maxLength: 64
+          description: Owning area, e.g. payments, limits, onboarding
+        config_key:
+          type: string
+          maxLength: 128
+          description: Key within the namespace
+        version:
+          type: integer
+          format: int32
+          description: Version number
+          readOnly: true
+        value:
+          type: object
+          additionalProperties: true
+          description: Configuration document
+        value_schema:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: JSON Schema the value must satisfy
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUPERSEDED
+          - ROLLED_BACK
+          description: Status (changed by lifecycle actions)
+          readOnly: true
+        effective_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the version takes effect
+        change_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it changed
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+          readOnly: true
+        promoted_from_environment:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Source environment when promoted
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the version for approval
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the version was submitted
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - namespace
+      - config_key
+      - version
+      - value
+      - status
+    ConfigEntryCreate:
+      type: object
+      properties:
+        namespace:
+          type: string
+          maxLength: 64
+          description: Owning area, e.g. payments, limits, onboarding
+        config_key:
+          type: string
+          maxLength: 128
+          description: Key within the namespace
+        value:
+          type: object
+          additionalProperties: true
+          description: Configuration document
+        value_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema the value must satisfy
+        effective_from:
+          type: string
+          format: date-time
+          description: When the version takes effect
+        change_reason:
+          type: string
+          maxLength: 500
+          description: Why it changed
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - namespace
+      - config_key
+      - value
+    CountryPack:
+      type: object
+      description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Pack code, e.g. KE-2026.3
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        version:
+          type: string
+          maxLength: 32
+          description: Semantic version
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - RELEASED
+          - DEPRECATED
+          description: Status
+        regulator:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Main regulator
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Local currency (ISO 4217)
+        contents:
+          type: object
+          additionalProperties: true
+          description: 'Manifest: report templates, tax rules, calendars, rails, KYC tiers'
+        release_notes:
+          type:
+          - string
+          - 'null'
+          description: Release notes
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - country
+      - name
+      - version
+      - status
+      - currency
+      - contents
+    CustomFieldDefinition:
+      type: object
+      description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation,
+        UI)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table / API resource the slot belongs to, e.g. customer
+        slot:
+          type: integer
+          format: int32
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+        field_key:
+          type: string
+          maxLength: 64
+          description: Stable machine key, e.g. employer_id
+        label:
+          type: string
+          maxLength: 120
+          description: Display label
+        label_translations:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Labels per language code
+        data_type:
+          type: string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          description: Type used to validate the stored string
+        is_required:
+          type: boolean
+          description: Must be provided on create
+        is_searchable:
+          type: boolean
+          description: Exposed as a list filter in the API and console
+        is_pii:
+          type: boolean
+          description: Encrypt and mask like other personal data
+        validation_regex:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Optional pattern the value must match
+        allowed_values:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Allowed values when data_type is ENUM
+        min_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Lower bound for NUMBER, DECIMAL, DATE
+        max_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Upper bound for NUMBER, DECIMAL, DATE
+        default_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Default applied on create
+        ui_visible:
+          type: boolean
+          description: Shown in console and apps
+        ui_order:
+          type: integer
+          format: int32
+          description: Display order
+        help_text:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Help shown to users
+        is_active:
+          type: boolean
+          description: Disable without deleting history
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - table_name
+      - slot
+      - field_key
+      - label
+      - data_type
+      - is_required
+      - is_searchable
+      - is_pii
+      - ui_visible
+      - ui_order
+      - is_active
+    CustomFieldDefinitionCreate:
+      type: object
+      properties:
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table / API resource the slot belongs to, e.g. customer
+        slot:
+          type: integer
+          format: int32
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+        field_key:
+          type: string
+          maxLength: 64
+          description: Stable machine key, e.g. employer_id
+        label:
+          type: string
+          maxLength: 120
+          description: Display label
+        label_translations:
+          type: object
+          additionalProperties: true
+          description: Labels per language code
+        data_type:
+          type: string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          description: Type used to validate the stored string
+        is_required:
+          type: boolean
+          description: Must be provided on create
+        is_searchable:
+          type: boolean
+          description: Exposed as a list filter in the API and console
+        is_pii:
+          type: boolean
+          description: Encrypt and mask like other personal data
+        validation_regex:
+          type: string
+          maxLength: 500
+          description: Optional pattern the value must match
+        allowed_values:
+          type: array
+          items: {}
+          description: Allowed values when data_type is ENUM
+        min_value:
+          type: string
+          maxLength: 64
+          description: Lower bound for NUMBER, DECIMAL, DATE
+        max_value:
+          type: string
+          maxLength: 64
+          description: Upper bound for NUMBER, DECIMAL, DATE
+        default_value:
+          type: string
+          maxLength: 500
+          description: Default applied on create
+        ui_visible:
+          type: boolean
+          description: Shown in console and apps
+        ui_order:
+          type: integer
+          format: int32
+          description: Display order
+        help_text:
+          type: string
+          maxLength: 500
+          description: Help shown to users
+        is_active:
+          type: boolean
+          description: Disable without deleting history
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - table_name
+      - slot
+      - field_key
+      - label
+    CustomFieldDefinitionUpdate:
+      type: object
+      properties:
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table / API resource the slot belongs to, e.g. customer
+        slot:
+          type: integer
+          format: int32
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+        field_key:
+          type: string
+          maxLength: 64
+          description: Stable machine key, e.g. employer_id
+        label:
+          type: string
+          maxLength: 120
+          description: Display label
+        label_translations:
+          type: object
+          additionalProperties: true
+          description: Labels per language code
+        data_type:
+          type: string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          description: Type used to validate the stored string
+        is_required:
+          type: boolean
+          description: Must be provided on create
+        is_searchable:
+          type: boolean
+          description: Exposed as a list filter in the API and console
+        is_pii:
+          type: boolean
+          description: Encrypt and mask like other personal data
+        validation_regex:
+          type: string
+          maxLength: 500
+          description: Optional pattern the value must match
+        allowed_values:
+          type: array
+          items: {}
+          description: Allowed values when data_type is ENUM
+        min_value:
+          type: string
+          maxLength: 64
+          description: Lower bound for NUMBER, DECIMAL, DATE
+        max_value:
+          type: string
+          maxLength: 64
+          description: Upper bound for NUMBER, DECIMAL, DATE
+        default_value:
+          type: string
+          maxLength: 500
+          description: Default applied on create
+        ui_visible:
+          type: boolean
+          description: Shown in console and apps
+        ui_order:
+          type: integer
+          format: int32
+          description: Display order
+        help_text:
+          type: string
+          maxLength: 500
+          description: Help shown to users
+        is_active:
+          type: boolean
+          description: Disable without deleting history
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TaxRateRule:
+      type: object
+      description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        country_pack_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source pack (empty = tenant-defined)
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity (empty = all)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+        tax_type:
+          type: string
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          description: Tax type
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate as a fraction, e.g. 0.15
+        applies_to:
+          type: string
+          maxLength: 64
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+        customer_segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+        threshold_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount below which no tax applies
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Threshold currency (ISO 4217)
+        tax_gl_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: GL code for the tax liability
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - country
+      - tax_type
+      - name
+      - rate
+      - applies_to
+      - valid_from
+    TaxRateRuleCreate:
+      type: object
+      properties:
+        country_pack_id:
+          type: string
+          format: uuid
+          description: Source pack (empty = tenant-defined)
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = all)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+        tax_type:
+          type: string
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          description: Tax type
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate as a fraction, e.g. 0.15
+        applies_to:
+          type: string
+          maxLength: 64
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+        customer_segment:
+          type: string
+          maxLength: 64
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+        threshold_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount below which no tax applies
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Threshold currency (ISO 4217)
+        tax_gl_code:
+          type: string
+          maxLength: 32
+          description: GL code for the tax liability
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - country
+      - tax_type
+      - name
+      - rate
+      - applies_to
+      - valid_from
+    TaxRateRuleUpdate:
+      type: object
+      properties:
+        country_pack_id:
+          type: string
+          format: uuid
+          description: Source pack (empty = tenant-defined)
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = all)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+        tax_type:
+          type: string
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          description: Tax type
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate as a fraction, e.g. 0.15
+        applies_to:
+          type: string
+          maxLength: 64
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+        customer_segment:
+          type: string
+          maxLength: 64
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+        threshold_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount below which no tax applies
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Threshold currency (ISO 4217)
+        tax_gl_code:
+          type: string
+          maxLength: 32
+          description: GL code for the tax liability
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TenantCountryPack:
+      type: object
+      description: A country pack installed for a tenant's legal entity, with local overrides
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        country_pack_id:
+          type: string
+          format: uuid
+          description: Installed pack version (changed by /upgrade)
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - INSTALLING
+          - INSTALLED
+          - UPGRADE_AVAILABLE
+          - FAILED
+          - UNINSTALLED
+          description: Status
+          readOnly: true
+        installed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Install time
+          readOnly: true
+        overrides:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Tenant overrides of pack defaults
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - country_pack_id
+      - legal_entity_id
+      - status
+    TenantCountryPackUpdate:
+      type: object
+      properties:
+        overrides:
+          type: object
+          additionalProperties: true
+          description: Tenant overrides of pack defaults
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration

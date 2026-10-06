@@ -19,7 +19,21 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import copy
+
 import yaml
+
+_Dumper = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
+_Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+def dump_yaml(data) -> str:
+    """YAML text via libyaml when available (an order of magnitude faster than the pure-Python dumper)."""
+    return yaml.dump(data, Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=120)
+
+
+def load_yaml(text: str):
+    return yaml.load(text, Loader=_Loader)
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "spec"
@@ -258,7 +272,7 @@ def parse_nested(text: str, ctx: str):
 def load_domains() -> list:
     domains = []
     for path in sorted((SPEC / "domains").glob("*.yaml")):
-        raw = yaml.safe_load(_quote_descriptions(path.read_text(encoding="utf-8")))
+        raw = load_yaml(_quote_descriptions(path.read_text(encoding="utf-8")))
         did = raw["domain"]
         enums = raw.get("enums", {}) or {}
         services = []
@@ -808,13 +822,13 @@ def gen_openapi(domains, enums, tables_global) -> list:
               "servers": [{"url": "https://api.meridian.example", "description": "Production"},
                           {"url": "https://sandbox.api.meridian.example", "description": "Sandbox"}],
               "security": [{"oauth2": []}], "tags": [], "paths": {},
-              "components": yaml.safe_load(yaml.safe_dump(COMMON_COMPONENTS))}
+              "components": copy.deepcopy(COMMON_COMPONENTS)}
     used_ids = set()
     for d in domains:
         doc = {"openapi": "3.1.0",
                "info": {"title": f"Meridian Core — {d.title} API", "version": "1.0.0", "description": d.description, "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}},
                "servers": bundle["servers"], "security": [{"oauth2": []}], "tags": [], "paths": {},
-               "components": yaml.safe_load(yaml.safe_dump(COMMON_COMPONENTS))}
+               "components": copy.deepcopy(COMMON_COMPONENTS)}
         scopes = {f"{d.id}:read": f"Read {d.title}", f"{d.id}:write": f"Change {d.title}"}
         for flow in doc["components"]["securitySchemes"]["oauth2"]["flows"].values():
             flow["scopes"] = dict(scopes)
@@ -984,10 +998,10 @@ def gen_openapi(domains, enums, tables_global) -> list:
         prune_components(doc)
         p = OUT / "openapi" / f"{d.id}.openapi.yaml"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
+        p.write_text(dump_yaml(doc), encoding="utf-8", newline="\n")
         # one OpenAPI file per service: only that service's paths (input to Spring interface codegen)
         for s in d.services:
-            sdoc = yaml.safe_load(yaml.safe_dump(doc))
+            sdoc = copy.deepcopy(doc)
             sdoc["info"]["title"] = f"Meridian Core — {s.name}"
             sdoc["paths"] = {pth: {m: o for m, o in ops.items() if o.get("x-service") == s.name}
                              for pth, ops in doc["paths"].items()}
@@ -997,10 +1011,10 @@ def gen_openapi(domains, enums, tables_global) -> list:
             prune_components(sdoc)
             sp = OUT / "openapi" / "services" / f"{s.name}.openapi.yaml"
             sp.parent.mkdir(parents=True, exist_ok=True)
-            sp.write_text(yaml.safe_dump(sdoc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
+            sp.write_text(dump_yaml(sdoc), encoding="utf-8", newline="\n")
     prune_components(bundle)
     (OUT / "openapi" / "meridian.openapi.yaml").write_text(
-        yaml.safe_dump(bundle, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
+        dump_yaml(bundle), encoding="utf-8", newline="\n")
     return endpoints
 
 
@@ -1041,7 +1055,7 @@ def gen_asyncapi(domains, enums, tables_global) -> list:
                 "action": "send", "channel": {"$ref": f"#/channels/{cid}"}}
     p = OUT / "asyncapi" / "meridian.asyncapi.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
+    p.write_text(dump_yaml(doc), encoding="utf-8", newline="\n")
     return rows
 
 
@@ -1151,7 +1165,7 @@ def main():
     gen_dictionary(domains, api_by_table)
     gen_manifest(domains)
     gen_routes(endpoints)
-    apps = yaml.safe_load(_quote_descriptions((SPEC / "apps.yaml").read_text(encoding="utf-8"))) \
+    apps = load_yaml(_quote_descriptions((SPEC / "apps.yaml").read_text(encoding="utf-8"))) \
         if (SPEC / "apps.yaml").exists() else {}
     op_ids = {e.op_id for e in endpoints}
     missing = [f"{a['id']} / {sc['name']}: {op}" for a in (apps or {}).get("apps", [])
@@ -1162,7 +1176,7 @@ def main():
             print("warning:", msg)
         else:
             raise SpecError(msg)
-    plan = yaml.safe_load((SPEC / "plan.yaml").read_text(encoding="utf-8")) if (SPEC / "plan.yaml").exists() else {}
+    plan = load_yaml((SPEC / "plan.yaml").read_text(encoding="utf-8")) if (SPEC / "plan.yaml").exists() else {}
     sys.path.insert(0, str(Path(__file__).parent))
     import tracker
     stats = tracker.build(ROOT / "tracker" / "Meridian_Tracker.xlsx", domains, enums, endpoints, events,

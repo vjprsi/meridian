@@ -195,6 +195,11 @@ paths:
         schema:
           type: string
           format: date
+      - name: ob_consent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -334,7 +339,7 @@ paths:
   /v1/payments/validate:
     post:
       operationId: paymentsValidate
-      summary: Validate and price a payment without executing it (route, fees, FX, CoP)
+      summary: Validate and price a payment without executing it (account checks, route, cut-off, fees, FX, CoP)
       tags:
       - Payments
       security:
@@ -343,8 +348,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -371,10 +382,94 @@ paths:
       x-service: payment-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-table: payment
+  /v1/payments/inbound:
+    post:
+      operationId: paymentsInbound
+      summary: Book an inbound credit transfer received on a rail (pacs.008) to an internal account
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentsInboundRequest'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment
+  /v1/payments/execute-due:
+    post:
+      operationId: paymentsExecuteDue
+      summary: Execute approved payments whose requested execution date has arrived (business-day scheduler)
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment
   /v1/payments/{id}/approve:
     post:
       operationId: paymentsApprove
-      summary: Approve a payment pending approval
+      summary: Approve a payment pending approval (four-eyes; one approval for the current level)
       tags:
       - Payments
       security:
@@ -511,6 +606,150 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentsCancelRequest'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment
+  /v1/payments/{id}/execute:
+    post:
+      operationId: paymentsExecute
+      summary: Reserve funds and submit an approved payment now
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment
+  /v1/payments/{id}/screening-decision:
+    post:
+      operationId: paymentsScreeningDecision
+      summary: Apply the compliance decision on a payment held in screening
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentsScreeningDecisionRequest'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment
+  /v1/payments/{id}/status-report:
+    post:
+      operationId: paymentsStatusReport
+      summary: Apply a rail status report (pacs.002 ACCP, ACSP, ACSC or RJCT) for a submitted payment
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentsStatusReportRequest'
       x-requirements:
       - LED-05
       - PAY-01
@@ -712,10 +951,51 @@ paths:
       x-service: payment-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
       x-table: payment
+  /v1/payments/{id}/approvals:
+    get:
+      operationId: paymentsApprovals
+      summary: Approval levels of the payment
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentApprovalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-table: payment
   /v1/payments/{id}/tracker:
     get:
       operationId: paymentsTracker
-      summary: End-to-end tracking (SWIFT gpi / rail status)
+      summary: End-to-end tracking (SWIFT gpi style status timeline, rail, charges, ETA)
       tags:
       - Payments
       security:
@@ -729,8 +1009,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -750,7 +1036,7 @@ paths:
   /v1/payments/{id}/receipt:
     get:
       operationId: paymentsReceipt
-      summary: Payment receipt / advice as PDF (signed URL)
+      summary: Payment receipt / advice as a PDF document
       tags:
       - Payments
       security:
@@ -764,8 +1050,13 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         '400': *id001
         '401': *id002
         '403': *id003
@@ -903,6 +1194,45 @@ paths:
       x-table: payment_return
       x-crud: true
       x-crud-get: true
+  /v1/payment-returns/inbound:
+    post:
+      operationId: paymentReturnsInbound
+      summary: Book a return received for one of our outbound payments (pacs.004)
+      tags:
+      - Payment Returns
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReturn'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentReturnsInboundRequest'
+      x-requirements:
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_return
   /v1/payment-recalls:
     get:
       operationId: paymentRecallsList
@@ -1019,6 +1349,45 @@ paths:
       x-table: payment_recall
       x-crud: true
       x-crud-get: true
+  /v1/payment-recalls/inbound:
+    post:
+      operationId: paymentRecallsInbound
+      summary: Register a recall request received from a rail for an inbound payment (camt.056)
+      tags:
+      - Payment Recalls
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRecall'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRecallsInboundRequest'
+      x-requirements:
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_recall
   /v1/payment-recalls/{id}/accept:
     post:
       operationId: paymentRecallsAccept
@@ -1104,6 +1473,51 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentRecallsRejectRequest'
+      x-requirements:
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_recall
+  /v1/payment-recalls/{id}/resolve:
+    post:
+      operationId: paymentRecallsResolve
+      summary: Apply the counterparty answer to an outbound recall (camt.029; funds returned when accepted)
+      tags:
+      - Payment Recalls
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRecall'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRecallsResolveRequest'
       x-requirements:
       - PAY-04
       x-service: payment-service
@@ -1200,8 +1614,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id005
-        name: id
+      - name: id
         in: path
         required: true
         schema:
@@ -1227,47 +1640,6 @@ paths:
       x-table: payment_repair
       x-crud: true
       x-crud-get: true
-    patch:
-      operationId: paymentRepairsUpdate
-      summary: Update payment repair
-      tags:
-      - Payment Repairs
-      security:
-      - oauth2:
-        - payments:write
-      parameters:
-      - *id005
-      - $ref: '#/components/parameters/IfMatch'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentRepair'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PaymentRepairUpdate'
-      x-requirements:
-      - PAY-04
-      x-service: payment-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
-      x-table: payment_repair
-      x-crud: true
-      x-crud-update: true
   /v1/payment-repairs/{id}/assign:
     post:
       operationId: paymentRepairsAssign
@@ -1755,8 +2127,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id007
-      - &id006
+      parameters: &id006
+      - &id005
         name: id
         in: path
         required: true
@@ -1793,7 +2165,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id006
+      - *id005
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -1834,7 +2206,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id007
+      parameters: *id006
       responses:
         '204':
           description: No content
@@ -1978,6 +2350,52 @@ paths:
       x-service: payment-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-table: payee
+  /v1/payees/{id}/unblock:
+    post:
+      operationId: payeesUnblock
+      summary: Unblock a blocked payee
+      tags:
+      - Payees
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payee'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayeesUnblockRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payee
   /v1/payee-aliases:
     get:
       operationId: payeeAliasesList
@@ -2025,7 +2443,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 16
+          enum:
+          - PENDING
+          - ACTIVE
+          - PORTING
+          - DELETED
       - name: custom_field_1
         in: query
         schema:
@@ -2118,7 +2540,7 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id008
+      parameters: &id007
       - name: id
         in: path
         required: true
@@ -2154,7 +2576,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id008
+      parameters: *id007
       responses:
         '204':
           description: No content
@@ -2258,10 +2680,96 @@ paths:
       x-service: payment-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-table: payee_alias
+  /v1/payee-aliases/{id}/resend-otp:
+    post:
+      operationId: payeeAliasesResendOtp
+      summary: Issue a new ownership OTP
+      tags:
+      - Payee Aliases
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeAlias'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-01
+      - PAY-07
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payee_alias
   /v1/payee-aliases/{id}/port:
     post:
       operationId: payeeAliasesPort
       summary: Request portability of an alias from another institution
+      tags:
+      - Payee Aliases
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayeeAlias'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayeeAliasesPortRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-07
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payee_alias
+  /v1/payee-aliases/{id}/complete-port:
+    post:
+      operationId: payeeAliasesCompletePort
+      summary: Confirm the donor released the alias; it becomes active here
       tags:
       - Payee Aliases
       security:
@@ -2627,7 +3135,7 @@ paths:
   /v1/bulk-payments/upload:
     post:
       operationId: bulkPaymentsUpload
-      summary: Upload a pain.001, CSV or NACHA file and create a bulk payment
+      summary: Upload a pain.001 or CSV file and create a bulk payment
       tags:
       - Bulk Payments
       security:
@@ -2780,7 +3288,7 @@ paths:
   /v1/bulk-payments/{id}/approve:
     post:
       operationId: bulkPaymentsApprove
-      summary: Approve the bulk payment
+      summary: Approve the bulk payment (four-eyes) and execute it
       tags:
       - Bulk Payments
       security:
@@ -2817,6 +3325,51 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkPaymentsApproveRequest'
+      x-requirements:
+      - PAY-01
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: bulk_payment
+  /v1/bulk-payments/{id}/reject:
+    post:
+      operationId: bulkPaymentsReject
+      summary: Reject the submitted bulk payment
+      tags:
+      - Bulk Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkPaymentsRejectRequest'
       x-requirements:
       - PAY-01
       x-service: payment-service
@@ -2870,7 +3423,7 @@ paths:
   /v1/bulk-payments/{id}/report:
     get:
       operationId: bulkPaymentsReport
-      summary: Execution report (CSV / pain.002) as signed URL
+      summary: Execution report per item (CSV)
       tags:
       - Bulk Payments
       security:
@@ -2884,8 +3437,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2981,7 +3538,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id009
+      - &id008
         name: id
         in: path
         required: true
@@ -3017,7 +3574,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id009
+      - *id008
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -3202,7 +3759,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id010
+      - &id009
         name: id
         in: path
         required: true
@@ -3238,7 +3795,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id010
+      - *id009
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -3626,6 +4183,45 @@ paths:
       x-table: direct_debit_collection
       x-crud: true
       x-crud-get: true
+  /v1/direct-debit-collections/{id}/collect:
+    post:
+      operationId: directDebitCollectionsCollect
+      summary: Present and settle a due collection (pacs.003)
+      tags:
+      - Direct Debit Collections
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectDebitCollection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-07
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: direct_debit_collection
   /v1/direct-debit-collections/{id}/cancel:
     post:
       operationId: directDebitCollectionsCancel
@@ -4037,6 +4633,11 @@ paths:
           - PAID
           - EXPIRED
           - DISABLED
+      - name: slug
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -4130,7 +4731,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id011
+      - &id010
         name: id
         in: path
         required: true
@@ -4167,7 +4768,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id011
+      - *id010
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -4200,6 +4801,52 @@ paths:
       x-table: payment_link
       x-crud: true
       x-crud-update: true
+  /v1/payment-links/{id}/pay:
+    post:
+      operationId: paymentLinksPay
+      summary: Pay through the link from an internal account
+      tags:
+      - Payment Links
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentLinksPayRequest'
+      x-requirements:
+      - PAY-07
+      - WAL-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_link
   /v1/payment-links/{id}/disable:
     post:
       operationId: paymentLinksDisable
@@ -4451,7 +5098,7 @@ paths:
   /v1/payment-qr-codes/decode:
     post:
       operationId: paymentQrCodesDecode
-      summary: Decode a scanned QR payload into payment details
+      summary: Decode and verify a scanned EMVCo QR payload (TLV fields, CRC, matching QR)
       tags:
       - Payment Qr Codes
       security:
@@ -4465,7 +5112,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentQrCode'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4491,7 +5140,7 @@ paths:
   /v1/payment-qr-codes/{id}/pay:
     post:
       operationId: paymentQrCodesPay
-      summary: Pay a decoded QR
+      summary: Pay a QR code
       tags:
       - Payment Qr Codes
       security:
@@ -4718,7 +5367,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id012
+      - &id011
         name: id
         in: path
         required: true
@@ -4755,7 +5404,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id012
+      - *id011
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -4837,7 +5486,7 @@ paths:
   /v1/payment-rails/{id}/resume:
     post:
       operationId: paymentRailsResume
-      summary: Resume a suspended rail
+      summary: Resume a suspended or degraded rail
       tags:
       - Payment Rails
       security:
@@ -4868,6 +5517,58 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsResumeRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_rail
+  /v1/payment-rails/{id}/metrics:
+    post:
+      operationId: paymentRailsMetrics
+      summary: Record observed performance from rail monitoring (DEGRADED below the success threshold)
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsMetricsRequest'
       x-requirements:
       - PAY-02
       - PAY-05
@@ -4914,7 +5615,7 @@ paths:
   /v1/payment-rails/{id}/next-execution:
     get:
       operationId: paymentRailsNextExecution
-      summary: Next possible execution date and time (?payment_type=&currency=)
+      summary: Next possible execution date and cut-off for a payment type and currency (business calendar aware)
       tags:
       - Payment Rails
       security:
@@ -4927,9 +5628,47 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: payment_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: at
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4941,6 +5680,52 @@ paths:
       - PAY-05
       x-service: routing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-table: payment_rail
+  /v1/payment-rails/{id}/inbound:
+    post:
+      operationId: paymentRailsInbound
+      summary: Inbound rail message (pacs.002, pacs.008, camt.056, pacs.004) pushed by the rail or sponsor bank; HMAC signature
+        in X-Rail-Signature
+      tags:
+      - Payment Rails
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsInboundRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: payment_rail
   /v1/rail-adapters:
     get:
@@ -5066,7 +5851,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id013
+      - &id012
         name: id
         in: path
         required: true
@@ -5102,7 +5887,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id013
+      - *id012
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -5137,7 +5922,7 @@ paths:
   /v1/rail-adapters/{id}/test-connection:
     post:
       operationId: railAdaptersTestConnection
-      summary: Send a heartbeat / echo to the rail
+      summary: Send a heartbeat / echo to the rail endpoint and report reachability and latency
       tags:
       - Rail Adapters
       security:
@@ -5152,8 +5937,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5172,7 +5963,7 @@ paths:
   /v1/rail-adapters/{id}/rotate-credentials:
     post:
       operationId: railAdaptersRotateCredentials
-      summary: Rotate certificates and keys
+      summary: Rotate certificates and keys to a new vault secret reference
       tags:
       - Rail Adapters
       security:
@@ -5203,6 +5994,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailAdaptersRotateCredentialsRequest'
       x-requirements:
       - PAY-02
       x-service: routing-service
@@ -5341,8 +6138,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id015
-      - &id014
+      parameters: &id014
+      - &id013
         name: id
         in: path
         required: true
@@ -5378,7 +6175,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id014
+      - *id013
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -5418,7 +6215,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id015
+      parameters: *id014
       responses:
         '204':
           description: No content
@@ -5555,8 +6352,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id017
-      - &id016
+      parameters: &id016
+      - &id015
         name: id
         in: path
         required: true
@@ -5593,7 +6390,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id016
+      - *id015
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -5634,7 +6431,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id017
+      parameters: *id016
       responses:
         '204':
           description: No content
@@ -5655,7 +6452,7 @@ paths:
   /v1/routing-rules/simulate:
     post:
       operationId: routingRulesSimulate
-      summary: Show which rail a payment would take and why
+      summary: Show which rail a payment would take and why (rules, candidates, scores)
       tags:
       - Routing Rules
       security:
@@ -5669,7 +6466,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRail'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5686,6 +6485,48 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoutingRulesSimulateRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_routing_rule
+  /v1/routing-rules/route:
+    post:
+      operationId: routingRulesRoute
+      summary: Choose the rail for a payment, with execution date, cut-off and settlement account
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRulesRouteRequest'
       x-requirements:
       - PAY-02
       - PAY-08
@@ -5744,6 +6585,11 @@ paths:
           - ACKNOWLEDGED
           - NACKED
           - FAILED
+      - name: end_to_end_id
+        in: query
+        schema:
+          type: string
+          maxLength: 35
       - name: custom_field_1
         in: query
         schema:
@@ -5823,10 +6669,49 @@ paths:
       x-table: rail_message
       x-crud: true
       x-crud-get: true
+  /v1/rail-messages/pacs008:
+    post:
+      operationId: railMessagesPacs008
+      summary: Build, store and send the outbound pacs.008 FI-to-FI customer credit transfer for a payment
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailMessagesPacs008Request'
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: rail_message
   /v1/rail-messages/{id}/payload:
     get:
       operationId: railMessagesPayload
-      summary: Decrypted raw payload (requires payments:audit scope)
+      summary: Raw payload (requires payments:audit scope)
       tags:
       - Rail Messages
       security:
@@ -5840,8 +6725,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5876,7 +6765,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RailMessage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6020,6 +6911,47 @@ paths:
     post:
       operationId: railSettlementBatchesClose
       summary: Close the batch and generate the settlement file
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailSettlementBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: rail_settlement_batch
+  /v1/rail-settlement-batches/{id}/settle:
+    post:
+      operationId: railSettlementBatchesSettle
+      summary: Confirm settlement of the cycle and post the net position to the ledger
       tags:
       - Rail Settlement Batches
       security:
@@ -6226,7 +7158,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id018
+      - &id017
         name: id
         in: path
         required: true
@@ -6263,7 +7195,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id018
+      - *id017
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -6333,10 +7265,10 @@ paths:
       x-service: routing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
       x-table: nostro_account
-  /v1/nostro-accounts/{id}/top-up:
+  /v1/nostro-accounts/{id}/refresh-position:
     post:
-      operationId: nostroAccountsTopUp
-      summary: Request a liquidity top-up transfer
+      operationId: nostroAccountsRefreshPosition
+      summary: Recompute the intraday position from the ledger balance and open settlement batches
       tags:
       - Nostro Accounts
       security:
@@ -6351,8 +7283,52 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPosition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: nostro_account
+  /v1/nostro-accounts/{id}/top-up:
+    post:
+      operationId: nostroAccountsTopUp
+      summary: Fund the nostro from the treasury funding account and record the new position
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPosition'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6609,7 +7585,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id019
+      - &id018
         name: id
         in: path
         required: true
@@ -6646,7 +7622,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id019
+      - *id018
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -6696,7 +7672,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RailParticipant'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7087,6 +8065,46 @@ paths:
       x-table: fx_deal
       x-crud: true
       x-crud-get: true
+  /v1/fx/deals/{id}/settle:
+    post:
+      operationId: fxDealsSettle
+      summary: 'Settle the deal: post both currency legs to the ledger'
+      tags:
+      - Fx Deals
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: fx_deal
   /v1/fx/deals/{id}/cancel:
     post:
       operationId: fxDealsCancel
@@ -7264,8 +8282,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id021
-      - &id020
+      parameters: &id020
+      - &id019
         name: id
         in: path
         required: true
@@ -7302,7 +8320,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id020
+      - *id019
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -7343,7 +8361,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id021
+      parameters: *id020
       responses:
         '204':
           description: No content
@@ -7475,7 +8493,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id022
+      - &id021
         name: id
         in: path
         required: true
@@ -7511,7 +8529,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id022
+      - *id021
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -7683,7 +8701,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id023
+      - &id022
         name: id
         in: path
         required: true
@@ -7720,7 +8738,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id023
+      - *id022
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -7756,7 +8774,7 @@ paths:
   /v1/remittance/corridors/{id}/quote:
     post:
       operationId: remittanceCorridorsQuote
-      summary: Price a remittance in this corridor
+      summary: Price a remittance in this corridor (fees, FX, partner, delivery time)
       tags:
       - Remittance Corridors
       security:
@@ -7845,128 +8863,90 @@ paths:
       x-service: fx-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-table: remittance_corridor
+  /v1/remittance/corridors/{id}/resume:
+    post:
+      operationId: remittanceCorridorsResume
+      summary: Resume a suspended corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceCorridorsResumeRequest'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: remittance_corridor
 components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
   schemas:
     Problem:
+      type: object
       description: RFC 9457 problem details
       properties:
-        code:
-          description: Stable machine-readable error code
+        type:
           type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
         detail:
           type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
         instance:
           type: string
         request_id:
           type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
       required:
       - type
       - title
       - status
       - code
-      type: object
     PaymentPage:
       type: object
       description: One page of Payment results (newest first)
@@ -7993,6 +8973,61 @@ components:
           additionalProperties: true
       required:
       - payment
+    PaymentsInboundRequest:
+      type: object
+      properties:
+        rail_code:
+          type: string
+          maxLength: 32
+        rail_message_id:
+          type: string
+          format: uuid
+        end_to_end_id:
+          type: string
+          maxLength: 35
+        uetr:
+          type: string
+          format: uuid
+        transaction_id:
+          type: string
+          maxLength: 35
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        debtor_name:
+          type: string
+          maxLength: 140
+        debtor_account_number:
+          type: string
+          maxLength: 64
+        debtor_agent_bic:
+          type: string
+          maxLength: 11
+        creditor_name:
+          type: string
+          maxLength: 140
+        creditor_account_number:
+          type: string
+          maxLength: 64
+        remittance_unstructured:
+          type: string
+          maxLength: 140
+        settlement_date:
+          type: string
+          format: date
+      required:
+      - rail_code
+      - end_to_end_id
+      - amount
+      - currency
+      - debtor_name
+      - creditor_account_number
     PaymentsApproveRequest:
       type: object
       properties:
@@ -8013,6 +9048,43 @@ components:
         reason:
           type: string
           maxLength: 255
+    PaymentsScreeningDecisionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          maxLength: 32
+        screening_result_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - status
+    PaymentsStatusReportRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          maxLength: 4
+        reason_code:
+          type: string
+          maxLength: 8
+        reason:
+          type: string
+          maxLength: 255
+        clearing_system_ref:
+          type: string
+          maxLength: 64
+        rail_message_id:
+          type: string
+          format: uuid
+        settlement_date:
+          type: string
+          format: date
+      required:
+      - status
     PaymentsReturnRequest:
       type: object
       properties:
@@ -8069,6 +9141,24 @@ components:
       required:
       - data
       - has_more
+    PaymentApprovalPage:
+      type: object
+      description: One page of PaymentApproval results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentApproval'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     PaymentReturnPage:
       type: object
       description: One page of PaymentReturn results (newest first)
@@ -8087,6 +9177,33 @@ components:
       required:
       - data
       - has_more
+    PaymentReturnsInboundRequest:
+      type: object
+      properties:
+        original_end_to_end_id:
+          type: string
+          maxLength: 35
+        reason_code:
+          type: string
+          maxLength: 8
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        return_id:
+          type: string
+          maxLength: 35
+        reason:
+          type: string
+          maxLength: 255
+        rail_message_id:
+          type: string
+          format: uuid
+      required:
+      - original_end_to_end_id
+      - reason_code
+      - amount
     PaymentRecallPage:
       type: object
       description: One page of PaymentRecall results (newest first)
@@ -8105,6 +9222,24 @@ components:
       required:
       - data
       - has_more
+    PaymentRecallsInboundRequest:
+      type: object
+      properties:
+        original_end_to_end_id:
+          type: string
+          maxLength: 35
+        reason_code:
+          type: string
+          maxLength: 8
+        reason:
+          type: string
+          maxLength: 255
+        requested_by:
+          type: string
+          maxLength: 64
+      required:
+      - original_end_to_end_id
+      - reason_code
     PaymentRecallsAcceptRequest:
       type: object
       properties:
@@ -8122,6 +9257,19 @@ components:
           maxLength: 255
       required:
       - response_code
+    PaymentRecallsResolveRequest:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        response_code:
+          type: string
+          maxLength: 8
+        response_reason:
+          type: string
+          maxLength: 255
+      required:
+      - accepted
     PaymentRepairPage:
       type: object
       description: One page of PaymentRepair results (newest first)
@@ -8164,24 +9312,6 @@ components:
           maxLength: 255
       required:
       - reason
-    PaymentApprovalPage:
-      type: object
-      description: One page of PaymentApproval results (newest first)
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PaymentApproval'
-        next_cursor:
-          type:
-          - string
-          - 'null'
-          description: Pass as ?cursor= to fetch the next page
-        has_more:
-          type: boolean
-      required:
-      - data
-      - has_more
     PaymentApprovalsApproveRequest:
       type: object
       properties:
@@ -8222,6 +9352,12 @@ components:
           maxLength: 255
       required:
       - reason
+    PayeesUnblockRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     PayeeAliasPage:
       type: object
       description: One page of PayeeAlias results (newest first)
@@ -8269,6 +9405,14 @@ components:
           maxLength: 10
       required:
       - otp
+    PayeeAliasesPortRequest:
+      type: object
+      properties:
+        donor_institution:
+          type: string
+          maxLength: 140
+      required:
+      - donor_institution
     PayeeVerificationPage:
       type: object
       description: One page of PayeeVerification results (newest first)
@@ -8308,9 +9452,8 @@ components:
     BulkPaymentsUploadRequest:
       type: object
       properties:
-        document_id:
+        content:
           type: string
-          format: uuid
         file_format:
           type: string
           enum:
@@ -8319,12 +9462,31 @@ components:
           - NACHA
           - BACS_STD18
           - JSON
+        customer_id:
+          type: string
+          format: uuid
         debtor_account_id:
           type: string
           format: uuid
+        name:
+          type: string
+          maxLength: 140
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        requested_execution_date:
+          type: string
+          format: date
+        document_id:
+          type: string
+          format: uuid
+        batch_booking:
+          type: boolean
       required:
-      - document_id
+      - content
       - file_format
+      - customer_id
       - debtor_account_id
     BulkPaymentItemPage:
       type: object
@@ -8350,6 +9512,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    BulkPaymentsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     BulkPaymentsCancelRequest:
       type: object
       properties:
@@ -8446,14 +9616,13 @@ components:
         debtor_account_id:
           type: string
           format: uuid
-        debtor_wallet_id:
-          type: string
-          format: uuid
         amount:
           type: string
           format: decimal
           examples:
           - '125.50'
+      required:
+      - debtor_account_id
     RequestsToPayDeclineRequest:
       type: object
       properties:
@@ -8484,6 +9653,22 @@ components:
       required:
       - data
       - has_more
+    PaymentLinksPayRequest:
+      type: object
+      properties:
+        debtor_account_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        payer_name:
+          type: string
+          maxLength: 140
+      required:
+      - debtor_account_id
     PaymentLinksDisableRequest:
       type: object
       properties:
@@ -8522,14 +9707,13 @@ components:
         debtor_account_id:
           type: string
           format: uuid
-        debtor_wallet_id:
-          type: string
-          format: uuid
         amount:
           type: string
           format: decimal
           examples:
           - '125.50'
+      required:
+      - debtor_account_id
     PaymentQrCodesDisableRequest:
       type: object
       properties:
@@ -8562,6 +9746,26 @@ components:
           maxLength: 255
       required:
       - reason
+    PaymentRailsResumeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    PaymentRailsMetricsRequest:
+      type: object
+      properties:
+        success_rate_7d:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        p95_latency_ms:
+          type: integer
+          format: int32
+      required:
+      - success_rate_7d
+      - p95_latency_ms
     RailCutoffPage:
       type: object
       description: One page of RailCutoff results (newest first)
@@ -8580,6 +9784,17 @@ components:
       required:
       - data
       - has_more
+    PaymentRailsInboundRequest:
+      type: object
+      properties:
+        message_type:
+          type: string
+          maxLength: 32
+        payload:
+          type: string
+      required:
+      - message_type
+      - payload
     RailAdapterPage:
       type: object
       description: One page of RailAdapter results (newest first)
@@ -8598,6 +9813,17 @@ components:
       required:
       - data
       - has_more
+    RailAdaptersRotateCredentialsRequest:
+      type: object
+      properties:
+        credentials_ref:
+          type: string
+          maxLength: 255
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - credentials_ref
     PaymentRoutingRulePage:
       type: object
       description: One page of PaymentRoutingRule results (newest first)
@@ -8624,6 +9850,14 @@ components:
           additionalProperties: true
       required:
       - payment
+    RoutingRulesRouteRequest:
+      type: object
+      properties:
+        payment:
+          type: object
+          additionalProperties: true
+      required:
+      - payment
     RailMessagePage:
       type: object
       description: One page of RailMessage results (newest first)
@@ -8642,6 +9876,18 @@ components:
       required:
       - data
       - has_more
+    RailMessagesPacs008Request:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+        payment:
+          type: object
+          additionalProperties: true
+      required:
+      - payment_rail_id
+      - payment
     RailMessagesReplayRequest:
       type: object
       properties:
@@ -8712,6 +9958,9 @@ components:
           format: decimal
           examples:
           - '125.50'
+        reason:
+          type: string
+          maxLength: 255
       required:
       - amount
     RailParticipantPage:
@@ -8875,6 +10124,12 @@ components:
           maxLength: 255
       required:
       - reason
+    RemittanceCorridorsResumeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     BulkPayment:
       type: object
       description: A batch of payments (payroll, supplier run) uploaded as a file or via API
@@ -9011,12 +10266,31 @@ components:
           format: uuid
           description: Ledger hold for the whole batch
           readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that submitted the batch (cannot approve it)
+          readOnly: true
         submitted_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Submission time
+          readOnly: true
+        settled_count:
+          type: integer
+          format: int32
+          description: Items settled
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason when rejected or cancelled
           readOnly: true
         completed_at:
           type:
@@ -9055,6 +10329,12 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkPaymentItem'
+          readOnly: true
+          description: Lines of the batch when created via the API
       required:
       - id
       - created_at
@@ -9071,6 +10351,7 @@ components:
       - failed_count
       - total_amount
       - currency
+      - settled_count
     BulkPaymentCreate:
       type: object
       properties:
@@ -9140,6 +10421,12 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkPaymentItemCreate'
+          minItems: 1
+          description: Lines of the batch when created via the API
       required:
       - customer_id
       - debtor_account_id
@@ -9188,10 +10475,12 @@ components:
           type: string
           format: uuid
           description: Batch
+          readOnly: true
         line_no:
           type: integer
           format: int32
-          description: Line number in the file
+          description: Line number in the file (assigned in order)
+          readOnly: true
         creditor_name:
           type: string
           maxLength: 140
@@ -9234,9 +10523,11 @@ components:
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
         end_to_end_id:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 35
-          description: End-to-end id
+          description: End-to-end id from the file (generated when empty)
         remittance_unstructured:
           type:
           - string
@@ -9257,10 +10548,10 @@ components:
           readOnly: true
         validation_errors:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Validation errors
+          items: {}
+          description: Validation errors ({field, code, message})
           readOnly: true
         payment_id:
           type:
@@ -9268,6 +10559,7 @@ components:
           - 'null'
           format: uuid
           description: Payment created for this line
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -9310,19 +10602,10 @@ components:
       - creditor_account_number
       - amount
       - currency
-      - end_to_end_id
       - status
-    BulkPaymentItemUpdate:
+    BulkPaymentItemCreate:
       type: object
       properties:
-        bulk_payment_id:
-          type: string
-          format: uuid
-          description: Batch
-        line_no:
-          type: integer
-          format: int32
-          description: Line number in the file
         creditor_name:
           type: string
           maxLength: 140
@@ -9363,15 +10646,85 @@ components:
         end_to_end_id:
           type: string
           maxLength: 35
-          description: End-to-end id
+          description: End-to-end id from the file (generated when empty)
         remittance_unstructured:
           type: string
           maxLength: 140
           description: Remittance information
-        payment_id:
+        custom_field_1:
           type: string
-          format: uuid
-          description: Payment created for this line
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - creditor_name
+      - creditor_account_id_type
+      - creditor_account_number
+      - amount
+      - currency
+    BulkPaymentItemUpdate:
+      type: object
+      properties:
+        creditor_name:
+          type: string
+          maxLength: 140
+          description: Beneficiary name
+        creditor_account_id_type:
+          type: string
+          enum:
+          - IBAN
+          - BBAN
+          - ACCOUNT_NUMBER
+          - WALLET
+          - PROXY
+          - CARD_PAN_TOKEN
+          - INTERNAL
+          description: Account identifier scheme
+        creditor_account_number:
+          type: string
+          maxLength: 64
+          description: Beneficiary account
+        creditor_agent_bic:
+          type: string
+          maxLength: 11
+          description: Beneficiary bank BIC
+        creditor_agent_clearing_id:
+          type: string
+          maxLength: 35
+          description: Beneficiary clearing id
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        end_to_end_id:
+          type: string
+          maxLength: 35
+          description: End-to-end id from the file (generated when empty)
+        remittance_unstructured:
+          type: string
+          maxLength: 140
+          description: Remittance information
         custom_field_1:
           type: string
           maxLength: 500
@@ -9440,6 +10793,7 @@ components:
           - 'null'
           format: uuid
           description: Payment created for the collection
+          readOnly: true
         amount:
           type: string
           format: decimal
@@ -9490,6 +10844,13 @@ components:
           format: date-time
           description: Collection time
           readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -9538,10 +10899,6 @@ components:
           type: string
           format: uuid
           description: Mandate
-        payment_id:
-          type: string
-          format: uuid
-          description: Payment created for the collection
         amount:
           type: string
           format: decimal
@@ -9627,48 +10984,57 @@ components:
           type: string
           format: uuid
           description: Quote accepted
+          readOnly: true
         payment_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Payment funded by the deal
+          readOnly: true
         side:
           type: string
           enum:
           - BUY
           - SELL
-          description: Buy or sell from the bank's view
+          description: 'Bank side on the sell currency: BUY (bank buys what the customer sells)'
+          readOnly: true
         sell_currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Sold currency (ISO 4217)
+          readOnly: true
         sell_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Sold amount
+          readOnly: true
         buy_currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Bought currency (ISO 4217)
+          readOnly: true
         buy_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Bought amount
+          readOnly: true
         rate:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Deal rate
+          readOnly: true
         value_date:
           type: string
           format: date
           description: Settlement value date
+          readOnly: true
         journal_entry_id:
           type:
           - string
@@ -9690,6 +11056,13 @@ components:
           - CANCELLED
           - FAILED
           description: Status
+          readOnly: true
+        cancellation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason when cancelled
           readOnly: true
         custom_field_1:
           type:
@@ -9776,7 +11149,7 @@ components:
         currency_pair:
           type: string
           maxLength: 7
-          description: e.g. USD/EUR (or */EUR)
+          description: e.g. USD/EUR (or */EUR, USD/*)
         segment:
           type:
           - string
@@ -9806,7 +11179,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount band start
+          description: Amount band start (sell amount)
         max_amount:
           type:
           - string
@@ -9814,7 +11187,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount band end
+          description: Amount band end (sell amount)
         margin_bps:
           type: integer
           format: int32
@@ -9886,7 +11259,7 @@ components:
         currency_pair:
           type: string
           maxLength: 7
-          description: e.g. USD/EUR (or */EUR)
+          description: e.g. USD/EUR (or */EUR, USD/*)
         segment:
           type: string
           maxLength: 32
@@ -9910,13 +11283,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount band start
+          description: Amount band start (sell amount)
         max_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Amount band end
+          description: Amount band end (sell amount)
         margin_bps:
           type: integer
           format: int32
@@ -9969,7 +11342,7 @@ components:
         currency_pair:
           type: string
           maxLength: 7
-          description: e.g. USD/EUR (or */EUR)
+          description: e.g. USD/EUR (or */EUR, USD/*)
         segment:
           type: string
           maxLength: 32
@@ -9993,13 +11366,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount band start
+          description: Amount band start (sell amount)
         max_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Amount band end
+          description: Amount band end (sell amount)
         margin_bps:
           type: integer
           format: int32
@@ -10086,6 +11459,28 @@ components:
           - 'null'
           format: uuid
           description: Customer (pricing segment)
+        segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Customer segment used for margin rules
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          description: Channel used for margin rules
         sell_currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -10101,7 +11496,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount sold (fix one side)
+          description: Amount sold (fix one side; computed when buy_amount is fixed)
         buy_amount:
           type:
           - string
@@ -10109,13 +11504,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount bought (fix one side)
+          description: Amount bought (fix one side; computed when sell_amount is fixed)
         mid_rate:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Market mid rate
+          description: Market mid rate (buy units per 1 sell unit)
           readOnly: true
         customer_rate:
           type: string
@@ -10128,6 +11523,13 @@ components:
           type: integer
           format: int32
           description: Margin in basis points
+          readOnly: true
+        fx_margin_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Margin rule applied
           readOnly: true
         fee_amount:
           type: string
@@ -10142,12 +11544,37 @@ components:
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Fee currency (ISO 4217)
+          readOnly: true
         remittance_corridor_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Corridor (remittances)
+          readOnly: true
+        remittance_partner_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payout partner (remittances)
+          readOnly: true
+        delivery_eta_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Expected delivery time (remittances)
+          readOnly: true
+        total_debit:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sell amount plus fee
+          readOnly: true
         rate_source:
           type:
           - string
@@ -10219,6 +11646,24 @@ components:
           type: string
           format: uuid
           description: Customer (pricing segment)
+        segment:
+          type: string
+          maxLength: 32
+          description: Customer segment used for margin rules
+        channel:
+          type: string
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          description: Channel used for margin rules
         sell_currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -10232,21 +11677,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount sold (fix one side)
+          description: Amount sold (fix one side; computed when buy_amount is fixed)
         buy_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Amount bought (fix one side)
-        fee_currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Fee currency (ISO 4217)
-        remittance_corridor_id:
-          type: string
-          format: uuid
-          description: Corridor (remittances)
+          description: Amount bought (fix one side; computed when sell_amount is fixed)
         custom_field_1:
           type: string
           maxLength: 500
@@ -10706,6 +12143,13 @@ components:
           - NOT_AVAILABLE
           description: Last Confirmation of Payee result
           readOnly: true
+        blocked_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the payee was blocked
+          readOnly: true
         verified_at:
           type:
           - string
@@ -11070,14 +12514,26 @@ components:
           readOnly: true
         status:
           type: string
-          maxLength: 16
-          description: ACTIVE, PENDING, PORTING, DELETED
+          enum:
+          - PENDING
+          - ACTIVE
+          - PORTING
+          - DELETED
+          description: Lifecycle status (PENDING until ownership is verified)
+          readOnly: true
         verified_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Ownership verification time
+          readOnly: true
+        donor_institution:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: Institution the alias is being ported from
           readOnly: true
         custom_field_1:
           type:
@@ -11161,10 +12617,6 @@ components:
           type: string
           maxLength: 32
           description: External registry (PIX DICT, UPI, PayNow, national proxy)
-        status:
-          type: string
-          maxLength: 16
-          description: ACTIVE, PENDING, PORTING, DELETED
         custom_field_1:
           type: string
           maxLength: 500
@@ -11256,22 +12708,35 @@ components:
           - ACCOUNT_CLOSED
           - NOT_AVAILABLE
           description: Outcome
+          readOnly: true
+        match_score:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Name similarity 0..1 (default thresholds MATCH >= 0.98, CLOSE_MATCH >= 0.80)
+          readOnly: true
         matched_name:
           type:
           - string
           - 'null'
           maxLength: 140
           description: Name returned on close match
+          readOnly: true
         provider:
           type: string
           maxLength: 32
-          description: Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry)
+          description: Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry, ON_US)
+          readOnly: true
         provider_ref:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Provider reference
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -11344,28 +12809,6 @@ components:
           type: string
           maxLength: 35
           description: Clearing id checked
-        result:
-          type: string
-          enum:
-          - MATCH
-          - CLOSE_MATCH
-          - NO_MATCH
-          - ACCOUNT_NOT_FOUND
-          - ACCOUNT_CLOSED
-          - NOT_AVAILABLE
-          description: Outcome
-        matched_name:
-          type: string
-          maxLength: 140
-          description: Name returned on close match
-        provider:
-          type: string
-          maxLength: 32
-          description: Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry)
-        provider_ref:
-          type: string
-          maxLength: 64
-          description: Provider reference
         custom_field_1:
           type: string
           maxLength: 500
@@ -11390,8 +12833,6 @@ components:
       - name_provided
       - account_id_type
       - account_number
-      - result
-      - provider
     Payment:
       type: object
       description: A payment instruction in the ISO 20022 canonical model (pain.001 / pacs.008 aligned)
@@ -11521,7 +12962,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Ledger account debited
+          description: Ledger account debited (resolved from the debtor account)
+          readOnly: true
         debtor_name:
           type:
           - string
@@ -11572,11 +13014,15 @@ components:
           format: uuid
           description: Saved payee used, if any
         creditor_name:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 140
-          description: Creditor (payee) name
+          description: Creditor (payee) name (required unless payee_id or creditor_account_id is given)
         creditor_account_id_type:
-          type: string
+          type:
+          - string
+          - 'null'
           enum:
           - IBAN
           - BBAN
@@ -11585,9 +13031,11 @@ components:
           - PROXY
           - CARD_PAN_TOKEN
           - INTERNAL
-          description: Scheme of creditor account identifier
+          description: Scheme of creditor account identifier (required with creditor_account_number)
         creditor_account_number:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
           description: Creditor IBAN / account number / wallet id / proxy
         creditor_agent_bic:
@@ -11714,19 +13162,22 @@ components:
         end_to_end_id:
           type: string
           maxLength: 35
-          description: ISO 20022 end-to-end id (shown to the creditor)
+          description: ISO 20022 end-to-end id (server-generated; shown to the creditor)
+          readOnly: true
         uetr:
           type:
           - string
           - 'null'
           format: uuid
-          description: SWIFT gpi unique end-to-end transaction reference
+          description: SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4)
+          readOnly: true
         instruction_id:
           type:
           - string
           - 'null'
           maxLength: 35
-          description: Instruction id between instructing parties
+          description: Instruction id between instructing parties (server-generated)
+          readOnly: true
         transaction_id:
           type:
           - string
@@ -11790,6 +13241,7 @@ components:
           - 'null'
           format: uuid
           description: Rail chosen by routing
+          readOnly: true
         rail_code:
           type:
           - string
@@ -11817,6 +13269,13 @@ components:
           - 'null'
           format: uuid
           description: Sanctions screening result
+          readOnly: true
+        limit_check_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Limits reservation (committed on settlement, released on failure)
           readOnly: true
         fraud_score:
           type:
@@ -11877,6 +13336,7 @@ components:
           - 'null'
           maxLength: 64
           description: Principal that initiated the payment
+          readOnly: true
         submitted_at:
           type:
           - string
@@ -11945,9 +13405,6 @@ components:
       - channel
       - priority
       - idempotency_key
-      - creditor_name
-      - creditor_account_id_type
-      - creditor_account_number
       - amount
       - currency
       - charge_bearer
@@ -12013,10 +13470,6 @@ components:
           type: string
           format: uuid
           description: Internal source wallet
-        debtor_ledger_account_id:
-          type: string
-          format: uuid
-          description: Ledger account debited
         debtor_name:
           type: string
           maxLength: 140
@@ -12055,7 +13508,7 @@ components:
         creditor_name:
           type: string
           maxLength: 140
-          description: Creditor (payee) name
+          description: Creditor (payee) name (required unless payee_id or creditor_account_id is given)
         creditor_account_id_type:
           type: string
           enum:
@@ -12066,7 +13519,7 @@ components:
           - PROXY
           - CARD_PAN_TOKEN
           - INTERNAL
-          description: Scheme of creditor account identifier
+          description: Scheme of creditor account identifier (required with creditor_account_number)
         creditor_account_number:
           type: string
           maxLength: 64
@@ -12131,18 +13584,6 @@ components:
           - SHAR
           - SLEV
           description: Who bears charges (ISO 20022 ChrgBr)
-        end_to_end_id:
-          type: string
-          maxLength: 35
-          description: ISO 20022 end-to-end id (shown to the creditor)
-        uetr:
-          type: string
-          format: uuid
-          description: SWIFT gpi unique end-to-end transaction reference
-        instruction_id:
-          type: string
-          maxLength: 35
-          description: Instruction id between instructing parties
         purpose_code:
           type: string
           maxLength: 4
@@ -12167,10 +13608,6 @@ components:
           type: string
           format: date
           description: Requested execution date (future-dated payments)
-        rail_id:
-          type: string
-          format: uuid
-          description: Rail chosen by routing
         bulk_payment_id:
           type: string
           format: uuid
@@ -12191,10 +13628,6 @@ components:
           type: string
           format: uuid
           description: Open banking consent (PIS)
-        initiated_by:
-          type: string
-          maxLength: 64
-          description: Principal that initiated the payment
         metadata:
           type: object
           additionalProperties: true
@@ -12223,12 +13656,8 @@ components:
       - payment_type
       - direction
       - channel
-      - creditor_name
-      - creditor_account_id_type
-      - creditor_account_number
       - amount
       - currency
-      - end_to_end_id
     PaymentApproval:
       type: object
       description: Approval step for payments needing one or more approvers (business multi-signature)
@@ -12289,16 +13718,38 @@ components:
           type: integer
           format: int32
           description: Level in the approval matrix
+          readOnly: true
         required_approvals:
           type: integer
           format: int32
           description: Approvals needed at this level
+          readOnly: true
         approver_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: User who decided
+          description: User who decided last
+          readOnly: true
+        approvals_received:
+          type: integer
+          format: int32
+          description: Approvals collected at this level
+          readOnly: true
+        approved_by:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Principals who approved at this level (distinct, never the initiator)
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that made the final decision
+          readOnly: true
         status:
           type: string
           enum:
@@ -12364,6 +13815,7 @@ components:
       - row_version
       - approver_level
       - required_approvals
+      - approvals_received
       - status
     PaymentLink:
       type: object
@@ -12430,7 +13882,8 @@ components:
         slug:
           type: string
           maxLength: 64
-          description: Short code used in the URL
+          description: Short code used in the URL (server-generated)
+          readOnly: true
         url:
           type: string
           maxLength: 500
@@ -12484,10 +13937,10 @@ components:
           readOnly: true
         allowed_methods:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Payment methods offered (account, wallet, card, QR)
+          items: {}
+          description: Payment methods offered (ACCOUNT, WALLET, CARD, QR)
         expires_at:
           type:
           - string
@@ -12571,10 +14024,6 @@ components:
           type: string
           format: uuid
           description: Wallet credited
-        slug:
-          type: string
-          maxLength: 64
-          description: Short code used in the URL
         title:
           type: string
           maxLength: 140
@@ -12609,9 +14058,9 @@ components:
           format: int32
           description: Cap on payments when reusable
         allowed_methods:
-          type: object
-          additionalProperties: true
-          description: Payment methods offered (account, wallet, card, QR)
+          type: array
+          items: {}
+          description: Payment methods offered (ACCOUNT, WALLET, CARD, QR)
         expires_at:
           type: string
           format: date-time
@@ -12637,7 +14086,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - slug
       - title
       - currency
     PaymentLinkUpdate:
@@ -12659,10 +14107,6 @@ components:
           type: string
           format: uuid
           description: Wallet credited
-        slug:
-          type: string
-          maxLength: 64
-          description: Short code used in the URL
         title:
           type: string
           maxLength: 140
@@ -12697,9 +14141,9 @@ components:
           format: int32
           description: Cap on payments when reusable
         allowed_methods:
-          type: object
-          additionalProperties: true
-          description: Payment methods offered (account, wallet, card, QR)
+          type: array
+          items: {}
+          description: Payment methods offered (ACCOUNT, WALLET, CARD, QR)
         expires_at:
           type: string
           format: date-time
@@ -13258,8 +14702,20 @@ components:
           description: EMVCO, PIX, UPI, PAYNOW, PROMPTPAY, DUITNOW, BHARAT_QR, INTERNAL
         payload:
           type: string
-          description: Encoded EMVCo TLV payload
+          description: Encoded EMVCo TLV payload (with CRC16-CCITT)
           readOnly: true
+        merchant_name:
+          type: string
+          maxLength: 25
+          description: Merchant / payee name encoded in the QR (EMVCo tag 59)
+        merchant_city:
+          type: string
+          maxLength: 15
+          description: Merchant city (EMVCo tag 60)
+        country_code:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (EMVCo tag 58) (ISO 3166-1 alpha-2)
         image_uri:
           type:
           - string
@@ -13351,6 +14807,9 @@ components:
       - qr_type
       - scheme
       - payload
+      - merchant_name
+      - merchant_city
+      - country_code
       - currency
       - status
     PaymentQrCodeCreate:
@@ -13382,6 +14841,18 @@ components:
           type: string
           maxLength: 32
           description: EMVCO, PIX, UPI, PAYNOW, PROMPTPAY, DUITNOW, BHARAT_QR, INTERNAL
+        merchant_name:
+          type: string
+          maxLength: 25
+          description: Merchant / payee name encoded in the QR (EMVCo tag 59)
+        merchant_city:
+          type: string
+          maxLength: 15
+          description: Merchant city (EMVCo tag 60)
+        country_code:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (EMVCo tag 58) (ISO 3166-1 alpha-2)
         amount:
           type: string
           format: decimal
@@ -13427,6 +14898,9 @@ components:
       required:
       - qr_type
       - scheme
+      - merchant_name
+      - merchant_city
+      - country_code
       - currency
     PaymentRail:
       type: object
@@ -13492,9 +14966,9 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
         currencies:
-          type: object
-          additionalProperties: true
-          description: Supported currencies
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
         message_standard:
           type: string
           maxLength: 32
@@ -13531,7 +15005,25 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Ledger settlement account
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
         status:
           type: string
           enum:
@@ -13539,7 +15031,15 @@ components:
           - DEGRADED
           - SUSPENDED
           - RETIRED
-          description: Status
+          description: Status (changed by suspend / resume)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last status change
+          readOnly: true
         success_rate_7d:
           type:
           - string
@@ -13555,6 +15055,13 @@ components:
           - 'null'
           format: int32
           description: p95 end-to-end latency
+          readOnly: true
+        metrics_updated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the performance metrics were last recorded
           readOnly: true
         custom_field_1:
           type:
@@ -13598,6 +15105,7 @@ components:
       - message_standard
       - settlement_model
       - is_instant
+      - cost_per_payment
       - status
     PaymentRailCreate:
       type: object
@@ -13626,9 +15134,9 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
         currencies:
-          type: object
-          additionalProperties: true
-          description: Supported currencies
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
         message_standard:
           type: string
           maxLength: 32
@@ -13657,15 +15165,21 @@ components:
         settlement_account_id:
           type: string
           format: uuid
-          description: Ledger settlement account
-        status:
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
           type: string
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          description: Status
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type: integer
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type: string
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
         custom_field_1:
           type: string
           maxLength: 500
@@ -13720,9 +15234,9 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
         currencies:
-          type: object
-          additionalProperties: true
-          description: Supported currencies
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
         message_standard:
           type: string
           maxLength: 32
@@ -13751,15 +15265,21 @@ components:
         settlement_account_id:
           type: string
           format: uuid
-          description: Ledger settlement account
-        status:
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
           type: string
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          description: Status
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type: integer
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type: string
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
         custom_field_1:
           type: string
           maxLength: 500
@@ -13963,6 +15483,7 @@ components:
           type: string
           format: uuid
           description: Payment to repair
+          readOnly: true
         status:
           type: string
           enum:
@@ -13971,15 +15492,18 @@ components:
           - RESUBMITTED
           - CANCELLED
           description: Status
+          readOnly: true
         error_code:
           type: string
           maxLength: 32
           description: Error code that sent it to repair
+          readOnly: true
         error_detail:
           type:
           - string
           - 'null'
           description: Error detail
+          readOnly: true
         suggested_fix:
           type:
           - object
@@ -13992,7 +15516,8 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Corrections applied by the operator
+          description: Corrections applied by the operator (set by resubmit)
+          readOnly: true
         assigned_to:
           type:
           - string
@@ -14044,56 +15569,6 @@ components:
       - payment_id
       - status
       - error_code
-    PaymentRepairUpdate:
-      type: object
-      properties:
-        payment_id:
-          type: string
-          format: uuid
-          description: Payment to repair
-        status:
-          type: string
-          enum:
-          - OPEN
-          - IN_REPAIR
-          - RESUBMITTED
-          - CANCELLED
-          description: Status
-        error_code:
-          type: string
-          maxLength: 32
-          description: Error code that sent it to repair
-        error_detail:
-          type: string
-          description: Error detail
-        corrections:
-          type: object
-          additionalProperties: true
-          description: Corrections applied by the operator
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Operator
-        custom_field_1:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     PaymentReturn:
       type: object
       description: Return of a settled payment (pacs.004), inbound or outbound
@@ -14191,6 +15666,13 @@ components:
           - 'null'
           maxLength: 35
           description: Return identification on the rail
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting moving the funds back
           readOnly: true
         completed_at:
           type:
@@ -14290,7 +15772,7 @@ components:
         conditions:
           type: object
           additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
         strategy:
           type: string
           enum:
@@ -14301,8 +15783,8 @@ components:
           - BALANCED
           description: Selection strategy among candidate rails
         candidate_rail_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered candidate rails
         fallback_rail_id:
           type:
@@ -14386,7 +15868,7 @@ components:
         conditions:
           type: object
           additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
         strategy:
           type: string
           enum:
@@ -14397,8 +15879,8 @@ components:
           - BALANCED
           description: Selection strategy among candidate rails
         candidate_rail_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered candidate rails
         fallback_rail_id:
           type: string
@@ -14457,7 +15939,7 @@ components:
         conditions:
           type: object
           additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
         strategy:
           type: string
           enum:
@@ -14468,8 +15950,8 @@ components:
           - BALANCED
           description: Selection strategy among candidate rails
         candidate_rail_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered candidate rails
         fallback_rail_id:
           type: string
@@ -14696,6 +16178,18 @@ components:
           - 'null'
           maxLength: 500
           description: Endpoint
+        credentials_version:
+          type: integer
+          format: int32
+          description: Credentials generation (incremented on rotation)
+          readOnly: true
+        credentials_rotated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last rotation time
+          readOnly: true
         config:
           type:
           - object
@@ -14719,6 +16213,13 @@ components:
           - 'null'
           format: date-time
           description: Last successful heartbeat
+          readOnly: true
+        last_test_result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Result of the last connection test
           readOnly: true
         custom_field_1:
           type:
@@ -14758,6 +16259,7 @@ components:
       - payment_rail_id
       - name
       - connection_type
+      - credentials_version
       - is_primary
       - status
     RailAdapterCreate:
@@ -14966,10 +16468,10 @@ components:
           description: IANA timezone
         days_of_week:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Days it applies to
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
         next_day_rollover:
           type: boolean
           description: After cut-off, roll to next business day
@@ -15050,9 +16552,9 @@ components:
           maxLength: 64
           description: IANA timezone
         days_of_week:
-          type: object
-          additionalProperties: true
-          description: Days it applies to
+          type: array
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
         next_day_rollover:
           type: boolean
           description: After cut-off, roll to next business day
@@ -15118,9 +16620,9 @@ components:
           maxLength: 64
           description: IANA timezone
         days_of_week:
-          type: object
-          additionalProperties: true
-          description: Days it applies to
+          type: array
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
         next_day_rollover:
           type: boolean
           description: After cut-off, roll to next business day
@@ -15310,6 +16812,12 @@ components:
           type: string
           maxLength: 64
           description: Message id (MsgId)
+        end_to_end_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: End-to-end id of the (original) transaction
         payment_id:
           type:
           - string
@@ -15322,6 +16830,12 @@ components:
           - 'null'
           format: uuid
           description: Batch, for batch rails
+        replay_of_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Message this one replays
         status:
           type: string
           enum:
@@ -15456,9 +16970,9 @@ components:
           description: Country (ISO 3166-1 alpha-2)
         reachable_rails:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Rail codes the participant is reachable on
         valid_from:
           type:
@@ -15539,8 +17053,8 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country (ISO 3166-1 alpha-2)
         reachable_rails:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Rail codes the participant is reachable on
         valid_from:
           type: string
@@ -15601,8 +17115,8 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country (ISO 3166-1 alpha-2)
         reachable_rails:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Rail codes the participant is reachable on
         valid_from:
           type: string
@@ -15731,6 +17245,13 @@ components:
           examples:
           - '125.50'
           description: Net settlement position
+          readOnly: true
+        settlement_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Settlement file generated on close (logical ref: a FK would cycle with rail_message.rail_settlement_batch_id)'
           readOnly: true
         journal_entry_id:
           type:
@@ -15894,12 +17415,18 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Percentage fee
+          description: Percentage fee (0.01 = 1%)
+        margin_bps:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Corridor FX margin in basis points (overrides margin rules)
         required_fields:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Beneficiary fields required by the destination
         delivery_eta_minutes:
           type:
@@ -15914,6 +17441,14 @@ components:
           - SUSPENDED
           - CLOSED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last status change
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -16019,22 +17554,19 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Percentage fee
+          description: Percentage fee (0.01 = 1%)
+        margin_bps:
+          type: integer
+          format: int32
+          description: Corridor FX margin in basis points (overrides margin rules)
         required_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Beneficiary fields required by the destination
         delivery_eta_minutes:
           type: integer
           format: int32
           description: Typical delivery time
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -16122,22 +17654,19 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Percentage fee
+          description: Percentage fee (0.01 = 1%)
+        margin_bps:
+          type: integer
+          format: int32
+          description: Corridor FX margin in basis points (overrides margin rules)
         required_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Beneficiary fields required by the destination
         delivery_eta_minutes:
           type: integer
           format: int32
           description: Typical delivery time
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -16205,12 +17734,12 @@ components:
           maxLength: 32
           description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
         countries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Payout countries
         payout_methods:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported payout methods
         api_endpoint:
           type:
@@ -16285,12 +17814,12 @@ components:
           maxLength: 32
           description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
         countries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Payout countries
         payout_methods:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported payout methods
         api_endpoint:
           type: string
@@ -16344,12 +17873,12 @@ components:
           maxLength: 32
           description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
         countries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Payout countries
         payout_methods:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported payout methods
         api_endpoint:
           type: string
@@ -16649,18 +18178,102 @@ components:
       - amount
       - currency
       - expires_at
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
   securitySchemes:
     oauth2:
+      type: oauth2
       flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
             payments:read: Read Payments Hub
             payments:write: Change Payments Hub
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            payments:read: Read Payments Hub
-            payments:write: Change Payments Hub
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2

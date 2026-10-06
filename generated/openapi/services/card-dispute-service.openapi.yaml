@@ -1,1066 +1,27 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    CardDispute:
-      description: A cardholder dispute and its scheme chargeback lifecycle
-      properties:
-        ai_summary:
-          description: Copilot summary and suggested reason code
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        assigned_to:
-          description: Analyst
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        card_authorization_id:
-          description: Disputed authorisation
-          format: uuid
-          type:
-          - string
-          - 'null'
-        card_id:
-          description: Card
-          format: uuid
-          type: string
-        category:
-          description: Dispute category
-          enum:
-          - FRAUD
-          - AUTHORIZATION
-          - PROCESSING_ERROR
-          - CONSUMER_DISPUTE
-          - NOT_RECEIVED
-          - NOT_AS_DESCRIBED
-          - DUPLICATE
-          - CANCELLED_RECURRING
-          - CREDIT_NOT_PROCESSED
-          - ATM_DISPUTE
-          type: string
-        clearing_record_id:
-          description: Disputed presentment
-          format: uuid
-          type:
-          - string
-          - 'null'
-        closed_at:
-          description: Closure time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_description:
-          description: Cardholder statement
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Cardholder
-          format: uuid
-          type: string
-        disputed_amount:
-          description: Amount disputed
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        outcome:
-          description: WON, LOST, SPLIT, WITHDRAWN
-          maxLength: 32
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        provisional_credit_amount:
-          description: Provisional credit given
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        provisional_credit_entry_id:
-          description: Provisional credit posting
-          format: uuid
-          type:
-          - string
-          - 'null'
-        reason_code:
-          description: Scheme reason code, e.g. 10.4, 4837
-          maxLength: 8
-          type:
-          - string
-          - 'null'
-        recovered_amount:
-          description: Amount recovered from the merchant
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        regulatory_deadline:
-          description: Regulation E / Z or local deadline
-          format: date
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        scheme:
-          description: Scheme
-          enum:
-          - VISA
-          - MASTERCARD
-          - AMEX
-          - UNIONPAY
-          - JCB
-          - DISCOVER
-          - RUPAY
-          - ELO
-          - LOCAL
-          type: string
-        scheme_case_id:
-          description: Scheme case number
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        stage:
-          description: Scheme stage
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type: string
-        stage_deadline:
-          description: Deadline for the current stage
-          format: date
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        written_off_amount:
-          description: Amount written off
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - card_id
-      - customer_id
-      - category
-      - scheme
-      - stage
-      - status
-      - disputed_amount
-      - currency
-      - provisional_credit_amount
-      - recovered_amount
-      - written_off_amount
-      type: object
-    CardDisputeCreate:
-      properties:
-        assigned_to:
-          description: Analyst
-          maxLength: 64
-          type: string
-        card_authorization_id:
-          description: Disputed authorisation
-          format: uuid
-          type: string
-        card_id:
-          description: Card
-          format: uuid
-          type: string
-        category:
-          description: Dispute category
-          enum:
-          - FRAUD
-          - AUTHORIZATION
-          - PROCESSING_ERROR
-          - CONSUMER_DISPUTE
-          - NOT_RECEIVED
-          - NOT_AS_DESCRIBED
-          - DUPLICATE
-          - CANCELLED_RECURRING
-          - CREDIT_NOT_PROCESSED
-          - ATM_DISPUTE
-          type: string
-        clearing_record_id:
-          description: Disputed presentment
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_description:
-          description: Cardholder statement
-          type: string
-        customer_id:
-          description: Cardholder
-          format: uuid
-          type: string
-        disputed_amount:
-          description: Amount disputed
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        provisional_credit_entry_id:
-          description: Provisional credit posting
-          format: uuid
-          type: string
-        reason_code:
-          description: Scheme reason code, e.g. 10.4, 4837
-          maxLength: 8
-          type: string
-        regulatory_deadline:
-          description: Regulation E / Z or local deadline
-          format: date
-          type: string
-        scheme:
-          description: Scheme
-          enum:
-          - VISA
-          - MASTERCARD
-          - AMEX
-          - UNIONPAY
-          - JCB
-          - DISCOVER
-          - RUPAY
-          - ELO
-          - LOCAL
-          type: string
-        scheme_case_id:
-          description: Scheme case number
-          maxLength: 64
-          type: string
-        stage:
-          description: Scheme stage
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type: string
-        stage_deadline:
-          description: Deadline for the current stage
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          type: string
-      required:
-      - card_id
-      - customer_id
-      - category
-      - scheme
-      - disputed_amount
-      - currency
-      type: object
-    CardDisputeEvent:
-      description: Immutable timeline of a dispute (stage changes, scheme messages, postings)
-      properties:
-        actor_id:
-          description: Actor
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        amount:
-          description: Amount involved
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        card_dispute_id:
-          description: Dispute
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        event_type:
-          description: CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST,
-            NOTE
-          maxLength: 40
-          type: string
-        from_stage:
-          description: Previous stage
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Posting created
-          format: uuid
-          type:
-          - string
-          - 'null'
-        note:
-          description: Note
-          type:
-          - string
-          - 'null'
-        to_stage:
-          description: New stage
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - card_dispute_id
-      - event_type
-      type: object
-    CardDisputeEventPage:
-      description: One page of CardDisputeEvent results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardDisputeEvent'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardDisputeEvidence:
-      description: Evidence attached to a dispute
-      properties:
-        card_dispute_id:
-          description: Dispute
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Description
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        document_id:
-          description: Stored file
-          format: uuid
-          type: string
-        evidence_type:
-          description: Evidence type
-          enum:
-          - CUSTOMER_STATEMENT
-          - RECEIPT
-          - CORRESPONDENCE
-          - POLICE_REPORT
-          - DELIVERY_PROOF
-          - SCREENSHOT
-          - SCHEME_DOCUMENT
-          - OTHER
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        submitted_at:
-          description: Submission time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        submitted_to_scheme:
-          description: Submitted to the scheme
-          type: boolean
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - card_dispute_id
-      - evidence_type
-      - document_id
-      - submitted_to_scheme
-      type: object
-    CardDisputeEvidenceCreate:
-      properties:
-        card_dispute_id:
-          description: Dispute
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Description
-          maxLength: 500
-          type: string
-        document_id:
-          description: Stored file
-          format: uuid
-          type: string
-        evidence_type:
-          description: Evidence type
-          enum:
-          - CUSTOMER_STATEMENT
-          - RECEIPT
-          - CORRESPONDENCE
-          - POLICE_REPORT
-          - DELIVERY_PROOF
-          - SCREENSHOT
-          - SCHEME_DOCUMENT
-          - OTHER
-          type: string
-        submitted_to_scheme:
-          description: Submitted to the scheme
-          type: boolean
-      required:
-      - card_dispute_id
-      - evidence_type
-      - document_id
-      type: object
-    CardDisputeEvidencePage:
-      description: One page of CardDisputeEvidence results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardDisputeEvidence'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardDisputePage:
-      description: One page of CardDispute results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CardDispute'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CardDisputeUpdate:
-      properties:
-        assigned_to:
-          description: Analyst
-          maxLength: 64
-          type: string
-        card_authorization_id:
-          description: Disputed authorisation
-          format: uuid
-          type: string
-        card_id:
-          description: Card
-          format: uuid
-          type: string
-        category:
-          description: Dispute category
-          enum:
-          - FRAUD
-          - AUTHORIZATION
-          - PROCESSING_ERROR
-          - CONSUMER_DISPUTE
-          - NOT_RECEIVED
-          - NOT_AS_DESCRIBED
-          - DUPLICATE
-          - CANCELLED_RECURRING
-          - CREDIT_NOT_PROCESSED
-          - ATM_DISPUTE
-          type: string
-        clearing_record_id:
-          description: Disputed presentment
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_description:
-          description: Cardholder statement
-          type: string
-        customer_id:
-          description: Cardholder
-          format: uuid
-          type: string
-        disputed_amount:
-          description: Amount disputed
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        provisional_credit_entry_id:
-          description: Provisional credit posting
-          format: uuid
-          type: string
-        reason_code:
-          description: Scheme reason code, e.g. 10.4, 4837
-          maxLength: 8
-          type: string
-        regulatory_deadline:
-          description: Regulation E / Z or local deadline
-          format: date
-          type: string
-        scheme:
-          description: Scheme
-          enum:
-          - VISA
-          - MASTERCARD
-          - AMEX
-          - UNIONPAY
-          - JCB
-          - DISCOVER
-          - RUPAY
-          - ELO
-          - LOCAL
-          type: string
-        scheme_case_id:
-          description: Scheme case number
-          maxLength: 64
-          type: string
-        stage:
-          description: Scheme stage
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type: string
-        stage_deadline:
-          description: Deadline for the current stage
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          type: string
-      type: object
-    CardDisputesAcceptRepresentmentRequest:
-      properties:
-        note:
-          type: string
-      type: object
-    CardDisputesAssignRequest:
-      properties:
-        assigned_to:
-          maxLength: 64
-          type: string
-      required:
-      - assigned_to
-      type: object
-    CardDisputesCloseRequest:
-      properties:
-        note:
-          type: string
-        outcome:
-          maxLength: 32
-          type: string
-      required:
-      - outcome
-      type: object
-    CardDisputesEscalateRequest:
-      properties:
-        note:
-          type: string
-        stage:
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          type: string
-      required:
-      - stage
-      type: object
-    CardDisputesProvisionalCreditRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - amount
-      type: object
-    CardDisputesReverseProvisionalCreditRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    CardDisputesSubmitChargebackRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        reason_code:
-          maxLength: 8
-          type: string
-      required:
-      - reason_code
-      - amount
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            cards:read: Read Card Issuing and Processing
-            cards:write: Change Card Issuing and Processing
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            cards:read: Read Card Issuing and Processing
-            cards:write: Change Card Issuing and Processing
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — card-dispute-service
+  version: 1.0.0
   description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
     vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
     clearing and settlement, interchange and fees, and scheme disputes.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — card-dispute-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Card Disputes
+  description: A cardholder dispute and its scheme chargeback lifecycle
+- name: Card Dispute Evidence
+  description: Evidence attached to a dispute
 paths:
   /v1/card-disputes:
     get:
@@ -1881,15 +842,1054 @@ paths:
       x-table: card_dispute_evidence
       x-crud: true
       x-crud-delete: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A cardholder dispute and its scheme chargeback lifecycle
-  name: Card Disputes
-- description: Evidence attached to a dispute
-  name: Card Dispute Evidence
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CardDisputePage:
+      type: object
+      description: One page of CardDispute results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardDispute'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardDisputesProvisionalCreditRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - amount
+    CardDisputesReverseProvisionalCreditRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CardDisputesSubmitChargebackRequest:
+      type: object
+      properties:
+        reason_code:
+          type: string
+          maxLength: 8
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - reason_code
+      - amount
+    CardDisputesAcceptRepresentmentRequest:
+      type: object
+      properties:
+        note:
+          type: string
+    CardDisputesEscalateRequest:
+      type: object
+      properties:
+        stage:
+          type: string
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+        note:
+          type: string
+      required:
+      - stage
+    CardDisputesCloseRequest:
+      type: object
+      properties:
+        outcome:
+          type: string
+          maxLength: 32
+        note:
+          type: string
+      required:
+      - outcome
+    CardDisputesAssignRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          maxLength: 64
+      required:
+      - assigned_to
+    CardDisputeEventPage:
+      type: object
+      description: One page of CardDisputeEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardDisputeEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardDisputeEvidencePage:
+      type: object
+      description: One page of CardDisputeEvidence results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardDisputeEvidence'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CardDispute:
+      type: object
+      description: A cardholder dispute and its scheme chargeback lifecycle
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        customer_id:
+          type: string
+          format: uuid
+          description: Cardholder
+        card_authorization_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Disputed authorisation
+        clearing_record_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Disputed presentment
+        category:
+          type: string
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          description: Dispute category
+        scheme:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
+        reason_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Scheme reason code, e.g. 10.4, 4837
+        stage:
+          type: string
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          description: Scheme stage
+        status:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          description: Status
+        disputed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount disputed
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        provisional_credit_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Provisional credit given
+          readOnly: true
+        provisional_credit_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Provisional credit posting
+        scheme_case_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Scheme case number
+        customer_description:
+          type:
+          - string
+          - 'null'
+          description: Cardholder statement
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Analyst
+        stage_deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Deadline for the current stage
+        regulatory_deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Regulation E / Z or local deadline
+        outcome:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: WON, LOST, SPLIT, WITHDRAWN
+          readOnly: true
+        recovered_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount recovered from the merchant
+          readOnly: true
+        written_off_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount written off
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Closure time
+          readOnly: true
+        ai_summary:
+          type:
+          - string
+          - 'null'
+          description: Copilot summary and suggested reason code
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - customer_id
+      - category
+      - scheme
+      - stage
+      - status
+      - disputed_amount
+      - currency
+      - provisional_credit_amount
+      - recovered_amount
+      - written_off_amount
+    CardDisputeCreate:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        customer_id:
+          type: string
+          format: uuid
+          description: Cardholder
+        card_authorization_id:
+          type: string
+          format: uuid
+          description: Disputed authorisation
+        clearing_record_id:
+          type: string
+          format: uuid
+          description: Disputed presentment
+        category:
+          type: string
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          description: Dispute category
+        scheme:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
+        reason_code:
+          type: string
+          maxLength: 8
+          description: Scheme reason code, e.g. 10.4, 4837
+        stage:
+          type: string
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          description: Scheme stage
+        status:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          description: Status
+        disputed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount disputed
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        provisional_credit_entry_id:
+          type: string
+          format: uuid
+          description: Provisional credit posting
+        scheme_case_id:
+          type: string
+          maxLength: 64
+          description: Scheme case number
+        customer_description:
+          type: string
+          description: Cardholder statement
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Analyst
+        stage_deadline:
+          type: string
+          format: date
+          description: Deadline for the current stage
+        regulatory_deadline:
+          type: string
+          format: date
+          description: Regulation E / Z or local deadline
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - card_id
+      - customer_id
+      - category
+      - scheme
+      - disputed_amount
+      - currency
+    CardDisputeUpdate:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        customer_id:
+          type: string
+          format: uuid
+          description: Cardholder
+        card_authorization_id:
+          type: string
+          format: uuid
+          description: Disputed authorisation
+        clearing_record_id:
+          type: string
+          format: uuid
+          description: Disputed presentment
+        category:
+          type: string
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          description: Dispute category
+        scheme:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
+        reason_code:
+          type: string
+          maxLength: 8
+          description: Scheme reason code, e.g. 10.4, 4837
+        stage:
+          type: string
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          description: Scheme stage
+        status:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          description: Status
+        disputed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount disputed
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        provisional_credit_entry_id:
+          type: string
+          format: uuid
+          description: Provisional credit posting
+        scheme_case_id:
+          type: string
+          maxLength: 64
+          description: Scheme case number
+        customer_description:
+          type: string
+          description: Cardholder statement
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Analyst
+        stage_deadline:
+          type: string
+          format: date
+          description: Deadline for the current stage
+        regulatory_deadline:
+          type: string
+          format: date
+          description: Regulation E / Z or local deadline
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CardDisputeEvent:
+      type: object
+      description: Immutable timeline of a dispute (stage changes, scheme messages, postings)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        card_dispute_id:
+          type: string
+          format: uuid
+          description: Dispute
+        event_type:
+          type: string
+          maxLength: 40
+          description: CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST,
+            NOTE
+        from_stage:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          description: Previous stage
+        to_stage:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          description: New stage
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount involved
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Posting created
+        note:
+          type:
+          - string
+          - 'null'
+          description: Note
+        actor_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Actor
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - card_dispute_id
+      - event_type
+    CardDisputeEvidence:
+      type: object
+      description: Evidence attached to a dispute
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_dispute_id:
+          type: string
+          format: uuid
+          description: Dispute
+        evidence_type:
+          type: string
+          enum:
+          - CUSTOMER_STATEMENT
+          - RECEIPT
+          - CORRESPONDENCE
+          - POLICE_REPORT
+          - DELIVERY_PROOF
+          - SCREENSHOT
+          - SCHEME_DOCUMENT
+          - OTHER
+          description: Evidence type
+        document_id:
+          type: string
+          format: uuid
+          description: Stored file
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Description
+        submitted_to_scheme:
+          type: boolean
+          description: Submitted to the scheme
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_dispute_id
+      - evidence_type
+      - document_id
+      - submitted_to_scheme
+    CardDisputeEvidenceCreate:
+      type: object
+      properties:
+        card_dispute_id:
+          type: string
+          format: uuid
+          description: Dispute
+        evidence_type:
+          type: string
+          enum:
+          - CUSTOMER_STATEMENT
+          - RECEIPT
+          - CORRESPONDENCE
+          - POLICE_REPORT
+          - DELIVERY_PROOF
+          - SCREENSHOT
+          - SCHEME_DOCUMENT
+          - OTHER
+          description: Evidence type
+        document_id:
+          type: string
+          format: uuid
+          description: Stored file
+        description:
+          type: string
+          maxLength: 500
+          description: Description
+        submitted_to_scheme:
+          type: boolean
+          description: Submitted to the scheme
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - card_dispute_id
+      - evidence_type
+      - document_id
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing

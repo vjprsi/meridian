@@ -1,1695 +1,35 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    SanctionsList:
-      description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
-      properties:
-        code:
-          description: List code, e.g. OFAC_SDN
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        entry_count:
-          description: Active entries
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Used for screening
-          type: boolean
-        list_version:
-          description: Publisher version / publication id
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        loaded_at:
-          description: Time loaded into Meridian
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        name:
-          description: List name
-          maxLength: 160
-          type: string
-        owner_tenant_id:
-          description: Tenant for INTERNAL lists; empty for global lists
-          format: uuid
-          type:
-          - string
-          - 'null'
-        published_at:
-          description: Publication time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source:
-          description: Publisher
-          enum:
-          - OFAC_SDN
-          - OFAC_CONSOLIDATED
-          - UN
-          - EU
-          - UK_HMT
-          - LOCAL_REGULATOR
-          - PEP
-          - ADVERSE_MEDIA
-          - INTERNAL
-          type: string
-        source_url:
-          description: Download location
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - source
-      - code
-      - name
-      - is_active
-      type: object
-    SanctionsListCreate:
-      properties:
-        code:
-          description: List code, e.g. OFAC_SDN
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_active:
-          description: Used for screening
-          type: boolean
-        list_version:
-          description: Publisher version / publication id
-          maxLength: 64
-          type: string
-        name:
-          description: List name
-          maxLength: 160
-          type: string
-        owner_tenant_id:
-          description: Tenant for INTERNAL lists; empty for global lists
-          format: uuid
-          type: string
-        published_at:
-          description: Publication time
-          format: date-time
-          type: string
-        source:
-          description: Publisher
-          enum:
-          - OFAC_SDN
-          - OFAC_CONSOLIDATED
-          - UN
-          - EU
-          - UK_HMT
-          - LOCAL_REGULATOR
-          - PEP
-          - ADVERSE_MEDIA
-          - INTERNAL
-          type: string
-        source_url:
-          description: Download location
-          maxLength: 500
-          type: string
-      required:
-      - source
-      - code
-      - name
-      type: object
-    SanctionsListEntry:
-      description: A listed person, entity, vessel or aircraft with aliases and identifiers
-      properties:
-        aliases:
-          additionalProperties: true
-          description: Aliases, AKAs and transliterations
-          type:
-          - object
-          - 'null'
-        countries:
-          additionalProperties: true
-          description: Associated countries
-          type:
-          - object
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        date_of_birth:
-          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        delisted_on:
-          description: Date removed
-          format: date
-          type:
-          - string
-          - 'null'
-        entry_type:
-          description: Kind of entry
-          enum:
-          - INDIVIDUAL
-          - ENTITY
-          - VESSEL
-          - AIRCRAFT
-          - COUNTRY
-          type: string
-        external_id:
-          description: Publisher's entry id
-          maxLength: 64
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        identifiers:
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
-          type:
-          - object
-          - 'null'
-        listed_on:
-          description: Date listed
-          format: date
-          type:
-          - string
-          - 'null'
-        nationality:
-          description: Nationality (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        pep_level:
-          description: PEP class for PEP lists
-          maxLength: 16
-          type:
-          - string
-          - 'null'
-        place_of_birth:
-          description: Place of birth
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        primary_name:
-          description: Primary name
-          maxLength: 500
-          type: string
-        programs:
-          additionalProperties: true
-          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
-          type:
-          - object
-          - 'null'
-        remarks:
-          description: Publisher remarks
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sanctions_list_id:
-          description: List
-          format: uuid
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - sanctions_list_id
-      - external_id
-      - entry_type
-      - primary_name
-      type: object
-    SanctionsListEntryCreate:
-      properties:
-        aliases:
-          additionalProperties: true
-          description: Aliases, AKAs and transliterations
-          type: object
-        countries:
-          additionalProperties: true
-          description: Associated countries
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        date_of_birth:
-          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
-          maxLength: 32
-          type: string
-        delisted_on:
-          description: Date removed
-          format: date
-          type: string
-        entry_type:
-          description: Kind of entry
-          enum:
-          - INDIVIDUAL
-          - ENTITY
-          - VESSEL
-          - AIRCRAFT
-          - COUNTRY
-          type: string
-        external_id:
-          description: Publisher's entry id
-          maxLength: 64
-          type: string
-        identifiers:
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
-          type: object
-        listed_on:
-          description: Date listed
-          format: date
-          type: string
-        nationality:
-          description: Nationality (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        pep_level:
-          description: PEP class for PEP lists
-          maxLength: 16
-          type: string
-        place_of_birth:
-          description: Place of birth
-          maxLength: 255
-          type: string
-        primary_name:
-          description: Primary name
-          maxLength: 500
-          type: string
-        programs:
-          additionalProperties: true
-          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
-          type: object
-        remarks:
-          description: Publisher remarks
-          type: string
-        sanctions_list_id:
-          description: List
-          format: uuid
-          type: string
-      required:
-      - sanctions_list_id
-      - external_id
-      - entry_type
-      - primary_name
-      type: object
-    SanctionsListEntryPage:
-      description: One page of SanctionsListEntry results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/SanctionsListEntry'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    SanctionsListEntryUpdate:
-      properties:
-        aliases:
-          additionalProperties: true
-          description: Aliases, AKAs and transliterations
-          type: object
-        countries:
-          additionalProperties: true
-          description: Associated countries
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        date_of_birth:
-          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
-          maxLength: 32
-          type: string
-        delisted_on:
-          description: Date removed
-          format: date
-          type: string
-        entry_type:
-          description: Kind of entry
-          enum:
-          - INDIVIDUAL
-          - ENTITY
-          - VESSEL
-          - AIRCRAFT
-          - COUNTRY
-          type: string
-        external_id:
-          description: Publisher's entry id
-          maxLength: 64
-          type: string
-        identifiers:
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
-          type: object
-        listed_on:
-          description: Date listed
-          format: date
-          type: string
-        nationality:
-          description: Nationality (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        pep_level:
-          description: PEP class for PEP lists
-          maxLength: 16
-          type: string
-        place_of_birth:
-          description: Place of birth
-          maxLength: 255
-          type: string
-        primary_name:
-          description: Primary name
-          maxLength: 500
-          type: string
-        programs:
-          additionalProperties: true
-          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
-          type: object
-        remarks:
-          description: Publisher remarks
-          type: string
-        sanctions_list_id:
-          description: List
-          format: uuid
-          type: string
-      type: object
-    SanctionsListPage:
-      description: One page of SanctionsList results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/SanctionsList'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    SanctionsListUpdate:
-      properties:
-        code:
-          description: List code, e.g. OFAC_SDN
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_active:
-          description: Used for screening
-          type: boolean
-        list_version:
-          description: Publisher version / publication id
-          maxLength: 64
-          type: string
-        name:
-          description: List name
-          maxLength: 160
-          type: string
-        owner_tenant_id:
-          description: Tenant for INTERNAL lists; empty for global lists
-          format: uuid
-          type: string
-        published_at:
-          description: Publication time
-          format: date-time
-          type: string
-        source:
-          description: Publisher
-          enum:
-          - OFAC_SDN
-          - OFAC_CONSOLIDATED
-          - UN
-          - EU
-          - UK_HMT
-          - LOCAL_REGULATOR
-          - PEP
-          - ADVERSE_MEDIA
-          - INTERNAL
-          type: string
-        source_url:
-          description: Download location
-          maxLength: 500
-          type: string
-      type: object
-    SanctionsListsImportRequest:
-      properties:
-        document_id:
-          format: uuid
-          type: string
-      required:
-      - document_id
-      type: object
-    ScreeningMatch:
-      description: A candidate list entry matched for a screening result, with its disposition
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        disposition:
-          description: Reviewer decision
-          enum:
-          - PENDING
-          - TRUE_MATCH
-          - FALSE_POSITIVE
-          type: string
-        disposition_reason:
-          description: Rationale
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        match_algorithm:
-          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
-          maxLength: 40
-          type: string
-        match_score:
-          description: Match score 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        matched_fields:
-          additionalProperties: true
-          description: Fields compared and their individual scores
-          type:
-          - object
-          - 'null'
-        matched_name:
-          description: Name that matched
-          maxLength: 500
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sanctions_list_entry_id:
-          description: Matched entry
-          format: uuid
-          type: string
-        screening_result_id:
-          description: Result
-          format: uuid
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - screening_result_id
-      - sanctions_list_entry_id
-      - matched_name
-      - match_score
-      - match_algorithm
-      - disposition
-      type: object
-    ScreeningMatchPage:
-      description: One page of ScreeningMatch results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ScreeningMatch'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ScreeningMatchUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        disposition:
-          description: Reviewer decision
-          enum:
-          - PENDING
-          - TRUE_MATCH
-          - FALSE_POSITIVE
-          type: string
-        disposition_reason:
-          description: Rationale
-          type: string
-        match_algorithm:
-          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
-          maxLength: 40
-          type: string
-        match_score:
-          description: Match score 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        matched_fields:
-          additionalProperties: true
-          description: Fields compared and their individual scores
-          type: object
-        matched_name:
-          description: Name that matched
-          maxLength: 500
-          type: string
-        sanctions_list_entry_id:
-          description: Matched entry
-          format: uuid
-          type: string
-        screening_result_id:
-          description: Result
-          format: uuid
-          type: string
-      type: object
-    ScreeningRequest:
-      description: A request to screen a customer, related party, payee or payment
-      properties:
-        correlation_id:
-          description: Trace / saga correlation id
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        country:
-          description: Country of residence / registration (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        date_of_birth:
-          description: Date of birth
-          format: date
-          type:
-          - string
-          - 'null'
-        full_name:
-          description: Name screened
-          maxLength: 500
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        identifiers:
-          additionalProperties: true
-          description: Identity document numbers
-          type:
-          - object
-          - 'null'
-        list_codes:
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
-          type:
-          - object
-          - 'null'
-        nationality:
-          description: Nationality (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        payload:
-          additionalProperties: true
-          description: Payment fields screened (parties, agents, free text)
-          type:
-          - object
-          - 'null'
-        requested_by_service:
-          description: Calling service
-          maxLength: 64
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        subject_id:
-          description: Business id of the subject
-          format: uuid
-          type: string
-        subject_type:
-          description: What is screened
-          enum:
-          - CUSTOMER
-          - RELATED_PARTY
-          - PAYMENT
-          - PAYEE
-          - MERCHANT
-          - AGENT
-          - EMPLOYEE
-          type: string
-        threshold:
-          description: Minimum match score that raises a hit
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        trigger:
-          description: Why screening ran
-          enum:
-          - ONBOARDING
-          - CUSTOMER_CHANGE
-          - PERIODIC_RESCREEN
-          - LIST_UPDATE
-          - PAYMENT
-          - MANUAL
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - subject_type
-      - subject_id
-      - trigger
-      - full_name
-      - threshold
-      - requested_by_service
-      type: object
-    ScreeningRequestCreate:
-      properties:
-        correlation_id:
-          description: Trace / saga correlation id
-          maxLength: 128
-          type: string
-        country:
-          description: Country of residence / registration (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        date_of_birth:
-          description: Date of birth
-          format: date
-          type: string
-        full_name:
-          description: Name screened
-          maxLength: 500
-          type: string
-        identifiers:
-          additionalProperties: true
-          description: Identity document numbers
-          type: object
-        list_codes:
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
-          type: object
-        nationality:
-          description: Nationality (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        payload:
-          additionalProperties: true
-          description: Payment fields screened (parties, agents, free text)
-          type: object
-        requested_by_service:
-          description: Calling service
-          maxLength: 64
-          type: string
-        subject_id:
-          description: Business id of the subject
-          format: uuid
-          type: string
-        subject_type:
-          description: What is screened
-          enum:
-          - CUSTOMER
-          - RELATED_PARTY
-          - PAYMENT
-          - PAYEE
-          - MERCHANT
-          - AGENT
-          - EMPLOYEE
-          type: string
-        threshold:
-          description: Minimum match score that raises a hit
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        trigger:
-          description: Why screening ran
-          enum:
-          - ONBOARDING
-          - CUSTOMER_CHANGE
-          - PERIODIC_RESCREEN
-          - LIST_UPDATE
-          - PAYMENT
-          - MANUAL
-          type: string
-      required:
-      - subject_type
-      - subject_id
-      - trigger
-      - full_name
-      - requested_by_service
-      type: object
-    ScreeningRequestPage:
-      description: One page of ScreeningRequest results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ScreeningRequest'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ScreeningRequestsBatchRequest:
-      properties:
-        subjects:
-          additionalProperties: true
-          type: object
-        trigger:
-          enum:
-          - ONBOARDING
-          - CUSTOMER_CHANGE
-          - PERIODIC_RESCREEN
-          - LIST_UPDATE
-          - PAYMENT
-          - MANUAL
-          type: string
-      required:
-      - subjects
-      - trigger
-      type: object
-    ScreeningRequestsScreenPaymentRequest:
-      properties:
-        payload:
-          additionalProperties: true
-          type: object
-        payment_id:
-          format: uuid
-          type: string
-      required:
-      - payment_id
-      - payload
-      type: object
-    ScreeningResult:
-      description: Outcome of a screening request, reviewed by compliance when there are potential matches
-      properties:
-        aml_case_id:
-          description: Case opened for a confirmed match
-          format: uuid
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decision_reason:
-          description: Reviewer rationale
-          type:
-          - string
-          - 'null'
-        has_adverse_media:
-          description: Adverse media found
-          readOnly: true
-          type: boolean
-        highest_score:
-          description: Best match score 0..1
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_pep:
-          description: PEP hit confirmed
-          readOnly: true
-          type: boolean
-        latency_ms:
-          description: Screening time
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        match_count:
-          description: Number of hits
-          format: int32
-          readOnly: true
-          type: integer
-        rescreen_due_at:
-          description: Next periodic rescreen
-          format: date-time
-          type:
-          - string
-          - 'null'
-        reviewed_at:
-          description: Review time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        reviewed_by:
-          description: Compliance reviewer
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        screening_request_id:
-          description: Request
-          format: uuid
-          type: string
-        status:
-          description: Outcome
-          enum:
-          - PENDING
-          - CLEAR
-          - POTENTIAL_MATCH
-          - CONFIRMED_MATCH
-          - FALSE_POSITIVE
-          - ERROR
-          type: string
-        subject_id:
-          description: Business id of the subject
-          format: uuid
-          type: string
-        subject_type:
-          description: What was screened
-          enum:
-          - CUSTOMER
-          - RELATED_PARTY
-          - PAYMENT
-          - PAYEE
-          - MERCHANT
-          - AGENT
-          - EMPLOYEE
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - screening_request_id
-      - subject_type
-      - subject_id
-      - status
-      - highest_score
-      - match_count
-      - is_pep
-      - has_adverse_media
-      type: object
-    ScreeningResultPage:
-      description: One page of ScreeningResult results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ScreeningResult'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ScreeningResultsReviewRequest:
-      properties:
-        decision_reason:
-          type: string
-        status:
-          enum:
-          - PENDING
-          - CLEAR
-          - POTENTIAL_MATCH
-          - CONFIRMED_MATCH
-          - FALSE_POSITIVE
-          - ERROR
-          type: string
-      required:
-      - status
-      - decision_reason
-      type: object
-    ScreeningWhitelist:
-      description: Good-guy list suppressing a known false positive for one subject and list entry
-      properties:
-        approved_by:
-          description: Approver
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        expires_at:
-          description: Review / expiry date
-          format: date-time
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        reason:
-          description: Why this is a false positive
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sanctions_list_entry_id:
-          description: Entry that is suppressed
-          format: uuid
-          type: string
-        subject_id:
-          description: Subject
-          format: uuid
-          type: string
-        subject_type:
-          description: Subject type
-          enum:
-          - CUSTOMER
-          - RELATED_PARTY
-          - PAYMENT
-          - PAYEE
-          - MERCHANT
-          - AGENT
-          - EMPLOYEE
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - subject_type
-      - subject_id
-      - sanctions_list_entry_id
-      - reason
-      type: object
-    ScreeningWhitelistCreate:
-      properties:
-        approved_by:
-          description: Approver
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        expires_at:
-          description: Review / expiry date
-          format: date-time
-          type: string
-        reason:
-          description: Why this is a false positive
-          type: string
-        sanctions_list_entry_id:
-          description: Entry that is suppressed
-          format: uuid
-          type: string
-        subject_id:
-          description: Subject
-          format: uuid
-          type: string
-        subject_type:
-          description: Subject type
-          enum:
-          - CUSTOMER
-          - RELATED_PARTY
-          - PAYMENT
-          - PAYEE
-          - MERCHANT
-          - AGENT
-          - EMPLOYEE
-          type: string
-      required:
-      - subject_type
-      - subject_id
-      - sanctions_list_entry_id
-      - reason
-      type: object
-    ScreeningWhitelistPage:
-      description: One page of ScreeningWhitelist results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ScreeningWhitelist'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            risk:read: Read Risk, Fraud, AML and Limits
-            risk:write: Change Risk, Fraud, AML and Limits
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — sanctions-service
+  version: 1.0.0
   description: 'Real-time fraud scoring, transaction monitoring, sanctions and PEP screening, AML case management with SAR/STR
     filing, and the limits engine. Every payment, card authorisation and wallet movement is scored, screened and limit-checked
     before money moves.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — sanctions-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Sanctions Lists
+  description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
+- name: Sanctions List Entries
+  description: A listed person, entity, vessel or aircraft with aliases and identifiers
+- name: Screening Requests
+  description: A request to screen a customer, related party, payee or payment
+- name: Screening Results
+  description: Outcome of a screening request, reviewed by compliance when there are potential matches
+- name: Screening Matches
+  description: A candidate list entry matched for a screening result, with its disposition
+- name: Screening Whitelist
+  description: Good-guy list suppressing a known false positive for one subject and list entry
 paths:
   /v1/risk/sanctions/lists:
     get:
@@ -3045,23 +1385,1683 @@ paths:
       x-table: screening_whitelist
       x-crud: true
       x-crud-delete: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
-  name: Sanctions Lists
-- description: A listed person, entity, vessel or aircraft with aliases and identifiers
-  name: Sanctions List Entries
-- description: A request to screen a customer, related party, payee or payment
-  name: Screening Requests
-- description: Outcome of a screening request, reviewed by compliance when there are potential matches
-  name: Screening Results
-- description: A candidate list entry matched for a screening result, with its disposition
-  name: Screening Matches
-- description: Good-guy list suppressing a known false positive for one subject and list entry
-  name: Screening Whitelist
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    SanctionsListPage:
+      type: object
+      description: One page of SanctionsList results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SanctionsList'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SanctionsListEntryPage:
+      type: object
+      description: One page of SanctionsListEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SanctionsListEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SanctionsListsImportRequest:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+      required:
+      - document_id
+    ScreeningRequestPage:
+      type: object
+      description: One page of ScreeningRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ScreeningRequestsScreenPaymentRequest:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        payload:
+          type: object
+          additionalProperties: true
+      required:
+      - payment_id
+      - payload
+    ScreeningRequestsBatchRequest:
+      type: object
+      properties:
+        subjects:
+          type: object
+          additionalProperties: true
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+      required:
+      - subjects
+      - trigger
+    ScreeningResultPage:
+      type: object
+      description: One page of ScreeningResult results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningResult'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ScreeningMatchPage:
+      type: object
+      description: One page of ScreeningMatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningMatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ScreeningResultsReviewRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+        decision_reason:
+          type: string
+      required:
+      - status
+      - decision_reason
+    ScreeningWhitelistPage:
+      type: object
+      description: One page of ScreeningWhitelist results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningWhitelist'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SanctionsList:
+      type: object
+      description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        owner_tenant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Tenant for INTERNAL lists; empty for global lists
+        source:
+          type: string
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          description: Publisher
+        code:
+          type: string
+          maxLength: 64
+          description: List code, e.g. OFAC_SDN
+        name:
+          type: string
+          maxLength: 160
+          description: List name
+        list_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Publisher version / publication id
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+        loaded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time loaded into Meridian
+          readOnly: true
+        entry_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Active entries
+          readOnly: true
+        source_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Download location
+        is_active:
+          type: boolean
+          description: Used for screening
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - source
+      - code
+      - name
+      - is_active
+    SanctionsListCreate:
+      type: object
+      properties:
+        owner_tenant_id:
+          type: string
+          format: uuid
+          description: Tenant for INTERNAL lists; empty for global lists
+        source:
+          type: string
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          description: Publisher
+        code:
+          type: string
+          maxLength: 64
+          description: List code, e.g. OFAC_SDN
+        name:
+          type: string
+          maxLength: 160
+          description: List name
+        list_version:
+          type: string
+          maxLength: 64
+          description: Publisher version / publication id
+        published_at:
+          type: string
+          format: date-time
+          description: Publication time
+        source_url:
+          type: string
+          maxLength: 500
+          description: Download location
+        is_active:
+          type: boolean
+          description: Used for screening
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - source
+      - code
+      - name
+    SanctionsListUpdate:
+      type: object
+      properties:
+        owner_tenant_id:
+          type: string
+          format: uuid
+          description: Tenant for INTERNAL lists; empty for global lists
+        source:
+          type: string
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          description: Publisher
+        code:
+          type: string
+          maxLength: 64
+          description: List code, e.g. OFAC_SDN
+        name:
+          type: string
+          maxLength: 160
+          description: List name
+        list_version:
+          type: string
+          maxLength: 64
+          description: Publisher version / publication id
+        published_at:
+          type: string
+          format: date-time
+          description: Publication time
+        source_url:
+          type: string
+          maxLength: 500
+          description: Download location
+        is_active:
+          type: boolean
+          description: Used for screening
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    SanctionsListEntry:
+      type: object
+      description: A listed person, entity, vessel or aircraft with aliases and identifiers
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        sanctions_list_id:
+          type: string
+          format: uuid
+          description: List
+        external_id:
+          type: string
+          maxLength: 64
+          description: Publisher's entry id
+        entry_type:
+          type: string
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          description: Kind of entry
+        primary_name:
+          type: string
+          maxLength: 500
+          description: Primary name
+        aliases:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+        date_of_birth:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+        place_of_birth:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Place of birth
+        nationality:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Nationality (ISO 3166-1 alpha-2)
+        countries:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Associated countries
+        identifiers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+        programs:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+        pep_level:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: PEP class for PEP lists
+        remarks:
+          type:
+          - string
+          - 'null'
+          description: Publisher remarks
+        listed_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date listed
+        delisted_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date removed
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - sanctions_list_id
+      - external_id
+      - entry_type
+      - primary_name
+    SanctionsListEntryCreate:
+      type: object
+      properties:
+        sanctions_list_id:
+          type: string
+          format: uuid
+          description: List
+        external_id:
+          type: string
+          maxLength: 64
+          description: Publisher's entry id
+        entry_type:
+          type: string
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          description: Kind of entry
+        primary_name:
+          type: string
+          maxLength: 500
+          description: Primary name
+        aliases:
+          type: object
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+        date_of_birth:
+          type: string
+          maxLength: 32
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+        place_of_birth:
+          type: string
+          maxLength: 255
+          description: Place of birth
+        nationality:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Nationality (ISO 3166-1 alpha-2)
+        countries:
+          type: object
+          additionalProperties: true
+          description: Associated countries
+        identifiers:
+          type: object
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+        programs:
+          type: object
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+        pep_level:
+          type: string
+          maxLength: 16
+          description: PEP class for PEP lists
+        remarks:
+          type: string
+          description: Publisher remarks
+        listed_on:
+          type: string
+          format: date
+          description: Date listed
+        delisted_on:
+          type: string
+          format: date
+          description: Date removed
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - sanctions_list_id
+      - external_id
+      - entry_type
+      - primary_name
+    SanctionsListEntryUpdate:
+      type: object
+      properties:
+        sanctions_list_id:
+          type: string
+          format: uuid
+          description: List
+        external_id:
+          type: string
+          maxLength: 64
+          description: Publisher's entry id
+        entry_type:
+          type: string
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          description: Kind of entry
+        primary_name:
+          type: string
+          maxLength: 500
+          description: Primary name
+        aliases:
+          type: object
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+        date_of_birth:
+          type: string
+          maxLength: 32
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+        place_of_birth:
+          type: string
+          maxLength: 255
+          description: Place of birth
+        nationality:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Nationality (ISO 3166-1 alpha-2)
+        countries:
+          type: object
+          additionalProperties: true
+          description: Associated countries
+        identifiers:
+          type: object
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+        programs:
+          type: object
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+        pep_level:
+          type: string
+          maxLength: 16
+          description: PEP class for PEP lists
+        remarks:
+          type: string
+          description: Publisher remarks
+        listed_on:
+          type: string
+          format: date
+          description: Date listed
+        delisted_on:
+          type: string
+          format: date
+          description: Date removed
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ScreeningMatch:
+      type: object
+      description: A candidate list entry matched for a screening result, with its disposition
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        screening_result_id:
+          type: string
+          format: uuid
+          description: Result
+        sanctions_list_entry_id:
+          type: string
+          format: uuid
+          description: Matched entry
+        matched_name:
+          type: string
+          maxLength: 500
+          description: Name that matched
+        match_score:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Match score 0..1
+        match_algorithm:
+          type: string
+          maxLength: 40
+          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
+        matched_fields:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Fields compared and their individual scores
+        disposition:
+          type: string
+          enum:
+          - PENDING
+          - TRUE_MATCH
+          - FALSE_POSITIVE
+          description: Reviewer decision
+        disposition_reason:
+          type:
+          - string
+          - 'null'
+          description: Rationale
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - screening_result_id
+      - sanctions_list_entry_id
+      - matched_name
+      - match_score
+      - match_algorithm
+      - disposition
+    ScreeningMatchUpdate:
+      type: object
+      properties:
+        screening_result_id:
+          type: string
+          format: uuid
+          description: Result
+        sanctions_list_entry_id:
+          type: string
+          format: uuid
+          description: Matched entry
+        matched_name:
+          type: string
+          maxLength: 500
+          description: Name that matched
+        match_score:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Match score 0..1
+        match_algorithm:
+          type: string
+          maxLength: 40
+          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
+        matched_fields:
+          type: object
+          additionalProperties: true
+          description: Fields compared and their individual scores
+        disposition:
+          type: string
+          enum:
+          - PENDING
+          - TRUE_MATCH
+          - FALSE_POSITIVE
+          description: Reviewer decision
+        disposition_reason:
+          type: string
+          description: Rationale
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ScreeningRequest:
+      type: object
+      description: A request to screen a customer, related party, payee or payment
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: What is screened
+        subject_id:
+          type: string
+          format: uuid
+          description: Business id of the subject
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          description: Why screening ran
+        full_name:
+          type: string
+          maxLength: 500
+          description: Name screened
+        date_of_birth:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date of birth
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Country of residence / registration (ISO 3166-1 alpha-2)
+        nationality:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Nationality (ISO 3166-1 alpha-2)
+        identifiers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Identity document numbers
+        payload:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Payment fields screened (parties, agents, free text)
+        list_codes:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Lists to screen against (empty = tenant default)
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum match score that raises a hit
+        requested_by_service:
+          type: string
+          maxLength: 64
+          description: Calling service
+        correlation_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Trace / saga correlation id
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_type
+      - subject_id
+      - trigger
+      - full_name
+      - threshold
+      - requested_by_service
+    ScreeningRequestCreate:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: What is screened
+        subject_id:
+          type: string
+          format: uuid
+          description: Business id of the subject
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          description: Why screening ran
+        full_name:
+          type: string
+          maxLength: 500
+          description: Name screened
+        date_of_birth:
+          type: string
+          format: date
+          description: Date of birth
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country of residence / registration (ISO 3166-1 alpha-2)
+        nationality:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Nationality (ISO 3166-1 alpha-2)
+        identifiers:
+          type: object
+          additionalProperties: true
+          description: Identity document numbers
+        payload:
+          type: object
+          additionalProperties: true
+          description: Payment fields screened (parties, agents, free text)
+        list_codes:
+          type: object
+          additionalProperties: true
+          description: Lists to screen against (empty = tenant default)
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum match score that raises a hit
+        requested_by_service:
+          type: string
+          maxLength: 64
+          description: Calling service
+        correlation_id:
+          type: string
+          maxLength: 128
+          description: Trace / saga correlation id
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - subject_type
+      - subject_id
+      - trigger
+      - full_name
+      - requested_by_service
+    ScreeningResult:
+      type: object
+      description: Outcome of a screening request, reviewed by compliance when there are potential matches
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        screening_request_id:
+          type: string
+          format: uuid
+          description: Request
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: What was screened
+        subject_id:
+          type: string
+          format: uuid
+          description: Business id of the subject
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          description: Outcome
+        highest_score:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Best match score 0..1
+          readOnly: true
+        match_count:
+          type: integer
+          format: int32
+          description: Number of hits
+          readOnly: true
+        is_pep:
+          type: boolean
+          description: PEP hit confirmed
+          readOnly: true
+        has_adverse_media:
+          type: boolean
+          description: Adverse media found
+          readOnly: true
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Compliance reviewer
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Review time
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          description: Reviewer rationale
+        aml_case_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Case opened for a confirmed match
+        rescreen_due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next periodic rescreen
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Screening time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - screening_request_id
+      - subject_type
+      - subject_id
+      - status
+      - highest_score
+      - match_count
+      - is_pep
+      - has_adverse_media
+    ScreeningWhitelist:
+      type: object
+      description: Good-guy list suppressing a known false positive for one subject and list entry
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: Subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        sanctions_list_entry_id:
+          type: string
+          format: uuid
+          description: Entry that is suppressed
+        reason:
+          type: string
+          description: Why this is a false positive
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Approver
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Review / expiry date
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_type
+      - subject_id
+      - sanctions_list_entry_id
+      - reason
+    ScreeningWhitelistCreate:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: Subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        sanctions_list_entry_id:
+          type: string
+          format: uuid
+          description: Entry that is suppressed
+        reason:
+          type: string
+          description: Why this is a false positive
+        approved_by:
+          type: string
+          maxLength: 64
+          description: Approver
+        expires_at:
+          type: string
+          format: date-time
+          description: Review / expiry date
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - subject_type
+      - subject_id
+      - sanctions_list_entry_id
+      - reason
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits

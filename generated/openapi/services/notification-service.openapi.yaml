@@ -1,2072 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    ApprovalRequest:
-      description: A pending sensitive operation awaiting checker approval (four-eyes)
-      properties:
-        action:
-          description: Action
-          maxLength: 40
-          type: string
-        amount:
-          description: Amount, for threshold routing
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        approval_policy_id:
-          description: Policy applied
-          format: uuid
-          type:
-          - string
-          - 'null'
-        approval_route:
-          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
-          items: {}
-          readOnly: true
-          type:
-          - array
-          - 'null'
-        approvals_received:
-          description: Approvals received
-          format: int32
-          readOnly: true
-          type: integer
-        cancel_reason:
-          description: Reason given by the maker when cancelling
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency of the amount (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        current_level:
-          description: Current approval level
-          format: int32
-          readOnly: true
-          type: integer
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        decided_at:
-          description: Final decision time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        diff:
-          additionalProperties: true
-          description: Before/after diff for updates
-          type:
-          - object
-          - 'null'
-        executed_at:
-          description: Execution time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        execution_result:
-          additionalProperties: true
-          description: Result or error from executing the operation
-          readOnly: true
-          type:
-          - object
-          - 'null'
-        expires_at:
-          description: Expiry
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        maker:
-          description: Requesting user
-          maxLength: 64
-          readOnly: true
-          type: string
-        payload:
-          additionalProperties: true
-          description: Operation to execute once approved
-          type: object
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - NORMAL
-          - HIGH
-          - URGENT
-          type: string
-        required_approvals:
-          description: Approvals required
-          format: int32
-          readOnly: true
-          type: integer
-        resource_id:
-          description: Resource id (empty for creates)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        resource_type:
-          description: Resource type
-          maxLength: 64
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING
-          - APPROVED
-          - REJECTED
-          - CHANGES_REQUESTED
-          - CANCELLED
-          - EXPIRED
-          - EXECUTED
-          - EXECUTION_FAILED
-          readOnly: true
-          type: string
-        summary:
-          description: Human-readable description of the change
-          type:
-          - string
-          - 'null'
-        title:
-          description: Short title shown in the approvals queue
-          maxLength: 255
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - resource_type
-      - action
-      - title
-      - payload
-      - priority
-      - status
-      - maker
-      - required_approvals
-      - approvals_received
-      - current_level
-      type: object
-    Notification:
-      description: A message sent (or to be sent) to a recipient on one channel
-      properties:
-        body:
-          description: Rendered body
-          type: string
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        cost:
-          description: Provider cost
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        cost_currency:
-          description: Cost currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        data:
-          additionalProperties: true
-          description: Deep-link and payload data
-          type:
-          - object
-          - 'null'
-        delivered_at:
-          description: Delivered
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        destination:
-          description: Phone, email, device token or inbox id
-          maxLength: 512
-          type: string
-        expires_at:
-          description: Do not deliver after this time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        failure_reason:
-          description: Failure reason
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        locale:
-          description: Locale
-          maxLength: 10
-          type: string
-        notification_template_id:
-          description: Template version
-          format: uuid
-          type:
-          - string
-          - 'null'
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - NORMAL
-          - HIGH
-          - URGENT
-          type: string
-        provider_message_id:
-          description: Provider message id
-          maxLength: 128
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        read_at:
-          description: Read
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        recipient_id:
-          description: Recipient id (customer, user, agent ...)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        recipient_type:
-          description: Recipient type
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        scheduled_at:
-          description: Send time (respects quiet hours)
-          format: date-time
-          type:
-          - string
-          - 'null'
-        sent_at:
-          description: Sent
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        source_event_id:
-          description: Triggering event id (dedupe)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        source_event_type:
-          description: Triggering event type
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - SCHEDULED
-          - SENT
-          - DELIVERED
-          - READ
-          - FAILED
-          - SUPPRESSED
-          - EXPIRED
-          - CANCELLED
-          readOnly: true
-          type: string
-        subject:
-          description: Rendered subject
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - recipient_type
-      - channel
-      - destination
-      - category
-      - locale
-      - body
-      - priority
-      - status
-      type: object
-    NotificationCreate:
-      properties:
-        body:
-          description: Rendered body
-          type: string
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data:
-          additionalProperties: true
-          description: Deep-link and payload data
-          type: object
-        destination:
-          description: Phone, email, device token or inbox id
-          maxLength: 512
-          type: string
-        expires_at:
-          description: Do not deliver after this time
-          format: date-time
-          type: string
-        locale:
-          description: Locale
-          maxLength: 10
-          type: string
-        notification_template_id:
-          description: Template version
-          format: uuid
-          type: string
-        priority:
-          description: Priority
-          enum:
-          - LOW
-          - NORMAL
-          - HIGH
-          - URGENT
-          type: string
-        recipient_id:
-          description: Recipient id (customer, user, agent ...)
-          format: uuid
-          type: string
-        recipient_type:
-          description: Recipient type
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        scheduled_at:
-          description: Send time (respects quiet hours)
-          format: date-time
-          type: string
-        source_event_id:
-          description: Triggering event id (dedupe)
-          maxLength: 64
-          type: string
-        source_event_type:
-          description: Triggering event type
-          maxLength: 128
-          type: string
-        subject:
-          description: Rendered subject
-          maxLength: 255
-          type: string
-      required:
-      - recipient_type
-      - channel
-      - destination
-      - category
-      - body
-      type: object
-    NotificationDeliveryAttempt:
-      description: One attempt to deliver a notification through a provider. Append-only.
-      properties:
-        attempt_no:
-          description: Attempt number
-          format: int32
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        cycle:
-          description: Send cycle (a resend starts a new one)
-          format: int32
-          type: integer
-        error_code:
-          description: Provider error code
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        latency_ms:
-          description: Provider latency
-          format: int32
-          type:
-          - integer
-          - 'null'
-        notification_id:
-          description: Notification
-          format: uuid
-          type: string
-        notification_provider_id:
-          description: Provider used
-          format: uuid
-          type: string
-        provider_response:
-          additionalProperties: true
-          description: Raw provider response
-          type:
-          - object
-          - 'null'
-        status:
-          description: ACCEPTED, REJECTED, TIMEOUT, ERROR
-          maxLength: 32
-          type: string
-      required:
-      - id
-      - created_at
-      - notification_id
-      - notification_provider_id
-      - attempt_no
-      - status
-      - cycle
-      type: object
-    NotificationDeliveryAttemptPage:
-      description: One page of NotificationDeliveryAttempt results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NotificationDeliveryAttempt'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationPage:
-      description: One page of Notification results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Notification'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationPreference:
-      description: A recipient's channel preferences and quiet hours per category
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_enabled:
-          description: Opted in (security and regulatory cannot be disabled)
-          type: boolean
-        locale:
-          description: Preferred language
-          maxLength: 10
-          type:
-          - string
-          - 'null'
-        quiet_hours_end:
-          description: HH:MM local
-          maxLength: 5
-          type:
-          - string
-          - 'null'
-        quiet_hours_start:
-          description: HH:MM local
-          maxLength: 5
-          type:
-          - string
-          - 'null'
-        recipient_id:
-          description: Recipient id
-          format: uuid
-          type: string
-        recipient_type:
-          description: Recipient type
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        timezone:
-          description: Timezone for quiet hours
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - recipient_type
-      - recipient_id
-      - category
-      - channel
-      - is_enabled
-      type: object
-    NotificationPreferenceCreate:
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_enabled:
-          description: Opted in (security and regulatory cannot be disabled)
-          type: boolean
-        locale:
-          description: Preferred language
-          maxLength: 10
-          type: string
-        quiet_hours_end:
-          description: HH:MM local
-          maxLength: 5
-          type: string
-        quiet_hours_start:
-          description: HH:MM local
-          maxLength: 5
-          type: string
-        recipient_id:
-          description: Recipient id
-          format: uuid
-          type: string
-        recipient_type:
-          description: Recipient type
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        timezone:
-          description: Timezone for quiet hours
-          maxLength: 64
-          type: string
-      required:
-      - recipient_type
-      - recipient_id
-      - category
-      - channel
-      type: object
-    NotificationPreferencePage:
-      description: One page of NotificationPreference results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NotificationPreference'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationPreferenceUpdate:
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        is_enabled:
-          description: Opted in (security and regulatory cannot be disabled)
-          type: boolean
-        locale:
-          description: Preferred language
-          maxLength: 10
-          type: string
-        quiet_hours_end:
-          description: HH:MM local
-          maxLength: 5
-          type: string
-        quiet_hours_start:
-          description: HH:MM local
-          maxLength: 5
-          type: string
-        recipient_id:
-          description: Recipient id
-          format: uuid
-          type: string
-        recipient_type:
-          description: Recipient type
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        timezone:
-          description: Timezone for quiet hours
-          maxLength: 64
-          type: string
-      type: object
-    NotificationProvider:
-      description: Delivery provider per channel with priority for failover
-      properties:
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        config:
-          additionalProperties: true
-          description: Provider options
-          type:
-          - object
-          - 'null'
-        country_scope:
-          description: ISO country codes routed to this provider
-          items: {}
-          type:
-          - array
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        credentials_ref:
-          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        priority:
-          description: Lower is tried first
-          format: int32
-          type: integer
-        provider_name:
-          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
-          maxLength: 64
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sender_id:
-          description: Sender id / from address
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - ERROR
-          - TESTING
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - channel
-      - provider_name
-      - priority
-      - status
-      type: object
-    NotificationProviderCreate:
-      properties:
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        config:
-          additionalProperties: true
-          description: Provider options
-          type: object
-        country_scope:
-          description: ISO country codes routed to this provider
-          items: {}
-          type: array
-        credentials_ref:
-          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
-          maxLength: 255
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        priority:
-          description: Lower is tried first
-          format: int32
-          type: integer
-        provider_name:
-          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
-          maxLength: 64
-          type: string
-        sender_id:
-          description: Sender id / from address
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - ERROR
-          - TESTING
-          type: string
-      required:
-      - channel
-      - provider_name
-      type: object
-    NotificationProviderPage:
-      description: One page of NotificationProvider results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NotificationProvider'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationProviderUpdate:
-      properties:
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        config:
-          additionalProperties: true
-          description: Provider options
-          type: object
-        country_scope:
-          description: ISO country codes routed to this provider
-          items: {}
-          type: array
-        credentials_ref:
-          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
-          maxLength: 255
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        priority:
-          description: Lower is tried first
-          format: int32
-          type: integer
-        provider_name:
-          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
-          maxLength: 64
-          type: string
-        sender_id:
-          description: Sender id / from address
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - ERROR
-          - TESTING
-          type: string
-      type: object
-    NotificationProvidersTestRequest:
-      properties:
-        destination:
-          maxLength: 320
-          type: string
-      required:
-      - destination
-      type: object
-    NotificationRule:
-      description: Maps a domain event to notifications (template, channels, recipient, conditions)
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channels:
-          description: Channels in preference order
-          items: {}
-          type: array
-        conditions:
-          description: CEL condition on the event payload
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        event_type:
-          description: Domain event, e.g. ledger.balance.changed
-          maxLength: 128
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        recipient_expression:
-          description: How to resolve the recipient from the event
-          maxLength: 255
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        template_code:
-          description: Template to use
-          maxLength: 64
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - event_type
-      - template_code
-      - channels
-      - recipient_expression
-      - category
-      - is_active
-      type: object
-    NotificationRuleCreate:
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channels:
-          description: Channels in preference order
-          items: {}
-          type: array
-        conditions:
-          description: CEL condition on the event payload
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        event_type:
-          description: Domain event, e.g. ledger.balance.changed
-          maxLength: 128
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        recipient_expression:
-          description: How to resolve the recipient from the event
-          maxLength: 255
-          type: string
-        template_code:
-          description: Template to use
-          maxLength: 64
-          type: string
-      required:
-      - event_type
-      - template_code
-      - channels
-      - recipient_expression
-      - category
-      type: object
-    NotificationRulePage:
-      description: One page of NotificationRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NotificationRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationRuleUpdate:
-      properties:
-        category:
-          description: Category
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channels:
-          description: Channels in preference order
-          items: {}
-          type: array
-        conditions:
-          description: CEL condition on the event payload
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        event_type:
-          description: Domain event, e.g. ledger.balance.changed
-          maxLength: 128
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        recipient_expression:
-          description: How to resolve the recipient from the event
-          maxLength: 255
-          type: string
-        template_code:
-          description: Template to use
-          maxLength: 64
-          type: string
-      type: object
-    NotificationTemplate:
-      description: Localised message template per channel
-      properties:
-        body:
-          description: Body with placeholders
-          type: string
-        category:
-          description: Category (drives opt-out rules)
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        code:
-          description: Template code, e.g. CARD_AUTH_APPROVED
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        locale:
-          description: Locale
-          maxLength: 10
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status (changes via /publish and approval)
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          readOnly: true
-          type: string
-        subject:
-          description: Subject / push title
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        variables_schema:
-          additionalProperties: true
-          description: Expected variables
-          type:
-          - object
-          - 'null'
-        version:
-          description: Version
-          format: int32
-          readOnly: true
-          type: integer
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - channel
-      - locale
-      - category
-      - body
-      - version
-      - status
-      type: object
-    NotificationTemplateCreate:
-      properties:
-        body:
-          description: Body with placeholders
-          type: string
-        category:
-          description: Category (drives opt-out rules)
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        code:
-          description: Template code, e.g. CARD_AUTH_APPROVED
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        locale:
-          description: Locale
-          maxLength: 10
-          type: string
-        subject:
-          description: Subject / push title
-          maxLength: 255
-          type: string
-        variables_schema:
-          additionalProperties: true
-          description: Expected variables
-          type: object
-      required:
-      - code
-      - channel
-      - category
-      - body
-      type: object
-    NotificationTemplatePage:
-      description: One page of NotificationTemplate results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NotificationTemplate'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NotificationTemplateUpdate:
-      properties:
-        body:
-          description: Body with placeholders
-          type: string
-        category:
-          description: Category (drives opt-out rules)
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          description: Channel
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        code:
-          description: Template code, e.g. CARD_AUTH_APPROVED
-          maxLength: 64
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        locale:
-          description: Locale
-          maxLength: 10
-          type: string
-        subject:
-          description: Subject / push title
-          maxLength: 255
-          type: string
-        variables_schema:
-          additionalProperties: true
-          description: Expected variables
-          type: object
-      type: object
-    NotificationTemplatesPreviewRequest:
-      properties:
-        variables:
-          additionalProperties: true
-          type: object
-      required:
-      - variables
-      type: object
-    NotificationTemplatesTestSendRequest:
-      properties:
-        destination:
-          maxLength: 320
-          type: string
-      required:
-      - destination
-      type: object
-    NotificationsProviderCallbacksEventsRequest:
-      properties:
-        payload:
-          additionalProperties: true
-          type: object
-      required:
-      - payload
-      type: object
-    NotificationsSendTemplatedRequest:
-      properties:
-        category:
-          enum:
-          - TRANSACTIONAL
-          - SECURITY
-          - SERVICE
-          - MARKETING
-          - REGULATORY
-          - COLLECTIONS
-          type: string
-        channel:
-          enum:
-          - PUSH
-          - SMS
-          - EMAIL
-          - WHATSAPP
-          - IN_APP
-          - USSD
-          - VOICE
-          type: string
-        data:
-          additionalProperties: true
-          type: object
-        destination:
-          maxLength: 512
-          type: string
-        expires_at:
-          format: date-time
-          type: string
-        locale:
-          maxLength: 10
-          type: string
-        priority:
-          enum:
-          - LOW
-          - NORMAL
-          - HIGH
-          - URGENT
-          type: string
-        recipient_id:
-          format: uuid
-          type: string
-        recipient_type:
-          enum:
-          - CUSTOMER
-          - STAFF
-          - AGENT
-          - MERCHANT
-          - EXTERNAL
-          type: string
-        scheduled_at:
-          format: date-time
-          type: string
-        template_code:
-          maxLength: 64
-          type: string
-        variables:
-          additionalProperties: true
-          type: object
-      required:
-      - template_code
-      - recipient_type
-      - recipient_id
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — notification-service
+  version: 1.0.0
   description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
     and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
     and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
@@ -2074,11 +9,26 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — notification-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Notifications
+  description: A message sent (or to be sent) to a recipient on one channel
+- name: Notification Templates
+  description: Localised message template per channel
+- name: Notification Providers
+  description: Delivery provider per channel with priority for failover
+- name: Notification Rules
+  description: Maps a domain event to notifications (template, channels, recipient, conditions)
+- name: Notification Preferences
+  description: A recipient's channel preferences and quiet hours per category
 paths:
   /v1/notifications:
     get:
@@ -3566,21 +1516,2071 @@ paths:
       x-table: notification_preference
       x-crud: true
       x-crud-update: true
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A message sent (or to be sent) to a recipient on one channel
-  name: Notifications
-- description: Localised message template per channel
-  name: Notification Templates
-- description: Delivery provider per channel with priority for failover
-  name: Notification Providers
-- description: Maps a domain event to notifications (template, channels, recipient, conditions)
-  name: Notification Rules
-- description: A recipient's channel preferences and quiet hours per category
-  name: Notification Preferences
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    NotificationPage:
+      type: object
+      description: One page of Notification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationDeliveryAttemptPage:
+      type: object
+      description: One page of NotificationDeliveryAttempt results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationDeliveryAttempt'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationsSendTemplatedRequest:
+      type: object
+      properties:
+        template_code:
+          type: string
+          maxLength: 64
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+        recipient_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+        destination:
+          type: string
+          maxLength: 512
+        locale:
+          type: string
+          maxLength: 10
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+        scheduled_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: true
+        variables:
+          type: object
+          additionalProperties: true
+      required:
+      - template_code
+      - recipient_type
+      - recipient_id
+    NotificationsProviderCallbacksEventsRequest:
+      type: object
+      properties:
+        payload:
+          type: object
+          additionalProperties: true
+      required:
+      - payload
+    NotificationTemplatePage:
+      type: object
+      description: One page of NotificationTemplate results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTemplate'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationTemplatesPreviewRequest:
+      type: object
+      properties:
+        variables:
+          type: object
+          additionalProperties: true
+      required:
+      - variables
+    NotificationTemplatesTestSendRequest:
+      type: object
+      properties:
+        destination:
+          type: string
+          maxLength: 320
+      required:
+      - destination
+    NotificationProviderPage:
+      type: object
+      description: One page of NotificationProvider results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationProvider'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationProvidersTestRequest:
+      type: object
+      properties:
+        destination:
+          type: string
+          maxLength: 320
+      required:
+      - destination
+    NotificationRulePage:
+      type: object
+      description: One page of NotificationRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationPreferencePage:
+      type: object
+      description: One page of NotificationPreference results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationPreference'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApprovalRequest:
+      type: object
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        approval_policy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Policy applied
+        resource_type:
+          type: string
+          maxLength: 64
+          description: Resource type
+        resource_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resource id (empty for creates)
+        action:
+          type: string
+          maxLength: 40
+          description: Action
+        title:
+          type: string
+          maxLength: 255
+          description: Short title shown in the approvals queue
+        summary:
+          type:
+          - string
+          - 'null'
+          description: Human-readable description of the change
+        payload:
+          type: object
+          additionalProperties: true
+          description: Operation to execute once approved
+        diff:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Before/after diff for updates
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount, for threshold routing
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of the amount (ISO 4217)
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          description: Priority
+        status:
+          type: string
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CHANGES_REQUESTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          description: Status
+          readOnly: true
+        maker:
+          type: string
+          maxLength: 64
+          description: Requesting user
+          readOnly: true
+        required_approvals:
+          type: integer
+          format: int32
+          description: Approvals required
+          readOnly: true
+        approvals_received:
+          type: integer
+          format: int32
+          description: Approvals received
+          readOnly: true
+        current_level:
+          type: integer
+          format: int32
+          description: Current approval level
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Final decision time
+          readOnly: true
+        executed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
+        execution_result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+        approval_route:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given by the maker when cancelling
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+    Notification:
+      type: object
+      description: A message sent (or to be sent) to a recipient on one channel
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          description: Recipient type
+        recipient_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Recipient id (customer, user, agent ...)
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        destination:
+          type: string
+          maxLength: 512
+          description: Phone, email, device token or inbox id
+        notification_template_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Template version
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rendered subject
+        body:
+          type: string
+          description: Rendered body
+        data:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Deep-link and payload data
+        source_event_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Triggering event type
+        source_event_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Triggering event id (dedupe)
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          description: Priority
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - SCHEDULED
+          - SENT
+          - DELIVERED
+          - READ
+          - FAILED
+          - SUPPRESSED
+          - EXPIRED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        scheduled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Send time (respects quiet hours)
+        sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Sent
+          readOnly: true
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Delivered
+          readOnly: true
+        read_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Read
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
+        provider_message_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Provider message id
+          readOnly: true
+        cost:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Provider cost
+          readOnly: true
+        cost_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Cost currency (ISO 4217)
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Do not deliver after this time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recipient_type
+      - channel
+      - destination
+      - category
+      - locale
+      - body
+      - priority
+      - status
+    NotificationCreate:
+      type: object
+      properties:
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          description: Recipient type
+        recipient_id:
+          type: string
+          format: uuid
+          description: Recipient id (customer, user, agent ...)
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        destination:
+          type: string
+          maxLength: 512
+          description: Phone, email, device token or inbox id
+        notification_template_id:
+          type: string
+          format: uuid
+          description: Template version
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+        subject:
+          type: string
+          maxLength: 255
+          description: Rendered subject
+        body:
+          type: string
+          description: Rendered body
+        data:
+          type: object
+          additionalProperties: true
+          description: Deep-link and payload data
+        source_event_type:
+          type: string
+          maxLength: 128
+          description: Triggering event type
+        source_event_id:
+          type: string
+          maxLength: 64
+          description: Triggering event id (dedupe)
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          description: Priority
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Send time (respects quiet hours)
+        expires_at:
+          type: string
+          format: date-time
+          description: Do not deliver after this time
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - recipient_type
+      - channel
+      - destination
+      - category
+      - body
+    NotificationDeliveryAttempt:
+      type: object
+      description: One attempt to deliver a notification through a provider. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        notification_id:
+          type: string
+          format: uuid
+          description: Notification
+        notification_provider_id:
+          type: string
+          format: uuid
+          description: Provider used
+        attempt_no:
+          type: integer
+          format: int32
+          description: Attempt number
+        status:
+          type: string
+          maxLength: 32
+          description: ACCEPTED, REJECTED, TIMEOUT, ERROR
+        provider_response:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Raw provider response
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Provider error code
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Provider latency
+        cycle:
+          type: integer
+          format: int32
+          description: Send cycle (a resend starts a new one)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - notification_id
+      - notification_provider_id
+      - attempt_no
+      - status
+      - cycle
+    NotificationPreference:
+      type: object
+      description: A recipient's channel preferences and quiet hours per category
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          description: Recipient type
+        recipient_id:
+          type: string
+          format: uuid
+          description: Recipient id
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        is_enabled:
+          type: boolean
+          description: Opted in (security and regulatory cannot be disabled)
+        quiet_hours_start:
+          type:
+          - string
+          - 'null'
+          maxLength: 5
+          description: HH:MM local
+        quiet_hours_end:
+          type:
+          - string
+          - 'null'
+          maxLength: 5
+          description: HH:MM local
+        timezone:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Timezone for quiet hours
+        locale:
+          type:
+          - string
+          - 'null'
+          maxLength: 10
+          description: Preferred language
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recipient_type
+      - recipient_id
+      - category
+      - channel
+      - is_enabled
+    NotificationPreferenceCreate:
+      type: object
+      properties:
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          description: Recipient type
+        recipient_id:
+          type: string
+          format: uuid
+          description: Recipient id
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        is_enabled:
+          type: boolean
+          description: Opted in (security and regulatory cannot be disabled)
+        quiet_hours_start:
+          type: string
+          maxLength: 5
+          description: HH:MM local
+        quiet_hours_end:
+          type: string
+          maxLength: 5
+          description: HH:MM local
+        timezone:
+          type: string
+          maxLength: 64
+          description: Timezone for quiet hours
+        locale:
+          type: string
+          maxLength: 10
+          description: Preferred language
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - recipient_type
+      - recipient_id
+      - category
+      - channel
+    NotificationPreferenceUpdate:
+      type: object
+      properties:
+        recipient_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          description: Recipient type
+        recipient_id:
+          type: string
+          format: uuid
+          description: Recipient id
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        is_enabled:
+          type: boolean
+          description: Opted in (security and regulatory cannot be disabled)
+        quiet_hours_start:
+          type: string
+          maxLength: 5
+          description: HH:MM local
+        quiet_hours_end:
+          type: string
+          maxLength: 5
+          description: HH:MM local
+        timezone:
+          type: string
+          maxLength: 64
+          description: Timezone for quiet hours
+        locale:
+          type: string
+          maxLength: 10
+          description: Preferred language
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    NotificationProvider:
+      type: object
+      description: Delivery provider per channel with priority for failover
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        provider_name:
+          type: string
+          maxLength: 64
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+        priority:
+          type: integer
+          format: int32
+          description: Lower is tried first
+        credentials_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+        sender_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sender id / from address
+        country_scope:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: ISO country codes routed to this provider
+        config:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Provider options
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          description: Status
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - channel
+      - provider_name
+      - priority
+      - status
+    NotificationProviderCreate:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        provider_name:
+          type: string
+          maxLength: 64
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+        priority:
+          type: integer
+          format: int32
+          description: Lower is tried first
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+        sender_id:
+          type: string
+          maxLength: 64
+          description: Sender id / from address
+        country_scope:
+          type: array
+          items: {}
+          description: ISO country codes routed to this provider
+        config:
+          type: object
+          additionalProperties: true
+          description: Provider options
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          description: Status
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - channel
+      - provider_name
+    NotificationProviderUpdate:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        provider_name:
+          type: string
+          maxLength: 64
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+        priority:
+          type: integer
+          format: int32
+          description: Lower is tried first
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+        sender_id:
+          type: string
+          maxLength: 64
+          description: Sender id / from address
+        country_scope:
+          type: array
+          items: {}
+          description: ISO country codes routed to this provider
+        config:
+          type: object
+          additionalProperties: true
+          description: Provider options
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          description: Status
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    NotificationRule:
+      type: object
+      description: Maps a domain event to notifications (template, channels, recipient, conditions)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        event_type:
+          type: string
+          maxLength: 128
+          description: Domain event, e.g. ledger.balance.changed
+        template_code:
+          type: string
+          maxLength: 64
+          description: Template to use
+        channels:
+          type: array
+          items: {}
+          description: Channels in preference order
+        recipient_expression:
+          type: string
+          maxLength: 255
+          description: How to resolve the recipient from the event
+        conditions:
+          type:
+          - string
+          - 'null'
+          description: CEL condition on the event payload
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - event_type
+      - template_code
+      - channels
+      - recipient_expression
+      - category
+      - is_active
+    NotificationRuleCreate:
+      type: object
+      properties:
+        event_type:
+          type: string
+          maxLength: 128
+          description: Domain event, e.g. ledger.balance.changed
+        template_code:
+          type: string
+          maxLength: 64
+          description: Template to use
+        channels:
+          type: array
+          items: {}
+          description: Channels in preference order
+        recipient_expression:
+          type: string
+          maxLength: 255
+          description: How to resolve the recipient from the event
+        conditions:
+          type: string
+          description: CEL condition on the event payload
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - event_type
+      - template_code
+      - channels
+      - recipient_expression
+      - category
+    NotificationRuleUpdate:
+      type: object
+      properties:
+        event_type:
+          type: string
+          maxLength: 128
+          description: Domain event, e.g. ledger.balance.changed
+        template_code:
+          type: string
+          maxLength: 64
+          description: Template to use
+        channels:
+          type: array
+          items: {}
+          description: Channels in preference order
+        recipient_expression:
+          type: string
+          maxLength: 255
+          description: How to resolve the recipient from the event
+        conditions:
+          type: string
+          description: CEL condition on the event payload
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    NotificationTemplate:
+      type: object
+      description: Localised message template per channel
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Template code, e.g. CARD_AUTH_APPROVED
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category (drives opt-out rules)
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Subject / push title
+        body:
+          type: string
+          description: Body with placeholders
+        variables_schema:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Expected variables
+        version:
+          type: integer
+          format: int32
+          description: Version
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Status (changes via /publish and approval)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - channel
+      - locale
+      - category
+      - body
+      - version
+      - status
+    NotificationTemplateCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Template code, e.g. CARD_AUTH_APPROVED
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category (drives opt-out rules)
+        subject:
+          type: string
+          maxLength: 255
+          description: Subject / push title
+        body:
+          type: string
+          description: Body with placeholders
+        variables_schema:
+          type: object
+          additionalProperties: true
+          description: Expected variables
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - channel
+      - category
+      - body
+    NotificationTemplateUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Template code, e.g. CARD_AUTH_APPROVED
+        channel:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          description: Channel
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          description: Category (drives opt-out rules)
+        subject:
+          type: string
+          maxLength: 255
+          description: Subject / push title
+        body:
+          type: string
+          description: Body with placeholders
+        variables_schema:
+          type: object
+          additionalProperties: true
+          description: Expected variables
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration

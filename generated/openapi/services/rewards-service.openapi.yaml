@@ -1,3240 +1,42 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    CashbackTransaction:
-      description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
-      properties:
-        cashback_amount:
-          description: Cashback awarded
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        confirm_after:
-          description: When the award confirms (after dispute window)
-          format: date-time
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        credit_account_id:
-          description: Account credited
-          format: uuid
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Ledger posting of the payout
-          format: uuid
-          type:
-          - string
-          - 'null'
-        paid_at:
-          description: Payout time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        reversal_reason:
-          description: Why reversed (refund, chargeback)
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        reward_rule_id:
-          description: Rule applied
-          format: uuid
-          type:
-          - string
-          - 'null'
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source_id:
-          description: Qualifying transaction
-          format: uuid
-          type: string
-        source_type:
-          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION
-          maxLength: 40
-          type: string
-        status:
-          description: Status
-          enum:
-          - PENDING
-          - CONFIRMED
-          - PAID
-          - REVERSED
-          - CANCELLED
-          type: string
-        transaction_amount:
-          description: Qualifying amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - rewards_program_id
-      - customer_id
-      - source_type
-      - source_id
-      - transaction_amount
-      - cashback_amount
-      - currency
-      - status
-      type: object
-    CashbackTransactionPage:
-      description: One page of CashbackTransaction results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CashbackTransaction'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CashbackTransactionsReverseRequest:
-      properties:
-        reversal_reason:
-          maxLength: 255
-          type: string
-      required:
-      - reversal_reason
-      type: object
-    PointsAccount:
-      description: A customer's points account within a program with running balances and tier
-      properties:
-        available_points:
-          description: Redeemable points
-          format: int64
-          readOnly: true
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        enrolled_at:
-          description: Enrolment time
-          format: date-time
-          type: string
-        expiring_points:
-          description: Points expiring in the next 30 days
-          format: int64
-          readOnly: true
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        lifetime_earned:
-          description: All points ever earned
-          format: int64
-          readOnly: true
-          type: integer
-        lifetime_redeemed:
-          description: All points ever redeemed
-          format: int64
-          readOnly: true
-          type: integer
-        next_expiry_date:
-          description: Next expiry date
-          format: date
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        pending_points:
-          description: Points awaiting confirmation
-          format: int64
-          readOnly: true
-          type: integer
-        reward_tier_id:
-          description: Current tier
-          format: uuid
-          type:
-          - string
-          - 'null'
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          type: string
-        tier_qualified_until:
-          description: Tier valid until
-          format: date
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - rewards_program_id
-      - customer_id
-      - status
-      - available_points
-      - pending_points
-      - lifetime_earned
-      - lifetime_redeemed
-      - expiring_points
-      - enrolled_at
-      type: object
-    PointsAccountCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer
-          format: uuid
-          type: string
-        enrolled_at:
-          description: Enrolment time
-          format: date-time
-          type: string
-        reward_tier_id:
-          description: Current tier
-          format: uuid
-          type: string
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          type: string
-        tier_qualified_until:
-          description: Tier valid until
-          format: date
-          type: string
-      required:
-      - rewards_program_id
-      - customer_id
-      type: object
-    PointsAccountPage:
-      description: One page of PointsAccount results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PointsAccount'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PointsAccountsAdjustRequest:
-      properties:
-        points:
-          format: int64
-          type: integer
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - points
-      - reason
-      type: object
-    PointsAccountsSuspendRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    PointsAccountsTransferRequest:
-      properties:
-        points:
-          format: int64
-          type: integer
-        to_points_account_id:
-          format: uuid
-          type: string
-      required:
-      - to_points_account_id
-      - points
-      type: object
-    PointsLedgerEntry:
-      description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
-      properties:
-        balance_after:
-          description: Available balance after the entry
-          format: int64
-          readOnly: true
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        entry_type:
-          description: Movement type
-          enum:
-          - EARN
-          - REDEEM
-          - EXPIRE
-          - ADJUST
-          - REVERSE
-          - TRANSFER_IN
-          - TRANSFER_OUT
-          - BONUS
-          type: string
-        expires_on:
-          description: Expiry date of earned points
-          format: date
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Prevents double awards
-          maxLength: 128
-          readOnly: true
-          type: string
-        is_pending:
-          description: Earned but not yet confirmed
-          type: boolean
-        points:
-          description: Signed points (positive earn, negative redeem/expire)
-          format: int64
-          type: integer
-        points_account_id:
-          description: Points account
-          format: uuid
-          type: string
-        reason:
-          description: Adjustment reason
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        reversal_of_id:
-          description: Entry this one reverses
-          format: uuid
-          type:
-          - string
-          - 'null'
-        reward_rule_id:
-          description: Rule that produced an earn
-          format: uuid
-          type:
-          - string
-          - 'null'
-        source_id:
-          description: Source object id
-          format: uuid
-          type:
-          - string
-          - 'null'
-        source_type:
-          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - points_account_id
-      - entry_type
-      - points
-      - balance_after
-      - is_pending
-      - idempotency_key
-      type: object
-    PointsLedgerEntryPage:
-      description: One page of PointsLedgerEntry results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PointsLedgerEntry'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    Redemption:
-      description: A customer's redemption of points for a catalogue item or statement credit
-      properties:
-        cash_value:
-          description: Value delivered
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        credit_account_id:
-          description: Account for statement credit
-          format: uuid
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        failure_reason:
-          description: Failure reason
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        fulfilled_at:
-          description: Fulfilment time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        idempotency_key:
-          description: Client key
-          maxLength: 128
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Ledger posting for statement credit
-          format: uuid
-          type:
-          - string
-          - 'null'
-        partner_member_id:
-          description: Loyalty number at the partner (airline miles)
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        partner_reference:
-          description: Fulfilment reference
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        points_account_id:
-          description: Points account
-          format: uuid
-          type: string
-        points_ledger_entry_id:
-          description: Debit entry
-          format: uuid
-          type:
-          - string
-          - 'null'
-        points_spent:
-          description: Points debited
-          format: int64
-          type: integer
-        quantity:
-          description: Quantity
-          format: int32
-          type: integer
-        reward_catalog_item_id:
-          description: Item redeemed
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - REQUESTED
-          - PROCESSING
-          - FULFILLED
-          - FAILED
-          - CANCELLED
-          - REVERSED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - points_account_id
-      - reward_catalog_item_id
-      - quantity
-      - points_spent
-      - status
-      - idempotency_key
-      type: object
-    RedemptionCreate:
-      properties:
-        cash_value:
-          description: Value delivered
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        credit_account_id:
-          description: Account for statement credit
-          format: uuid
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        journal_entry_id:
-          description: Ledger posting for statement credit
-          format: uuid
-          type: string
-        partner_member_id:
-          description: Loyalty number at the partner (airline miles)
-          maxLength: 64
-          type: string
-        partner_reference:
-          description: Fulfilment reference
-          maxLength: 128
-          type: string
-        points_account_id:
-          description: Points account
-          format: uuid
-          type: string
-        points_ledger_entry_id:
-          description: Debit entry
-          format: uuid
-          type: string
-        points_spent:
-          description: Points debited
-          format: int64
-          type: integer
-        quantity:
-          description: Quantity
-          format: int32
-          type: integer
-        reward_catalog_item_id:
-          description: Item redeemed
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - REQUESTED
-          - PROCESSING
-          - FULFILLED
-          - FAILED
-          - CANCELLED
-          - REVERSED
-          type: string
-      required:
-      - points_account_id
-      - reward_catalog_item_id
-      - points_spent
-      type: object
-    RedemptionPage:
-      description: One page of Redemption results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Redemption'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RedemptionsCancelRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    Referral:
-      description: One referral from a referrer to a referee, tracked through qualification to payout
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        fraud_score:
-          description: Fraud score at qualification
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        qualified_at:
-          description: Qualification time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        qualify_by:
-          description: Deadline to qualify
-          format: date-time
-          type:
-          - string
-          - 'null'
-        referee_contact:
-          description: Invited phone or email
-          maxLength: 320
-          type:
-          - string
-          - 'null'
-        referee_customer_id:
-          description: Referee once signed up
-          format: uuid
-          type:
-          - string
-          - 'null'
-        referee_payout_journal_entry_id:
-          description: Referee reward posting
-          format: uuid
-          type:
-          - string
-          - 'null'
-        referral_code:
-          description: Code shared by the referrer
-          maxLength: 32
-          type: string
-        referral_program_id:
-          description: Program
-          format: uuid
-          type: string
-        referrer_customer_id:
-          description: Referrer
-          format: uuid
-          type: string
-        referrer_payout_journal_entry_id:
-          description: Referrer reward posting
-          format: uuid
-          type:
-          - string
-          - 'null'
-        rejection_reason:
-          description: Why rejected (self-referral, fraud)
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        signed_up_at:
-          description: Referee sign-up time
-          format: date-time
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - INVITED
-          - SIGNED_UP
-          - QUALIFYING
-          - QUALIFIED
-          - REWARDED
-          - EXPIRED
-          - REJECTED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - referral_program_id
-      - referrer_customer_id
-      - referral_code
-      - status
-      type: object
-    ReferralCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fraud_score:
-          description: Fraud score at qualification
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        qualify_by:
-          description: Deadline to qualify
-          format: date-time
-          type: string
-        referee_contact:
-          description: Invited phone or email
-          maxLength: 320
-          type: string
-        referee_customer_id:
-          description: Referee once signed up
-          format: uuid
-          type: string
-        referee_payout_journal_entry_id:
-          description: Referee reward posting
-          format: uuid
-          type: string
-        referral_code:
-          description: Code shared by the referrer
-          maxLength: 32
-          type: string
-        referral_program_id:
-          description: Program
-          format: uuid
-          type: string
-        referrer_customer_id:
-          description: Referrer
-          format: uuid
-          type: string
-        referrer_payout_journal_entry_id:
-          description: Referrer reward posting
-          format: uuid
-          type: string
-        rejection_reason:
-          description: Why rejected (self-referral, fraud)
-          maxLength: 255
-          type: string
-        signed_up_at:
-          description: Referee sign-up time
-          format: date-time
-          type: string
-        status:
-          description: Status
-          enum:
-          - INVITED
-          - SIGNED_UP
-          - QUALIFYING
-          - QUALIFIED
-          - REWARDED
-          - EXPIRED
-          - REJECTED
-          type: string
-      required:
-      - referral_program_id
-      - referrer_customer_id
-      - referral_code
-      type: object
-    ReferralPage:
-      description: One page of Referral results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Referral'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReferralProgram:
-      description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
-      properties:
-        budget_amount:
-          description: Total program budget
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Reward currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        ends_on:
-          description: End
-          format: date
-          type:
-          - string
-          - 'null'
-        funding_ledger_account_id:
-          description: Account funding payouts
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        max_referrals_per_customer:
-          description: Cap per referrer
-          format: int32
-          type:
-          - integer
-          - 'null'
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        qualification_rules:
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
-          type: object
-        qualify_within_days:
-          description: Days the referee has to qualify
-          format: int32
-          type: integer
-        referee_points:
-          description: Points reward to the referee
-          format: int64
-          type:
-          - integer
-          - 'null'
-        referee_reward:
-          description: Cash reward to the referee
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        referrer_points:
-          description: Points reward to the referrer
-          format: int64
-          type:
-          - integer
-          - 'null'
-        referrer_reward:
-          description: Cash reward to the referrer
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - status
-      - qualification_rules
-      - qualify_within_days
-      - starts_on
-      type: object
-    ReferralProgramCreate:
-      properties:
-        budget_amount:
-          description: Total program budget
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        currency:
-          description: Reward currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        ends_on:
-          description: End
-          format: date
-          type: string
-        funding_ledger_account_id:
-          description: Account funding payouts
-          format: uuid
-          type: string
-        max_referrals_per_customer:
-          description: Cap per referrer
-          format: int32
-          type: integer
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        qualification_rules:
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
-          type: object
-        qualify_within_days:
-          description: Days the referee has to qualify
-          format: int32
-          type: integer
-        referee_points:
-          description: Points reward to the referee
-          format: int64
-          type: integer
-        referee_reward:
-          description: Cash reward to the referee
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        referrer_points:
-          description: Points reward to the referrer
-          format: int64
-          type: integer
-        referrer_reward:
-          description: Cash reward to the referrer
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-      required:
-      - code
-      - name
-      - qualification_rules
-      - starts_on
-      type: object
-    ReferralProgramPage:
-      description: One page of ReferralProgram results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ReferralProgram'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ReferralProgramUpdate:
-      properties:
-        budget_amount:
-          description: Total program budget
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        currency:
-          description: Reward currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        ends_on:
-          description: End
-          format: date
-          type: string
-        funding_ledger_account_id:
-          description: Account funding payouts
-          format: uuid
-          type: string
-        max_referrals_per_customer:
-          description: Cap per referrer
-          format: int32
-          type: integer
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        qualification_rules:
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
-          type: object
-        qualify_within_days:
-          description: Days the referee has to qualify
-          format: int32
-          type: integer
-        referee_points:
-          description: Points reward to the referee
-          format: int64
-          type: integer
-        referee_reward:
-          description: Cash reward to the referee
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        referrer_points:
-          description: Points reward to the referrer
-          format: int64
-          type: integer
-        referrer_reward:
-          description: Cash reward to the referrer
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-      type: object
-    ReferralProgramsPauseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    ReferralsCodeRequest:
-      properties:
-        customer_id:
-          format: uuid
-          type: string
-        referral_program_id:
-          format: uuid
-          type: string
-      required:
-      - referral_program_id
-      - customer_id
-      type: object
-    ReferralsRejectRequest:
-      properties:
-        rejection_reason:
-          maxLength: 255
-          type: string
-      required:
-      - rejection_reason
-      type: object
-    RewardCatalogItem:
-      description: Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
-      properties:
-        cash_value:
-          description: Monetary value delivered
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency of cash_value (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        image_document_id:
-          description: Image
-          format: uuid
-          type:
-          - string
-          - 'null'
-        is_active:
-          description: Available for redemption
-          type: boolean
-        item_type:
-          description: Redemption type
-          enum:
-          - STATEMENT_CREDIT
-          - VOUCHER
-          - GIFT_CARD
-          - PARTNER_MILES
-          - MERCHANDISE
-          - DONATION
-          - CASH_TRANSFER
-          type: string
-        min_tier_rank:
-          description: Minimum tier rank required
-          format: int32
-          type:
-          - integer
-          - 'null'
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        partner_name:
-          description: Fulfilment partner (airline, voucher provider)
-          maxLength: 120
-          type:
-          - string
-          - 'null'
-        partner_sku:
-          description: Partner's product code
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        points_cost:
-          description: Points required
-          format: int64
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sku:
-          description: Catalogue SKU
-          maxLength: 64
-          type: string
-        stock:
-          description: Remaining stock (empty = unlimited)
-          format: int32
-          type:
-          - integer
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - rewards_program_id
-      - sku
-      - name
-      - item_type
-      - points_cost
-      - is_active
-      type: object
-    RewardCatalogItemCreate:
-      properties:
-        cash_value:
-          description: Monetary value delivered
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Currency of cash_value (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        image_document_id:
-          description: Image
-          format: uuid
-          type: string
-        is_active:
-          description: Available for redemption
-          type: boolean
-        item_type:
-          description: Redemption type
-          enum:
-          - STATEMENT_CREDIT
-          - VOUCHER
-          - GIFT_CARD
-          - PARTNER_MILES
-          - MERCHANDISE
-          - DONATION
-          - CASH_TRANSFER
-          type: string
-        min_tier_rank:
-          description: Minimum tier rank required
-          format: int32
-          type: integer
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        partner_name:
-          description: Fulfilment partner (airline, voucher provider)
-          maxLength: 120
-          type: string
-        partner_sku:
-          description: Partner's product code
-          maxLength: 64
-          type: string
-        points_cost:
-          description: Points required
-          format: int64
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        sku:
-          description: Catalogue SKU
-          maxLength: 64
-          type: string
-        stock:
-          description: Remaining stock (empty = unlimited)
-          format: int32
-          type: integer
-      required:
-      - rewards_program_id
-      - sku
-      - name
-      - item_type
-      - points_cost
-      type: object
-    RewardCatalogItemPage:
-      description: One page of RewardCatalogItem results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RewardCatalogItem'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RewardCatalogItemUpdate:
-      properties:
-        cash_value:
-          description: Monetary value delivered
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        currency:
-          description: Currency of cash_value (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        image_document_id:
-          description: Image
-          format: uuid
-          type: string
-        is_active:
-          description: Available for redemption
-          type: boolean
-        item_type:
-          description: Redemption type
-          enum:
-          - STATEMENT_CREDIT
-          - VOUCHER
-          - GIFT_CARD
-          - PARTNER_MILES
-          - MERCHANDISE
-          - DONATION
-          - CASH_TRANSFER
-          type: string
-        min_tier_rank:
-          description: Minimum tier rank required
-          format: int32
-          type: integer
-        name:
-          description: Display name
-          maxLength: 160
-          type: string
-        partner_name:
-          description: Fulfilment partner (airline, voucher provider)
-          maxLength: 120
-          type: string
-        partner_sku:
-          description: Partner's product code
-          maxLength: 64
-          type: string
-        points_cost:
-          description: Points required
-          format: int64
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        sku:
-          description: Catalogue SKU
-          maxLength: 64
-          type: string
-        stock:
-          description: Remaining stock (empty = unlimited)
-          format: int32
-          type: integer
-      type: object
-    RewardRule:
-      description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
-      properties:
-        cap_amount:
-          description: Maximum award per cap period
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        cap_period:
-          description: Period the cap applies to
-          enum:
-          - TRANSACTION
-          - DAY
-          - WEEK
-          - MONTH
-          - QUARTER
-          - YEAR
-          - LIFETIME
-          type:
-          - string
-          - 'null'
-        cashback_rate:
-          description: Cashback as a fraction of the amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        channels:
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
-          type:
-          - object
-          - 'null'
-        countries:
-          additionalProperties: true
-          description: Merchant countries that qualify
-          type:
-          - object
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        fixed_award:
-          description: Fixed points or cashback per qualifying event
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        mcc_exclude:
-          additionalProperties: true
-          description: MCC codes excluded (e.g. gambling, quasi-cash)
-          type:
-          - object
-          - 'null'
-        mcc_include:
-          additionalProperties: true
-          description: MCC codes that qualify (empty = any)
-          type:
-          - object
-          - 'null'
-        merchant_ids:
-          additionalProperties: true
-          description: Specific merchants (partner offers)
-          type:
-          - object
-          - 'null'
-        min_amount:
-          description: Minimum transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        multiplier:
-          description: Promotional multiplier
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        points_per_unit:
-          description: Points earned per unit of currency spent
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        product_ids:
-          additionalProperties: true
-          description: Products that qualify
-          type:
-          - object
-          - 'null'
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        settle_after_days:
-          description: Days before pending awards confirm (dispute window)
-          format: int32
-          type: integer
-        stackable:
-          description: Can combine with other matching rules
-          type: boolean
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        trigger:
-          description: Event that earns
-          enum:
-          - CARD_SPEND
-          - WALLET_PAYMENT
-          - BILL_PAYMENT
-          - ACCOUNT_OPENING
-          - DIRECT_DEPOSIT
-          - BALANCE_HELD
-          - LOAN_REPAYMENT
-          - REFERRAL
-          - MANUAL
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_days_of_week:
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
-          type:
-          - object
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to
-          format: date-time
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - rewards_program_id
-      - name
-      - trigger
-      - status
-      - priority
-      - stackable
-      - multiplier
-      - valid_from
-      - settle_after_days
-      type: object
-    RewardRuleCreate:
-      properties:
-        cap_amount:
-          description: Maximum award per cap period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        cap_period:
-          description: Period the cap applies to
-          enum:
-          - TRANSACTION
-          - DAY
-          - WEEK
-          - MONTH
-          - QUARTER
-          - YEAR
-          - LIFETIME
-          type: string
-        cashback_rate:
-          description: Cashback as a fraction of the amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channels:
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
-          type: object
-        countries:
-          additionalProperties: true
-          description: Merchant countries that qualify
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fixed_award:
-          description: Fixed points or cashback per qualifying event
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        mcc_exclude:
-          additionalProperties: true
-          description: MCC codes excluded (e.g. gambling, quasi-cash)
-          type: object
-        mcc_include:
-          additionalProperties: true
-          description: MCC codes that qualify (empty = any)
-          type: object
-        merchant_ids:
-          additionalProperties: true
-          description: Specific merchants (partner offers)
-          type: object
-        min_amount:
-          description: Minimum transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        multiplier:
-          description: Promotional multiplier
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        points_per_unit:
-          description: Points earned per unit of currency spent
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        product_ids:
-          additionalProperties: true
-          description: Products that qualify
-          type: object
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        settle_after_days:
-          description: Days before pending awards confirm (dispute window)
-          format: int32
-          type: integer
-        stackable:
-          description: Can combine with other matching rules
-          type: boolean
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        trigger:
-          description: Event that earns
-          enum:
-          - CARD_SPEND
-          - WALLET_PAYMENT
-          - BILL_PAYMENT
-          - ACCOUNT_OPENING
-          - DIRECT_DEPOSIT
-          - BALANCE_HELD
-          - LOAN_REPAYMENT
-          - REFERRAL
-          - MANUAL
-          type: string
-        valid_days_of_week:
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
-          type: object
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to
-          format: date-time
-          type: string
-      required:
-      - rewards_program_id
-      - name
-      - trigger
-      - valid_from
-      type: object
-    RewardRulePage:
-      description: One page of RewardRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RewardRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RewardRuleUpdate:
-      properties:
-        cap_amount:
-          description: Maximum award per cap period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        cap_period:
-          description: Period the cap applies to
-          enum:
-          - TRANSACTION
-          - DAY
-          - WEEK
-          - MONTH
-          - QUARTER
-          - YEAR
-          - LIFETIME
-          type: string
-        cashback_rate:
-          description: Cashback as a fraction of the amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channels:
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
-          type: object
-        countries:
-          additionalProperties: true
-          description: Merchant countries that qualify
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fixed_award:
-          description: Fixed points or cashback per qualifying event
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        mcc_exclude:
-          additionalProperties: true
-          description: MCC codes excluded (e.g. gambling, quasi-cash)
-          type: object
-        mcc_include:
-          additionalProperties: true
-          description: MCC codes that qualify (empty = any)
-          type: object
-        merchant_ids:
-          additionalProperties: true
-          description: Specific merchants (partner offers)
-          type: object
-        min_amount:
-          description: Minimum transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        multiplier:
-          description: Promotional multiplier
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        points_per_unit:
-          description: Points earned per unit of currency spent
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        priority:
-          description: Lower evaluates first
-          format: int32
-          type: integer
-        product_ids:
-          additionalProperties: true
-          description: Products that qualify
-          type: object
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        settle_after_days:
-          description: Days before pending awards confirm (dispute window)
-          format: int32
-          type: integer
-        stackable:
-          description: Can combine with other matching rules
-          type: boolean
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          type: string
-        trigger:
-          description: Event that earns
-          enum:
-          - CARD_SPEND
-          - WALLET_PAYMENT
-          - BILL_PAYMENT
-          - ACCOUNT_OPENING
-          - DIRECT_DEPOSIT
-          - BALANCE_HELD
-          - LOAN_REPAYMENT
-          - REFERRAL
-          - MANUAL
-          type: string
-        valid_days_of_week:
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
-          type: object
-        valid_from:
-          description: Effective from
-          format: date-time
-          type: string
-        valid_to:
-          description: Effective to
-          format: date-time
-          type: string
-      type: object
-    RewardRulesDeactivateRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    RewardRulesSimulateRequest:
-      properties:
-        rewards_program_id:
-          format: uuid
-          type: string
-        transaction:
-          additionalProperties: true
-          type: object
-      required:
-      - rewards_program_id
-      - transaction
-      type: object
-    RewardTier:
-      description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
-      properties:
-        benefits:
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
-          type:
-          - object
-          - 'null'
-        code:
-          description: Tier code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        earn_multiplier:
-          description: Multiplier applied to base earn
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Display name
-          maxLength: 80
-          type: string
-        qualify_points:
-          description: Points earned in the period needed to reach the tier
-          format: int64
-          type:
-          - integer
-          - 'null'
-        qualify_spend:
-          description: Annual spend needed to reach the tier
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        rank:
-          description: Order, 1 = lowest
-          format: int32
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - rewards_program_id
-      - code
-      - name
-      - rank
-      - earn_multiplier
-      type: object
-    RewardTierCreate:
-      properties:
-        benefits:
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
-          type: object
-        code:
-          description: Tier code
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        earn_multiplier:
-          description: Multiplier applied to base earn
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Display name
-          maxLength: 80
-          type: string
-        qualify_points:
-          description: Points earned in the period needed to reach the tier
-          format: int64
-          type: integer
-        qualify_spend:
-          description: Annual spend needed to reach the tier
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        rank:
-          description: Order, 1 = lowest
-          format: int32
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-      required:
-      - rewards_program_id
-      - code
-      - name
-      - rank
-      type: object
-    RewardTierPage:
-      description: One page of RewardTier results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RewardTier'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RewardTierUpdate:
-      properties:
-        benefits:
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
-          type: object
-        code:
-          description: Tier code
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        earn_multiplier:
-          description: Multiplier applied to base earn
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Display name
-          maxLength: 80
-          type: string
-        qualify_points:
-          description: Points earned in the period needed to reach the tier
-          format: int64
-          type: integer
-        qualify_spend:
-          description: Annual spend needed to reach the tier
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        rank:
-          description: Order, 1 = lowest
-          format: int32
-          type: integer
-        rewards_program_id:
-          description: Program
-          format: uuid
-          type: string
-      type: object
-    RewardsProgram:
-      description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
-      properties:
-        approved_by:
-          description: Checker who approved activation
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        auto_enrol:
-          description: Enrol eligible customers automatically
-          type: boolean
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        eligible_product_ids:
-          additionalProperties: true
-          description: Products whose customers can enrol (empty = all)
-          type:
-          - object
-          - 'null'
-        ends_on:
-          description: End date
-          format: date
-          type:
-          - string
-          - 'null'
-        funding_ledger_account_id:
-          description: Ledger account funding rewards liability
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        liability_ledger_account_id:
-          description: Ledger account holding outstanding rewards liability
-          format: uuid
-          type:
-          - string
-          - 'null'
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        point_value:
-          description: Monetary value of one point for redemption
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        points_expiry_months:
-          description: Months until earned points expire (empty = never)
-          format: int32
-          type:
-          - integer
-          - 'null'
-        points_name:
-          description: Branded name of the points currency, e.g. Stars
-          maxLength: 40
-          type:
-          - string
-          - 'null'
-        program_type:
-          description: Points, cashback, miles or hybrid
-          enum:
-          - POINTS
-          - CASHBACK
-          - MILES
-          - HYBRID
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        starts_on:
-          description: Start date
-          format: date
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-        terms_document_id:
-          description: Program terms and conditions
-          format: uuid
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        value_currency:
-          description: Currency of point_value and cashback (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - program_type
-      - status
-      - auto_enrol
-      - starts_on
-      type: object
-    RewardsProgramCreate:
-      properties:
-        auto_enrol:
-          description: Enrol eligible customers automatically
-          type: boolean
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        eligible_product_ids:
-          additionalProperties: true
-          description: Products whose customers can enrol (empty = all)
-          type: object
-        ends_on:
-          description: End date
-          format: date
-          type: string
-        funding_ledger_account_id:
-          description: Ledger account funding rewards liability
-          format: uuid
-          type: string
-        liability_ledger_account_id:
-          description: Ledger account holding outstanding rewards liability
-          format: uuid
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        point_value:
-          description: Monetary value of one point for redemption
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        points_expiry_months:
-          description: Months until earned points expire (empty = never)
-          format: int32
-          type: integer
-        points_name:
-          description: Branded name of the points currency, e.g. Stars
-          maxLength: 40
-          type: string
-        program_type:
-          description: Points, cashback, miles or hybrid
-          enum:
-          - POINTS
-          - CASHBACK
-          - MILES
-          - HYBRID
-          type: string
-        starts_on:
-          description: Start date
-          format: date
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-        terms_document_id:
-          description: Program terms and conditions
-          format: uuid
-          type: string
-        value_currency:
-          description: Currency of point_value and cashback (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-      required:
-      - code
-      - name
-      - program_type
-      - starts_on
-      type: object
-    RewardsProgramPage:
-      description: One page of RewardsProgram results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RewardsProgram'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RewardsProgramUpdate:
-      properties:
-        auto_enrol:
-          description: Enrol eligible customers automatically
-          type: boolean
-        code:
-          description: Program code
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        eligible_product_ids:
-          additionalProperties: true
-          description: Products whose customers can enrol (empty = all)
-          type: object
-        ends_on:
-          description: End date
-          format: date
-          type: string
-        funding_ledger_account_id:
-          description: Ledger account funding rewards liability
-          format: uuid
-          type: string
-        liability_ledger_account_id:
-          description: Ledger account holding outstanding rewards liability
-          format: uuid
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        point_value:
-          description: Monetary value of one point for redemption
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        points_expiry_months:
-          description: Months until earned points expire (empty = never)
-          format: int32
-          type: integer
-        points_name:
-          description: Branded name of the points currency, e.g. Stars
-          maxLength: 40
-          type: string
-        program_type:
-          description: Points, cashback, miles or hybrid
-          enum:
-          - POINTS
-          - CASHBACK
-          - MILES
-          - HYBRID
-          type: string
-        starts_on:
-          description: Start date
-          format: date
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          type: string
-        terms_document_id:
-          description: Program terms and conditions
-          format: uuid
-          type: string
-        value_currency:
-          description: Currency of point_value and cashback (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-      type: object
-    RewardsProgramsActivateRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    RewardsProgramsEndRequest:
-      properties:
-        ends_on:
-          format: date
-          type: string
-      required:
-      - ends_on
-      type: object
-    RewardsProgramsPauseRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
-            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
-            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — rewards-service
+  version: 1.0.0
   description: 'Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and personal
     finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — rewards-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Rewards Programs
+  description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+- name: Reward Tiers
+  description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
+- name: Reward Rules
+  description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
+- name: Points Accounts
+  description: A customer's points account within a program with running balances and tier
+- name: Points Ledger Entries
+  description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
+- name: Cashback Transactions
+  description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
+- name: Reward Catalog Items
+  description: Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
+- name: Redemptions
+  description: A customer's redemption of points for a catalogue item or statement credit
+- name: Referral Programs
+  description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
+- name: Referrals
+  description: One referral from a referrer to a referee, tracked through qualification to payout
 paths:
   /v1/rewards/programs:
     get:
@@ -5858,31 +2660,3229 @@ paths:
       x-service: rewards-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-table: referral
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
-  name: Rewards Programs
-- description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
-  name: Reward Tiers
-- description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
-  name: Reward Rules
-- description: A customer's points account within a program with running balances and tier
-  name: Points Accounts
-- description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
-  name: Points Ledger Entries
-- description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
-  name: Cashback Transactions
-- description: Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
-  name: Reward Catalog Items
-- description: A customer's redemption of points for a catalogue item or statement credit
-  name: Redemptions
-- description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
-  name: Referral Programs
-- description: One referral from a referrer to a referee, tracked through qualification to payout
-  name: Referrals
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    RewardsProgramPage:
+      type: object
+      description: One page of RewardsProgram results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardsProgram'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RewardsProgramsActivateRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    RewardsProgramsPauseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    RewardsProgramsEndRequest:
+      type: object
+      properties:
+        ends_on:
+          type: string
+          format: date
+      required:
+      - ends_on
+    RewardTierPage:
+      type: object
+      description: One page of RewardTier results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardTier'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RewardRulePage:
+      type: object
+      description: One page of RewardRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RewardRulesDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    RewardRulesSimulateRequest:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+        transaction:
+          type: object
+          additionalProperties: true
+      required:
+      - rewards_program_id
+      - transaction
+    PointsAccountPage:
+      type: object
+      description: One page of PointsAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PointsAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PointsLedgerEntryPage:
+      type: object
+      description: One page of PointsLedgerEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PointsLedgerEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PointsAccountsAdjustRequest:
+      type: object
+      properties:
+        points:
+          type: integer
+          format: int64
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - points
+      - reason
+    PointsAccountsTransferRequest:
+      type: object
+      properties:
+        to_points_account_id:
+          type: string
+          format: uuid
+        points:
+          type: integer
+          format: int64
+      required:
+      - to_points_account_id
+      - points
+    PointsAccountsSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CashbackTransactionPage:
+      type: object
+      description: One page of CashbackTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashbackTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CashbackTransactionsReverseRequest:
+      type: object
+      properties:
+        reversal_reason:
+          type: string
+          maxLength: 255
+      required:
+      - reversal_reason
+    RewardCatalogItemPage:
+      type: object
+      description: One page of RewardCatalogItem results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardCatalogItem'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RedemptionPage:
+      type: object
+      description: One page of Redemption results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Redemption'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RedemptionsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    ReferralProgramPage:
+      type: object
+      description: One page of ReferralProgram results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralProgram'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReferralProgramsPauseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    ReferralPage:
+      type: object
+      description: One page of Referral results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Referral'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReferralsCodeRequest:
+      type: object
+      properties:
+        referral_program_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+      required:
+      - referral_program_id
+      - customer_id
+    ReferralsRejectRequest:
+      type: object
+      properties:
+        rejection_reason:
+          type: string
+          maxLength: 255
+      required:
+      - rejection_reason
+    CashbackTransaction:
+      type: object
+      description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        reward_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule applied
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        source_type:
+          type: string
+          maxLength: 40
+          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION
+        source_id:
+          type: string
+          format: uuid
+          description: Qualifying transaction
+        transaction_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Qualifying amount
+        cashback_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cashback awarded
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CONFIRMED
+          - PAID
+          - REVERSED
+          - CANCELLED
+          description: Status
+        confirm_after:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the award confirms (after dispute window)
+        credit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account credited
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting of the payout
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Payout time
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why reversed (refund, chargeback)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - customer_id
+      - source_type
+      - source_id
+      - transaction_amount
+      - cashback_amount
+      - currency
+      - status
+    PointsAccount:
+      type: object
+      description: A customer's points account within a program with running balances and tier
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          description: Status
+        reward_tier_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Current tier
+        tier_qualified_until:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Tier valid until
+        available_points:
+          type: integer
+          format: int64
+          description: Redeemable points
+          readOnly: true
+        pending_points:
+          type: integer
+          format: int64
+          description: Points awaiting confirmation
+          readOnly: true
+        lifetime_earned:
+          type: integer
+          format: int64
+          description: All points ever earned
+          readOnly: true
+        lifetime_redeemed:
+          type: integer
+          format: int64
+          description: All points ever redeemed
+          readOnly: true
+        expiring_points:
+          type: integer
+          format: int64
+          description: Points expiring in the next 30 days
+          readOnly: true
+        next_expiry_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next expiry date
+          readOnly: true
+        enrolled_at:
+          type: string
+          format: date-time
+          description: Enrolment time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - customer_id
+      - status
+      - available_points
+      - pending_points
+      - lifetime_earned
+      - lifetime_redeemed
+      - expiring_points
+      - enrolled_at
+    PointsAccountCreate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          description: Status
+        reward_tier_id:
+          type: string
+          format: uuid
+          description: Current tier
+        tier_qualified_until:
+          type: string
+          format: date
+          description: Tier valid until
+        enrolled_at:
+          type: string
+          format: date-time
+          description: Enrolment time
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - rewards_program_id
+      - customer_id
+    PointsLedgerEntry:
+      type: object
+      description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        points_account_id:
+          type: string
+          format: uuid
+          description: Points account
+        entry_type:
+          type: string
+          enum:
+          - EARN
+          - REDEEM
+          - EXPIRE
+          - ADJUST
+          - REVERSE
+          - TRANSFER_IN
+          - TRANSFER_OUT
+          - BONUS
+          description: Movement type
+        points:
+          type: integer
+          format: int64
+          description: Signed points (positive earn, negative redeem/expire)
+        balance_after:
+          type: integer
+          format: int64
+          description: Available balance after the entry
+          readOnly: true
+        is_pending:
+          type: boolean
+          description: Earned but not yet confirmed
+        reward_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule that produced an earn
+        source_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL
+        source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source object id
+        expires_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Expiry date of earned points
+        reversal_of_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Entry this one reverses
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Adjustment reason
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Prevents double awards
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - points_account_id
+      - entry_type
+      - points
+      - balance_after
+      - is_pending
+      - idempotency_key
+    Redemption:
+      type: object
+      description: A customer's redemption of points for a catalogue item or statement credit
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        points_account_id:
+          type: string
+          format: uuid
+          description: Points account
+        reward_catalog_item_id:
+          type: string
+          format: uuid
+          description: Item redeemed
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity
+        points_spent:
+          type: integer
+          format: int64
+          description: Points debited
+        cash_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Value delivered
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - PROCESSING
+          - FULFILLED
+          - FAILED
+          - CANCELLED
+          - REVERSED
+          description: Status
+        credit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account for statement credit
+        partner_member_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Loyalty number at the partner (airline miles)
+        partner_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Fulfilment reference
+        points_ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Debit entry
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting for statement credit
+        fulfilled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Fulfilment time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - points_account_id
+      - reward_catalog_item_id
+      - quantity
+      - points_spent
+      - status
+      - idempotency_key
+    RedemptionCreate:
+      type: object
+      properties:
+        points_account_id:
+          type: string
+          format: uuid
+          description: Points account
+        reward_catalog_item_id:
+          type: string
+          format: uuid
+          description: Item redeemed
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity
+        points_spent:
+          type: integer
+          format: int64
+          description: Points debited
+        cash_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Value delivered
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - PROCESSING
+          - FULFILLED
+          - FAILED
+          - CANCELLED
+          - REVERSED
+          description: Status
+        credit_account_id:
+          type: string
+          format: uuid
+          description: Account for statement credit
+        partner_member_id:
+          type: string
+          maxLength: 64
+          description: Loyalty number at the partner (airline miles)
+        partner_reference:
+          type: string
+          maxLength: 128
+          description: Fulfilment reference
+        points_ledger_entry_id:
+          type: string
+          format: uuid
+          description: Debit entry
+        journal_entry_id:
+          type: string
+          format: uuid
+          description: Ledger posting for statement credit
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - points_account_id
+      - reward_catalog_item_id
+      - points_spent
+    Referral:
+      type: object
+      description: One referral from a referrer to a referee, tracked through qualification to payout
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        referral_program_id:
+          type: string
+          format: uuid
+          description: Program
+        referrer_customer_id:
+          type: string
+          format: uuid
+          description: Referrer
+        referral_code:
+          type: string
+          maxLength: 32
+          description: Code shared by the referrer
+        referee_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referee once signed up
+        referee_contact:
+          type:
+          - string
+          - 'null'
+          maxLength: 320
+          description: Invited phone or email
+        status:
+          type: string
+          enum:
+          - INVITED
+          - SIGNED_UP
+          - QUALIFYING
+          - QUALIFIED
+          - REWARDED
+          - EXPIRED
+          - REJECTED
+          description: Status
+        signed_up_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Referee sign-up time
+        qualify_by:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Deadline to qualify
+        qualified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Qualification time
+          readOnly: true
+        referrer_payout_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referrer reward posting
+        referee_payout_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referee reward posting
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why rejected (self-referral, fraud)
+        fraud_score:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fraud score at qualification
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - referral_program_id
+      - referrer_customer_id
+      - referral_code
+      - status
+    ReferralCreate:
+      type: object
+      properties:
+        referral_program_id:
+          type: string
+          format: uuid
+          description: Program
+        referrer_customer_id:
+          type: string
+          format: uuid
+          description: Referrer
+        referral_code:
+          type: string
+          maxLength: 32
+          description: Code shared by the referrer
+        referee_customer_id:
+          type: string
+          format: uuid
+          description: Referee once signed up
+        referee_contact:
+          type: string
+          maxLength: 320
+          description: Invited phone or email
+        status:
+          type: string
+          enum:
+          - INVITED
+          - SIGNED_UP
+          - QUALIFYING
+          - QUALIFIED
+          - REWARDED
+          - EXPIRED
+          - REJECTED
+          description: Status
+        signed_up_at:
+          type: string
+          format: date-time
+          description: Referee sign-up time
+        qualify_by:
+          type: string
+          format: date-time
+          description: Deadline to qualify
+        referrer_payout_journal_entry_id:
+          type: string
+          format: uuid
+          description: Referrer reward posting
+        referee_payout_journal_entry_id:
+          type: string
+          format: uuid
+          description: Referee reward posting
+        rejection_reason:
+          type: string
+          maxLength: 255
+          description: Why rejected (self-referral, fraud)
+        fraud_score:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fraud score at qualification
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - referral_program_id
+      - referrer_customer_id
+      - referral_code
+    ReferralProgram:
+      type: object
+      description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Status
+        qualification_rules:
+          type: object
+          additionalProperties: true
+          description: E.g. account opened + first deposit >= X within N days
+        qualify_within_days:
+          type: integer
+          format: int32
+          description: Days the referee has to qualify
+        referrer_reward:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referrer
+        referee_reward:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referee
+        referrer_points:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Points reward to the referrer
+        referee_points:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Points reward to the referee
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Reward currency (ISO 4217)
+        max_referrals_per_customer:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Cap per referrer
+        budget_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total program budget
+        funding_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account funding payouts
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        ends_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: End
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - status
+      - qualification_rules
+      - qualify_within_days
+      - starts_on
+    ReferralProgramCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Status
+        qualification_rules:
+          type: object
+          additionalProperties: true
+          description: E.g. account opened + first deposit >= X within N days
+        qualify_within_days:
+          type: integer
+          format: int32
+          description: Days the referee has to qualify
+        referrer_reward:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referrer
+        referee_reward:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referee
+        referrer_points:
+          type: integer
+          format: int64
+          description: Points reward to the referrer
+        referee_points:
+          type: integer
+          format: int64
+          description: Points reward to the referee
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reward currency (ISO 4217)
+        max_referrals_per_customer:
+          type: integer
+          format: int32
+          description: Cap per referrer
+        budget_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total program budget
+        funding_ledger_account_id:
+          type: string
+          format: uuid
+          description: Account funding payouts
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        ends_on:
+          type: string
+          format: date
+          description: End
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - qualification_rules
+      - starts_on
+    ReferralProgramUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Status
+        qualification_rules:
+          type: object
+          additionalProperties: true
+          description: E.g. account opened + first deposit >= X within N days
+        qualify_within_days:
+          type: integer
+          format: int32
+          description: Days the referee has to qualify
+        referrer_reward:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referrer
+        referee_reward:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash reward to the referee
+        referrer_points:
+          type: integer
+          format: int64
+          description: Points reward to the referrer
+        referee_points:
+          type: integer
+          format: int64
+          description: Points reward to the referee
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reward currency (ISO 4217)
+        max_referrals_per_customer:
+          type: integer
+          format: int32
+          description: Cap per referrer
+        budget_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total program budget
+        funding_ledger_account_id:
+          type: string
+          format: uuid
+          description: Account funding payouts
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        ends_on:
+          type: string
+          format: date
+          description: End
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RewardCatalogItem:
+      type: object
+      description: Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        sku:
+          type: string
+          maxLength: 64
+          description: Catalogue SKU
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        item_type:
+          type: string
+          enum:
+          - STATEMENT_CREDIT
+          - VOUCHER
+          - GIFT_CARD
+          - PARTNER_MILES
+          - MERCHANDISE
+          - DONATION
+          - CASH_TRANSFER
+          description: Redemption type
+        points_cost:
+          type: integer
+          format: int64
+          description: Points required
+        cash_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value delivered
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of cash_value (ISO 4217)
+        partner_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Fulfilment partner (airline, voucher provider)
+        partner_sku:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Partner's product code
+        image_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Image
+        stock:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Remaining stock (empty = unlimited)
+        min_tier_rank:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Minimum tier rank required
+        is_active:
+          type: boolean
+          description: Available for redemption
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - sku
+      - name
+      - item_type
+      - points_cost
+      - is_active
+    RewardCatalogItemCreate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        sku:
+          type: string
+          maxLength: 64
+          description: Catalogue SKU
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        item_type:
+          type: string
+          enum:
+          - STATEMENT_CREDIT
+          - VOUCHER
+          - GIFT_CARD
+          - PARTNER_MILES
+          - MERCHANDISE
+          - DONATION
+          - CASH_TRANSFER
+          description: Redemption type
+        points_cost:
+          type: integer
+          format: int64
+          description: Points required
+        cash_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value delivered
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of cash_value (ISO 4217)
+        partner_name:
+          type: string
+          maxLength: 120
+          description: Fulfilment partner (airline, voucher provider)
+        partner_sku:
+          type: string
+          maxLength: 64
+          description: Partner's product code
+        image_document_id:
+          type: string
+          format: uuid
+          description: Image
+        stock:
+          type: integer
+          format: int32
+          description: Remaining stock (empty = unlimited)
+        min_tier_rank:
+          type: integer
+          format: int32
+          description: Minimum tier rank required
+        is_active:
+          type: boolean
+          description: Available for redemption
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - rewards_program_id
+      - sku
+      - name
+      - item_type
+      - points_cost
+    RewardCatalogItemUpdate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        sku:
+          type: string
+          maxLength: 64
+          description: Catalogue SKU
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        item_type:
+          type: string
+          enum:
+          - STATEMENT_CREDIT
+          - VOUCHER
+          - GIFT_CARD
+          - PARTNER_MILES
+          - MERCHANDISE
+          - DONATION
+          - CASH_TRANSFER
+          description: Redemption type
+        points_cost:
+          type: integer
+          format: int64
+          description: Points required
+        cash_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value delivered
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of cash_value (ISO 4217)
+        partner_name:
+          type: string
+          maxLength: 120
+          description: Fulfilment partner (airline, voucher provider)
+        partner_sku:
+          type: string
+          maxLength: 64
+          description: Partner's product code
+        image_document_id:
+          type: string
+          format: uuid
+          description: Image
+        stock:
+          type: integer
+          format: int32
+          description: Remaining stock (empty = unlimited)
+        min_tier_rank:
+          type: integer
+          format: int32
+          description: Minimum tier rank required
+        is_active:
+          type: boolean
+          description: Available for redemption
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RewardRule:
+      type: object
+      description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+          description: Event that earns
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        stackable:
+          type: boolean
+          description: Can combine with other matching rules
+        mcc_include:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: MCC codes that qualify (empty = any)
+        mcc_exclude:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: MCC codes excluded (e.g. gambling, quasi-cash)
+        merchant_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Specific merchants (partner offers)
+        product_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Products that qualify
+        channels:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+        countries:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Merchant countries that qualify
+        min_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum transaction amount
+        points_per_unit:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points earned per unit of currency spent
+        cashback_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cashback as a fraction of the amount
+        fixed_award:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed points or cashback per qualifying event
+        multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Promotional multiplier
+        cap_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum award per cap period
+        cap_period:
+          type:
+          - string
+          - 'null'
+          enum:
+          - TRANSACTION
+          - DAY
+          - WEEK
+          - MONTH
+          - QUARTER
+          - YEAR
+          - LIFETIME
+          description: Period the cap applies to
+        valid_days_of_week:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Days of week the rule applies (e.g. weekend boosts)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective to
+        settle_after_days:
+          type: integer
+          format: int32
+          description: Days before pending awards confirm (dispute window)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - name
+      - trigger
+      - status
+      - priority
+      - stackable
+      - multiplier
+      - valid_from
+      - settle_after_days
+    RewardRuleCreate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+          description: Event that earns
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        stackable:
+          type: boolean
+          description: Can combine with other matching rules
+        mcc_include:
+          type: object
+          additionalProperties: true
+          description: MCC codes that qualify (empty = any)
+        mcc_exclude:
+          type: object
+          additionalProperties: true
+          description: MCC codes excluded (e.g. gambling, quasi-cash)
+        merchant_ids:
+          type: object
+          additionalProperties: true
+          description: Specific merchants (partner offers)
+        product_ids:
+          type: object
+          additionalProperties: true
+          description: Products that qualify
+        channels:
+          type: object
+          additionalProperties: true
+          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+        countries:
+          type: object
+          additionalProperties: true
+          description: Merchant countries that qualify
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum transaction amount
+        points_per_unit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points earned per unit of currency spent
+        cashback_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cashback as a fraction of the amount
+        fixed_award:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed points or cashback per qualifying event
+        multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Promotional multiplier
+        cap_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum award per cap period
+        cap_period:
+          type: string
+          enum:
+          - TRANSACTION
+          - DAY
+          - WEEK
+          - MONTH
+          - QUARTER
+          - YEAR
+          - LIFETIME
+          description: Period the cap applies to
+        valid_days_of_week:
+          type: object
+          additionalProperties: true
+          description: Days of week the rule applies (e.g. weekend boosts)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        settle_after_days:
+          type: integer
+          format: int32
+          description: Days before pending awards confirm (dispute window)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - rewards_program_id
+      - name
+      - trigger
+      - valid_from
+    RewardRuleUpdate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+          description: Event that earns
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Status
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluates first
+        stackable:
+          type: boolean
+          description: Can combine with other matching rules
+        mcc_include:
+          type: object
+          additionalProperties: true
+          description: MCC codes that qualify (empty = any)
+        mcc_exclude:
+          type: object
+          additionalProperties: true
+          description: MCC codes excluded (e.g. gambling, quasi-cash)
+        merchant_ids:
+          type: object
+          additionalProperties: true
+          description: Specific merchants (partner offers)
+        product_ids:
+          type: object
+          additionalProperties: true
+          description: Products that qualify
+        channels:
+          type: object
+          additionalProperties: true
+          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+        countries:
+          type: object
+          additionalProperties: true
+          description: Merchant countries that qualify
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum transaction amount
+        points_per_unit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points earned per unit of currency spent
+        cashback_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cashback as a fraction of the amount
+        fixed_award:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed points or cashback per qualifying event
+        multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Promotional multiplier
+        cap_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum award per cap period
+        cap_period:
+          type: string
+          enum:
+          - TRANSACTION
+          - DAY
+          - WEEK
+          - MONTH
+          - QUARTER
+          - YEAR
+          - LIFETIME
+          description: Period the cap applies to
+        valid_days_of_week:
+          type: object
+          additionalProperties: true
+          description: Days of week the rule applies (e.g. weekend boosts)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        settle_after_days:
+          type: integer
+          format: int32
+          description: Days before pending awards confirm (dispute window)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RewardTier:
+      type: object
+      description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        code:
+          type: string
+          maxLength: 32
+          description: Tier code
+        name:
+          type: string
+          maxLength: 80
+          description: Display name
+        rank:
+          type: integer
+          format: int32
+          description: Order, 1 = lowest
+        qualify_spend:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Annual spend needed to reach the tier
+        qualify_points:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Points earned in the period needed to reach the tier
+        earn_multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Multiplier applied to base earn
+        benefits:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Tier benefits (fee waivers, lounge access, FX discounts)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - code
+      - name
+      - rank
+      - earn_multiplier
+    RewardTierCreate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        code:
+          type: string
+          maxLength: 32
+          description: Tier code
+        name:
+          type: string
+          maxLength: 80
+          description: Display name
+        rank:
+          type: integer
+          format: int32
+          description: Order, 1 = lowest
+        qualify_spend:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Annual spend needed to reach the tier
+        qualify_points:
+          type: integer
+          format: int64
+          description: Points earned in the period needed to reach the tier
+        earn_multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Multiplier applied to base earn
+        benefits:
+          type: object
+          additionalProperties: true
+          description: Tier benefits (fee waivers, lounge access, FX discounts)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - rewards_program_id
+      - code
+      - name
+      - rank
+    RewardTierUpdate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program
+        code:
+          type: string
+          maxLength: 32
+          description: Tier code
+        name:
+          type: string
+          maxLength: 80
+          description: Display name
+        rank:
+          type: integer
+          format: int32
+          description: Order, 1 = lowest
+        qualify_spend:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Annual spend needed to reach the tier
+        qualify_points:
+          type: integer
+          format: int64
+          description: Points earned in the period needed to reach the tier
+        earn_multiplier:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Multiplier applied to base earn
+        benefits:
+          type: object
+          additionalProperties: true
+          description: Tier benefits (fee waivers, lounge access, FX discounts)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RewardsProgram:
+      type: object
+      description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        program_type:
+          type: string
+          enum:
+          - POINTS
+          - CASHBACK
+          - MILES
+          - HYBRID
+          description: Points, cashback, miles or hybrid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Lifecycle status
+        points_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Branded name of the points currency, e.g. Stars
+        point_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value of one point for redemption
+        value_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of point_value and cashback (ISO 4217)
+        points_expiry_months:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Months until earned points expire (empty = never)
+        funding_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger account funding rewards liability
+        liability_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger account holding outstanding rewards liability
+        eligible_product_ids:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Products whose customers can enrol (empty = all)
+        auto_enrol:
+          type: boolean
+          description: Enrol eligible customers automatically
+        terms_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program terms and conditions
+        starts_on:
+          type: string
+          format: date
+          description: Start date
+        ends_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: End date
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved activation
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - program_type
+      - status
+      - auto_enrol
+      - starts_on
+    RewardsProgramCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        program_type:
+          type: string
+          enum:
+          - POINTS
+          - CASHBACK
+          - MILES
+          - HYBRID
+          description: Points, cashback, miles or hybrid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Lifecycle status
+        points_name:
+          type: string
+          maxLength: 40
+          description: Branded name of the points currency, e.g. Stars
+        point_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value of one point for redemption
+        value_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of point_value and cashback (ISO 4217)
+        points_expiry_months:
+          type: integer
+          format: int32
+          description: Months until earned points expire (empty = never)
+        funding_ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account funding rewards liability
+        liability_ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account holding outstanding rewards liability
+        eligible_product_ids:
+          type: object
+          additionalProperties: true
+          description: Products whose customers can enrol (empty = all)
+        auto_enrol:
+          type: boolean
+          description: Enrol eligible customers automatically
+        terms_document_id:
+          type: string
+          format: uuid
+          description: Program terms and conditions
+        starts_on:
+          type: string
+          format: date
+          description: Start date
+        ends_on:
+          type: string
+          format: date
+          description: End date
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - program_type
+      - starts_on
+    RewardsProgramUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Program code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        program_type:
+          type: string
+          enum:
+          - POINTS
+          - CASHBACK
+          - MILES
+          - HYBRID
+          description: Points, cashback, miles or hybrid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - PAUSED
+          - ENDED
+          description: Lifecycle status
+        points_name:
+          type: string
+          maxLength: 40
+          description: Branded name of the points currency, e.g. Stars
+        point_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monetary value of one point for redemption
+        value_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of point_value and cashback (ISO 4217)
+        points_expiry_months:
+          type: integer
+          format: int32
+          description: Months until earned points expire (empty = never)
+        funding_ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account funding rewards liability
+        liability_ledger_account_id:
+          type: string
+          format: uuid
+          description: Ledger account holding outstanding rewards liability
+        eligible_product_ids:
+          type: object
+          additionalProperties: true
+          description: Products whose customers can enrol (empty = all)
+        auto_enrol:
+          type: boolean
+          description: Enrol eligible customers automatically
+        terms_document_id:
+          type: string
+          format: uuid
+          description: Program terms and conditions
+        starts_on:
+          type: string
+          format: date
+          description: Start date
+        ends_on:
+          type: string
+          format: date
+          description: End date
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'

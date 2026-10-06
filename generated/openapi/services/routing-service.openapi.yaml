@@ -1,2450 +1,41 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    NostroAccount:
-      description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
-      properties:
-        account_number:
-          description: Account number / IBAN
-          maxLength: 64
-          type: string
-        account_type:
-          description: Kind of account
-          enum:
-          - NOSTRO
-          - VOSTRO
-          - SETTLEMENT
-          - PREFUNDING
-          - CENTRAL_BANK
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        institution_bic:
-          description: Institution BIC
-          maxLength: 11
-          type:
-          - string
-          - 'null'
-        institution_name:
-          description: Holding institution
-          maxLength: 140
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Mirror ledger account
-          format: uuid
-          type: string
-        min_balance:
-          description: Minimum balance before alerting
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Account name
-          maxLength: 120
-          type: string
-        payment_rail_id:
-          description: Rail it funds
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        target_balance:
-          description: Target balance for top-up
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - account_type
-      - institution_name
-      - account_number
-      - currency
-      - ledger_account_id
-      - min_balance
-      - is_active
-      type: object
-    NostroAccountCreate:
-      properties:
-        account_number:
-          description: Account number / IBAN
-          maxLength: 64
-          type: string
-        account_type:
-          description: Kind of account
-          enum:
-          - NOSTRO
-          - VOSTRO
-          - SETTLEMENT
-          - PREFUNDING
-          - CENTRAL_BANK
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        institution_bic:
-          description: Institution BIC
-          maxLength: 11
-          type: string
-        institution_name:
-          description: Holding institution
-          maxLength: 140
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Mirror ledger account
-          format: uuid
-          type: string
-        min_balance:
-          description: Minimum balance before alerting
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Account name
-          maxLength: 120
-          type: string
-        payment_rail_id:
-          description: Rail it funds
-          format: uuid
-          type: string
-        target_balance:
-          description: Target balance for top-up
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - name
-      - account_type
-      - institution_name
-      - account_number
-      - currency
-      - ledger_account_id
-      type: object
-    NostroAccountPage:
-      description: One page of NostroAccount results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/NostroAccount'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    NostroAccountUpdate:
-      properties:
-        account_number:
-          description: Account number / IBAN
-          maxLength: 64
-          type: string
-        account_type:
-          description: Kind of account
-          enum:
-          - NOSTRO
-          - VOSTRO
-          - SETTLEMENT
-          - PREFUNDING
-          - CENTRAL_BANK
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        institution_bic:
-          description: Institution BIC
-          maxLength: 11
-          type: string
-        institution_name:
-          description: Holding institution
-          maxLength: 140
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        ledger_account_id:
-          description: Mirror ledger account
-          format: uuid
-          type: string
-        min_balance:
-          description: Minimum balance before alerting
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Account name
-          maxLength: 120
-          type: string
-        payment_rail_id:
-          description: Rail it funds
-          format: uuid
-          type: string
-        target_balance:
-          description: Target balance for top-up
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      type: object
-    NostroAccountsTopUpRequest:
-      properties:
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - amount
-      type: object
-    PaymentRail:
-      description: A payment rail / scheme the platform can send to or receive from
-      properties:
-        code:
-          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
-          maxLength: 32
-          type: string
-        country:
-          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currencies:
-          additionalProperties: true
-          description: Supported currencies
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        holiday_calendar_id:
-          description: Calendar used for business days
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_instant:
-          description: Real-time rail
-          type: boolean
-        max_amount:
-          description: Scheme maximum per payment
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        message_standard:
-          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
-          maxLength: 32
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        operating_hours:
-          additionalProperties: true
-          description: Opening hours (24x7 or windows)
-          type:
-          - object
-          - 'null'
-        p95_latency_ms:
-          description: p95 end-to-end latency
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        rail_type:
-          description: Kind of rail
-          enum:
-          - INSTANT
-          - BATCH
-          - RTGS
-          - MOBILE_MONEY
-          - CROSS_BORDER
-          - CARD_PUSH
-          - INTERNAL
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        settlement_account_id:
-          description: Ledger settlement account
-          format: uuid
-          type:
-          - string
-          - 'null'
-        settlement_model:
-          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
-          maxLength: 32
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-        success_rate_7d:
-          description: Success rate over the last 7 days
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - rail_type
-      - currencies
-      - message_standard
-      - settlement_model
-      - is_instant
-      - status
-      type: object
-    PaymentRailCreate:
-      properties:
-        code:
-          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
-          maxLength: 32
-          type: string
-        country:
-          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        currencies:
-          additionalProperties: true
-          description: Supported currencies
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        holiday_calendar_id:
-          description: Calendar used for business days
-          format: uuid
-          type: string
-        is_instant:
-          description: Real-time rail
-          type: boolean
-        max_amount:
-          description: Scheme maximum per payment
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        message_standard:
-          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
-          maxLength: 32
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        operating_hours:
-          additionalProperties: true
-          description: Opening hours (24x7 or windows)
-          type: object
-        rail_type:
-          description: Kind of rail
-          enum:
-          - INSTANT
-          - BATCH
-          - RTGS
-          - MOBILE_MONEY
-          - CROSS_BORDER
-          - CARD_PUSH
-          - INTERNAL
-          type: string
-        settlement_account_id:
-          description: Ledger settlement account
-          format: uuid
-          type: string
-        settlement_model:
-          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
-          maxLength: 32
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-      required:
-      - code
-      - name
-      - rail_type
-      - currencies
-      - message_standard
-      - settlement_model
-      type: object
-    PaymentRailPage:
-      description: One page of PaymentRail results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PaymentRail'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PaymentRailUpdate:
-      properties:
-        code:
-          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
-          maxLength: 32
-          type: string
-        country:
-          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        currencies:
-          additionalProperties: true
-          description: Supported currencies
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        holiday_calendar_id:
-          description: Calendar used for business days
-          format: uuid
-          type: string
-        is_instant:
-          description: Real-time rail
-          type: boolean
-        max_amount:
-          description: Scheme maximum per payment
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        message_standard:
-          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
-          maxLength: 32
-          type: string
-        name:
-          description: Display name
-          maxLength: 120
-          type: string
-        operating_hours:
-          additionalProperties: true
-          description: Opening hours (24x7 or windows)
-          type: object
-        rail_type:
-          description: Kind of rail
-          enum:
-          - INSTANT
-          - BATCH
-          - RTGS
-          - MOBILE_MONEY
-          - CROSS_BORDER
-          - CARD_PUSH
-          - INTERNAL
-          type: string
-        settlement_account_id:
-          description: Ledger settlement account
-          format: uuid
-          type: string
-        settlement_model:
-          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
-          maxLength: 32
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-      type: object
-    PaymentRailsSuspendRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    PaymentRoutingRule:
-      description: Rule choosing a rail and adapter for a payment
-      properties:
-        candidate_rail_ids:
-          additionalProperties: true
-          description: Ordered candidate rails
-          type: object
-        conditions:
-          additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
-          type: object
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        fallback_rail_id:
-          description: Rail if candidates are unavailable
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluated first
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        strategy:
-          description: Selection strategy among candidate rails
-          enum:
-          - FIXED
-          - CHEAPEST
-          - FASTEST
-          - MOST_RELIABLE
-          - BALANCED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type:
-          - string
-          - 'null'
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-        weights:
-          additionalProperties: true
-          description: Weights for BALANCED strategy (cost, speed, success)
-          type:
-          - object
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - priority
-      - conditions
-      - strategy
-      - candidate_rail_ids
-      - is_active
-      type: object
-    PaymentRoutingRuleCreate:
-      properties:
-        candidate_rail_ids:
-          additionalProperties: true
-          description: Ordered candidate rails
-          type: object
-        conditions:
-          additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fallback_rail_id:
-          description: Rail if candidates are unavailable
-          format: uuid
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluated first
-          format: int32
-          type: integer
-        strategy:
-          description: Selection strategy among candidate rails
-          enum:
-          - FIXED
-          - CHEAPEST
-          - FASTEST
-          - MOST_RELIABLE
-          - BALANCED
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        weights:
-          additionalProperties: true
-          description: Weights for BALANCED strategy (cost, speed, success)
-          type: object
-      required:
-      - name
-      - conditions
-      - candidate_rail_ids
-      type: object
-    PaymentRoutingRulePage:
-      description: One page of PaymentRoutingRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PaymentRoutingRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PaymentRoutingRuleUpdate:
-      properties:
-        candidate_rail_ids:
-          additionalProperties: true
-          description: Ordered candidate rails
-          type: object
-        conditions:
-          additionalProperties: true
-          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
-          type: object
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fallback_rail_id:
-          description: Rail if candidates are unavailable
-          format: uuid
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        priority:
-          description: Lower evaluated first
-          format: int32
-          type: integer
-        strategy:
-          description: Selection strategy among candidate rails
-          enum:
-          - FIXED
-          - CHEAPEST
-          - FASTEST
-          - MOST_RELIABLE
-          - BALANCED
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        weights:
-          additionalProperties: true
-          description: Weights for BALANCED strategy (cost, speed, success)
-          type: object
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    RailAdapter:
-      description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
-      properties:
-        config:
-          additionalProperties: true
-          description: Adapter-specific configuration
-          type:
-          - object
-          - 'null'
-        connection_type:
-          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        endpoint_url:
-          description: Endpoint
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_primary:
-          description: Primary adapter for the rail
-          type: boolean
-        last_heartbeat_at:
-          description: Last successful heartbeat
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        name:
-          description: Adapter name
-          maxLength: 120
-          type: string
-        participant_id:
-          description: Our participant / member id on the rail
-          maxLength: 35
-          type:
-          - string
-          - 'null'
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        provider:
-          description: Sponsor bank or aggregator
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - payment_rail_id
-      - name
-      - connection_type
-      - is_primary
-      - status
-      type: object
-    RailAdapterCreate:
-      properties:
-        config:
-          additionalProperties: true
-          description: Adapter-specific configuration
-          type: object
-        connection_type:
-          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        endpoint_url:
-          description: Endpoint
-          maxLength: 500
-          type: string
-        is_primary:
-          description: Primary adapter for the rail
-          type: boolean
-        name:
-          description: Adapter name
-          maxLength: 120
-          type: string
-        participant_id:
-          description: Our participant / member id on the rail
-          maxLength: 35
-          type: string
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        provider:
-          description: Sponsor bank or aggregator
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-      required:
-      - payment_rail_id
-      - name
-      - connection_type
-      type: object
-    RailAdapterPage:
-      description: One page of RailAdapter results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailAdapter'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RailAdapterUpdate:
-      properties:
-        config:
-          additionalProperties: true
-          description: Adapter-specific configuration
-          type: object
-        connection_type:
-          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
-          maxLength: 32
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        endpoint_url:
-          description: Endpoint
-          maxLength: 500
-          type: string
-        is_primary:
-          description: Primary adapter for the rail
-          type: boolean
-        name:
-          description: Adapter name
-          maxLength: 120
-          type: string
-        participant_id:
-          description: Our participant / member id on the rail
-          maxLength: 35
-          type: string
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        provider:
-          description: Sponsor bank or aggregator
-          maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DEGRADED
-          - SUSPENDED
-          - RETIRED
-          type: string
-      type: object
-    RailCutoff:
-      description: Cut-off times per rail, payment type and currency
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (empty = all) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        cutoff_time:
-          description: Local time HH:MM
-          maxLength: 5
-          type: string
-        days_of_week:
-          additionalProperties: true
-          description: Days it applies to
-          type:
-          - object
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        next_day_rollover:
-          description: After cut-off, roll to next business day
-          type: boolean
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        payment_type:
-          description: Payment type (empty = all)
-          enum:
-          - INTERNAL_TRANSFER
-          - P2P
-          - DOMESTIC
-          - INSTANT
-          - CROSS_BORDER
-          - BULK_ITEM
-          - PAYROLL
-          - DIRECT_DEBIT
-          - REQUEST_TO_PAY
-          - BILL_PAYMENT
-          - QR_PAYMENT
-          - LINK_PAYMENT
-          - REFUND
-          - RETURN
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        timezone:
-          description: IANA timezone
-          maxLength: 64
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - payment_rail_id
-      - cutoff_time
-      - timezone
-      - next_day_rollover
-      type: object
-    RailCutoffCreate:
-      properties:
-        currency:
-          description: Currency (empty = all) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        cutoff_time:
-          description: Local time HH:MM
-          maxLength: 5
-          type: string
-        days_of_week:
-          additionalProperties: true
-          description: Days it applies to
-          type: object
-        next_day_rollover:
-          description: After cut-off, roll to next business day
-          type: boolean
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        payment_type:
-          description: Payment type (empty = all)
-          enum:
-          - INTERNAL_TRANSFER
-          - P2P
-          - DOMESTIC
-          - INSTANT
-          - CROSS_BORDER
-          - BULK_ITEM
-          - PAYROLL
-          - DIRECT_DEBIT
-          - REQUEST_TO_PAY
-          - BILL_PAYMENT
-          - QR_PAYMENT
-          - LINK_PAYMENT
-          - REFUND
-          - RETURN
-          type: string
-        timezone:
-          description: IANA timezone
-          maxLength: 64
-          type: string
-      required:
-      - payment_rail_id
-      - cutoff_time
-      - timezone
-      type: object
-    RailCutoffPage:
-      description: One page of RailCutoff results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailCutoff'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RailCutoffUpdate:
-      properties:
-        currency:
-          description: Currency (empty = all) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        cutoff_time:
-          description: Local time HH:MM
-          maxLength: 5
-          type: string
-        days_of_week:
-          additionalProperties: true
-          description: Days it applies to
-          type: object
-        next_day_rollover:
-          description: After cut-off, roll to next business day
-          type: boolean
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        payment_type:
-          description: Payment type (empty = all)
-          enum:
-          - INTERNAL_TRANSFER
-          - P2P
-          - DOMESTIC
-          - INSTANT
-          - CROSS_BORDER
-          - BULK_ITEM
-          - PAYROLL
-          - DIRECT_DEBIT
-          - REQUEST_TO_PAY
-          - BILL_PAYMENT
-          - QR_PAYMENT
-          - LINK_PAYMENT
-          - REFUND
-          - RETURN
-          type: string
-        timezone:
-          description: IANA timezone
-          maxLength: 64
-          type: string
-      type: object
-    RailLiquidityPosition:
-      description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
-      properties:
-        as_of:
-          description: Position time
-          format: date-time
-          type: string
-        available_liquidity:
-          description: Balance minus reserved outflows
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        breach:
-          description: Below minimum balance
-          type: boolean
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        current_balance:
-          description: Current balance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        nostro_account_id:
-          description: Account
-          format: uuid
-          type: string
-        opening_balance:
-          description: Opening balance
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        projected_inflows:
-          description: Expected inflows
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        projected_outflows:
-          description: Expected outflows
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - nostro_account_id
-      - as_of
-      - opening_balance
-      - projected_inflows
-      - projected_outflows
-      - current_balance
-      - available_liquidity
-      - currency
-      - breach
-      type: object
-    RailLiquidityPositionPage:
-      description: One page of RailLiquidityPosition results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailLiquidityPosition'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RailMessage:
-      description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        direction:
-          description: Inbound or outbound
-          enum:
-          - INBOUND
-          - OUTBOUND
-          type: string
-        error:
-          description: Error detail
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        message_id:
-          description: Message id (MsgId)
-          maxLength: 64
-          type: string
-        message_type:
-          description: e.g. pacs.008.001.08, pacs.002, camt.056, pain.001
-          maxLength: 32
-          type: string
-        payload_hash:
-          description: SHA-256 of the payload
-          maxLength: 64
-          type: string
-        payload_uri:
-          description: Encrypted payload location (object storage)
-          maxLength: 500
-          type: string
-        payment_id:
-          description: Related payment
-          format: uuid
-          type:
-          - string
-          - 'null'
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        rail_settlement_batch_id:
-          description: Batch, for batch rails
-          format: uuid
-          type:
-          - string
-          - 'null'
-        signature_valid:
-          description: Signature verification result
-          type:
-          - boolean
-          - 'null'
-        status:
-          description: Processing status
-          enum:
-          - RECEIVED
-          - PARSED
-          - SENT
-          - ACKNOWLEDGED
-          - NACKED
-          - FAILED
-          type: string
-      required:
-      - id
-      - created_at
-      - payment_rail_id
-      - direction
-      - message_type
-      - message_id
-      - status
-      - payload_uri
-      - payload_hash
-      type: object
-    RailMessagePage:
-      description: One page of RailMessage results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailMessage'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RailMessagesReplayRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      required:
-      - reason
-      type: object
-    RailParticipant:
-      description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
-      properties:
-        bic:
-          description: BIC
-          maxLength: 11
-          type:
-          - string
-          - 'null'
-        clearing_id:
-          description: Sort code, ABA routing number, IFSC, ISPB
-          maxLength: 35
-          type:
-          - string
-          - 'null'
-        clearing_system:
-          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
-          maxLength: 16
-          type:
-          - string
-          - 'null'
-        country:
-          description: Country (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Institution name
-          maxLength: 140
-          type: string
-        reachable_rails:
-          additionalProperties: true
-          description: Rail codes the participant is reachable on
-          type:
-          - object
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source:
-          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Directory validity start
-          format: date
-          type:
-          - string
-          - 'null'
-        valid_to:
-          description: Directory validity end
-          format: date
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - country
-      type: object
-    RailParticipantCreate:
-      properties:
-        bic:
-          description: BIC
-          maxLength: 11
-          type: string
-        clearing_id:
-          description: Sort code, ABA routing number, IFSC, ISPB
-          maxLength: 35
-          type: string
-        clearing_system:
-          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
-          maxLength: 16
-          type: string
-        country:
-          description: Country (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        name:
-          description: Institution name
-          maxLength: 140
-          type: string
-        reachable_rails:
-          additionalProperties: true
-          description: Rail codes the participant is reachable on
-          type: object
-        source:
-          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
-          maxLength: 32
-          type: string
-        valid_from:
-          description: Directory validity start
-          format: date
-          type: string
-        valid_to:
-          description: Directory validity end
-          format: date
-          type: string
-      required:
-      - name
-      - country
-      type: object
-    RailParticipantPage:
-      description: One page of RailParticipant results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailParticipant'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RailParticipantUpdate:
-      properties:
-        bic:
-          description: BIC
-          maxLength: 11
-          type: string
-        clearing_id:
-          description: Sort code, ABA routing number, IFSC, ISPB
-          maxLength: 35
-          type: string
-        clearing_system:
-          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
-          maxLength: 16
-          type: string
-        country:
-          description: Country (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        name:
-          description: Institution name
-          maxLength: 140
-          type: string
-        reachable_rails:
-          additionalProperties: true
-          description: Rail codes the participant is reachable on
-          type: object
-        source:
-          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
-          maxLength: 32
-          type: string
-        valid_from:
-          description: Directory validity start
-          format: date
-          type: string
-        valid_to:
-          description: Directory validity end
-          format: date
-          type: string
-      type: object
-    RailParticipantsLookupRequest:
-      properties:
-        bic:
-          maxLength: 11
-          type: string
-        clearing_id:
-          maxLength: 35
-          type: string
-        clearing_system:
-          maxLength: 16
-          type: string
-        iban:
-          maxLength: 34
-          type: string
-      type: object
-    RailSettlementBatch:
-      description: Settlement cycle / batch on a rail (net positions, files submitted)
-      properties:
-        closed_at:
-          description: Time closed
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        credit_count:
-          description: Credits in the batch
-          format: int32
-          readOnly: true
-          type: integer
-        credit_total:
-          description: Sum of credits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        cycle_id:
-          description: Rail settlement cycle id
-          maxLength: 64
-          type: string
-        debit_count:
-          description: Debits in the batch
-          format: int32
-          readOnly: true
-          type: integer
-        debit_total:
-          description: Sum of debits
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Settlement posting
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        net_position:
-          description: Net settlement position
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type: string
-        payment_rail_id:
-          description: Rail
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        settled_at:
-          description: Time settled
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        settlement_date:
-          description: Settlement date
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - CLOSED
-          - SUBMITTED
-          - SETTLED
-          - FAILED
-          - RECONCILED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - payment_rail_id
-      - cycle_id
-      - settlement_date
-      - status
-      - currency
-      - debit_count
-      - credit_count
-      - debit_total
-      - credit_total
-      - net_position
-      type: object
-    RailSettlementBatchPage:
-      description: One page of RailSettlementBatch results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RailSettlementBatch'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RoutingRulesSimulateRequest:
-      properties:
-        payment:
-          additionalProperties: true
-          type: object
-      required:
-      - payment
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            payments:read: Read Payments Hub
-            payments:write: Change Payments Hub
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            payments:read: Read Payments Hub
-            payments:write: Change Payments Hub
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — routing-service
+  version: 1.0.0
   description: 'ISO 20022-native payments hub. Initiates, screens, approves, routes, submits and settles payments on every
     rail (instant, batch, RTGS, mobile money, cross-border); manages payees, aliases, bulk files, direct-debit mandates, request-to-pay,
     payment links and QR codes; runs rail routing, settlement, liquidity and FX.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — routing-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Payment Rails
+  description: A payment rail / scheme the platform can send to or receive from
+- name: Rail Adapters
+  description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
+- name: Rail Cutoffs
+  description: Cut-off times per rail, payment type and currency
+- name: Routing Rules
+  description: Rule choosing a rail and adapter for a payment
+- name: Rail Messages
+  description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
+- name: Rail Settlement Batches
+  description: Settlement cycle / batch on a rail (net positions, files submitted)
+- name: Nostro Accounts
+  description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
+- name: Liquidity Positions
+  description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
+- name: Rail Participants
+  description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
 paths:
   /v1/payment-rails:
     get:
@@ -2707,7 +298,7 @@ paths:
   /v1/payment-rails/{id}/resume:
     post:
       operationId: paymentRailsResume
-      summary: Resume a suspended rail
+      summary: Resume a suspended or degraded rail
       tags:
       - Payment Rails
       security:
@@ -2738,6 +329,58 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsResumeRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_rail
+  /v1/payment-rails/{id}/metrics:
+    post:
+      operationId: paymentRailsMetrics
+      summary: Record observed performance from rail monitoring (DEGRADED below the success threshold)
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsMetricsRequest'
       x-requirements:
       - PAY-02
       - PAY-05
@@ -2784,7 +427,7 @@ paths:
   /v1/payment-rails/{id}/next-execution:
     get:
       operationId: paymentRailsNextExecution
-      summary: Next possible execution date and time (?payment_type=&currency=)
+      summary: Next possible execution date and cut-off for a payment type and currency (business calendar aware)
       tags:
       - Payment Rails
       security:
@@ -2797,9 +440,47 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: payment_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: at
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2811,6 +492,52 @@ paths:
       - PAY-05
       x-service: routing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-table: payment_rail
+  /v1/payment-rails/{id}/inbound:
+    post:
+      operationId: paymentRailsInbound
+      summary: Inbound rail message (pacs.002, pacs.008, camt.056, pacs.004) pushed by the rail or sponsor bank; HMAC signature
+        in X-Rail-Signature
+      tags:
+      - Payment Rails
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsInboundRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: payment_rail
   /v1/rail-adapters:
     get:
@@ -3007,7 +734,7 @@ paths:
   /v1/rail-adapters/{id}/test-connection:
     post:
       operationId: railAdaptersTestConnection
-      summary: Send a heartbeat / echo to the rail
+      summary: Send a heartbeat / echo to the rail endpoint and report reachability and latency
       tags:
       - Rail Adapters
       security:
@@ -3022,8 +749,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3042,7 +775,7 @@ paths:
   /v1/rail-adapters/{id}/rotate-credentials:
     post:
       operationId: railAdaptersRotateCredentials
-      summary: Rotate certificates and keys
+      summary: Rotate certificates and keys to a new vault secret reference
       tags:
       - Rail Adapters
       security:
@@ -3073,6 +806,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailAdaptersRotateCredentialsRequest'
       x-requirements:
       - PAY-02
       x-service: routing-service
@@ -3525,7 +1264,7 @@ paths:
   /v1/routing-rules/simulate:
     post:
       operationId: routingRulesSimulate
-      summary: Show which rail a payment would take and why
+      summary: Show which rail a payment would take and why (rules, candidates, scores)
       tags:
       - Routing Rules
       security:
@@ -3539,7 +1278,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRail'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3556,6 +1297,48 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RoutingRulesSimulateRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: payment_routing_rule
+  /v1/routing-rules/route:
+    post:
+      operationId: routingRulesRoute
+      summary: Choose the rail for a payment, with execution date, cut-off and settlement account
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRulesRouteRequest'
       x-requirements:
       - PAY-02
       - PAY-08
@@ -3614,6 +1397,11 @@ paths:
           - ACKNOWLEDGED
           - NACKED
           - FAILED
+      - name: end_to_end_id
+        in: query
+        schema:
+          type: string
+          maxLength: 35
       - name: custom_field_1
         in: query
         schema:
@@ -3693,10 +1481,49 @@ paths:
       x-table: rail_message
       x-crud: true
       x-crud-get: true
+  /v1/rail-messages/pacs008:
+    post:
+      operationId: railMessagesPacs008
+      summary: Build, store and send the outbound pacs.008 FI-to-FI customer credit transfer for a payment
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailMessagesPacs008Request'
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: rail_message
   /v1/rail-messages/{id}/payload:
     get:
       operationId: railMessagesPayload
-      summary: Decrypted raw payload (requires payments:audit scope)
+      summary: Raw payload (requires payments:audit scope)
       tags:
       - Rail Messages
       security:
@@ -3710,8 +1537,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3746,7 +1577,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RailMessage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3890,6 +1723,47 @@ paths:
     post:
       operationId: railSettlementBatchesClose
       summary: Close the batch and generate the settlement file
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailSettlementBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: rail_settlement_batch
+  /v1/rail-settlement-batches/{id}/settle:
+    post:
+      operationId: railSettlementBatchesSettle
+      summary: Confirm settlement of the cycle and post the net position to the ledger
       tags:
       - Rail Settlement Batches
       security:
@@ -4203,10 +2077,10 @@ paths:
       x-service: routing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
       x-table: nostro_account
-  /v1/nostro-accounts/{id}/top-up:
+  /v1/nostro-accounts/{id}/refresh-position:
     post:
-      operationId: nostroAccountsTopUp
-      summary: Request a liquidity top-up transfer
+      operationId: nostroAccountsRefreshPosition
+      summary: Recompute the intraday position from the ledger balance and open settlement batches
       tags:
       - Nostro Accounts
       security:
@@ -4221,8 +2095,52 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPosition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-table: nostro_account
+  /v1/nostro-accounts/{id}/top-up:
+    post:
+      operationId: nostroAccountsTopUp
+      summary: Fund the nostro from the treasury funding account and record the new position
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPosition'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4566,7 +2484,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RailParticipant'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4589,29 +2509,2588 @@ paths:
       x-service: routing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-table: rail_participant
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A payment rail / scheme the platform can send to or receive from
-  name: Payment Rails
-- description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
-  name: Rail Adapters
-- description: Cut-off times per rail, payment type and currency
-  name: Rail Cutoffs
-- description: Rule choosing a rail and adapter for a payment
-  name: Routing Rules
-- description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
-  name: Rail Messages
-- description: Settlement cycle / batch on a rail (net positions, files submitted)
-  name: Rail Settlement Batches
-- description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
-  name: Nostro Accounts
-- description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
-  name: Liquidity Positions
-- description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
-  name: Rail Participants
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    PaymentRailPage:
+      type: object
+      description: One page of PaymentRail results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRail'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PaymentRailsSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    PaymentRailsResumeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    PaymentRailsMetricsRequest:
+      type: object
+      properties:
+        success_rate_7d:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        p95_latency_ms:
+          type: integer
+          format: int32
+      required:
+      - success_rate_7d
+      - p95_latency_ms
+    RailCutoffPage:
+      type: object
+      description: One page of RailCutoff results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailCutoff'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PaymentRailsInboundRequest:
+      type: object
+      properties:
+        message_type:
+          type: string
+          maxLength: 32
+        payload:
+          type: string
+      required:
+      - message_type
+      - payload
+    RailAdapterPage:
+      type: object
+      description: One page of RailAdapter results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailAdapter'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RailAdaptersRotateCredentialsRequest:
+      type: object
+      properties:
+        credentials_ref:
+          type: string
+          maxLength: 255
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - credentials_ref
+    PaymentRoutingRulePage:
+      type: object
+      description: One page of PaymentRoutingRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRoutingRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RoutingRulesSimulateRequest:
+      type: object
+      properties:
+        payment:
+          type: object
+          additionalProperties: true
+      required:
+      - payment
+    RoutingRulesRouteRequest:
+      type: object
+      properties:
+        payment:
+          type: object
+          additionalProperties: true
+      required:
+      - payment
+    RailMessagePage:
+      type: object
+      description: One page of RailMessage results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailMessage'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RailMessagesPacs008Request:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+        payment:
+          type: object
+          additionalProperties: true
+      required:
+      - payment_rail_id
+      - payment
+    RailMessagesReplayRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    RailSettlementBatchPage:
+      type: object
+      description: One page of RailSettlementBatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailSettlementBatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NostroAccountPage:
+      type: object
+      description: One page of NostroAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NostroAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RailLiquidityPositionPage:
+      type: object
+      description: One page of RailLiquidityPosition results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailLiquidityPosition'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NostroAccountsTopUpRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - amount
+    RailParticipantPage:
+      type: object
+      description: One page of RailParticipant results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailParticipant'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RailParticipantsLookupRequest:
+      type: object
+      properties:
+        bic:
+          type: string
+          maxLength: 11
+        iban:
+          type: string
+          maxLength: 34
+        clearing_system:
+          type: string
+          maxLength: 16
+        clearing_id:
+          type: string
+          maxLength: 35
+    NostroAccount:
+      type: object
+      description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+          description: Account name
+        account_type:
+          type: string
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          description: Kind of account
+        institution_name:
+          type: string
+          maxLength: 140
+          description: Holding institution
+        institution_bic:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: Institution BIC
+        account_number:
+          type: string
+          maxLength: 64
+          description: Account number / IBAN
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Mirror ledger account
+        payment_rail_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rail it funds
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance before alerting
+        target_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Target balance for top-up
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - account_type
+      - institution_name
+      - account_number
+      - currency
+      - ledger_account_id
+      - min_balance
+      - is_active
+    NostroAccountCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Account name
+        account_type:
+          type: string
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          description: Kind of account
+        institution_name:
+          type: string
+          maxLength: 140
+          description: Holding institution
+        institution_bic:
+          type: string
+          maxLength: 11
+          description: Institution BIC
+        account_number:
+          type: string
+          maxLength: 64
+          description: Account number / IBAN
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Mirror ledger account
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail it funds
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance before alerting
+        target_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Target balance for top-up
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - account_type
+      - institution_name
+      - account_number
+      - currency
+      - ledger_account_id
+    NostroAccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Account name
+        account_type:
+          type: string
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          description: Kind of account
+        institution_name:
+          type: string
+          maxLength: 140
+          description: Holding institution
+        institution_bic:
+          type: string
+          maxLength: 11
+          description: Institution BIC
+        account_number:
+          type: string
+          maxLength: 64
+          description: Account number / IBAN
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Mirror ledger account
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail it funds
+        min_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance before alerting
+        target_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Target balance for top-up
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PaymentRail:
+      type: object
+      description: A payment rail / scheme the platform can send to or receive from
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        rail_type:
+          type: string
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          description: Kind of rail
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+        currencies:
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
+        message_standard:
+          type: string
+          maxLength: 32
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme maximum per payment
+        settlement_model:
+          type: string
+          maxLength: 32
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+        is_instant:
+          type: boolean
+          description: Real-time rail
+        operating_hours:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+        holiday_calendar_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Calendar used for business days
+        settlement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          description: Status (changed by suspend / resume)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last status change
+          readOnly: true
+        success_rate_7d:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Success rate over the last 7 days
+          readOnly: true
+        p95_latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: p95 end-to-end latency
+          readOnly: true
+        metrics_updated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the performance metrics were last recorded
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - rail_type
+      - currencies
+      - message_standard
+      - settlement_model
+      - is_instant
+      - cost_per_payment
+      - status
+    PaymentRailCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        rail_type:
+          type: string
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          description: Kind of rail
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+        currencies:
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
+        message_standard:
+          type: string
+          maxLength: 32
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme maximum per payment
+        settlement_model:
+          type: string
+          maxLength: 32
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+        is_instant:
+          type: boolean
+          description: Real-time rail
+        operating_hours:
+          type: object
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+        holiday_calendar_id:
+          type: string
+          format: uuid
+          description: Calendar used for business days
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type: integer
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type: string
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - rail_type
+      - currencies
+      - message_standard
+      - settlement_model
+    PaymentRailUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        rail_type:
+          type: string
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          description: Kind of rail
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+        currencies:
+          type: array
+          items: {}
+          description: Supported currencies (ISO 4217 codes)
+        message_standard:
+          type: string
+          maxLength: 32
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme maximum per payment
+        settlement_model:
+          type: string
+          maxLength: 32
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+        is_instant:
+          type: boolean
+          description: Real-time rail
+        operating_hours:
+          type: object
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+        holiday_calendar_id:
+          type: string
+          format: uuid
+          description: Calendar used for business days
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: Ledger settlement (clearing) account credited for outbound payments
+        cost_per_payment:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Scheme and sponsor cost per payment (routing cost factor)
+        settlement_minutes:
+          type: integer
+          format: int32
+          description: Typical end-to-end settlement time in minutes
+        participant_bic:
+          type: string
+          maxLength: 11
+          description: Our BIC / participant id on the rail (instructing agent)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PaymentRoutingRule:
+      type: object
+      description: Rule choosing a rail and adapter for a payment
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluated first
+        conditions:
+          type: object
+          additionalProperties: true
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
+        strategy:
+          type: string
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          description: Selection strategy among candidate rails
+        candidate_rail_ids:
+          type: array
+          items: {}
+          description: Ordered candidate rails
+        fallback_rail_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rail if candidates are unavailable
+        weights:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - priority
+      - conditions
+      - strategy
+      - candidate_rail_ids
+      - is_active
+    PaymentRoutingRuleCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluated first
+        conditions:
+          type: object
+          additionalProperties: true
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
+        strategy:
+          type: string
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          description: Selection strategy among candidate rails
+        candidate_rail_ids:
+          type: array
+          items: {}
+          description: Ordered candidate rails
+        fallback_rail_id:
+          type: string
+          format: uuid
+          description: Rail if candidates are unavailable
+        weights:
+          type: object
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - conditions
+      - candidate_rail_ids
+    PaymentRoutingRuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower evaluated first
+        conditions:
+          type: object
+          additionalProperties: true
+          description: Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)
+        strategy:
+          type: string
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          description: Selection strategy among candidate rails
+        candidate_rail_ids:
+          type: array
+          items: {}
+          description: Ordered candidate rails
+        fallback_rail_id:
+          type: string
+          format: uuid
+          description: Rail if candidates are unavailable
+        weights:
+          type: object
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RailAdapter:
+      type: object
+      description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        name:
+          type: string
+          maxLength: 120
+          description: Adapter name
+        connection_type:
+          type: string
+          maxLength: 32
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+        provider:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sponsor bank or aggregator
+        participant_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: Our participant / member id on the rail
+        endpoint_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Endpoint
+        credentials_version:
+          type: integer
+          format: int32
+          description: Credentials generation (incremented on rotation)
+          readOnly: true
+        credentials_rotated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last rotation time
+          readOnly: true
+        config:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Adapter-specific configuration
+        is_primary:
+          type: boolean
+          description: Primary adapter for the rail
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          description: Status
+        last_heartbeat_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last successful heartbeat
+          readOnly: true
+        last_test_result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Result of the last connection test
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - name
+      - connection_type
+      - credentials_version
+      - is_primary
+      - status
+    RailAdapterCreate:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        name:
+          type: string
+          maxLength: 120
+          description: Adapter name
+        connection_type:
+          type: string
+          maxLength: 32
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+        provider:
+          type: string
+          maxLength: 64
+          description: Sponsor bank or aggregator
+        participant_id:
+          type: string
+          maxLength: 35
+          description: Our participant / member id on the rail
+        endpoint_url:
+          type: string
+          maxLength: 500
+          description: Endpoint
+        config:
+          type: object
+          additionalProperties: true
+          description: Adapter-specific configuration
+        is_primary:
+          type: boolean
+          description: Primary adapter for the rail
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          description: Status
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - payment_rail_id
+      - name
+      - connection_type
+    RailAdapterUpdate:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        name:
+          type: string
+          maxLength: 120
+          description: Adapter name
+        connection_type:
+          type: string
+          maxLength: 32
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+        provider:
+          type: string
+          maxLength: 64
+          description: Sponsor bank or aggregator
+        participant_id:
+          type: string
+          maxLength: 35
+          description: Our participant / member id on the rail
+        endpoint_url:
+          type: string
+          maxLength: 500
+          description: Endpoint
+        config:
+          type: object
+          additionalProperties: true
+          description: Adapter-specific configuration
+        is_primary:
+          type: boolean
+          description: Primary adapter for the rail
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          description: Status
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RailCutoff:
+      type: object
+      description: Cut-off times per rail, payment type and currency
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        payment_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          description: Payment type (empty = all)
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (empty = all) (ISO 4217)
+        cutoff_time:
+          type: string
+          maxLength: 5
+          description: Local time HH:MM
+        timezone:
+          type: string
+          maxLength: 64
+          description: IANA timezone
+        days_of_week:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
+        next_day_rollover:
+          type: boolean
+          description: After cut-off, roll to next business day
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - cutoff_time
+      - timezone
+      - next_day_rollover
+    RailCutoffCreate:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        payment_type:
+          type: string
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          description: Payment type (empty = all)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (empty = all) (ISO 4217)
+        cutoff_time:
+          type: string
+          maxLength: 5
+          description: Local time HH:MM
+        timezone:
+          type: string
+          maxLength: 64
+          description: IANA timezone
+        days_of_week:
+          type: array
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
+        next_day_rollover:
+          type: boolean
+          description: After cut-off, roll to next business day
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - payment_rail_id
+      - cutoff_time
+      - timezone
+    RailCutoffUpdate:
+      type: object
+      properties:
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        payment_type:
+          type: string
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          description: Payment type (empty = all)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (empty = all) (ISO 4217)
+        cutoff_time:
+          type: string
+          maxLength: 5
+          description: Local time HH:MM
+        timezone:
+          type: string
+          maxLength: 64
+          description: IANA timezone
+        days_of_week:
+          type: array
+          items: {}
+          description: Days it applies to (MONDAY..SUNDAY; empty = every business day)
+        next_day_rollover:
+          type: boolean
+          description: After cut-off, roll to next business day
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RailLiquidityPosition:
+      type: object
+      description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        nostro_account_id:
+          type: string
+          format: uuid
+          description: Account
+        as_of:
+          type: string
+          format: date-time
+          description: Position time
+        opening_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Opening balance
+        projected_inflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Expected inflows
+        projected_outflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Expected outflows
+        current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Current balance
+        available_liquidity:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance minus reserved outflows
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        breach:
+          type: boolean
+          description: Below minimum balance
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - nostro_account_id
+      - as_of
+      - opening_balance
+      - projected_inflows
+      - projected_outflows
+      - current_balance
+      - available_liquidity
+      - currency
+      - breach
+    RailMessage:
+      type: object
+      description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        direction:
+          type: string
+          enum:
+          - INBOUND
+          - OUTBOUND
+          description: Inbound or outbound
+        message_type:
+          type: string
+          maxLength: 32
+          description: e.g. pacs.008.001.08, pacs.002, camt.056, pain.001
+        message_id:
+          type: string
+          maxLength: 64
+          description: Message id (MsgId)
+        end_to_end_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: End-to-end id of the (original) transaction
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Related payment
+        rail_settlement_batch_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Batch, for batch rails
+        replay_of_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Message this one replays
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - PARSED
+          - SENT
+          - ACKNOWLEDGED
+          - NACKED
+          - FAILED
+          description: Processing status
+        payload_uri:
+          type: string
+          maxLength: 500
+          description: Encrypted payload location (object storage)
+        payload_hash:
+          type: string
+          maxLength: 64
+          description: SHA-256 of the payload
+        signature_valid:
+          type:
+          - boolean
+          - 'null'
+          description: Signature verification result
+        error:
+          type:
+          - string
+          - 'null'
+          description: Error detail
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - payment_rail_id
+      - direction
+      - message_type
+      - message_id
+      - status
+      - payload_uri
+      - payload_hash
+    RailParticipant:
+      type: object
+      description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        bic:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: BIC
+        clearing_system:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+        clearing_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: Sort code, ABA routing number, IFSC, ISPB
+        name:
+          type: string
+          maxLength: 140
+          description: Institution name
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        reachable_rails:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Rail codes the participant is reachable on
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Directory validity start
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Directory validity end
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - country
+    RailParticipantCreate:
+      type: object
+      properties:
+        bic:
+          type: string
+          maxLength: 11
+          description: BIC
+        clearing_system:
+          type: string
+          maxLength: 16
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+        clearing_id:
+          type: string
+          maxLength: 35
+          description: Sort code, ABA routing number, IFSC, ISPB
+        name:
+          type: string
+          maxLength: 140
+          description: Institution name
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        reachable_rails:
+          type: array
+          items: {}
+          description: Rail codes the participant is reachable on
+        valid_from:
+          type: string
+          format: date
+          description: Directory validity start
+        valid_to:
+          type: string
+          format: date
+          description: Directory validity end
+        source:
+          type: string
+          maxLength: 32
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - country
+    RailParticipantUpdate:
+      type: object
+      properties:
+        bic:
+          type: string
+          maxLength: 11
+          description: BIC
+        clearing_system:
+          type: string
+          maxLength: 16
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+        clearing_id:
+          type: string
+          maxLength: 35
+          description: Sort code, ABA routing number, IFSC, ISPB
+        name:
+          type: string
+          maxLength: 140
+          description: Institution name
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        reachable_rails:
+          type: array
+          items: {}
+          description: Rail codes the participant is reachable on
+        valid_from:
+          type: string
+          format: date
+          description: Directory validity start
+        valid_to:
+          type: string
+          format: date
+          description: Directory validity end
+        source:
+          type: string
+          maxLength: 32
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RailSettlementBatch:
+      type: object
+      description: Settlement cycle / batch on a rail (net positions, files submitted)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        payment_rail_id:
+          type: string
+          format: uuid
+          description: Rail
+        cycle_id:
+          type: string
+          maxLength: 64
+          description: Rail settlement cycle id
+        settlement_date:
+          type: string
+          format: date
+          description: Settlement date
+        status:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+          - SUBMITTED
+          - SETTLED
+          - FAILED
+          - RECONCILED
+          description: Status
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        debit_count:
+          type: integer
+          format: int32
+          description: Debits in the batch
+          readOnly: true
+        credit_count:
+          type: integer
+          format: int32
+          description: Credits in the batch
+          readOnly: true
+        debit_total:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sum of debits
+          readOnly: true
+        credit_total:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sum of credits
+          readOnly: true
+        net_position:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net settlement position
+          readOnly: true
+        settlement_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Settlement file generated on close (logical ref: a FK would cycle with rail_message.rail_settlement_batch_id)'
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement posting
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time closed
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time settled
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - cycle_id
+      - settlement_date
+      - status
+      - currency
+      - debit_count
+      - credit_count
+      - debit_total
+      - credit_total
+      - net_position
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub

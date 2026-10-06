@@ -1,1942 +1,37 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    AlmBehaviouralAssumption:
-      description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
-      properties:
-        approved_by:
-          description: Model approver
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        assumption_type:
-          description: Assumption type
-          enum:
-          - PREPAYMENT
-          - DEPOSIT_DECAY
-          - NON_MATURITY_REPRICING
-          - EARLY_WITHDRAWAL
-          - DRAWDOWN
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        model_version:
-          description: Model version
-          maxLength: 32
-          type: string
-        parameters:
-          additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
-          type: object
-        product_id:
-          description: Product (empty = all products of the segment)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        segment:
-          description: Customer / product segment
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - assumption_type
-      - parameters
-      - valid_from
-      - model_version
-      type: object
-    AlmBehaviouralAssumptionCreate:
-      properties:
-        approved_by:
-          description: Model approver
-          maxLength: 64
-          type: string
-        assumption_type:
-          description: Assumption type
-          enum:
-          - PREPAYMENT
-          - DEPOSIT_DECAY
-          - NON_MATURITY_REPRICING
-          - EARLY_WITHDRAWAL
-          - DRAWDOWN
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        model_version:
-          description: Model version
-          maxLength: 32
-          type: string
-        parameters:
-          additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
-          type: object
-        product_id:
-          description: Product (empty = all products of the segment)
-          format: uuid
-          type: string
-        segment:
-          description: Customer / product segment
-          maxLength: 64
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      required:
-      - assumption_type
-      - parameters
-      - valid_from
-      - model_version
-      type: object
-    AlmBehaviouralAssumptionPage:
-      description: One page of AlmBehaviouralAssumption results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AlmBehaviouralAssumption'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AlmBehaviouralAssumptionUpdate:
-      properties:
-        approved_by:
-          description: Model approver
-          maxLength: 64
-          type: string
-        assumption_type:
-          description: Assumption type
-          enum:
-          - PREPAYMENT
-          - DEPOSIT_DECAY
-          - NON_MATURITY_REPRICING
-          - EARLY_WITHDRAWAL
-          - DRAWDOWN
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        model_version:
-          description: Model version
-          maxLength: 32
-          type: string
-        parameters:
-          additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
-          type: object
-        product_id:
-          description: Product (empty = all products of the segment)
-          format: uuid
-          type: string
-        segment:
-          description: Customer / product segment
-          maxLength: 64
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      type: object
-    AlmBehaviouralAssumptionsApproveRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    AlmGapBucket:
-      description: Repricing gap per time bucket (rate-sensitive assets minus liabilities)
-      properties:
-        alm_gap_run_id:
-          description: Gap run
-          format: uuid
-          type: string
-        breakdown:
-          additionalProperties: true
-          description: Amounts by product
-          type:
-          - object
-          - 'null'
-        bucket_code:
-          description: Bucket, e.g. 0-1M, 1-3M, 3-6M, 6-12M, 1-2Y, 2-5Y, >5Y
-          maxLength: 16
-          type: string
-        bucket_order:
-          description: Display order
-          format: int32
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        cumulative_gap:
-          description: Cumulative gap
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        gap:
-          description: Net repricing gap
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        off_balance_net:
-          description: Off-balance-sheet net position
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        rate_sensitive_assets:
-          description: Assets repricing in the bucket
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        rate_sensitive_liabilities:
-          description: Liabilities repricing in the bucket
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-      required:
-      - id
-      - created_at
-      - alm_gap_run_id
-      - bucket_code
-      - bucket_order
-      - rate_sensitive_assets
-      - rate_sensitive_liabilities
-      - off_balance_net
-      - gap
-      - cumulative_gap
-      type: object
-    AlmGapBucketPage:
-      description: One page of AlmGapBucket results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AlmGapBucket'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AlmGapRun:
-      description: Repricing gap report run at an as-of date
-      properties:
-        as_of_date:
-          description: As-of date
-          format: date
-          type: string
-        behavioural:
-          description: Apply behavioural assumptions
-          type: boolean
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (empty = all, in base currency) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        finished_at:
-          description: End
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_entity_id:
-          description: Entity
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        started_at:
-          description: Start
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Run status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - legal_entity_id
-      - as_of_date
-      - behavioural
-      - status
-      type: object
-    AlmGapRunCreate:
-      properties:
-        as_of_date:
-          description: As-of date
-          format: date
-          type: string
-        behavioural:
-          description: Apply behavioural assumptions
-          type: boolean
-        currency:
-          description: Currency (empty = all, in base currency) (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        legal_entity_id:
-          description: Entity
-          format: uuid
-          type: string
-      required:
-      - legal_entity_id
-      - as_of_date
-      type: object
-    AlmGapRunPage:
-      description: One page of AlmGapRun results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AlmGapRun'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AlmSensitivityRun:
-      description: NII / EVE / EaR sensitivity simulation under a rate shock
-      properties:
-        as_of_date:
-          description: As-of date
-          format: date
-          type: string
-        base_value:
-          description: Base-case NII or EVE
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Reporting currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_shock:
-          additionalProperties: true
-          description: Tenor-by-tenor shocks for CUSTOM
-          type:
-          - object
-          - 'null'
-        delta:
-          description: Change versus base
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        delta_pct_tier1:
-          description: Change as share of Tier 1 capital (EVE outlier test)
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        horizon_months:
-          description: NII horizon
-          format: int32
-          type: integer
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        legal_entity_id:
-          description: Entity
-          format: uuid
-          type: string
-        measure:
-          description: NII, EVE or EaR
-          enum:
-          - NII
-          - EVE
-          - EAR
-          type: string
-        results:
-          additionalProperties: true
-          description: Detail by product and bucket
-          readOnly: true
-          type:
-          - object
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        shock_bps:
-          description: Parallel shock size in basis points
-          format: int32
-          type:
-          - integer
-          - 'null'
-        shock_type:
-          description: Shock scenario
-          enum:
-          - PARALLEL_UP
-          - PARALLEL_DOWN
-          - STEEPENER
-          - FLATTENER
-          - SHORT_UP
-          - SHORT_DOWN
-          - CUSTOM
-          type: string
-        shocked_value:
-          description: Shocked NII or EVE
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Run status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - legal_entity_id
-      - as_of_date
-      - measure
-      - shock_type
-      - horizon_months
-      - currency
-      - status
-      type: object
-    AlmSensitivityRunCreate:
-      properties:
-        as_of_date:
-          description: As-of date
-          format: date
-          type: string
-        currency:
-          description: Reporting currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_shock:
-          additionalProperties: true
-          description: Tenor-by-tenor shocks for CUSTOM
-          type: object
-        horizon_months:
-          description: NII horizon
-          format: int32
-          type: integer
-        legal_entity_id:
-          description: Entity
-          format: uuid
-          type: string
-        measure:
-          description: NII, EVE or EaR
-          enum:
-          - NII
-          - EVE
-          - EAR
-          type: string
-        shock_bps:
-          description: Parallel shock size in basis points
-          format: int32
-          type: integer
-        shock_type:
-          description: Shock scenario
-          enum:
-          - PARALLEL_UP
-          - PARALLEL_DOWN
-          - STEEPENER
-          - FLATTENER
-          - SHORT_UP
-          - SHORT_DOWN
-          - CUSTOM
-          type: string
-      required:
-      - legal_entity_id
-      - as_of_date
-      - measure
-      - shock_type
-      - currency
-      type: object
-    AlmSensitivityRunPage:
-      description: One page of AlmSensitivityRun results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/AlmSensitivityRun'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    AlmSensitivityRunsStandardShocksRequest:
-      properties:
-        as_of_date:
-          format: date
-          type: string
-        currency:
-          description: ISO 4217
-          pattern: ^[A-Z]{3}$
-          type: string
-        legal_entity_id:
-          format: uuid
-          type: string
-      required:
-      - legal_entity_id
-      - as_of_date
-      - currency
-      type: object
-    FtpAssignment:
-      description: FTP rate and margin assigned to an account or loan for a period
-      properties:
-        average_balance:
-          description: Average balance for the period
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_rate:
-          description: Rate paid / earned with the customer
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        deposit_account_id:
-          description: Deposit account, when applicable
-          format: uuid
-          type:
-          - string
-          - 'null'
-        exposure_id:
-          description: Account or loan id
-          format: uuid
-          type: string
-        exposure_type:
-          description: DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE
-          maxLength: 32
-          type: string
-        ftp_charge_credit:
-          description: FTP charge (loans) or credit (deposits)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        ftp_rate:
-          description: Transfer price
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        ftp_rule_id:
-          description: Rule applied
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        loan_id:
-          description: Loan, when applicable
-          format: uuid
-          type:
-          - string
-          - 'null'
-        net_margin:
-          description: Customer rate minus FTP (sign by side)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        period_end:
-          description: Period end
-          format: date
-          type: string
-        period_start:
-          description: Period start
-          format: date
-          type: string
-        product_id:
-          description: Product
-          format: uuid
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - period_start
-      - period_end
-      - exposure_type
-      - exposure_id
-      - average_balance
-      - currency
-      - customer_rate
-      - ftp_rate
-      - net_margin
-      - ftp_charge_credit
-      type: object
-    FtpAssignmentPage:
-      description: One page of FtpAssignment results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/FtpAssignment'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    FtpAssignmentsRunRequest:
-      properties:
-        period_end:
-          format: date
-          type: string
-        period_start:
-          format: date
-          type: string
-      required:
-      - period_start
-      - period_end
-      type: object
-    FtpCurve:
-      description: Funds transfer pricing curve per currency, type and effective date
-      properties:
-        approved_by:
-          description: ALCO approver
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        code:
-          description: Curve code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        curve_type:
-          description: Base, liquidity premium, ...
-          enum:
-          - BASE
-          - LIQUIDITY_PREMIUM
-          - CONTINGENT_LIQUIDITY
-          - MATCHED_MATURITY
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        effective_date:
-          description: Effective date
-          format: date
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_published:
-          description: Published for use
-          type: boolean
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        source:
-          description: Market source / construction method
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - currency
-      - curve_type
-      - effective_date
-      - is_published
-      type: object
-    FtpCurveCreate:
-      properties:
-        approved_by:
-          description: ALCO approver
-          maxLength: 64
-          type: string
-        code:
-          description: Curve code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        curve_type:
-          description: Base, liquidity premium, ...
-          enum:
-          - BASE
-          - LIQUIDITY_PREMIUM
-          - CONTINGENT_LIQUIDITY
-          - MATCHED_MATURITY
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        effective_date:
-          description: Effective date
-          format: date
-          type: string
-        is_published:
-          description: Published for use
-          type: boolean
-        source:
-          description: Market source / construction method
-          maxLength: 64
-          type: string
-      required:
-      - code
-      - currency
-      - curve_type
-      - effective_date
-      type: object
-    FtpCurvePage:
-      description: One page of FtpCurve results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/FtpCurve'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    FtpCurvePoint:
-      description: Tenor point on an FTP curve
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        ftp_curve_id:
-          description: Curve
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        rate:
-          description: Rate at the tenor
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        tenor_days:
-          description: Tenor in days
-          format: int32
-          type: integer
-        tenor_label:
-          description: Tenor label, e.g. 3M
-          maxLength: 8
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - ftp_curve_id
-      - tenor_days
-      - tenor_label
-      - rate
-      type: object
-    FtpCurvePointCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        ftp_curve_id:
-          description: Curve
-          format: uuid
-          type: string
-        rate:
-          description: Rate at the tenor
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tenor_days:
-          description: Tenor in days
-          format: int32
-          type: integer
-        tenor_label:
-          description: Tenor label, e.g. 3M
-          maxLength: 8
-          type: string
-      required:
-      - ftp_curve_id
-      - tenor_days
-      - tenor_label
-      - rate
-      type: object
-    FtpCurvePointPage:
-      description: One page of FtpCurvePoint results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/FtpCurvePoint'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    FtpCurvePointUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        ftp_curve_id:
-          description: Curve
-          format: uuid
-          type: string
-        rate:
-          description: Rate at the tenor
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tenor_days:
-          description: Tenor in days
-          format: int32
-          type: integer
-        tenor_label:
-          description: Tenor label, e.g. 3M
-          maxLength: 8
-          type: string
-      type: object
-    FtpCurveUpdate:
-      properties:
-        approved_by:
-          description: ALCO approver
-          maxLength: 64
-          type: string
-        code:
-          description: Curve code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        curve_type:
-          description: Base, liquidity premium, ...
-          enum:
-          - BASE
-          - LIQUIDITY_PREMIUM
-          - CONTINGENT_LIQUIDITY
-          - MATCHED_MATURITY
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        effective_date:
-          description: Effective date
-          format: date
-          type: string
-        is_published:
-          description: Published for use
-          type: boolean
-        source:
-          description: Market source / construction method
-          maxLength: 64
-          type: string
-      type: object
-    FtpCurvesPublishRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    FtpRule:
-      description: Rule assigning an FTP method and curves to products / segments
-      properties:
-        base_curve_code:
-          description: Base curve code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        fixed_spread:
-          description: Spread for FIXED_SPREAD method
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        liquidity_curve_code:
-          description: Liquidity premium curve code
-          maxLength: 32
-          type:
-          - string
-          - 'null'
-        method:
-          description: Pricing method
-          enum:
-          - MATCHED_MATURITY
-          - POOLED
-          - BEHAVIOURAL
-          - FIXED_SPREAD
-          type: string
-        priority:
-          description: Lower wins
-          format: int32
-          type: integer
-        product_id:
-          description: Product (empty = default)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        segment:
-          description: Segment
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - method
-      - base_curve_code
-      - priority
-      - valid_from
-      type: object
-    FtpRuleCreate:
-      properties:
-        base_curve_code:
-          description: Base curve code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fixed_spread:
-          description: Spread for FIXED_SPREAD method
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        liquidity_curve_code:
-          description: Liquidity premium curve code
-          maxLength: 32
-          type: string
-        method:
-          description: Pricing method
-          enum:
-          - MATCHED_MATURITY
-          - POOLED
-          - BEHAVIOURAL
-          - FIXED_SPREAD
-          type: string
-        priority:
-          description: Lower wins
-          format: int32
-          type: integer
-        product_id:
-          description: Product (empty = default)
-          format: uuid
-          type: string
-        segment:
-          description: Segment
-          maxLength: 64
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      required:
-      - method
-      - base_curve_code
-      - valid_from
-      type: object
-    FtpRulePage:
-      description: One page of FtpRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/FtpRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    FtpRuleUpdate:
-      properties:
-        base_curve_code:
-          description: Base curve code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        fixed_spread:
-          description: Spread for FIXED_SPREAD method
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        liquidity_curve_code:
-          description: Liquidity premium curve code
-          maxLength: 32
-          type: string
-        method:
-          description: Pricing method
-          enum:
-          - MATCHED_MATURITY
-          - POOLED
-          - BEHAVIOURAL
-          - FIXED_SPREAD
-          type: string
-        priority:
-          description: Lower wins
-          format: int32
-          type: integer
-        product_id:
-          description: Product (empty = default)
-          format: uuid
-          type: string
-        segment:
-          description: Segment
-          maxLength: 64
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            treasury:read: Read Treasury and ALM
-            treasury:write: Change Treasury and ALM
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            treasury:read: Read Treasury and ALM
-            treasury:write: Change Treasury and ALM
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — alm-service
+  version: 1.0.0
   description: 'Front-to-back treasury: money market, FX and securities deals with confirmations and settlement, counterparty
     limits, liquidity positions and Basel III ratios (LCR/NSFR) with stress testing, and asset-liability management (repricing
     gap, NII/EVE sensitivity) with funds transfer pricing.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — alm-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Alm Behavioural Assumptions
+  description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+- name: Alm Gap Runs
+  description: Repricing gap report run at an as-of date
+- name: Alm Sensitivity Runs
+  description: NII / EVE / EaR sensitivity simulation under a rate shock
+- name: Ftp Curves
+  description: Funds transfer pricing curve per currency, type and effective date
+- name: Ftp Curve Points
+  description: Tenor point on an FTP curve
+- name: Ftp Rules
+  description: Rule assigning an FTP method and curves to products / segments
+- name: Ftp Assignments
+  description: FTP rate and margin assigned to an account or loan for a period
 paths:
   /v1/treasury/alm/assumptions:
     get:
@@ -3479,25 +1574,1930 @@ paths:
       x-service: alm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-table: ftp_assignment
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
-  name: Alm Behavioural Assumptions
-- description: Repricing gap report run at an as-of date
-  name: Alm Gap Runs
-- description: NII / EVE / EaR sensitivity simulation under a rate shock
-  name: Alm Sensitivity Runs
-- description: Funds transfer pricing curve per currency, type and effective date
-  name: Ftp Curves
-- description: Tenor point on an FTP curve
-  name: Ftp Curve Points
-- description: Rule assigning an FTP method and curves to products / segments
-  name: Ftp Rules
-- description: FTP rate and margin assigned to an account or loan for a period
-  name: Ftp Assignments
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    AlmBehaviouralAssumptionPage:
+      type: object
+      description: One page of AlmBehaviouralAssumption results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlmBehaviouralAssumption'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AlmBehaviouralAssumptionsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    AlmGapRunPage:
+      type: object
+      description: One page of AlmGapRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlmGapRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AlmGapBucketPage:
+      type: object
+      description: One page of AlmGapBucket results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlmGapBucket'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AlmSensitivityRunPage:
+      type: object
+      description: One page of AlmSensitivityRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlmSensitivityRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AlmSensitivityRunsStandardShocksRequest:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+        as_of_date:
+          type: string
+          format: date
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+      required:
+      - legal_entity_id
+      - as_of_date
+      - currency
+    FtpCurvePage:
+      type: object
+      description: One page of FtpCurve results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FtpCurve'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FtpCurvePointPage:
+      type: object
+      description: One page of FtpCurvePoint results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FtpCurvePoint'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FtpCurvesPublishRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    FtpRulePage:
+      type: object
+      description: One page of FtpRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FtpRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FtpAssignmentPage:
+      type: object
+      description: One page of FtpAssignment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FtpAssignment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FtpAssignmentsRunRequest:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+      required:
+      - period_start
+      - period_end
+    AlmBehaviouralAssumption:
+      type: object
+      description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        assumption_type:
+          type: string
+          enum:
+          - PREPAYMENT
+          - DEPOSIT_DECAY
+          - NON_MATURITY_REPRICING
+          - EARLY_WITHDRAWAL
+          - DRAWDOWN
+          description: Assumption type
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (empty = all products of the segment)
+        segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Customer / product segment
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        model_version:
+          type: string
+          maxLength: 32
+          description: Model version
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Model approver
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - assumption_type
+      - parameters
+      - valid_from
+      - model_version
+    AlmBehaviouralAssumptionCreate:
+      type: object
+      properties:
+        assumption_type:
+          type: string
+          enum:
+          - PREPAYMENT
+          - DEPOSIT_DECAY
+          - NON_MATURITY_REPRICING
+          - EARLY_WITHDRAWAL
+          - DRAWDOWN
+          description: Assumption type
+        product_id:
+          type: string
+          format: uuid
+          description: Product (empty = all products of the segment)
+        segment:
+          type: string
+          maxLength: 64
+          description: Customer / product segment
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        model_version:
+          type: string
+          maxLength: 32
+          description: Model version
+        approved_by:
+          type: string
+          maxLength: 64
+          description: Model approver
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - assumption_type
+      - parameters
+      - valid_from
+      - model_version
+    AlmBehaviouralAssumptionUpdate:
+      type: object
+      properties:
+        assumption_type:
+          type: string
+          enum:
+          - PREPAYMENT
+          - DEPOSIT_DECAY
+          - NON_MATURITY_REPRICING
+          - EARLY_WITHDRAWAL
+          - DRAWDOWN
+          description: Assumption type
+        product_id:
+          type: string
+          format: uuid
+          description: Product (empty = all products of the segment)
+        segment:
+          type: string
+          maxLength: 64
+          description: Customer / product segment
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        model_version:
+          type: string
+          maxLength: 32
+          description: Model version
+        approved_by:
+          type: string
+          maxLength: 64
+          description: Model approver
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    AlmGapBucket:
+      type: object
+      description: Repricing gap per time bucket (rate-sensitive assets minus liabilities)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        alm_gap_run_id:
+          type: string
+          format: uuid
+          description: Gap run
+        bucket_code:
+          type: string
+          maxLength: 16
+          description: Bucket, e.g. 0-1M, 1-3M, 3-6M, 6-12M, 1-2Y, 2-5Y, >5Y
+        bucket_order:
+          type: integer
+          format: int32
+          description: Display order
+        rate_sensitive_assets:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Assets repricing in the bucket
+        rate_sensitive_liabilities:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Liabilities repricing in the bucket
+        off_balance_net:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Off-balance-sheet net position
+        gap:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net repricing gap
+        cumulative_gap:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cumulative gap
+        breakdown:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Amounts by product
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - alm_gap_run_id
+      - bucket_code
+      - bucket_order
+      - rate_sensitive_assets
+      - rate_sensitive_liabilities
+      - off_balance_net
+      - gap
+      - cumulative_gap
+    AlmGapRun:
+      type: object
+      description: Repricing gap report run at an as-of date
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        as_of_date:
+          type: string
+          format: date
+          description: As-of date
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (empty = all, in base currency) (ISO 4217)
+        behavioural:
+          type: boolean
+          description: Apply behavioural assumptions
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Run status
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - as_of_date
+      - behavioural
+      - status
+    AlmGapRunCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        as_of_date:
+          type: string
+          format: date
+          description: As-of date
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (empty = all, in base currency) (ISO 4217)
+        behavioural:
+          type: boolean
+          description: Apply behavioural assumptions
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - legal_entity_id
+      - as_of_date
+    AlmSensitivityRun:
+      type: object
+      description: NII / EVE / EaR sensitivity simulation under a rate shock
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        as_of_date:
+          type: string
+          format: date
+          description: As-of date
+        measure:
+          type: string
+          enum:
+          - NII
+          - EVE
+          - EAR
+          description: NII, EVE or EaR
+        shock_type:
+          type: string
+          enum:
+          - PARALLEL_UP
+          - PARALLEL_DOWN
+          - STEEPENER
+          - FLATTENER
+          - SHORT_UP
+          - SHORT_DOWN
+          - CUSTOM
+          description: Shock scenario
+        shock_bps:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Parallel shock size in basis points
+        custom_shock:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Tenor-by-tenor shocks for CUSTOM
+        horizon_months:
+          type: integer
+          format: int32
+          description: NII horizon
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reporting currency (ISO 4217)
+        base_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Base-case NII or EVE
+          readOnly: true
+        shocked_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Shocked NII or EVE
+          readOnly: true
+        delta:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Change versus base
+          readOnly: true
+        delta_pct_tier1:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Change as share of Tier 1 capital (EVE outlier test)
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Run status
+          readOnly: true
+        results:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Detail by product and bucket
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - as_of_date
+      - measure
+      - shock_type
+      - horizon_months
+      - currency
+      - status
+    AlmSensitivityRunCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        as_of_date:
+          type: string
+          format: date
+          description: As-of date
+        measure:
+          type: string
+          enum:
+          - NII
+          - EVE
+          - EAR
+          description: NII, EVE or EaR
+        shock_type:
+          type: string
+          enum:
+          - PARALLEL_UP
+          - PARALLEL_DOWN
+          - STEEPENER
+          - FLATTENER
+          - SHORT_UP
+          - SHORT_DOWN
+          - CUSTOM
+          description: Shock scenario
+        shock_bps:
+          type: integer
+          format: int32
+          description: Parallel shock size in basis points
+        custom_shock:
+          type: object
+          additionalProperties: true
+          description: Tenor-by-tenor shocks for CUSTOM
+        horizon_months:
+          type: integer
+          format: int32
+          description: NII horizon
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Reporting currency (ISO 4217)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - legal_entity_id
+      - as_of_date
+      - measure
+      - shock_type
+      - currency
+    FtpAssignment:
+      type: object
+      description: FTP rate and margin assigned to an account or loan for a period
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        period_start:
+          type: string
+          format: date
+          description: Period start
+        period_end:
+          type: string
+          format: date
+          description: Period end
+        exposure_type:
+          type: string
+          maxLength: 32
+          description: DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE
+        exposure_id:
+          type: string
+          format: uuid
+          description: Account or loan id
+        deposit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit account, when applicable
+        loan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Loan, when applicable
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product
+        ftp_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule applied
+        average_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Average balance for the period
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        customer_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate paid / earned with the customer
+        ftp_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Transfer price
+        net_margin:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Customer rate minus FTP (sign by side)
+        ftp_charge_credit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: FTP charge (loans) or credit (deposits)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - period_start
+      - period_end
+      - exposure_type
+      - exposure_id
+      - average_balance
+      - currency
+      - customer_rate
+      - ftp_rate
+      - net_margin
+      - ftp_charge_credit
+    FtpCurve:
+      type: object
+      description: Funds transfer pricing curve per currency, type and effective date
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Curve code
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        curve_type:
+          type: string
+          enum:
+          - BASE
+          - LIQUIDITY_PREMIUM
+          - CONTINGENT_LIQUIDITY
+          - MATCHED_MATURITY
+          description: Base, liquidity premium, ...
+        effective_date:
+          type: string
+          format: date
+          description: Effective date
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Market source / construction method
+        is_published:
+          type: boolean
+          description: Published for use
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: ALCO approver
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - currency
+      - curve_type
+      - effective_date
+      - is_published
+    FtpCurveCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Curve code
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        curve_type:
+          type: string
+          enum:
+          - BASE
+          - LIQUIDITY_PREMIUM
+          - CONTINGENT_LIQUIDITY
+          - MATCHED_MATURITY
+          description: Base, liquidity premium, ...
+        effective_date:
+          type: string
+          format: date
+          description: Effective date
+        source:
+          type: string
+          maxLength: 64
+          description: Market source / construction method
+        is_published:
+          type: boolean
+          description: Published for use
+        approved_by:
+          type: string
+          maxLength: 64
+          description: ALCO approver
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - currency
+      - curve_type
+      - effective_date
+    FtpCurveUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Curve code
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        curve_type:
+          type: string
+          enum:
+          - BASE
+          - LIQUIDITY_PREMIUM
+          - CONTINGENT_LIQUIDITY
+          - MATCHED_MATURITY
+          description: Base, liquidity premium, ...
+        effective_date:
+          type: string
+          format: date
+          description: Effective date
+        source:
+          type: string
+          maxLength: 64
+          description: Market source / construction method
+        is_published:
+          type: boolean
+          description: Published for use
+        approved_by:
+          type: string
+          maxLength: 64
+          description: ALCO approver
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    FtpCurvePoint:
+      type: object
+      description: Tenor point on an FTP curve
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        ftp_curve_id:
+          type: string
+          format: uuid
+          description: Curve
+        tenor_days:
+          type: integer
+          format: int32
+          description: Tenor in days
+        tenor_label:
+          type: string
+          maxLength: 8
+          description: Tenor label, e.g. 3M
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate at the tenor
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ftp_curve_id
+      - tenor_days
+      - tenor_label
+      - rate
+    FtpCurvePointCreate:
+      type: object
+      properties:
+        ftp_curve_id:
+          type: string
+          format: uuid
+          description: Curve
+        tenor_days:
+          type: integer
+          format: int32
+          description: Tenor in days
+        tenor_label:
+          type: string
+          maxLength: 8
+          description: Tenor label, e.g. 3M
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate at the tenor
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - ftp_curve_id
+      - tenor_days
+      - tenor_label
+      - rate
+    FtpCurvePointUpdate:
+      type: object
+      properties:
+        ftp_curve_id:
+          type: string
+          format: uuid
+          description: Curve
+        tenor_days:
+          type: integer
+          format: int32
+          description: Tenor in days
+        tenor_label:
+          type: string
+          maxLength: 8
+          description: Tenor label, e.g. 3M
+        rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate at the tenor
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    FtpRule:
+      type: object
+      description: Rule assigning an FTP method and curves to products / segments
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (empty = default)
+        segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Segment
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        method:
+          type: string
+          enum:
+          - MATCHED_MATURITY
+          - POOLED
+          - BEHAVIOURAL
+          - FIXED_SPREAD
+          description: Pricing method
+        base_curve_code:
+          type: string
+          maxLength: 32
+          description: Base curve code
+        liquidity_curve_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Liquidity premium curve code
+        fixed_spread:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Spread for FIXED_SPREAD method
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - method
+      - base_curve_code
+      - priority
+      - valid_from
+    FtpRuleCreate:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+          description: Product (empty = default)
+        segment:
+          type: string
+          maxLength: 64
+          description: Segment
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        method:
+          type: string
+          enum:
+          - MATCHED_MATURITY
+          - POOLED
+          - BEHAVIOURAL
+          - FIXED_SPREAD
+          description: Pricing method
+        base_curve_code:
+          type: string
+          maxLength: 32
+          description: Base curve code
+        liquidity_curve_code:
+          type: string
+          maxLength: 32
+          description: Liquidity premium curve code
+        fixed_spread:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Spread for FIXED_SPREAD method
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - method
+      - base_curve_code
+      - valid_from
+    FtpRuleUpdate:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+          description: Product (empty = default)
+        segment:
+          type: string
+          maxLength: 64
+          description: Segment
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        method:
+          type: string
+          enum:
+          - MATCHED_MATURITY
+          - POOLED
+          - BEHAVIOURAL
+          - FIXED_SPREAD
+          description: Pricing method
+        base_curve_code:
+          type: string
+          maxLength: 32
+          description: Base curve code
+        liquidity_curve_code:
+          type: string
+          maxLength: 32
+          description: Liquidity premium curve code
+        fixed_spread:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Spread for FIXED_SPREAD method
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            treasury:read: Read Treasury and ALM
+            treasury:write: Change Treasury and ALM
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            treasury:read: Read Treasury and ALM
+            treasury:write: Change Treasury and ALM

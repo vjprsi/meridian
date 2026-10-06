@@ -1,1107 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    WebhookDelivery:
-      description: Delivery of one event to one endpoint, with retry state
-      properties:
-        attempt_count:
-          description: Attempts made
-          format: int32
-          readOnly: true
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        delivered_at:
-          description: Success time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        event_id:
-          description: CloudEvents id
-          maxLength: 64
-          type: string
-        event_type:
-          description: Event type
-          maxLength: 128
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        last_error:
-          description: Last error
-          maxLength: 500
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        last_status_code:
-          description: Last HTTP status
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        next_attempt_at:
-          description: Next retry
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        ordering_key:
-          description: Aggregate id used for ordering
-          maxLength: 64
-          type:
-          - string
-          - 'null'
-        payload:
-          additionalProperties: true
-          description: Payload sent
-          type: object
-        replay_job_id:
-          description: Replay job that produced it
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - PENDING
-          - RETRYING
-          - SUCCEEDED
-          - FAILED
-          - ABANDONED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - webhook_endpoint_id
-      - event_id
-      - event_type
-      - payload
-      - status
-      - attempt_count
-      type: object
-    WebhookDeliveryAttempt:
-      description: One HTTP attempt of a webhook delivery. Append-only.
-      properties:
-        attempt_no:
-          description: Attempt number
-          format: int32
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        error:
-          description: Network / TLS error
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        latency_ms:
-          description: Round-trip time
-          format: int32
-          type:
-          - integer
-          - 'null'
-        request_headers:
-          additionalProperties: true
-          description: Headers sent (signature redacted)
-          type:
-          - object
-          - 'null'
-        response_body:
-          description: First 4 KB of the response
-          maxLength: 4000
-          type:
-          - string
-          - 'null'
-        status_code:
-          description: HTTP status
-          format: int32
-          type:
-          - integer
-          - 'null'
-        webhook_delivery_id:
-          description: Delivery
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - webhook_delivery_id
-      - attempt_no
-      type: object
-    WebhookDeliveryAttemptPage:
-      description: One page of WebhookDeliveryAttempt results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WebhookDeliveryAttempt'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WebhookDeliveryPage:
-      description: One page of WebhookDelivery results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WebhookDelivery'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WebhookEndpoint:
-      description: A client HTTPS endpoint receiving events
-      properties:
-        api_client_id:
-          description: Owning API client
-          format: uuid
-          type:
-          - string
-          - 'null'
-        api_version:
-          description: Payload version
-          maxLength: 16
-          type: string
-        consecutive_failures:
-          description: Consecutive failures (auto-disable at threshold)
-          format: int32
-          readOnly: true
-          type: integer
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_headers:
-          additionalProperties: true
-          description: Extra headers sent with each delivery
-          type:
-          - object
-          - 'null'
-        description:
-          description: Description
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        disabled_reason:
-          description: Why it was disabled
-          maxLength: 255
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        environment:
-          description: Sandbox or production
-          enum:
-          - SANDBOX
-          - PRODUCTION
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        last_failure_at:
-          description: Last failed delivery
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        last_success_at:
-          description: Last successful delivery
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        max_requests_per_second:
-          description: Delivery rate cap
-          format: int32
-          type: integer
-        mtls_enabled:
-          description: Present a client certificate
-          type: boolean
-        previous_secret_expires_at:
-          description: End of the 24 h rotation grace period
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        signing_secret:
-          description: Plaintext signing secret; returned only by create and rotate-secret (returned once; never stored)
-          maxLength: 255
-          readOnly: true
-          type: string
-        signing_secret_version:
-          description: Secret version (rotation)
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status (changed by /enable, /disable and delivery health)
-          enum:
-          - ACTIVE
-          - DISABLED
-          - FAILING
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        url:
-          description: HTTPS URL
-          maxLength: 1000
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - url
-      - environment
-      - api_version
-      - signing_secret_version
-      - status
-      - max_requests_per_second
-      - mtls_enabled
-      - consecutive_failures
-      type: object
-    WebhookEndpointCreate:
-      properties:
-        api_client_id:
-          description: Owning API client
-          format: uuid
-          type: string
-        api_version:
-          description: Payload version
-          maxLength: 16
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_headers:
-          additionalProperties: true
-          description: Extra headers sent with each delivery
-          type: object
-        description:
-          description: Description
-          maxLength: 500
-          type: string
-        environment:
-          description: Sandbox or production
-          enum:
-          - SANDBOX
-          - PRODUCTION
-          type: string
-        max_requests_per_second:
-          description: Delivery rate cap
-          format: int32
-          type: integer
-        mtls_enabled:
-          description: Present a client certificate
-          type: boolean
-        url:
-          description: HTTPS URL
-          maxLength: 1000
-          type: string
-      required:
-      - url
-      type: object
-    WebhookEndpointPage:
-      description: One page of WebhookEndpoint results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WebhookEndpoint'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WebhookEndpointUpdate:
-      properties:
-        api_client_id:
-          description: Owning API client
-          format: uuid
-          type: string
-        api_version:
-          description: Payload version
-          maxLength: 16
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_headers:
-          additionalProperties: true
-          description: Extra headers sent with each delivery
-          type: object
-        description:
-          description: Description
-          maxLength: 500
-          type: string
-        environment:
-          description: Sandbox or production
-          enum:
-          - SANDBOX
-          - PRODUCTION
-          type: string
-        max_requests_per_second:
-          description: Delivery rate cap
-          format: int32
-          type: integer
-        mtls_enabled:
-          description: Present a client certificate
-          type: boolean
-        url:
-          description: HTTPS URL
-          maxLength: 1000
-          type: string
-      type: object
-    WebhookEndpointsDisableRequest:
-      properties:
-        reason:
-          maxLength: 255
-          type: string
-      type: object
-    WebhookEndpointsTestRequest:
-      properties:
-        event_type:
-          maxLength: 128
-          type: string
-      required:
-      - event_type
-      type: object
-    WebhookReplayJob:
-      description: A request to re-deliver past events to an endpoint
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        event_types:
-          description: Event types or wildcards to replay (empty = subscribed types)
-          items: {}
-          type:
-          - array
-          - 'null'
-        events_replayed:
-          description: Events re-delivered
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        events_total:
-          description: Events found
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        from_time:
-          description: Range start
-          format: date-time
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        to_time:
-          description: Range end
-          format: date-time
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - webhook_endpoint_id
-      - from_time
-      - to_time
-      - status
-      type: object
-    WebhookReplayJobCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        event_types:
-          description: Event types or wildcards to replay (empty = subscribed types)
-          items: {}
-          type: array
-        from_time:
-          description: Range start
-          format: date-time
-          type: string
-        to_time:
-          description: Range end
-          format: date-time
-          type: string
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      required:
-      - webhook_endpoint_id
-      - from_time
-      - to_time
-      type: object
-    WebhookReplayJobPage:
-      description: One page of WebhookReplayJob results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WebhookReplayJob'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WebhookSubscription:
-      description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        event_type:
-          description: Event type or wildcard, e.g. payments.*
-          maxLength: 128
-          type: string
-        filter_expression:
-          description: CEL filter on the payload
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - webhook_endpoint_id
-      - event_type
-      - is_active
-      type: object
-    WebhookSubscriptionCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        event_type:
-          description: Event type or wildcard, e.g. payments.*
-          maxLength: 128
-          type: string
-        filter_expression:
-          description: CEL filter on the payload
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      required:
-      - webhook_endpoint_id
-      - event_type
-      type: object
-    WebhookSubscriptionPage:
-      description: One page of WebhookSubscription results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WebhookSubscription'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WebhookSubscriptionUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        event_type:
-          description: Event type or wildcard, e.g. payments.*
-          maxLength: 128
-          type: string
-        filter_expression:
-          description: CEL filter on the payload
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        webhook_endpoint_id:
-          description: Endpoint
-          format: uuid
-          type: string
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            platform:read: Read Platform and Administration
-            platform:write: Change Platform and Administration
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — webhook-service
+  version: 1.0.0
   description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
     and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
     and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
@@ -1109,11 +9,24 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — webhook-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Webhook Endpoints
+  description: A client HTTPS endpoint receiving events
+- name: Webhook Subscriptions
+  description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
+- name: Webhook Deliveries
+  description: Delivery of one event to one endpoint, with retry state
+- name: Event Replays
+  description: A request to re-deliver past events to an endpoint
 paths:
   /v1/webhook-endpoints:
     get:
@@ -2101,19 +1014,1106 @@ paths:
       x-service: webhook-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: webhook_replay_job
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A client HTTPS endpoint receiving events
-  name: Webhook Endpoints
-- description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
-  name: Webhook Subscriptions
-- description: Delivery of one event to one endpoint, with retry state
-  name: Webhook Deliveries
-- description: A request to re-deliver past events to an endpoint
-  name: Event Replays
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    WebhookEndpointPage:
+      type: object
+      description: One page of WebhookEndpoint results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpoint'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookEndpointsDisableRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    WebhookEndpointsTestRequest:
+      type: object
+      properties:
+        event_type:
+          type: string
+          maxLength: 128
+      required:
+      - event_type
+    WebhookSubscriptionPage:
+      type: object
+      description: One page of WebhookSubscription results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookSubscription'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDeliveryPage:
+      type: object
+      description: One page of WebhookDelivery results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDeliveryAttemptPage:
+      type: object
+      description: One page of WebhookDeliveryAttempt results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDeliveryAttempt'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookReplayJobPage:
+      type: object
+      description: One page of WebhookReplayJob results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookReplayJob'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDelivery:
+      type: object
+      description: Delivery of one event to one endpoint, with retry state
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_id:
+          type: string
+          maxLength: 64
+          description: CloudEvents id
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type
+        ordering_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Aggregate id used for ordering
+        payload:
+          type: object
+          additionalProperties: true
+          description: Payload sent
+        status:
+          type: string
+          enum:
+          - PENDING
+          - RETRYING
+          - SUCCEEDED
+          - FAILED
+          - ABANDONED
+          description: Status
+          readOnly: true
+        attempt_count:
+          type: integer
+          format: int32
+          description: Attempts made
+          readOnly: true
+        next_attempt_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next retry
+          readOnly: true
+        last_status_code:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Last HTTP status
+          readOnly: true
+        last_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Last error
+          readOnly: true
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Success time
+          readOnly: true
+        replay_job_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Replay job that produced it
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - webhook_endpoint_id
+      - event_id
+      - event_type
+      - payload
+      - status
+      - attempt_count
+    WebhookDeliveryAttempt:
+      type: object
+      description: One HTTP attempt of a webhook delivery. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        webhook_delivery_id:
+          type: string
+          format: uuid
+          description: Delivery
+        attempt_no:
+          type: integer
+          format: int32
+          description: Attempt number
+        request_headers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Headers sent (signature redacted)
+        status_code:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: HTTP status
+        response_body:
+          type:
+          - string
+          - 'null'
+          maxLength: 4000
+          description: First 4 KB of the response
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Round-trip time
+        error:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Network / TLS error
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - webhook_delivery_id
+      - attempt_no
+    WebhookEndpoint:
+      type: object
+      description: A client HTTPS endpoint receiving events
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        url:
+          type: string
+          maxLength: 1000
+          description: HTTPS URL
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Description
+        api_client_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning API client
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          description: Sandbox or production
+        api_version:
+          type: string
+          maxLength: 16
+          description: Payload version
+        signing_secret_version:
+          type: integer
+          format: int32
+          description: Secret version (rotation)
+          readOnly: true
+        previous_secret_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the 24 h rotation grace period
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DISABLED
+          - FAILING
+          description: Status (changed by /enable, /disable and delivery health)
+          readOnly: true
+        max_requests_per_second:
+          type: integer
+          format: int32
+          description: Delivery rate cap
+        mtls_enabled:
+          type: boolean
+          description: Present a client certificate
+        custom_headers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Extra headers sent with each delivery
+        consecutive_failures:
+          type: integer
+          format: int32
+          description: Consecutive failures (auto-disable at threshold)
+          readOnly: true
+        last_success_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last successful delivery
+          readOnly: true
+        last_failure_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last failed delivery
+          readOnly: true
+        disabled_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was disabled
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        signing_secret:
+          type: string
+          maxLength: 255
+          description: Plaintext signing secret; returned only by create and rotate-secret (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - url
+      - environment
+      - api_version
+      - signing_secret_version
+      - status
+      - max_requests_per_second
+      - mtls_enabled
+      - consecutive_failures
+    WebhookEndpointCreate:
+      type: object
+      properties:
+        url:
+          type: string
+          maxLength: 1000
+          description: HTTPS URL
+        description:
+          type: string
+          maxLength: 500
+          description: Description
+        api_client_id:
+          type: string
+          format: uuid
+          description: Owning API client
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          description: Sandbox or production
+        api_version:
+          type: string
+          maxLength: 16
+          description: Payload version
+        max_requests_per_second:
+          type: integer
+          format: int32
+          description: Delivery rate cap
+        mtls_enabled:
+          type: boolean
+          description: Present a client certificate
+        custom_headers:
+          type: object
+          additionalProperties: true
+          description: Extra headers sent with each delivery
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - url
+    WebhookEndpointUpdate:
+      type: object
+      properties:
+        url:
+          type: string
+          maxLength: 1000
+          description: HTTPS URL
+        description:
+          type: string
+          maxLength: 500
+          description: Description
+        api_client_id:
+          type: string
+          format: uuid
+          description: Owning API client
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          description: Sandbox or production
+        api_version:
+          type: string
+          maxLength: 16
+          description: Payload version
+        max_requests_per_second:
+          type: integer
+          format: int32
+          description: Delivery rate cap
+        mtls_enabled:
+          type: boolean
+          description: Present a client certificate
+        custom_headers:
+          type: object
+          additionalProperties: true
+          description: Extra headers sent with each delivery
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WebhookReplayJob:
+      type: object
+      description: A request to re-deliver past events to an endpoint
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_types:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Event types or wildcards to replay (empty = subscribed types)
+        from_time:
+          type: string
+          format: date-time
+          description: Range start
+        to_time:
+          type: string
+          format: date-time
+          description: Range end
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        events_total:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Events found
+          readOnly: true
+        events_replayed:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Events re-delivered
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - webhook_endpoint_id
+      - from_time
+      - to_time
+      - status
+    WebhookReplayJobCreate:
+      type: object
+      properties:
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_types:
+          type: array
+          items: {}
+          description: Event types or wildcards to replay (empty = subscribed types)
+        from_time:
+          type: string
+          format: date-time
+          description: Range start
+        to_time:
+          type: string
+          format: date-time
+          description: Range end
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - webhook_endpoint_id
+      - from_time
+      - to_time
+    WebhookSubscription:
+      type: object
+      description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type or wildcard, e.g. payments.*
+        filter_expression:
+          type:
+          - string
+          - 'null'
+          description: CEL filter on the payload
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - webhook_endpoint_id
+      - event_type
+      - is_active
+    WebhookSubscriptionCreate:
+      type: object
+      properties:
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type or wildcard, e.g. payments.*
+        filter_expression:
+          type: string
+          description: CEL filter on the payload
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - webhook_endpoint_id
+      - event_type
+    WebhookSubscriptionUpdate:
+      type: object
+      properties:
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type or wildcard, e.g. payments.*
+        filter_expression:
+          type: string
+          description: CEL filter on the payload
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration

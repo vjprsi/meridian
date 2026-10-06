@@ -1,1644 +1,7 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    CommissionEarning:
-      description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
-      properties:
-        base_amount:
-          description: Base the commission was computed on
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        beneficiary:
-          description: Beneficiary type
-          enum:
-          - AGENT
-          - SUPER_AGENT
-          - SUB_AGENT
-          - MERCHANT
-          - BILLER
-          - PLATFORM
-          - CUSTOMER
-          type: string
-        beneficiary_agent_id:
-          description: Agent beneficiary
-          format: uuid
-          type:
-          - string
-          - 'null'
-        beneficiary_merchant_id:
-          description: Merchant beneficiary
-          format: uuid
-          type:
-          - string
-          - 'null'
-        beneficiary_wallet_id:
-          description: Wallet to pay
-          format: uuid
-          type: string
-        commission_amount:
-          description: Gross commission (negative for clawback)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        commission_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        commission_rule_id:
-          description: Rule applied
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        earned_at:
-          description: Transaction completion time
-          format: date-time
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_clawback:
-          description: Clawback of an earlier earning (reversal)
-          type: boolean
-        net_amount:
-          description: Net commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        payout_due_on:
-          description: Payout date per plan frequency
-          format: date
-          type: string
-        tax_amount:
-          description: Withholding tax
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        wallet_transaction_id:
-          description: Source transaction
-          format: uuid
-          type: string
-      required:
-      - id
-      - created_at
-      - commission_plan_id
-      - commission_rule_id
-      - wallet_transaction_id
-      - beneficiary
-      - beneficiary_wallet_id
-      - base_amount
-      - commission_amount
-      - tax_amount
-      - net_amount
-      - currency
-      - is_clawback
-      - earned_at
-      - payout_due_on
-      type: object
-    CommissionEarningPage:
-      description: One page of CommissionEarning results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CommissionEarning'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CommissionPayoutLine:
-      description: Amount paid to one beneficiary in a payout run. Append-only.
-      properties:
-        beneficiary_agent_id:
-          description: Agent paid
-          format: uuid
-          type:
-          - string
-          - 'null'
-        beneficiary_wallet_id:
-          description: Wallet paid
-          format: uuid
-          type: string
-        commission_payout_run_id:
-          description: Run
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        earning_count:
-          description: Earnings included
-          format: int32
-          type: integer
-        failure_reason:
-          description: Failure reason
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        gross_amount:
-          description: Gross commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        net_amount:
-          description: Net paid
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        payout_status:
-          description: PAID, FAILED, HELD
-          maxLength: 16
-          type: string
-        tax_amount:
-          description: Tax withheld
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        wallet_transaction_id:
-          description: Payout transaction
-          format: uuid
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - commission_payout_run_id
-      - beneficiary_wallet_id
-      - earning_count
-      - gross_amount
-      - tax_amount
-      - net_amount
-      - currency
-      - payout_status
-      type: object
-    CommissionPayoutLinePage:
-      description: One page of CommissionPayoutLine results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CommissionPayoutLine'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CommissionPayoutRun:
-      description: A payout run paying accrued commissions to beneficiary wallets
-      properties:
-        approved_at:
-          description: Approval time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: Checker
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        beneficiary_count:
-          description: Beneficiaries paid
-          format: int32
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        finished_at:
-          description: End
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        journal_entry_id:
-          description: Summary posting
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        payout_frequency:
-          description: Frequency covered
-          enum:
-          - REALTIME
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          type: string
-        period_end:
-          description: Earnings to
-          format: date
-          type: string
-        period_start:
-          description: Earnings from
-          format: date
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        started_at:
-          description: Start
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        total_amount:
-          description: Total net paid
-          examples:
-          - '125.50'
-          format: decimal
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - payout_frequency
-      - period_start
-      - period_end
-      - currency
-      - status
-      type: object
-    CommissionPayoutRunCreate:
-      properties:
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        payout_frequency:
-          description: Frequency covered
-          enum:
-          - REALTIME
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          type: string
-        period_end:
-          description: Earnings to
-          format: date
-          type: string
-        period_start:
-          description: Earnings from
-          format: date
-          type: string
-      required:
-      - payout_frequency
-      - period_start
-      - period_end
-      - currency
-      type: object
-    CommissionPayoutRunPage:
-      description: One page of CommissionPayoutRun results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CommissionPayoutRun'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CommissionPayoutRunsApproveRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    CommissionPlan:
-      description: A versioned set of commission rules assigned to agents, merchants or billers
-      properties:
-        applies_to:
-          description: AGENT, MERCHANT, BILLER, ALL
-          maxLength: 32
-          type: string
-        approved_at:
-          description: Approval time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: Checker
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        description:
-          description: Description
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        payout_frequency:
-          description: Payout frequency
-          enum:
-          - REALTIME
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type:
-          - string
-          - 'null'
-        version:
-          description: Version
-          format: int32
-          type: integer
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - code
-      - name
-      - version
-      - applies_to
-      - currency
-      - payout_frequency
-      - status
-      - valid_from
-      type: object
-    CommissionPlanCreate:
-      properties:
-        applies_to:
-          description: AGENT, MERCHANT, BILLER, ALL
-          maxLength: 32
-          type: string
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Description
-          type: string
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        payout_frequency:
-          description: Payout frequency
-          enum:
-          - REALTIME
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        version:
-          description: Version
-          format: int32
-          type: integer
-      required:
-      - code
-      - name
-      - applies_to
-      - currency
-      - valid_from
-      type: object
-    CommissionPlanPage:
-      description: One page of CommissionPlan results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CommissionPlan'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CommissionPlanUpdate:
-      properties:
-        applies_to:
-          description: AGENT, MERCHANT, BILLER, ALL
-          maxLength: 32
-          type: string
-        code:
-          description: Plan code
-          maxLength: 32
-          type: string
-        currency:
-          description: Currency (ISO 4217)
-          pattern: ^[A-Z]{3}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        description:
-          description: Description
-          type: string
-        name:
-          description: Name
-          maxLength: 120
-          type: string
-        payout_frequency:
-          description: Payout frequency
-          enum:
-          - REALTIME
-          - DAILY
-          - WEEKLY
-          - MONTHLY
-          type: string
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-        valid_to:
-          description: Effective to
-          format: date
-          type: string
-        version:
-          description: Version
-          format: int32
-          type: integer
-      type: object
-    CommissionPlansApproveRequest:
-      properties:
-        comment:
-          maxLength: 500
-          type: string
-      type: object
-    CommissionPlansRetireRequest:
-      properties:
-        effective_date:
-          format: date
-          type: string
-      type: object
-    CommissionPlansSimulateRequest:
-      properties:
-        agent_id:
-          format: uuid
-          type: string
-        amount:
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        kyc_tier:
-          format: int32
-          type: integer
-        txn_type:
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-      required:
-      - txn_type
-      - amount
-      type: object
-    CommissionRule:
-      description: One commission rule; the most specific matching rule per beneficiary wins
-      properties:
-        agent_level:
-          description: Agent level (empty = any)
-          enum:
-          - SUPER_AGENT
-          - AGENT
-          - SUB_AGENT
-          type:
-          - string
-          - 'null'
-        agent_territory_id:
-          description: Territory (empty = any)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        base:
-          description: 'Base of the percentage: AMOUNT or FEE'
-          maxLength: 16
-          type: string
-        basis:
-          description: Calculation basis
-          enum:
-          - FLAT
-          - PERCENTAGE
-          - TIERED
-          - FLAT_PLUS_PERCENTAGE
-          type: string
-        beneficiary:
-          description: Who earns it
-          enum:
-          - AGENT
-          - SUPER_AGENT
-          - SUB_AGENT
-          - MERCHANT
-          - BILLER
-          - PLATFORM
-          - CUSTOMER
-          type: string
-        beneficiary_share:
-          description: Share of the computed commission for this beneficiary
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        biller_id:
-          description: Biller (empty = any)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        cap_amount:
-          description: Maximum commission per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        channel:
-          description: Channel (empty = any)
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type:
-          - string
-          - 'null'
-        commission_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        flat_amount:
-          description: Flat commission
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        funded_by:
-          description: FEE, PLATFORM, BILLER, MERCHANT
-          maxLength: 32
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        kyc_tier:
-          description: Customer KYC tier (empty = any)
-          format: int32
-          type:
-          - integer
-          - 'null'
-        max_amount:
-          description: Applies up to this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        min_amount:
-          description: Applies from this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        percentage:
-          description: Percentage of the base (0.005 = 0.5%)
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        priority:
-          description: Lower wins among equally specific rules
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        tax_withholding_rate:
-          description: Withholding tax on commission
-          examples:
-          - '125.50'
-          format: decimal
-          type:
-          - string
-          - 'null'
-        tiers:
-          additionalProperties: true
-          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
-          type:
-          - object
-          - 'null'
-        txn_type:
-          description: Transaction type
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - commission_plan_id
-      - name
-      - priority
-      - txn_type
-      - basis
-      - base
-      - beneficiary
-      - beneficiary_share
-      - funded_by
-      - is_active
-      type: object
-    CommissionRuleCreate:
-      properties:
-        agent_level:
-          description: Agent level (empty = any)
-          enum:
-          - SUPER_AGENT
-          - AGENT
-          - SUB_AGENT
-          type: string
-        agent_territory_id:
-          description: Territory (empty = any)
-          format: uuid
-          type: string
-        base:
-          description: 'Base of the percentage: AMOUNT or FEE'
-          maxLength: 16
-          type: string
-        basis:
-          description: Calculation basis
-          enum:
-          - FLAT
-          - PERCENTAGE
-          - TIERED
-          - FLAT_PLUS_PERCENTAGE
-          type: string
-        beneficiary:
-          description: Who earns it
-          enum:
-          - AGENT
-          - SUPER_AGENT
-          - SUB_AGENT
-          - MERCHANT
-          - BILLER
-          - PLATFORM
-          - CUSTOMER
-          type: string
-        beneficiary_share:
-          description: Share of the computed commission for this beneficiary
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        biller_id:
-          description: Biller (empty = any)
-          format: uuid
-          type: string
-        cap_amount:
-          description: Maximum commission per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          description: Channel (empty = any)
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        commission_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        flat_amount:
-          description: Flat commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        funded_by:
-          description: FEE, PLATFORM, BILLER, MERCHANT
-          maxLength: 32
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        kyc_tier:
-          description: Customer KYC tier (empty = any)
-          format: int32
-          type: integer
-        max_amount:
-          description: Applies up to this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        min_amount:
-          description: Applies from this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        percentage:
-          description: Percentage of the base (0.005 = 0.5%)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        priority:
-          description: Lower wins among equally specific rules
-          format: int32
-          type: integer
-        tax_withholding_rate:
-          description: Withholding tax on commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tiers:
-          additionalProperties: true
-          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
-          type: object
-        txn_type:
-          description: Transaction type
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-      required:
-      - commission_plan_id
-      - name
-      - txn_type
-      - basis
-      - beneficiary
-      type: object
-    CommissionRulePage:
-      description: One page of CommissionRule results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/CommissionRule'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    CommissionRuleUpdate:
-      properties:
-        agent_level:
-          description: Agent level (empty = any)
-          enum:
-          - SUPER_AGENT
-          - AGENT
-          - SUB_AGENT
-          type: string
-        agent_territory_id:
-          description: Territory (empty = any)
-          format: uuid
-          type: string
-        base:
-          description: 'Base of the percentage: AMOUNT or FEE'
-          maxLength: 16
-          type: string
-        basis:
-          description: Calculation basis
-          enum:
-          - FLAT
-          - PERCENTAGE
-          - TIERED
-          - FLAT_PLUS_PERCENTAGE
-          type: string
-        beneficiary:
-          description: Who earns it
-          enum:
-          - AGENT
-          - SUPER_AGENT
-          - SUB_AGENT
-          - MERCHANT
-          - BILLER
-          - PLATFORM
-          - CUSTOMER
-          type: string
-        beneficiary_share:
-          description: Share of the computed commission for this beneficiary
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        biller_id:
-          description: Biller (empty = any)
-          format: uuid
-          type: string
-        cap_amount:
-          description: Maximum commission per transaction
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        channel:
-          description: Channel (empty = any)
-          enum:
-          - USSD
-          - SMS
-          - APP
-          - WEB
-          - API
-          - AGENT_APP
-          - POS
-          - QR
-          - BULK
-          - SYSTEM
-          type: string
-        commission_plan_id:
-          description: Plan
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        flat_amount:
-          description: Flat commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        funded_by:
-          description: FEE, PLATFORM, BILLER, MERCHANT
-          maxLength: 32
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        kyc_tier:
-          description: Customer KYC tier (empty = any)
-          format: int32
-          type: integer
-        max_amount:
-          description: Applies up to this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        min_amount:
-          description: Applies from this transaction amount
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        name:
-          description: Rule name
-          maxLength: 120
-          type: string
-        percentage:
-          description: Percentage of the base (0.005 = 0.5%)
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        priority:
-          description: Lower wins among equally specific rules
-          format: int32
-          type: integer
-        tax_withholding_rate:
-          description: Withholding tax on commission
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        tiers:
-          additionalProperties: true
-          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
-          type: object
-        txn_type:
-          description: Transaction type
-          enum:
-          - P2P
-          - CASH_IN
-          - CASH_OUT
-          - MERCHANT_PAYMENT
-          - BILL_PAYMENT
-          - AIRTIME
-          - G2P
-          - BULK_DISBURSEMENT
-          - WALLET_TO_BANK
-          - BANK_TO_WALLET
-          - FLOAT_TRANSFER
-          - COMMISSION_PAYOUT
-          - INTEROP_OUT
-          - INTEROP_IN
-          - REFUND
-          - REVERSAL
-          - FEE
-          - ADJUSTMENT
-          - LOAN_DISBURSEMENT
-          - LOAN_REPAYMENT
-          type: string
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            wallets:read: Read Wallets, Agents and Merchants
-            wallets:write: Change Wallets, Agents and Merchants
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            wallets:read: Read Wallets, Agents and Merchants
-            wallets:write: Change Wallets, Agents and Merchants
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — commission-service
+  version: 1.0.0
   description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
     with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
     bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
@@ -1647,11 +10,24 @@ info:
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — commission-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Commission Plans
+  description: A versioned set of commission rules assigned to agents, merchants or billers
+- name: Commission Rules
+  description: One commission rule; the most specific matching rule per beneficiary wins
+- name: Commission Earnings
+  description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+- name: Commission Payout Runs
+  description: A payout run paying accrued commissions to beneficiary wallets
 paths:
   /v1/commission-plans:
     get:
@@ -2750,19 +1126,1643 @@ paths:
       x-service: commission-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
       x-table: commission_payout_run
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: A versioned set of commission rules assigned to agents, merchants or billers
-  name: Commission Plans
-- description: One commission rule; the most specific matching rule per beneficiary wins
-  name: Commission Rules
-- description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
-  name: Commission Earnings
-- description: A payout run paying accrued commissions to beneficiary wallets
-  name: Commission Payout Runs
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    CommissionPlanPage:
+      type: object
+      description: One page of CommissionPlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionRulePage:
+      type: object
+      description: One page of CommissionRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionPlansApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    CommissionPlansRetireRequest:
+      type: object
+      properties:
+        effective_date:
+          type: string
+          format: date
+    CommissionPlansSimulateRequest:
+      type: object
+      properties:
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        agent_id:
+          type: string
+          format: uuid
+        kyc_tier:
+          type: integer
+          format: int32
+      required:
+      - txn_type
+      - amount
+    CommissionEarningPage:
+      type: object
+      description: One page of CommissionEarning results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionEarning'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionPayoutRunPage:
+      type: object
+      description: One page of CommissionPayoutRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPayoutRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionPayoutRunsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    CommissionPayoutLinePage:
+      type: object
+      description: One page of CommissionPayoutLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPayoutLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionEarning:
+      type: object
+      description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        commission_rule_id:
+          type: string
+          format: uuid
+          description: Rule applied
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Source transaction
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          description: Beneficiary type
+        beneficiary_agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent beneficiary
+        beneficiary_merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant beneficiary
+        beneficiary_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet to pay
+        base_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Base the commission was computed on
+        commission_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross commission (negative for clawback)
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax
+        net_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net commission
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_clawback:
+          type: boolean
+          description: Clawback of an earlier earning (reversal)
+        earned_at:
+          type: string
+          format: date-time
+          description: Transaction completion time
+        payout_due_on:
+          type: string
+          format: date
+          description: Payout date per plan frequency
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - commission_plan_id
+      - commission_rule_id
+      - wallet_transaction_id
+      - beneficiary
+      - beneficiary_wallet_id
+      - base_amount
+      - commission_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - is_clawback
+      - earned_at
+      - payout_due_on
+    CommissionPayoutLine:
+      type: object
+      description: Amount paid to one beneficiary in a payout run. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        commission_payout_run_id:
+          type: string
+          format: uuid
+          description: Run
+        beneficiary_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet paid
+        beneficiary_agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent paid
+        earning_count:
+          type: integer
+          format: int32
+          description: Earnings included
+        gross_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross commission
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax withheld
+        net_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net paid
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_status:
+          type: string
+          maxLength: 16
+          description: PAID, FAILED, HELD
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payout transaction
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - commission_payout_run_id
+      - beneficiary_wallet_id
+      - earning_count
+      - gross_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - payout_status
+    CommissionPayoutRun:
+      type: object
+      description: A payout run paying accrued commissions to beneficiary wallets
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Frequency covered
+        period_start:
+          type: string
+          format: date
+          description: Earnings from
+        period_end:
+          type: string
+          format: date
+          description: Earnings to
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        beneficiary_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Beneficiaries paid
+          readOnly: true
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total net paid
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Summary posting
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payout_frequency
+      - period_start
+      - period_end
+      - currency
+      - status
+    CommissionPayoutRunCreate:
+      type: object
+      properties:
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Frequency covered
+        period_start:
+          type: string
+          format: date
+          description: Earnings from
+        period_end:
+          type: string
+          format: date
+          description: Earnings to
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - payout_frequency
+      - period_start
+      - period_end
+      - currency
+    CommissionPlan:
+      type: object
+      description: A versioned set of commission rules assigned to agents, merchants or billers
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        version:
+          type: integer
+          format: int32
+          description: Version
+        applies_to:
+          type: string
+          maxLength: 32
+          description: AGENT, MERCHANT, BILLER, ALL
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Payout frequency
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Status
+          readOnly: true
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - version
+      - applies_to
+      - currency
+      - payout_frequency
+      - status
+      - valid_from
+    CommissionPlanCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        version:
+          type: integer
+          format: int32
+          description: Version
+        applies_to:
+          type: string
+          maxLength: 32
+          description: AGENT, MERCHANT, BILLER, ALL
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Payout frequency
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - applies_to
+      - currency
+      - valid_from
+    CommissionPlanUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Plan code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        version:
+          type: integer
+          format: int32
+          description: Version
+        applies_to:
+          type: string
+          maxLength: 32
+          description: AGENT, MERCHANT, BILLER, ALL
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Payout frequency
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CommissionRule:
+      type: object
+      description: One commission rule; the most specific matching rule per beneficiary wins
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        kyc_tier:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Customer KYC tier (empty = any)
+        agent_level:
+          type:
+          - string
+          - 'null'
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          description: Agent level (empty = any)
+        agent_territory_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Territory (empty = any)
+        biller_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Biller (empty = any)
+        min_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat commission
+        percentage:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the base (0.005 = 0.5%)
+        tiers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+        cap_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum commission per transaction
+        base:
+          type: string
+          maxLength: 16
+          description: 'Base of the percentage: AMOUNT or FEE'
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          description: Who earns it
+        beneficiary_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the computed commission for this beneficiary
+        funded_by:
+          type: string
+          maxLength: 32
+          description: FEE, PLATFORM, BILLER, MERCHANT
+        tax_withholding_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on commission
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - commission_plan_id
+      - name
+      - priority
+      - txn_type
+      - basis
+      - base
+      - beneficiary
+      - beneficiary_share
+      - funded_by
+      - is_active
+    CommissionRuleCreate:
+      type: object
+      properties:
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        kyc_tier:
+          type: integer
+          format: int32
+          description: Customer KYC tier (empty = any)
+        agent_level:
+          type: string
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          description: Agent level (empty = any)
+        agent_territory_id:
+          type: string
+          format: uuid
+          description: Territory (empty = any)
+        biller_id:
+          type: string
+          format: uuid
+          description: Biller (empty = any)
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat commission
+        percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the base (0.005 = 0.5%)
+        tiers:
+          type: object
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+        cap_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum commission per transaction
+        base:
+          type: string
+          maxLength: 16
+          description: 'Base of the percentage: AMOUNT or FEE'
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          description: Who earns it
+        beneficiary_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the computed commission for this beneficiary
+        funded_by:
+          type: string
+          maxLength: 32
+          description: FEE, PLATFORM, BILLER, MERCHANT
+        tax_withholding_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on commission
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - commission_plan_id
+      - name
+      - txn_type
+      - basis
+      - beneficiary
+    CommissionRuleUpdate:
+      type: object
+      properties:
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        kyc_tier:
+          type: integer
+          format: int32
+          description: Customer KYC tier (empty = any)
+        agent_level:
+          type: string
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          description: Agent level (empty = any)
+        agent_territory_id:
+          type: string
+          format: uuid
+          description: Territory (empty = any)
+        biller_id:
+          type: string
+          format: uuid
+          description: Biller (empty = any)
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat commission
+        percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the base (0.005 = 0.5%)
+        tiers:
+          type: object
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+        cap_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum commission per transaction
+        base:
+          type: string
+          maxLength: 16
+          description: 'Base of the percentage: AMOUNT or FEE'
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          description: Who earns it
+        beneficiary_share:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Share of the computed commission for this beneficiary
+        funded_by:
+          type: string
+          maxLength: 32
+          description: FEE, PLATFORM, BILLER, MERCHANT
+        tax_withholding_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on commission
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants

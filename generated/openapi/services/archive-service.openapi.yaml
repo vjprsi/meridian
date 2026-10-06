@@ -1,1700 +1,34 @@
-components:
-  parameters:
-    CreatedAfter:
-      in: query
-      name: created_after
-      schema:
-        format: date-time
-        type: string
-    CreatedBefore:
-      in: query
-      name: created_before
-      schema:
-        format: date-time
-        type: string
-    Cursor:
-      in: query
-      name: cursor
-      schema:
-        type: string
-    IdempotencyKey:
-      description: Unique key per logical request; replays return the original response for 24h
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 128
-        type: string
-    IfMatch:
-      description: Current row_version of the resource (optimistic locking)
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        type: string
-    Limit:
-      in: query
-      name: limit
-      schema:
-        default: 50
-        maximum: 200
-        minimum: 1
-        type: integer
-  responses:
-    BadRequest:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Malformed request
-    Conflict:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Version or idempotency conflict
-    Forbidden:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Not allowed
-    NotFound:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Resource not found
-    TooManyRequests:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Rate limit exceeded
-    Unauthorized:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Missing or invalid credentials
-    Unprocessable:
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-      description: Business rule violation
-  schemas:
-    ArchiveJob:
-      description: A run moving aged records from a service database to the archive store
-      properties:
-        bytes_archived:
-          description: Bytes written
-          format: int64
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        cutoff_date:
-          description: Records older than this date are archived
-          format: date
-          type: string
-        data_classification_id:
-          description: Table archived
-          format: uuid
-          type: string
-        error:
-          description: Error details
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        finished_at:
-          description: End
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        records_archived:
-          description: Records archived
-          format: int64
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        records_skipped_hold:
-          description: Records skipped because of legal holds
-          format: int64
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        retention_policy_id:
-          description: Policy applied
-          format: uuid
-          type: string
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        started_at:
-          description: Start
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - RUNNING
-          - SUCCEEDED
-          - FAILED
-          - CANCELLED
-          - PARTIALLY_SUCCEEDED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - retention_policy_id
-      - data_classification_id
-      - cutoff_date
-      - status
-      type: object
-    ArchiveJobCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        cutoff_date:
-          description: Records older than this date are archived
-          format: date
-          type: string
-        data_classification_id:
-          description: Table archived
-          format: uuid
-          type: string
-        retention_policy_id:
-          description: Policy applied
-          format: uuid
-          type: string
-      required:
-      - retention_policy_id
-      - data_classification_id
-      - cutoff_date
-      type: object
-    ArchiveJobPage:
-      description: One page of ArchiveJob results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ArchiveJob'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ArchivedObject:
-      description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
-      properties:
-        archive_job_id:
-          description: Job that produced it
-          format: uuid
-          type: string
-        checksum_sha256:
-          description: Integrity checksum
-          maxLength: 64
-          type: string
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        database_name:
-          description: Source database
-          maxLength: 64
-          type: string
-        first_record_id:
-          description: First record id in the batch
-          format: uuid
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        last_record_id:
-          description: Last record id in the batch
-          format: uuid
-          type: string
-        max_created_at:
-          description: Newest record time
-          format: date-time
-          type: string
-        min_created_at:
-          description: Oldest record time
-          format: date-time
-          type: string
-        record_count:
-          description: Records in the object
-          format: int64
-          type: integer
-        restorable:
-          description: Can be restored for queries
-          type: boolean
-        storage_class:
-          description: Storage tier, e.g. ARCHIVE, DEEP_ARCHIVE
-          maxLength: 32
-          type: string
-        storage_uri:
-          description: Object-store URI (Parquet)
-          maxLength: 500
-          type: string
-        table_name:
-          description: Source table
-          maxLength: 64
-          type: string
-        worm_retain_until:
-          description: Object-lock retention date
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - archive_job_id
-      - database_name
-      - table_name
-      - first_record_id
-      - last_record_id
-      - record_count
-      - min_created_at
-      - max_created_at
-      - storage_uri
-      - storage_class
-      - checksum_sha256
-      - worm_retain_until
-      - restorable
-      type: object
-    ArchivedObjectPage:
-      description: One page of ArchivedObject results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/ArchivedObject'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    ArchivedObjectsRestoreRequest:
-      properties:
-        reason:
-          maxLength: 500
-          type: string
-      required:
-      - reason
-      type: object
-    DataClassification:
-      description: Catalogue entry classifying a table (or column set) by sensitivity and data class
-      properties:
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        data_class:
-          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
-          maxLength: 64
-          type: string
-        database_name:
-          description: Database
-          maxLength: 64
-          type: string
-        description:
-          description: Notes
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        owner:
-          description: Data owner (business)
-          maxLength: 120
-          type:
-          - string
-          - 'null'
-        pii_columns:
-          description: Columns holding personal data
-          items: {}
-          type:
-          - array
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        sensitivity:
-          description: Sensitivity
-          enum:
-          - PUBLIC
-          - INTERNAL
-          - CONFIDENTIAL
-          - RESTRICTED
-          - PCI
-          - PII
-          - SPECIAL_CATEGORY
-          type: string
-        service_name:
-          description: Owning service
-          maxLength: 64
-          type: string
-        steward:
-          description: Data steward
-          maxLength: 120
-          type:
-          - string
-          - 'null'
-        table_name:
-          description: Table
-          maxLength: 64
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - data_class
-      - service_name
-      - database_name
-      - table_name
-      - sensitivity
-      type: object
-    DataClassificationCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_class:
-          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
-          maxLength: 64
-          type: string
-        database_name:
-          description: Database
-          maxLength: 64
-          type: string
-        description:
-          description: Notes
-          maxLength: 500
-          type: string
-        owner:
-          description: Data owner (business)
-          maxLength: 120
-          type: string
-        pii_columns:
-          description: Columns holding personal data
-          items: {}
-          type: array
-        sensitivity:
-          description: Sensitivity
-          enum:
-          - PUBLIC
-          - INTERNAL
-          - CONFIDENTIAL
-          - RESTRICTED
-          - PCI
-          - PII
-          - SPECIAL_CATEGORY
-          type: string
-        service_name:
-          description: Owning service
-          maxLength: 64
-          type: string
-        steward:
-          description: Data steward
-          maxLength: 120
-          type: string
-        table_name:
-          description: Table
-          maxLength: 64
-          type: string
-      required:
-      - data_class
-      - service_name
-      - database_name
-      - table_name
-      - sensitivity
-      type: object
-    DataClassificationPage:
-      description: One page of DataClassification results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/DataClassification'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    DataClassificationUpdate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_class:
-          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
-          maxLength: 64
-          type: string
-        database_name:
-          description: Database
-          maxLength: 64
-          type: string
-        description:
-          description: Notes
-          maxLength: 500
-          type: string
-        owner:
-          description: Data owner (business)
-          maxLength: 120
-          type: string
-        pii_columns:
-          description: Columns holding personal data
-          items: {}
-          type: array
-        sensitivity:
-          description: Sensitivity
-          enum:
-          - PUBLIC
-          - INTERNAL
-          - CONFIDENTIAL
-          - RESTRICTED
-          - PCI
-          - PII
-          - SPECIAL_CATEGORY
-          type: string
-        service_name:
-          description: Owning service
-          maxLength: 64
-          type: string
-        steward:
-          description: Data steward
-          maxLength: 120
-          type: string
-        table_name:
-          description: Table
-          maxLength: 64
-          type: string
-      type: object
-    LegalHold:
-      description: A legal or regulatory hold that suspends archival purge and deletion for its scope
-      properties:
-        approval_request_id:
-          description: Approval for placing or releasing
-          format: uuid
-          type:
-          - string
-          - 'null'
-        case_reference:
-          description: External matter or court reference
-          maxLength: 128
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        customer_id:
-          description: Customer, when scope is a customer
-          format: uuid
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        name:
-          description: Hold name / matter
-          maxLength: 160
-          type: string
-        reason:
-          description: Legal basis
-          type: string
-        released_at:
-          description: Release time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        released_by:
-          description: Who released it
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        requested_by:
-          description: Legal / compliance requester
-          maxLength: 120
-          type: string
-        review_on:
-          description: Next review date
-          format: date
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        scope_ids:
-          description: Ids covered (customers, accounts, cases, tables...)
-          items: {}
-          type: array
-        scope_type:
-          description: What the hold covers
-          enum:
-          - CUSTOMER
-          - ACCOUNT
-          - CASE
-          - TABLE
-          - DOCUMENT
-          - TENANT
-          type: string
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - RELEASED
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - name
-      - scope_type
-      - scope_ids
-      - reason
-      - requested_by
-      - status
-      - starts_on
-      type: object
-    LegalHoldCreate:
-      properties:
-        approval_request_id:
-          description: Approval for placing or releasing
-          format: uuid
-          type: string
-        case_reference:
-          description: External matter or court reference
-          maxLength: 128
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer, when scope is a customer
-          format: uuid
-          type: string
-        name:
-          description: Hold name / matter
-          maxLength: 160
-          type: string
-        reason:
-          description: Legal basis
-          type: string
-        requested_by:
-          description: Legal / compliance requester
-          maxLength: 120
-          type: string
-        review_on:
-          description: Next review date
-          format: date
-          type: string
-        scope_ids:
-          description: Ids covered (customers, accounts, cases, tables...)
-          items: {}
-          type: array
-        scope_type:
-          description: What the hold covers
-          enum:
-          - CUSTOMER
-          - ACCOUNT
-          - CASE
-          - TABLE
-          - DOCUMENT
-          - TENANT
-          type: string
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - RELEASED
-          type: string
-      required:
-      - name
-      - scope_type
-      - scope_ids
-      - reason
-      - requested_by
-      - starts_on
-      type: object
-    LegalHoldPage:
-      description: One page of LegalHold results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/LegalHold'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    LegalHoldUpdate:
-      properties:
-        approval_request_id:
-          description: Approval for placing or releasing
-          format: uuid
-          type: string
-        case_reference:
-          description: External matter or court reference
-          maxLength: 128
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        customer_id:
-          description: Customer, when scope is a customer
-          format: uuid
-          type: string
-        name:
-          description: Hold name / matter
-          maxLength: 160
-          type: string
-        reason:
-          description: Legal basis
-          type: string
-        requested_by:
-          description: Legal / compliance requester
-          maxLength: 120
-          type: string
-        review_on:
-          description: Next review date
-          format: date
-          type: string
-        scope_ids:
-          description: Ids covered (customers, accounts, cases, tables...)
-          items: {}
-          type: array
-        scope_type:
-          description: What the hold covers
-          enum:
-          - CUSTOMER
-          - ACCOUNT
-          - CASE
-          - TABLE
-          - DOCUMENT
-          - TENANT
-          type: string
-        starts_on:
-          description: Start
-          format: date
-          type: string
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - RELEASED
-          type: string
-      type: object
-    LegalHoldsReleaseRequest:
-      properties:
-        reason:
-          maxLength: 500
-          type: string
-      required:
-      - reason
-      type: object
-    Problem:
-      description: RFC 9457 problem details
-      properties:
-        code:
-          description: Stable machine-readable error code
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            properties:
-              code:
-                type: string
-              field:
-                type: string
-              message:
-                type: string
-            type: object
-          type: array
-        instance:
-          type: string
-        request_id:
-          type: string
-        status:
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
-      required:
-      - type
-      - title
-      - status
-      - code
-      type: object
-    PurgeRequest:
-      description: Request to permanently delete or anonymise data that reached end of retention
-      properties:
-        action:
-          description: PURGE or ANONYMISE
-          enum:
-          - ARCHIVE
-          - ANONYMISE
-          - PURGE
-          - ARCHIVE_THEN_PURGE
-          type: string
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type:
-          - string
-          - 'null'
-        approved_by:
-          description: Checker who approved the purge (differs from the requester)
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        blocked_by_hold_id:
-          description: Hold blocking execution
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        certificate_document_id:
-          description: Certificate of destruction
-          format: uuid
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        certificate_hash:
-          description: Hash of the certificate
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        data_classification_id:
-          description: Table affected
-          format: uuid
-          type:
-          - string
-          - 'null'
-        decided_at:
-          description: When the request was approved, rejected or cancelled
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        decision_reason:
-          description: Reason given on rejection or cancellation
-          maxLength: 500
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        estimated_records:
-          description: Records selected
-          format: int64
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        executed_at:
-          description: Execution time
-          format: date-time
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        record_selector:
-          additionalProperties: true
-          description: Selection criteria / id ranges
-          type: object
-        records_purged:
-          description: Records purged
-          format: int64
-          readOnly: true
-          type:
-          - integer
-          - 'null'
-        retention_policy_id:
-          description: Policy that triggered it
-          format: uuid
-          type:
-          - string
-          - 'null'
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        scope_description:
-          description: What will be purged
-          maxLength: 500
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - EXECUTING
-          - COMPLETED
-          - FAILED
-          - BLOCKED_BY_HOLD
-          - CANCELLED
-          readOnly: true
-          type: string
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - scope_description
-      - record_selector
-      - action
-      - status
-      type: object
-    PurgeRequestCreate:
-      properties:
-        action:
-          description: PURGE or ANONYMISE
-          enum:
-          - ARCHIVE
-          - ANONYMISE
-          - PURGE
-          - ARCHIVE_THEN_PURGE
-          type: string
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_classification_id:
-          description: Table affected
-          format: uuid
-          type: string
-        record_selector:
-          additionalProperties: true
-          description: Selection criteria / id ranges
-          type: object
-        retention_policy_id:
-          description: Policy that triggered it
-          format: uuid
-          type: string
-        scope_description:
-          description: What will be purged
-          maxLength: 500
-          type: string
-      required:
-      - scope_description
-      - record_selector
-      - action
-      type: object
-    PurgeRequestPage:
-      description: One page of PurgeRequest results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/PurgeRequest'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    PurgeRequestsCancelRequest:
-      properties:
-        reason:
-          maxLength: 500
-          type: string
-      required:
-      - reason
-      type: object
-    PurgeRequestsRejectRequest:
-      properties:
-        reason:
-          maxLength: 500
-          type: string
-      required:
-      - reason
-      type: object
-    RetentionPolicy:
-      description: How long a data class is kept per jurisdiction and what happens after
-      properties:
-        action:
-          description: Action at end of each phase
-          enum:
-          - ARCHIVE
-          - ANONYMISE
-          - PURGE
-          - ARCHIVE_THEN_PURGE
-          type: string
-        country_code:
-          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type:
-          - string
-          - 'null'
-        created_at:
-          description: Creation time
-          format: date-time
-          readOnly: true
-          type: string
-        created_by:
-          description: Principal that created the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type:
-          - string
-          - 'null'
-        data_class:
-          description: Data class covered
-          maxLength: 64
-          type: string
-        id:
-          description: Unique id (UUIDv7, time-ordered)
-          format: uuid
-          readOnly: true
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type:
-          - string
-          - 'null'
-        online_days:
-          description: Days kept in the operational database
-          format: int32
-          type: integer
-        regulation_reference:
-          description: Law or regulation, e.g. AML record keeping
-          maxLength: 255
-          type:
-          - string
-          - 'null'
-        requires_approval:
-          description: Purge needs maker-checker
-          type: boolean
-        retention_trigger:
-          description: Event that starts the retention clock
-          enum:
-          - CREATED_AT
-          - RELATIONSHIP_END
-          - ACCOUNT_CLOSURE
-          - TRANSACTION_DATE
-          - CASE_CLOSURE
-          - CUSTOM_EVENT
-          type: string
-        retention_years:
-          description: Total years kept (online + archive)
-          format: int32
-          type: integer
-        row_version:
-          description: Optimistic lock version; send as If-Match
-          format: int32
-          readOnly: true
-          type: integer
-        updated_at:
-          description: Last update time
-          format: date-time
-          readOnly: true
-          type: string
-        updated_by:
-          description: Principal that last updated the row
-          maxLength: 64
-          readOnly: true
-          type:
-          - string
-          - 'null'
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-      required:
-      - id
-      - created_at
-      - updated_at
-      - row_version
-      - data_class
-      - retention_trigger
-      - online_days
-      - retention_years
-      - action
-      - requires_approval
-      - is_active
-      - valid_from
-      type: object
-    RetentionPolicyCreate:
-      properties:
-        action:
-          description: Action at end of each phase
-          enum:
-          - ARCHIVE
-          - ANONYMISE
-          - PURGE
-          - ARCHIVE_THEN_PURGE
-          type: string
-        country_code:
-          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_class:
-          description: Data class covered
-          maxLength: 64
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type: string
-        online_days:
-          description: Days kept in the operational database
-          format: int32
-          type: integer
-        regulation_reference:
-          description: Law or regulation, e.g. AML record keeping
-          maxLength: 255
-          type: string
-        requires_approval:
-          description: Purge needs maker-checker
-          type: boolean
-        retention_trigger:
-          description: Event that starts the retention clock
-          enum:
-          - CREATED_AT
-          - RELATIONSHIP_END
-          - ACCOUNT_CLOSURE
-          - TRANSACTION_DATE
-          - CASE_CLOSURE
-          - CUSTOM_EVENT
-          type: string
-        retention_years:
-          description: Total years kept (online + archive)
-          format: int32
-          type: integer
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-      required:
-      - data_class
-      - retention_years
-      - valid_from
-      type: object
-    RetentionPolicyPage:
-      description: One page of RetentionPolicy results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/RetentionPolicy'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    RetentionPolicyUpdate:
-      properties:
-        action:
-          description: Action at end of each phase
-          enum:
-          - ARCHIVE
-          - ANONYMISE
-          - PURGE
-          - ARCHIVE_THEN_PURGE
-          type: string
-        country_code:
-          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
-          pattern: ^[A-Z]{2}$
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        data_class:
-          description: Data class covered
-          maxLength: 64
-          type: string
-        is_active:
-          description: Active
-          type: boolean
-        legal_entity_id:
-          description: Legal entity (empty = all)
-          format: uuid
-          type: string
-        online_days:
-          description: Days kept in the operational database
-          format: int32
-          type: integer
-        regulation_reference:
-          description: Law or regulation, e.g. AML record keeping
-          maxLength: 255
-          type: string
-        requires_approval:
-          description: Purge needs maker-checker
-          type: boolean
-        retention_trigger:
-          description: Event that starts the retention clock
-          enum:
-          - CREATED_AT
-          - RELATIONSHIP_END
-          - ACCOUNT_CLOSURE
-          - TRANSACTION_DATE
-          - CASE_CLOSURE
-          - CUSTOM_EVENT
-          type: string
-        retention_years:
-          description: Total years kept (online + archive)
-          format: int32
-          type: integer
-        valid_from:
-          description: Effective from
-          format: date
-          type: string
-      type: object
-  securitySchemes:
-    oauth2:
-      flows:
-        authorizationCode:
-          authorizationUrl: https://auth.meridian.example/oauth2/authorize
-          scopes:
-            operations:read: 'Read Operations: Batch, Files, Search and Archive'
-            operations:write: 'Change Operations: Batch, Files, Search and Archive'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-        clientCredentials:
-          scopes:
-            operations:read: 'Read Operations: Batch, Files, Search and Archive'
-            operations:write: 'Change Operations: Batch, Files, Search and Archive'
-          tokenUrl: https://auth.meridian.example/oauth2/token
-      type: oauth2
+openapi: 3.1.0
 info:
+  title: Meridian Core — archive-service
+  version: 1.0.0
   description: 'Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise
     search across all entities, and data retention, archival, legal hold and certified purge.
 
     '
   license:
-    identifier: LicenseRef-Proprietary
     name: Proprietary
-  title: Meridian Core — archive-service
-  version: 1.0.0
-openapi: 3.1.0
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Data Classifications
+  description: Catalogue entry classifying a table (or column set) by sensitivity and data class
+- name: Retention Policies
+  description: How long a data class is kept per jurisdiction and what happens after
+- name: Archive Jobs
+  description: A run moving aged records from a service database to the archive store
+- name: Archived Objects
+  description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+- name: Legal Holds
+  description: A legal or regulatory hold that suspends archival purge and deletion for its scope
+- name: Purge Requests
+  description: Request to permanently delete or anonymise data that reached end of retention
 paths:
   /v1/archive/classifications:
     get:
@@ -3302,23 +1636,1689 @@ paths:
       x-service: archive-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
       x-table: purge_request
-security:
-- oauth2: []
-servers:
-- description: Production
-  url: https://api.meridian.example
-- description: Sandbox
-  url: https://sandbox.api.meridian.example
-tags:
-- description: Catalogue entry classifying a table (or column set) by sensitivity and data class
-  name: Data Classifications
-- description: How long a data class is kept per jurisdiction and what happens after
-  name: Retention Policies
-- description: A run moving aged records from a service database to the archive store
-  name: Archive Jobs
-- description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
-  name: Archived Objects
-- description: A legal or regulatory hold that suspends archival purge and deletion for its scope
-  name: Legal Holds
-- description: Request to permanently delete or anonymise data that reached end of retention
-  name: Purge Requests
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    DataClassificationPage:
+      type: object
+      description: One page of DataClassification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataClassification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RetentionPolicyPage:
+      type: object
+      description: One page of RetentionPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetentionPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ArchiveJobPage:
+      type: object
+      description: One page of ArchiveJob results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchiveJob'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ArchivedObjectPage:
+      type: object
+      description: One page of ArchivedObject results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArchivedObject'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ArchivedObjectsRestoreRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    LegalHoldPage:
+      type: object
+      description: One page of LegalHold results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalHold'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LegalHoldsReleaseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    PurgeRequestPage:
+      type: object
+      description: One page of PurgeRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurgeRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PurgeRequestsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    PurgeRequestsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    ArchiveJob:
+      type: object
+      description: A run moving aged records from a service database to the archive store
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        retention_policy_id:
+          type: string
+          format: uuid
+          description: Policy applied
+        data_classification_id:
+          type: string
+          format: uuid
+          description: Table archived
+        cutoff_date:
+          type: string
+          format: date
+          description: Records older than this date are archived
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        records_archived:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Records archived
+          readOnly: true
+        records_skipped_hold:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Records skipped because of legal holds
+          readOnly: true
+        bytes_archived:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Bytes written
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Error details
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - retention_policy_id
+      - data_classification_id
+      - cutoff_date
+      - status
+    ArchiveJobCreate:
+      type: object
+      properties:
+        retention_policy_id:
+          type: string
+          format: uuid
+          description: Policy applied
+        data_classification_id:
+          type: string
+          format: uuid
+          description: Table archived
+        cutoff_date:
+          type: string
+          format: date
+          description: Records older than this date are archived
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - retention_policy_id
+      - data_classification_id
+      - cutoff_date
+    ArchivedObject:
+      type: object
+      description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        archive_job_id:
+          type: string
+          format: uuid
+          description: Job that produced it
+        database_name:
+          type: string
+          maxLength: 64
+          description: Source database
+        table_name:
+          type: string
+          maxLength: 64
+          description: Source table
+        first_record_id:
+          type: string
+          format: uuid
+          description: First record id in the batch
+        last_record_id:
+          type: string
+          format: uuid
+          description: Last record id in the batch
+        record_count:
+          type: integer
+          format: int64
+          description: Records in the object
+        min_created_at:
+          type: string
+          format: date-time
+          description: Oldest record time
+        max_created_at:
+          type: string
+          format: date-time
+          description: Newest record time
+        storage_uri:
+          type: string
+          maxLength: 500
+          description: Object-store URI (Parquet)
+        storage_class:
+          type: string
+          maxLength: 32
+          description: Storage tier, e.g. ARCHIVE, DEEP_ARCHIVE
+        checksum_sha256:
+          type: string
+          maxLength: 64
+          description: Integrity checksum
+        worm_retain_until:
+          type: string
+          format: date
+          description: Object-lock retention date
+        restorable:
+          type: boolean
+          description: Can be restored for queries
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - archive_job_id
+      - database_name
+      - table_name
+      - first_record_id
+      - last_record_id
+      - record_count
+      - min_created_at
+      - max_created_at
+      - storage_uri
+      - storage_class
+      - checksum_sha256
+      - worm_retain_until
+      - restorable
+    DataClassification:
+      type: object
+      description: Catalogue entry classifying a table (or column set) by sensitivity and data class
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+        service_name:
+          type: string
+          maxLength: 64
+          description: Owning service
+        database_name:
+          type: string
+          maxLength: 64
+          description: Database
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table
+        sensitivity:
+          type: string
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          description: Sensitivity
+        pii_columns:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Columns holding personal data
+        owner:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Data owner (business)
+        steward:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Data steward
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Notes
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - data_class
+      - service_name
+      - database_name
+      - table_name
+      - sensitivity
+    DataClassificationCreate:
+      type: object
+      properties:
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+        service_name:
+          type: string
+          maxLength: 64
+          description: Owning service
+        database_name:
+          type: string
+          maxLength: 64
+          description: Database
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table
+        sensitivity:
+          type: string
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          description: Sensitivity
+        pii_columns:
+          type: array
+          items: {}
+          description: Columns holding personal data
+        owner:
+          type: string
+          maxLength: 120
+          description: Data owner (business)
+        steward:
+          type: string
+          maxLength: 120
+          description: Data steward
+        description:
+          type: string
+          maxLength: 500
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - data_class
+      - service_name
+      - database_name
+      - table_name
+      - sensitivity
+    DataClassificationUpdate:
+      type: object
+      properties:
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+        service_name:
+          type: string
+          maxLength: 64
+          description: Owning service
+        database_name:
+          type: string
+          maxLength: 64
+          description: Database
+        table_name:
+          type: string
+          maxLength: 64
+          description: Table
+        sensitivity:
+          type: string
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          description: Sensitivity
+        pii_columns:
+          type: array
+          items: {}
+          description: Columns holding personal data
+        owner:
+          type: string
+          maxLength: 120
+          description: Data owner (business)
+        steward:
+          type: string
+          maxLength: 120
+          description: Data steward
+        description:
+          type: string
+          maxLength: 500
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LegalHold:
+      type: object
+      description: A legal or regulatory hold that suspends archival purge and deletion for its scope
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 160
+          description: Hold name / matter
+        scope_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          description: What the hold covers
+        scope_ids:
+          type: array
+          items: {}
+          description: Ids covered (customers, accounts, cases, tables...)
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer, when scope is a customer
+        reason:
+          type: string
+          description: Legal basis
+        requested_by:
+          type: string
+          maxLength: 120
+          description: Legal / compliance requester
+        case_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: External matter or court reference
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - RELEASED
+          description: Status
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        review_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next review date
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        released_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who released it
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval for placing or releasing
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - scope_type
+      - scope_ids
+      - reason
+      - requested_by
+      - status
+      - starts_on
+    LegalHoldCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 160
+          description: Hold name / matter
+        scope_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          description: What the hold covers
+        scope_ids:
+          type: array
+          items: {}
+          description: Ids covered (customers, accounts, cases, tables...)
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer, when scope is a customer
+        reason:
+          type: string
+          description: Legal basis
+        requested_by:
+          type: string
+          maxLength: 120
+          description: Legal / compliance requester
+        case_reference:
+          type: string
+          maxLength: 128
+          description: External matter or court reference
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - RELEASED
+          description: Status
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        review_on:
+          type: string
+          format: date
+          description: Next review date
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Approval for placing or releasing
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - scope_type
+      - scope_ids
+      - reason
+      - requested_by
+      - starts_on
+    LegalHoldUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 160
+          description: Hold name / matter
+        scope_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          description: What the hold covers
+        scope_ids:
+          type: array
+          items: {}
+          description: Ids covered (customers, accounts, cases, tables...)
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer, when scope is a customer
+        reason:
+          type: string
+          description: Legal basis
+        requested_by:
+          type: string
+          maxLength: 120
+          description: Legal / compliance requester
+        case_reference:
+          type: string
+          maxLength: 128
+          description: External matter or court reference
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - RELEASED
+          description: Status
+        starts_on:
+          type: string
+          format: date
+          description: Start
+        review_on:
+          type: string
+          format: date
+          description: Next review date
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Approval for placing or releasing
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PurgeRequest:
+      type: object
+      description: Request to permanently delete or anonymise data that reached end of retention
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        retention_policy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Policy that triggered it
+        data_classification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Table affected
+        scope_description:
+          type: string
+          maxLength: 500
+          description: What will be purged
+        record_selector:
+          type: object
+          additionalProperties: true
+          description: Selection criteria / id ranges
+        action:
+          type: string
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          description: PURGE or ANONYMISE
+        estimated_records:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Records selected
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - EXECUTING
+          - COMPLETED
+          - FAILED
+          - BLOCKED_BY_HOLD
+          - CANCELLED
+          description: Status
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved the purge (differs from the requester)
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the request was approved, rejected or cancelled
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason given on rejection or cancellation
+          readOnly: true
+        blocked_by_hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Hold blocking execution
+          readOnly: true
+        executed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
+        records_purged:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Records purged
+          readOnly: true
+        certificate_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Certificate of destruction
+          readOnly: true
+        certificate_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the certificate
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scope_description
+      - record_selector
+      - action
+      - status
+    PurgeRequestCreate:
+      type: object
+      properties:
+        retention_policy_id:
+          type: string
+          format: uuid
+          description: Policy that triggered it
+        data_classification_id:
+          type: string
+          format: uuid
+          description: Table affected
+        scope_description:
+          type: string
+          maxLength: 500
+          description: What will be purged
+        record_selector:
+          type: object
+          additionalProperties: true
+          description: Selection criteria / id ranges
+        action:
+          type: string
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          description: PURGE or ANONYMISE
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - scope_description
+      - record_selector
+      - action
+    RetentionPolicy:
+      type: object
+      description: How long a data class is kept per jurisdiction and what happens after
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class covered
+        country_code:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity (empty = all)
+        retention_trigger:
+          type: string
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          description: Event that starts the retention clock
+        online_days:
+          type: integer
+          format: int32
+          description: Days kept in the operational database
+        retention_years:
+          type: integer
+          format: int32
+          description: Total years kept (online + archive)
+        action:
+          type: string
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          description: Action at end of each phase
+        regulation_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Law or regulation, e.g. AML record keeping
+        requires_approval:
+          type: boolean
+          description: Purge needs maker-checker
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - data_class
+      - retention_trigger
+      - online_days
+      - retention_years
+      - action
+      - requires_approval
+      - is_active
+      - valid_from
+    RetentionPolicyCreate:
+      type: object
+      properties:
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class covered
+        country_code:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = all)
+        retention_trigger:
+          type: string
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          description: Event that starts the retention clock
+        online_days:
+          type: integer
+          format: int32
+          description: Days kept in the operational database
+        retention_years:
+          type: integer
+          format: int32
+          description: Total years kept (online + archive)
+        action:
+          type: string
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          description: Action at end of each phase
+        regulation_reference:
+          type: string
+          maxLength: 255
+          description: Law or regulation, e.g. AML record keeping
+        requires_approval:
+          type: boolean
+          description: Purge needs maker-checker
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - data_class
+      - retention_years
+      - valid_from
+    RetentionPolicyUpdate:
+      type: object
+      properties:
+        data_class:
+          type: string
+          maxLength: 64
+          description: Data class covered
+        country_code:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = all)
+        retention_trigger:
+          type: string
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          description: Event that starts the retention clock
+        online_days:
+          type: integer
+          format: int32
+          description: Days kept in the operational database
+        retention_years:
+          type: integer
+          format: int32
+          description: Total years kept (online + archive)
+        action:
+          type: string
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          description: Action at end of each phase
+        regulation_reference:
+          type: string
+          maxLength: 255
+          description: Law or regulation, e.g. AML record keeping
+        requires_approval:
+          type: boolean
+          description: Purge needs maker-checker
+        is_active:
+          type: boolean
+          description: Active
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Current row_version of the resource (optimistic locking)
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    CreatedAfter:
+      name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    CreatedBefore:
+      name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
