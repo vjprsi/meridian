@@ -1,5 +1,7 @@
 package io.meridian.regulatoryreporting.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -13,6 +15,7 @@ import io.meridian.regulatoryreporting.infrastructure.Store;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +41,13 @@ public class DefinitionService {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public DefinitionService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    /** Approval resource type for definition versions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "report_definition_version";
+
+    public DefinitionService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -95,7 +103,40 @@ public class DefinitionService {
         v.set("data_sources", req.get("data_sources"));
         v.set("field_mappings", req.get("field_mappings"));
         v.set("validation_rules", req.hasNonNull("validation_rules") ? req.get("validation_rules") : json.createArrayNode());
-        return crud.insert("report_definition_version", v);
+        String inserted = crud.insert("report_definition_version", v);
+        // Central maker-checker: versions are immutable, so the new DRAFT is the submission; the checker publishes it
+        // from the workflow inbox and DefinitionVersionApprovalHandler applies the decision.
+        JsonNode row = json.readTree(inserted);
+        UUID versionId = UUID.fromString(row.get("id").asString());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("report_definition_id", definitionId.toString());
+        payload.put("report_code", def.get("code").asString());
+        payload.put("definition_version", next);
+        payload.put("effective_from", from.toString());
+        payload.put("change_note", Fields.text(req, "change_note"));
+        payload.put("row_version", row.path("row_version").asInt(1));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, versionId, "publish",
+                "Report definition " + def.get("code").asString() + " v" + next, payload),
+                "publish:" + versionId + ":" + row.path("row_version").asInt(1));
+        return inserted;
+    }
+
+    /** Publishes a version identified by id (workflow decisions); same checks as {@link #publish}. */
+    @Transactional
+    public String publishVersion(UUID versionId, String comment) {
+        JsonNode version = store.require("report_definition_version", versionId);
+        return publish(RunService.uuid(version, "report_definition_id"), version.get("definition_version").asInt(), comment);
+    }
+
+    /** True while the version is an unpublished DRAFT of a live definition with the submitted row_version. */
+    @Transactional(readOnly = true)
+    public boolean awaitsPublication(UUID versionId, Integer rowVersion) {
+        return store.find("report_definition_version", versionId)
+                .filter(v -> "DRAFT".equals(v.path("status").asString()))
+                .filter(v -> rowVersion == null || rowVersion == v.path("row_version").asInt())
+                .filter(v -> store.find("report_definition", RunService.uuid(v, "report_definition_id"))
+                        .map(d -> !"DEPRECATED".equals(d.path("status").asString())).orElse(false))
+                .isPresent();
     }
 
     /** Compiles sources, mappings and rules of a version payload; 422 invalid_definition listing every problem. */
@@ -180,6 +221,7 @@ public class DefinitionService {
         }
         outbox.publish("reporting.report_definition.published", "report_definition_version",
                 UUID.fromString(published.get("id").asString()), payload);
+        approvals.cancelOpen(APPROVAL_RESOURCE, UUID.fromString(published.get("id").asString()), null, "published directly");
         return published.toString();
     }
 
@@ -198,6 +240,10 @@ public class DefinitionService {
         store.update("update report_schedule set is_active = false, updated_by = ? where report_definition_id = ? and is_active",
                 TenantContext.principal(), definitionId);
         outbox.publish("reporting.report_definition.deprecated", "report_definition", definitionId, row);
+        for (JsonNode draft : !approvals.centralised() ? List.<JsonNode>of() : store.rows("select row_to_json(t)::text from report_definition_version t "
+                + "where t.report_definition_id = ? and t.status = 'DRAFT'", definitionId)) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, RunService.uuid(draft, "id"), null, "definition deprecated");
+        }
         return row.toString();
     }
 

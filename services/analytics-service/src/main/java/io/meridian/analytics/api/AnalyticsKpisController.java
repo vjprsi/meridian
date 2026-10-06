@@ -48,7 +48,7 @@ public class AnalyticsKpisController implements AnalyticsKpisApi {
         ObjectNode values = crud.toColumns("analytics_kpi", body);
         kpis.prepare(values, null);
         return idempotency.execute(idempotencyKey, body, AnalyticsKpi.class,
-                () -> responses.created(crud.insert("analytics_kpi", values), AnalyticsKpi.class));
+                () -> responses.created(kpis.create(values), AnalyticsKpi.class));
     }
 
     @Override
@@ -61,7 +61,7 @@ public class AnalyticsKpisController implements AnalyticsKpisApi {
             return responses.ok(existing.toString(), AnalyticsKpi.class);
         }
         kpis.prepare(values, existing);
-        String row = crud.updateRow("analytics_kpi", Map.of("id", id), values, version).orElseThrow(() ->
+        String row = kpis.update(id, values, version, existing).orElseThrow(() ->
                 ApiException.conflict("version_conflict", "If-Match " + version + " does not match the current version; reload and retry"));
         return responses.ok(row, AnalyticsKpi.class);
     }

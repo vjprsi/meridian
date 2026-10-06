@@ -2,6 +2,8 @@ package io.meridian.rewards.application;
 
 import static io.meridian.rewards.application.Json.text;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -14,7 +16,9 @@ import io.meridian.rewards.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -29,12 +33,17 @@ public class AccountService {
     static final String T = "points_account";
     static final String ADJ = "points_adjustment";
 
+    /** Approval resource type for manual points adjustments in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "points_adjustment";
+
     private final Rows rows;
     private final Patcher patcher;
     private final PointsLedger ledger;
     private final Events events;
+    private final Approvals approvals;
 
-    public AccountService(Rows rows, Patcher patcher, PointsLedger ledger, Events events) {
+    public AccountService(Rows rows, Patcher patcher, PointsLedger ledger, Events events, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.patcher = patcher;
         this.ledger = ledger;
@@ -181,7 +190,39 @@ public class AccountService {
         v.put("requested_by", Json.truncate(TenantContext.principal(), 64));
         ObjectNode row = rows.insert(ADJ, v);
         events.publish("engagement.points_adjustment.requested", ADJ, row, PointsAdjustment.class);
+        requestCentralApproval(a, row);
         return row;
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; the approval handler applies the decision. */
+    private void requestCentralApproval(ObjectNode account, ObjectNode adj) {
+        UUID id = Json.uuid(adj, "id");
+        long points = adj.path("points").asLong();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("points_account_id", text(account, "id"));
+        payload.put("customer_id", text(account, "customer_id"));
+        payload.put("rewards_program_id", text(account, "rewards_program_id"));
+        payload.put("points", points);
+        payload.put("reason", text(adj, "reason"));
+        payload.put("available_points", account.path("available_points").asLong());
+        ApprovalSpec spec = ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Points adjustment " + (points > 0 ? "+" : "") + points + " on account " + text(account, "id"), payload);
+        ObjectNode program = rows.find("rewards_program", Json.uuid(account, "rewards_program_id")).orElse(null);
+        BigDecimal pointValue = program == null ? null : Json.decimal(program, "point_value");
+        String currency = program == null ? null : text(program, "value_currency");
+        if (pointValue != null && currency != null) {
+            spec = spec.withAmount(pointValue.multiply(BigDecimal.valueOf(Math.abs(points))).stripTrailingZeros(), currency);
+        }
+        approvals.request(spec, "submit:" + id + ":" + points);
+    }
+
+    /** True while the adjustment is PENDING_APPROVAL with the submitted points unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Long points) {
+        return rows.find(ADJ, id)
+                .filter(a -> "PENDING_APPROVAL".equals(text(a, "status")))
+                .filter(a -> points == null || points == a.path("points").asLong())
+                .isPresent();
     }
 
     @Transactional
@@ -213,7 +254,9 @@ public class AccountService {
             v.put("decision_comment", Json.truncate(comment, 500));
         }
         v.put("points_ledger_entry_id", text(entry, "id"));
-        return rows.update(ADJ, id, v);
+        ObjectNode row = rows.update(ADJ, id, v);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+        return row;
     }
 
     @Transactional
@@ -230,6 +273,7 @@ public class AccountService {
         v.put("decision_comment", Json.truncate(reason, 500));
         ObjectNode row = rows.update(ADJ, id, v);
         events.publish("engagement.points_adjustment.rejected", ADJ, row, PointsAdjustment.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row;
     }
 
