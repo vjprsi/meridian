@@ -105,6 +105,11 @@ services:
 | True no-content action | 4th part `none` | `204` (use only when nothing is returned) |
 | Provider callback without bearer token | summary starts with `[public]` | `security: []`, no Idempotency-Key, permitted by the service's security chain; the service must verify the provider signature and resolve the tenant from the referenced entity |
 
+API surface rules (checked by the generator): resource names are unique platform-wide (they become tags and
+`*Api` class names); never nest a sub-resource under a path that also has `/{id}/...` actions
+(`/v1/campaigns/variants/{id}` vs `/v1/campaigns/{id}/submit` is ambiguous) — use `/v1/campaign-variants` or
+`/v1/campaigns/{campaign_id}/variants`.
+
 Rule of thumb: an action whose purpose is to compute, preview, simulate, test, export or download something must
 declare `object`, a MIME type or a table — never `none`.
 

@@ -392,6 +392,29 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
             for e in s.events:
                 if e.table not in tables_global:
                     errors.append(f"event {e.name}: table {e.table} unknown")
+    # API surface hygiene (warnings for now): unique resource names (they become tags / *Api classes) and
+    # no ambiguous paths (a literal segment where another path of the same shape has a variable).
+    seen_res = {}
+    shapes = []
+    for d in domains:
+        for sv in d.services:
+            for api in sv.apis:
+                if api.resource in seen_res and seen_res[api.resource] != d.id:
+                    warnings.append(f"[{d.id}] resource name '{api.resource}' also used in domain {seen_res[api.resource]}")
+                seen_res[api.resource] = d.id
+                bases = [api.path, api.path + "/{id}"] + [api.path + act.path for act in api.actions]
+                shapes += [(d.id, b) for b in bases]
+    for i, (da, pa) in enumerate(shapes):
+        sa = pa.strip("/").split("/")
+        for db_, pb in shapes[i + 1:]:
+            sb = pb.strip("/").split("/")
+            if pa == pb or len(sa) != len(sb):
+                continue
+            ok = all(x == y or x.startswith("{") or y.startswith("{") for x, y in zip(sa, sb))
+            a_more = any(not x.startswith("{") and y.startswith("{") for x, y in zip(sa, sb))
+            b_more = any(x.startswith("{") and not y.startswith("{") for x, y in zip(sa, sb))
+            if ok and a_more and b_more:  # crossed specificity: neither path wins for some URL
+                warnings.append(f"[{da}] ambiguous paths: {pa} vs {pb}")
     if focus:
         errors = [e for e in errors if _belongs(e, focus, domains)]
         warnings = [w for w in warnings if w.startswith(f"[{focus}]")]
