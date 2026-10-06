@@ -6,8 +6,10 @@ import io.meridian.statement.api.generated.model.TaxCertificate;
 import io.meridian.statement.api.generated.model.TaxCertificateCreate;
 import io.meridian.statement.application.StatementService;
 import io.meridian.statement.application.TaxCertificateService;
+import io.meridian.statement.domain.StatementRenderer;
 import io.meridian.web.idempotency.Idempotency;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,18 +40,19 @@ public class TaxCertificatesController implements TaxCertificatesApi {
     }
 
     @Override
-    public ResponseEntity<Void> taxCertificatesDownload(UUID id) {
+    public ResponseEntity<String> taxCertificatesDownload(UUID id, Long expires, String signature) {
         TenantContext.require();
-        String expires = Http.query("expires");
-        String signature = Http.query("signature");
         if (expires != null || signature != null) {
             statements.verifySignature(id, String.valueOf(expires), String.valueOf(signature));
         }
-        if ("url".equalsIgnoreCase(Http.query("as"))) {
-            return Http.json(json, statements.signedLink(id, "tax_certificate"));
-        }
         byte[] content = certificates.render(id).getBytes(StandardCharsets.UTF_8);
         return Http.file(content, "text/plain;charset=UTF-8", "tax-certificate-" + id + ".txt",
-                io.meridian.statement.domain.StatementRenderer.sha256(content));
+                StatementRenderer.sha256(content));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> taxCertificatesDownloadLink(UUID id) {
+        TenantContext.require();
+        return Http.object(json, statements.signedLink(id, "tax_certificate"));
     }
 }

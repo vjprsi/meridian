@@ -169,14 +169,9 @@ public class AccountSupport {
         if (before.equals(after)) {
             return;
         }
-        try {
-            ledger.restrict(ledgerAccount, before, after, str(history, "reason") == null ? to : str(history, "reason"),
-                    LedgerPort.key("restrict", uuid(history, "id"), null));
-        } catch (ApiException e) {
-            if (!"not_frozen".equals(e.code())) { // already unrestricted in the ledger: desired state reached
-                throw e;
-            }
-        }
+        // freeze/unfreeze are idempotent in the ledger (already in the target status -> 200)
+        ledger.restrict(ledgerAccount, before, after, str(history, "reason") == null ? to : str(history, "reason"),
+                LedgerPort.key("restrict", uuid(history, "id"), null));
     }
 
     /** Four-eyes: the checker must differ from the maker. */

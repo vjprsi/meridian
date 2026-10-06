@@ -44,6 +44,9 @@ enums:
   StatementDeliveryChannel: [EMAIL, IN_APP, POST, SFTP, API]
   TaxCertificateType: [INTEREST_CERTIFICATE, WITHHOLDING_TAX_CERTIFICATE, FORM_1099_INT, ANNUAL_SUMMARY,
                        BALANCE_CONFIRMATION]
+  DepositEodJob: [INTEREST_ACCRUAL, PRODUCT_CHANGES, MATURITY_PROCESSING, STANDING_ORDERS, POT_RULES, SWEEPS,
+                  DORMANCY_SCAN]
+  DepositEodRunStatus: [RUNNING, COMPLETED, COMPLETED_WITH_ERRORS]
 
 services:
   # ------------------------------------------------------------------ deposit-service
@@ -59,7 +62,7 @@ services:
         description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
         fr: [DEP-01, DEP-04, PRD-01, CIF-02]
         columns:
-          - "account_number string(34) nn uq | Bank account number"
+          - "account_number string(34) nn uq ro | Bank account number (server-generated, check digit per country)"
           - "iban string(34) uq | IBAN where applicable"
           - "bban string(34) | Basic bank account number"
           - "routing_code string(20) | Sort code / routing number / IFSC / CLABE prefix"
@@ -95,6 +98,8 @@ services:
           - "source_of_funds string(255) | Declared source of funds"
           - "expected_monthly_volume amount | Declared expected monthly turnover (AML profile)"
           - "external_ref string(128) idx | Client or migration reference"
+          - "product_terms json ro | Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees, withholding_tax_rate, overdraft)"
+          - "pending_product_change json ro | Scheduled product change (product_id, product_version_id, effective_date, product_terms)"
           - "metadata json | Client-defined key/value metadata"
 
       - name: account_holder
@@ -127,7 +132,7 @@ services:
           - "max_amount amount | Applies up to this amount"
           - "rule enum:MandateRule nn | Approval rule"
           - "required_approvals int nn default=1 | Number of approvals for CUSTOM"
-          - "approver_groups json | Signing groups required, e.g. [[A],[A,B]]"
+          - "approver_groups json[] | Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]]"
           - "valid_from date nn | Start date"
           - "valid_to date | End date"
           - "document_id uuid ref=document | Board resolution or signed mandate"
@@ -263,7 +268,7 @@ services:
         description: Fixed-term deposit (placement, maturity, rollover, premature withdrawal)
         fr: [DEP-03, PRC-01]
         columns:
-          - "deposit_number string(34) nn uq | Deposit reference number"
+          - "deposit_number string(34) nn uq ro | Deposit reference number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Customer"
           - "product_id uuid nn ref=product | Product"
           - "product_version_id uuid nn ref=product_version | Version pinned"
@@ -288,6 +293,7 @@ services:
           - "status enum:TermDepositStatus nn default=PENDING_FUNDING ro | Status"
           - "certificate_document_id uuid ref=document | Deposit certificate"
           - "previous_deposit_id uuid fk=term_deposit | Deposit it rolled over from"
+          - "product_terms json ro | Product terms pinned from the catalog at placement (copied on rollover)"
           - "metadata json | Client-defined key/value metadata"
 
       - name: term_deposit_event
@@ -445,7 +451,9 @@ services:
           - "last_cheque_no string(16) nn | Last serial"
           - "delivery_branch_id uuid ref=branch | Collection branch"
           - "status enum:ChequeBookStatus nn default=REQUESTED ro | Status"
+          - "dispatch_reference string(64) ro | Courier / dispatch tracking reference"
           - "dispatched_at ts ro | Dispatch time"
+          - "activated_at ts ro | Time the customer confirmed receipt and the book was activated"
 
       - name: cheque
         prefix: chq
@@ -473,7 +481,7 @@ services:
         fr: [LED-08, DEP-01]
         columns:
           - "master_account_id uuid nn fk=deposit_account idx | Real account receiving the funds"
-          - "virtual_account_number string(34) nn uq | Virtual account number"
+          - "virtual_account_number string(34) nn uq ro | Virtual account number (server-generated)"
           - "iban string(34) uq | Virtual IBAN"
           - "purpose enum:VirtualAccountPurpose nn | Purpose"
           - "owner_customer_id uuid ref=customer idx | End customer (e.g. marketplace seller)"
@@ -485,6 +493,20 @@ services:
           - "expires_at ts | Expiry"
           - "status enum:VirtualAccountStatus nn default=ACTIVE | Status"
           - "metadata json | Client-defined key/value metadata"
+
+      - name: deposit_eod_run
+        prefix: der
+        description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+        fr: [DEP-01, PRC-01, OPS-01]
+        columns:
+          - "job enum:DepositEodJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:DepositEodRunStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: deposit-accounts
@@ -500,19 +522,31 @@ services:
           - "POST /{id}/reactivate | Reactivate a dormant account after customer verification | reason string(500) nn"
           - "POST /{id}/change-product | Move the account to another product or version | product_id uuid nn, product_version_id uuid nn, effective_date date nn | deposit_account"
           - "GET /{id}/balance | Balances from the ledger (ledger, available, pending) | | account_balance"
-          - "GET /{id}/transactions | Ledger entries of the account (?from=&to=) | | ledger_entry[]"
+          - "GET /{id}/transactions?from:ts&to:ts | Ledger entries of the account booked in [from, to) | | ledger_entry[]"
           - "GET /{id}/holders | Holders of the account | | account_holder[]"
           - "GET /{id}/mandates | Mandates of the account | | account_mandate[]"
           - "GET /{id}/status-history | Status changes | | account_status_history[]"
           - "GET /{id}/blocks | Blocks on the account | | account_block[]"
-          - "GET /{id}/accruals | Daily interest accruals (?from=&to=) | | interest_accrual[]"
+          - "GET /{id}/accruals?from:date&to:date&kind:enum:InterestAccrualKind | Daily interest accruals with accrual_date in [from, to] | | interest_accrual[]"
           - "GET /{id}/capitalisations | Interest postings | | interest_capitalisation[]"
           - "GET /{id}/fees | Fees charged | | fee_charge[]"
           - "POST /{id}/charge-fee | Charge a manual fee | fee_code string(64) nn, amount amount, reason string(255) nn | fee_charge"
           - "POST /{id}/capitalise-interest | Capitalise accrued interest now (e.g. before closure)"
           - "POST /{id}/recalculate-interest | Recalculate accruals from a back value date | from_date date nn, reason string(255) nn"
-          - "GET /{id}/interest-projection | Projected interest for the next N days (?days=) | | none"
-          - "GET /{id}/confirmation-letter | Generate an account confirmation letter | | none"
+          - "GET /{id}/interest-projection?days:int | Projected interest for the next days (1-1830, default 30) | | object"
+          - "GET /{id}/confirmation-letter | Account confirmation letter (printable text) | | text/plain"
+          - "POST /eod/accrue?business_date:date! | End of day - accrue interest through business_date and capitalise where due, every open account of the tenant (idempotent per business date) | | object"
+          - "POST /eod/product-changes?business_date:date! | End of day - apply scheduled product changes effective on or before business_date (idempotent per business date) | | object"
+          - "POST /eod/maturities?business_date:date! | End of day - term deposit maturities (payout or rollover) and maturing notices (idempotent per business date) | | object"
+          - "POST /eod/standing-orders?business_date:date! | End of day - execute standing orders due on or before business_date (idempotent per business date) | | object"
+          - "POST /eod/pot-rules?business_date:date! | End of day - run scheduled savings pot rules due on or before business_date (idempotent per business date) | | object"
+          - "POST /eod/sweeps?business_date:date! | End of day - evaluate sweep rules due by the end of business_date (idempotent per business date) | | object"
+          - "POST /eod/dormancy?business_date:date! | End of day - dormancy scan (warnings, inactive, dormant) as of business_date (idempotent per business date) | | object"
+      - resource: deposit-eod-runs
+        path: /v1/deposit-eod-runs
+        table: deposit_eod_run
+        ops: [list, get]
+        filters: [job, business_date, status]
       - resource: account-holders
         path: /v1/account-holders
         table: account_holder
@@ -524,7 +558,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [deposit_account_id, operation_type]
         actions:
-          - "POST /evaluate | Check which approvals an operation needs | deposit_account_id uuid nn, operation_type string(64) nn, amount amount | none"
+          - "POST /evaluate | Check which approvals an operation needs and whether the signatories (customer ids) satisfy them | deposit_account_id uuid nn, operation_type string(64) nn, amount amount, signatories json[] | object"
       - resource: account-status-history
         path: /v1/account-status-history
         table: account_status_history
@@ -579,12 +613,12 @@ services:
           - "POST /{id}/top-up | Add funds (if the product allows) | amount amount nn"
           - "POST /{id}/withdraw | Partial withdrawal | amount amount nn, reason string(255)"
           - "POST /{id}/break | Premature withdrawal with penalty | reason string(500) nn"
-          - "GET /{id}/break-quote | Payout if broken today (penalty, interest, tax) | | none"
+          - "GET /{id}/break-quote | Payout if broken today (penalty, interest, tax) | | object"
           - "POST /{id}/change-rollover | Change the maturity instruction | rollover_instruction enum:RolloverInstruction nn, payout_account_id uuid"
           - "POST /{id}/mark-lien | Pledge as collateral | reference string(128) nn, amount amount nn"
           - "POST /{id}/release-lien | Release the pledge | reference string(128) nn"
           - "GET /{id}/events | Lifecycle events | | term_deposit_event[]"
-          - "GET /{id}/certificate | Download the deposit certificate | | none"
+          - "GET /{id}/certificate | Deposit certificate (printable text) | | text/plain"
       - resource: savings-pots
         path: /v1/savings-pots
         table: savings_pot
@@ -630,7 +664,7 @@ services:
         ops: [list, get, create]
         filters: [deposit_account_id, status, reason_code]
         actions:
-          - "GET /quote | Closure quote for an account (?deposit_account_id=) | | none"
+          - "GET /quote?deposit_account_id:uuid! | Closure quote for an account (final interest, fees, payout, blockers) | | object"
           - "POST /{id}/approve | Approve the closure (checker) | comment string(500)"
           - "POST /{id}/reject | Reject the closure | reason string(500) nn"
           - "POST /{id}/cancel | Cancel the request | reason string(255)"
@@ -640,8 +674,10 @@ services:
         ops: [list, get, create]
         filters: [deposit_account_id, status]
         actions:
+          - "POST /{id}/dispatch | Dispatch the book to the customer or collection branch | dispatch_reference string(64), delivery_branch_id uuid"
+          - "POST /{id}/activate | Activate the book once the customer confirms receipt (cheques clear only on ACTIVE books)"
           - "POST /{id}/cancel | Cancel the cheque book | reason string(255) nn"
-          - "GET /{id}/cheques | Cheques in the book | | cheque[]"
+          - "GET /{id}/cheques?status:enum:ChequeStatus | Cheques in the book | | cheque[]"
       - resource: cheques
         path: /v1/cheques
         table: cheque
@@ -657,7 +693,7 @@ services:
         ops: [list, get, create, update]
         filters: [master_account_id, purpose, status, owner_customer_id, owner_reference, virtual_account_number]
         actions:
-          - "POST /bulk | Create up to 10,000 virtual accounts | items json nn | none"
+          - "POST /bulk | Create up to 10,000 virtual accounts, all or nothing; each item has the VirtualAccountCreate fields | items json[] nn | object"
           - "POST /{id}/close | Close a virtual account | reason string(255)"
           - "GET /{id}/balance | Sub-ledger balance | | account_balance"
           - "GET /{id}/transactions | Credits routed through the virtual account | | ledger_entry[]"
@@ -701,7 +737,7 @@ services:
         fr: [DEP-06]
         columns:
           - "deposit_account_id uuid nn ref=deposit_account idx | Account"
-          - "statement_no int nn | Sequential statement number per account"
+          - "statement_no int nn ro | Sequential statement number per account (server-assigned; shared by all formats of one period)"
           - "period_start date nn | First day"
           - "period_end date nn | Last day"
           - "format enum:StatementFormat nn default=PDF | Format"
@@ -716,7 +752,8 @@ services:
           - "line_count int ro | Number of lines"
           - "is_on_demand bool nn default=false | Requested outside the cycle"
           - "status enum:StatementStatus nn default=PENDING ro | Generation status"
-          - "document_id uuid ref=document ro | Generated file"
+          - "failure_reason string(500) ro | Why generation failed (status FAILED)"
+          - "document_id uuid ref=document ro | Generated file registered with document-service"
           - "checksum string(64) ro | SHA-256 of the file"
           - "generated_at ts ro | Generation time"
           - "delivered_at ts ro | Delivery time"
@@ -750,7 +787,7 @@ services:
           - "deposit_account_id uuid nn ref=deposit_account uq | Account"
           - "frequency enum:ScheduleFrequency nn default=MONTHLY | Cycle"
           - "cycle_day int nn default=1 | Cycle end day"
-          - "formats json nn | StatementFormat values to generate"
+          - "formats json[] nn | StatementFormat values to generate, e.g. [PDF, CSV]"
           - "delivery_channel enum:StatementDeliveryChannel nn default=IN_APP | Channel"
           - "email email pii | Override delivery email"
           - "postal_address_id uuid ref=customer_address | Postal address for POST"
@@ -784,9 +821,11 @@ services:
         filters: [deposit_account_id, period_end, format, status]
         actions:
           - "GET /{id}/lines | Lines of the statement | | statement_line[]"
-          - "GET /{id}/download | Signed URL to download the statement file | | none"
+          - "GET /{id}/download?expires:bigint&signature:string | Statement file; Content-Type follows the format (application/pdf, text/csv, application/xml, text/plain, application/x-ofx, application/json); expires and signature come from download-link | | application/octet-stream"
+          - "GET /{id}/download-link | Signed, expiring download URL (url, expires_at, checksum) | | object"
           - "POST /{id}/resend | Deliver the statement again | delivery_channel enum:StatementDeliveryChannel, email email"
           - "POST /{id}/regenerate | Regenerate a failed statement"
+          - "POST /cycle?business_date:date! | End of day - generate and deliver statements for schedules whose cycle ends on business_date (idempotent per business date) | | object"
       - resource: statement-schedules
         path: /v1/statement-schedules
         table: statement_schedule
@@ -798,7 +837,8 @@ services:
         ops: [list, get, create]
         filters: [customer_id, deposit_account_id, certificate_type, tax_year]
         actions:
-          - "GET /{id}/download | Signed URL to download the certificate | | none"
+          - "GET /{id}/download?expires:bigint&signature:string | Certificate (printable text); expires and signature come from download-link | | text/plain"
+          - "GET /{id}/download-link | Signed, expiring download URL (url, expires_at) | | object"
 
     events:
       - "accounts.statement.generated | statement | A statement was generated"

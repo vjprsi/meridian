@@ -165,11 +165,13 @@ public class LedgerClient implements LedgerPort {
     }
 
     @Override
-    public void setOverdraftLimit(UUID ledgerAccountId, BigDecimal limit) {
-        JsonNode account = client.get(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId);
+    public void setOverdraftLimit(UUID ledgerAccountId, BigDecimal limit, String reason, String key) {
         ObjectNode body = json.createObjectNode();
-        body.put("overdraft_limit", limit.toPlainString());
-        client.patch(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId, body, account.path("row_version").asString("1"));
+        body.put("limit", limit.toPlainString());
+        if (reason != null) {
+            body.put("reason", reason.length() > 255 ? reason.substring(0, 255) : reason);
+        }
+        client.post(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId + "/overdraft-limit", body, key);
     }
 
     private UUID ledgerId() {

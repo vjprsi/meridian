@@ -6,10 +6,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import io.meridian.common.tenancy.TenantContext;
-import io.meridian.deposit.application.DepositAccountService;
-import io.meridian.deposit.application.InterestService;
-import io.meridian.deposit.application.StandingOrderService;
-import io.meridian.deposit.application.TermDepositService;
 import io.meridian.deposit.domain.AccountNumbers;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
@@ -50,7 +46,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * deposit-service end to end over HTTP against PostgreSQL 18 (RLS enforced) with ledger-service and the product
  * catalog stubbed behind a mocked {@link ServiceClient} ({@link FakeLedger}). A controllable clock moves business
- * time forward for accrual, capitalisation, maturity and dormancy.
+ * time forward; the end-of-day jobs (accrual, product changes, maturities, standing orders, dormancy) are called over
+ * HTTP the way business-day-service calls them.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "meridian.events.relay-enabled=false", "meridian.security-mode=dev",
@@ -75,13 +72,14 @@ class DepositFlowIT {
     static final String PRODUCT = "0199a000-0000-7000-8000-00000000f001";
     static final String VERSION = "0199a000-0000-7000-8000-00000000f002";
     static final String VERSION_2 = "0199a000-0000-7000-8000-00000000f003";
-    static final String SNAPSHOT = """
-            {"product_snapshot":{"interest_rates":[
+    /** Catalog terms of VERSION (pinned as product_terms on every account and term deposit opened in the test). */
+    static final String RATES = """
+            {"data":[
               {"rate_kind":"CREDIT_INTEREST","rate_type":"FIXED","fixed_rate":"0.0365","day_count":"ACT_365","capitalisation_frequency":"MONTHLY"},
-              {"rate_kind":"OVERDRAFT_INTEREST","rate_type":"FIXED","fixed_rate":"0.1825","day_count":"ACT_365"}],
-             "fees":[{"code":"MONTHLY_MAINTENANCE","calculation_method":"FLAT","flat_amount":"5.00","tax_rate":"0.20"},
-                     {"code":"ACCOUNT_CLOSURE","calculation_method":"FLAT","flat_amount":"10.00"}],
-             "withholding_tax_rate":"0.20"}}""";
+              {"rate_kind":"OVERDRAFT_INTEREST","rate_type":"FIXED","fixed_rate":"0.1825","day_count":"ACT_365"}],"has_more":false}""";
+    static final String FEES = """
+            {"data":[{"code":"MONTHLY_MAINTENANCE","calculation_method":"FLAT","flat_amount":"5.00","tax_rate":"0.20"},
+                     {"code":"ACCOUNT_CLOSURE","calculation_method":"FLAT","flat_amount":"10.00"}],"has_more":false}""";
 
     /** A clock tests can move forward. */
     static final class MutableClock extends Clock {
@@ -131,18 +129,6 @@ class DepositFlowIT {
     @Autowired
     JdbcClient jdbc;
 
-    @Autowired
-    InterestService interest;
-
-    @Autowired
-    TermDepositService termDeposits;
-
-    @Autowired
-    StandingOrderService standingOrders;
-
-    @Autowired
-    DepositAccountService depositAccounts;
-
     @MockitoBean
     ServiceClient serviceClient;
 
@@ -168,11 +154,18 @@ class DepositFlowIT {
             String path = i.getArgument(1);
             return "product-catalog-service".equals(service) ? catalog(path) : ledger.get(service, path);
         });
-        when(serviceClient.patch(anyString(), anyString(), any(), any()))
-                .thenAnswer(i -> ledger.patch(i.getArgument(0), i.getArgument(1), i.getArgument(2), i.getArgument(3)));
     }
 
     private JsonNode catalog(String path) {
+        if (path.equals("/v1/product-versions/" + VERSION)) {
+            return json.readTree("{\"id\":\"" + VERSION + "\",\"product_id\":\"" + PRODUCT + "\",\"status\":\"PUBLISHED\"}");
+        }
+        if (path.startsWith("/v1/product-versions/" + VERSION + "/interest-rates")) {
+            return json.readTree(RATES);
+        }
+        if (path.startsWith("/v1/product-versions/" + VERSION + "/fees")) {
+            return json.readTree(FEES);
+        }
         if (path.equals("/v1/product-versions/" + VERSION_2)) {
             return json.readTree("{\"id\":\"" + VERSION_2 + "\",\"product_id\":\"" + PRODUCT + "\",\"status\":\"PUBLISHED\"}");
         }
@@ -197,8 +190,10 @@ class DepositFlowIT {
     @Test
     @Order(1)
     void openApproveActivateWithFourEyesAndIdempotency() throws Exception {
-        JsonNode opened = post("/v1/deposit-accounts", accountBody("AUTO"), "maker", 201);
+        JsonNode opened = post("/v1/deposit-accounts", accountBody(), "maker", 201);
         a = opened.get("id").asString();
+        assertThat(opened.get("product_terms").get("interest_rates")).hasSize(2);
+        assertThat(opened.get("product_terms").get("fees").get(0).get("code").asString()).isEqualTo("MONTHLY_MAINTENANCE");
         assertThat(opened.get("status").asString()).isEqualTo("PENDING_APPROVAL");
         String number = opened.get("account_number").asString();
         assertThat(number).hasSize(8);
@@ -252,9 +247,12 @@ class DepositFlowIT {
         JsonNode bal = get("/v1/deposit-accounts/" + a + "/balance");
         assertThat(dec(bal, "posted_balance")).isEqualByComparingTo("1000.00");
         assertThat(get("/v1/deposit-accounts/" + a + "/transactions").get("data")).hasSize(1);
-        assertThat(post("/v1/deposit-accounts", accountBody("AUTO").replace("\"EUR\"", "\"EUX\""), "maker", 422)
+        assertThat(get("/v1/deposit-accounts/" + a + "/transactions?from=2026-10-05T00:00:00Z&to=2026-10-06T00:00:00Z")
+                .get("data")).hasSize(1);
+        assertThat(get("/v1/deposit-accounts/" + a + "/transactions?from=2026-10-06T00:00:00Z").get("data")).isEmpty();
+        assertThat(post("/v1/deposit-accounts", accountBody().replace("\"EUR\"", "\"EUX\""), "maker", 422)
                 .get("code").asString()).isEqualTo("invalid_currency");
-        HttpResponse<String> noKey = send("POST", "/v1/deposit-accounts", accountBody("AUTO"), null, "maker", TENANT);
+        HttpResponse<String> noKey = send("POST", "/v1/deposit-accounts", accountBody(), null, "maker", TENANT);
         assertThat(noKey.statusCode()).isEqualTo(400);
     }
 
@@ -375,9 +373,27 @@ class DepositFlowIT {
                 .isEqualTo("nothing_to_capitalise");
         assertThat(events("accounts.interest.capitalised", null)).isEqualTo(1);
 
-        CLOCK.advanceDays(10); // 2026-11-15; the end-of-day accrual runs for 5..14 Nov
-        asTenant(() -> interest.accrueThrough(UUID.fromString(a), LocalDate.of(2026, 11, 14)));
+        assertThat(get("/v1/deposit-accounts/" + a + "/accruals?from=2026-10-10&to=2026-10-19&kind=CREDIT&limit=200")
+                .get("data")).hasSize(10);
+        assertThat(send("GET", "/v1/deposit-accounts/" + a + "/accruals?kind=NOPE", null, null, "ops", TENANT).statusCode())
+                .isEqualTo(400);
+
+        CLOCK.advanceDays(10); // 2026-11-15; business-day-service closes 14 Nov: accrual for 5..14 Nov
+        JsonNode eod = post("/v1/deposit-accounts/eod/accrue?business_date=2026-11-14", null, "system:business-day", 200);
+        assertThat(eod.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(eod.get("replayed").asBoolean()).isFalse();
+        assertThat(eod.get("counts").get("accounts").asInt()).isEqualTo(2);
+        assertThat(eod.get("counts").get("accrual_rows").asInt()).isPositive();
         assertThat(dec(get("/v1/deposit-accounts/" + a), "accrued_credit_interest")).isEqualByComparingTo("1.00248");
+        JsonNode again = post("/v1/deposit-accounts/eod/accrue?business_date=2026-11-14", null, "system:business-day", 200);
+        assertThat(again.get("replayed").asBoolean()).isTrue();
+        assertThat(again.get("run_id").asString()).isEqualTo(eod.get("run_id").asString());
+        assertThat(dec(get("/v1/deposit-accounts/" + a), "accrued_credit_interest")).isEqualByComparingTo("1.00248");
+        JsonNode runs = get("/v1/deposit-eod-runs?job=INTEREST_ACCRUAL&business_date=2026-11-14").get("data");
+        assertThat(runs).hasSize(1);
+        assertThat(runs.get(0).get("attempts").asInt()).isEqualTo(1);
+        assertThat(send("POST", "/v1/deposit-accounts/eod/accrue", null, UUID.randomUUID().toString(), "ops", TENANT)
+                .statusCode()).isEqualTo(400);
         ledger.credit(aLedger, "500.00", OffsetDateTime.parse("2026-11-10T09:00:00Z")); // back-valued
         assertThat(post("/v1/deposit-accounts/" + a + "/recalculate-interest",
                 "{\"from_date\":\"2026-10-20\",\"reason\":\"late credit\"}", "ops", 422).get("code").asString())
@@ -416,15 +432,18 @@ class DepositFlowIT {
         JsonNode approved = post("/v1/overdraft-facilities/" + id + "/approve", "{\"comment\":\"score 720\"}", "credit-officer", 200);
         assertThat(approved.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(approved.get("approved_by").asString()).isEqualTo("credit-officer");
-        FakeLedger.Call patch = ledger.calls("PATCH", "/v1/ledger-accounts/" + aLedger).getLast();
-        assertThat(new BigDecimal(patch.body().get("overdraft_limit").asString())).isEqualByComparingTo("500.00");
+        String limitPath = "/v1/ledger-accounts/" + aLedger + "/overdraft-limit";
+        FakeLedger.Call setLimit = ledger.calls("POST", limitPath).getLast();
+        assertThat(new BigDecimal(setLimit.body().get("limit").asString())).isEqualByComparingTo("500.00");
+        assertThat(setLimit.key()).isEqualTo("overdraft-limit:" + id + ":approve:1");
+        assertThat(ledger.calls("PATCH", "/v1/ledger-accounts/")).isEmpty();
         assertThat(dec(get("/v1/deposit-accounts/" + a), "overdraft_limit")).isEqualByComparingTo("500");
         assertThat(post("/v1/overdraft-facilities/" + id + "/change-limit", "{\"limit_amount\":\"300.00\",\"reason\":\"review\"}",
                 "credit-officer", 200).get("limit_amount").asString()).startsWith("300");
         assertThat(post("/v1/overdraft-facilities/" + id + "/suspend", "{\"reason\":\"arrears\"}", "ops", 200)
                 .get("status").asString()).isEqualTo("SUSPENDED");
-        assertThat(ledger.calls("PATCH", "/v1/ledger-accounts/" + aLedger).getLast().body().get("overdraft_limit").asString())
-                .isEqualTo("0");
+        assertThat(ledger.calls("POST", limitPath).getLast().body().get("limit").asString()).isEqualTo("0");
+        assertThat(ledger.calls("POST", limitPath)).hasSize(3);
         assertThat(post("/v1/overdraft-facilities/" + id + "/cancel", "{\"reason\":\"closed\"}", "ops", 200)
                 .get("status").asString()).isEqualTo("CANCELLED");
         assertThat(post("/v1/overdraft-facilities/" + id + "/approve", "{}", "credit-officer", 409).get("code").asString())
@@ -481,7 +500,8 @@ class DepositFlowIT {
         JsonNode td = post("/v1/term-deposits", tdBody(today, maturity, "500.00", "PAY_OUT_ALL"), "maker", 201);
         String id = td.get("id").asString();
         assertThat(td.get("status").asString()).isEqualTo("PENDING_FUNDING");
-        assertThat(td.get("deposit_number").asString()).startsWith("TD");
+        assertThat(td.get("deposit_number").asString()).startsWith("TD").hasSize(14);
+        assertThat(td.get("product_terms").get("interest_rates")).hasSize(2);
         assertThat(post("/v1/term-deposits/" + id + "/break", "{\"reason\":\"x\"}", "ops", 409).get("code").asString())
                 .isEqualTo("invalid_transition");
         JsonNode funded = post("/v1/term-deposits/" + id + "/fund", null, "ops", 200);
@@ -495,6 +515,7 @@ class DepositFlowIT {
 
         HttpResponse<String> quote = send("GET", "/v1/term-deposits/" + id + "/break-quote", null, null, "ops", TENANT);
         assertThat(quote.statusCode()).isEqualTo(200);
+        assertThat(quote.headers().firstValue("Content-Type").orElse("")).startsWith("application/json");
         assertThat(dec(json.readTree(quote.body()), "payout")).isEqualByComparingTo("500.00");
 
         post("/v1/term-deposits/" + id + "/mark-lien", "{\"reference\":\"LOAN-9\",\"amount\":\"400.00\"}", "ops", 200);
@@ -510,6 +531,7 @@ class DepositFlowIT {
 
         HttpResponse<String> cert = send("GET", "/v1/term-deposits/" + id + "/certificate", null, null, "ops", TENANT);
         assertThat(cert.statusCode()).isEqualTo(200);
+        assertThat(cert.headers().firstValue("Content-Type").orElse("")).startsWith("text/plain");
         assertThat(cert.body()).contains("TERM DEPOSIT CERTIFICATE").contains("500.00 EUR");
 
         JsonNode broken = post("/v1/term-deposits/" + id + "/break", "{\"reason\":\"need cash\"}", "ops", 200);
@@ -542,8 +564,10 @@ class DepositFlowIT {
         BigDecimal tax300 = gross300.multiply(new BigDecimal("0.20")).setScale(2, java.math.RoundingMode.HALF_EVEN);
 
         CLOCK.advanceDays((int) days);
-        List<?> matured = asTenant(() -> termDeposits.processMaturities(LocalDate.now(CLOCK)));
-        assertThat(matured).hasSize(2);
+        JsonNode matured = post("/v1/deposit-accounts/eod/maturities?business_date=" + LocalDate.now(CLOCK), null,
+                "system:business-day", 200);
+        assertThat(matured.get("counts").get("maturities").asInt()).isEqualTo(2);
+        assertThat(matured.get("error_count").asInt()).isZero();
         JsonNode p = get("/v1/term-deposits/" + payOut);
         assertThat(p.get("status").asString()).isEqualTo("MATURED");
         assertThat(ledger.balanceOf(bLedger).subtract(bBefore))
@@ -583,7 +607,11 @@ class DepositFlowIT {
         post("/v1/standing-orders/" + id + "/resume", null, "customer", 200);
 
         BigDecimal bBefore = ledger.balanceOf(bLedger);
-        asTenant(() -> standingOrders.executeDue(second));
+        JsonNode run = post("/v1/deposit-accounts/eod/standing-orders?business_date=" + second, null, "system:business-day", 200);
+        assertThat(run.get("counts").get("succeeded").asInt()).isEqualTo(1);
+        assertThat(ledger.balanceOf(bLedger).subtract(bBefore)).isEqualByComparingTo("25.00");
+        assertThat(post("/v1/deposit-accounts/eod/standing-orders?business_date=" + second, null, "system:business-day", 200)
+                .get("replayed").asBoolean()).isTrue();
         assertThat(ledger.balanceOf(bLedger).subtract(bBefore)).isEqualByComparingTo("25.00");
         FakeLedger.Call posting = ledger.lastPosting();
         assertThat(posting.key()).isEqualTo("standing-order:" + id + ":" + second + ":1");
@@ -597,7 +625,10 @@ class DepositFlowIT {
                  "frequency":"WEEKLY","start_date":"%s"}""".formatted(b, UUID.randomUUID(), today), "customer", 201)
                 .get("id").asString();
         LocalDate due = LocalDate.parse(get("/v1/standing-orders/" + big).get("next_execution_date").asString());
-        asTenant(() -> standingOrders.executeDue(due));
+        JsonNode failedRun = post("/v1/deposit-accounts/eod/standing-orders?business_date=" + due, null,
+                "system:business-day", 200);
+        assertThat(failedRun.get("counts").get("failed").asInt()).isEqualTo(1);
+        assertThat(failedRun.get("status").asString()).isEqualTo("COMPLETED"); // a business failure, not a job error
         JsonNode failed = get("/v1/standing-orders/" + big);
         assertThat(failed.get("consecutive_failures").asInt()).isEqualTo(1);
         assertThat(get("/v1/standing-orders/" + big + "/executions").get("data").get(0).get("failure_code").asString())
@@ -642,8 +673,23 @@ class DepositFlowIT {
         assertThat(post("/v1/cheque-books", """
                 {"deposit_account_id":"%s","leaves":2,"first_cheque_no":"000103","last_cheque_no":"000104"}""".formatted(a),
                 "ops", 409).get("code").asString()).isEqualTo("serials_in_use");
-        JsonNode leaves = get("/v1/cheque-books/" + book.get("id").asString() + "/cheques").get("data");
+        String bookId = book.get("id").asString();
+        assertThat(book.get("status").asString()).isEqualTo("REQUESTED");
+        JsonNode leaves = get("/v1/cheque-books/" + bookId + "/cheques?status=ISSUED").get("data");
         assertThat(leaves).hasSize(3);
+        assertThat(get("/v1/cheque-books/" + bookId + "/cheques?status=CLEARED").get("data")).isEmpty();
+        assertThat(post("/v1/cheques/" + chequeId(leaves, "000102") + "/present", "{\"amount\":\"1.00\",\"currency\":\"EUR\"}",
+                "clearing", 409).get("code").asString()).isEqualTo("cheque_book_not_active");
+        assertThat(post("/v1/cheque-books/" + bookId + "/activate", null, "ops", 409).get("code").asString())
+                .isEqualTo("invalid_transition");
+        JsonNode dispatched = post("/v1/cheque-books/" + bookId + "/dispatch", "{\"dispatch_reference\":\"RM-123456\"}",
+                "ops", 200);
+        assertThat(dispatched.get("status").asString()).isEqualTo("DISPATCHED");
+        assertThat(dispatched.get("dispatch_reference").asString()).isEqualTo("RM-123456");
+        assertThat(dispatched.get("dispatched_at").isNull()).isFalse();
+        JsonNode activated = post("/v1/cheque-books/" + bookId + "/activate", null, "customer", 200);
+        assertThat(activated.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(activated.get("activated_at").isNull()).isFalse();
         String c1 = chequeId(leaves, "000101");
         String c2 = chequeId(leaves, "000102");
         String c3 = chequeId(leaves, "000103");
@@ -661,7 +707,7 @@ class DepositFlowIT {
         JsonNode returned = post("/v1/cheques/" + c3 + "/return", "{\"return_reason\":\"SIGNATURE_MISMATCH\"}", "clearing", 200);
         assertThat(returned.get("status").asString()).isEqualTo("RETURNED");
         assertThat(ledger.balanceOf(aLedger)).isEqualByComparingTo("1000.00");
-        assertThat(get("/v1/cheque-books/" + book.get("id").asString()).get("status").asString()).isEqualTo("EXHAUSTED");
+        assertThat(get("/v1/cheque-books/" + bookId).get("status").asString()).isEqualTo("EXHAUSTED");
         assertThat(events("accounts.cheque.returned", null)).isEqualTo(2);
     }
 
@@ -669,21 +715,25 @@ class DepositFlowIT {
     @Order(14)
     void virtualAccountsSingleBulkAndClose() throws Exception {
         JsonNode va = post("/v1/virtual-accounts", """
-                {"master_account_id":"%s","virtual_account_number":"AUTO","purpose":"COLLECTION","currency":"EUR",
-                 "owner_reference":"INV-1"}""".formatted(a), "ops", 201);
+                {"master_account_id":"%s","purpose":"COLLECTION","currency":"EUR","owner_reference":"INV-1"}"""
+                .formatted(a), "ops", 201);
         assertThat(AccountNumbers.isValidLuhn(va.get("virtual_account_number").asString())).isTrue();
         UUID vaLedger = UUID.fromString(va.get("ledger_account_id").asString());
         assertThat(ledger.accountRow(vaLedger).get("parent_id").asString()).isEqualTo(aLedger.toString());
         HttpResponse<String> bulk = send("POST", "/v1/virtual-accounts/bulk", """
-                {"items":{"accounts":[
+                {"items":[
                   {"master_account_id":"%s","purpose":"MARKETPLACE_SELLER","currency":"EUR","owner_reference":"S-1"},
-                  {"master_account_id":"%s","purpose":"MARKETPLACE_SELLER","currency":"EUR","owner_reference":"S-2"}]}}"""
+                  {"master_account_id":"%s","purpose":"MARKETPLACE_SELLER","currency":"EUR","owner_reference":"S-2"}]}"""
                 .formatted(a, a), "bulk-1", "ops", TENANT);
         assertThat(bulk.statusCode()).as(bulk.body()).isEqualTo(200);
-        assertThat(json.readTree(bulk.body()).get("created").asInt()).isEqualTo(2);
-        assertThat(post("/v1/virtual-accounts/bulk", "{\"items\":{\"accounts\":[{\"master_account_id\":\"" + a
-                + "\",\"purpose\":\"INVOICE\",\"currency\":\"USD\"}]}}", "ops", 422).get("code").asString())
+        JsonNode created = json.readTree(bulk.body());
+        assertThat(created.get("created").asInt()).isEqualTo(2);
+        assertThat(created.get("data")).hasSize(2);
+        assertThat(AccountNumbers.isValidLuhn(created.get("data").get(0).get("virtual_account_number").asString())).isTrue();
+        assertThat(post("/v1/virtual-accounts/bulk", "{\"items\":[{\"master_account_id\":\"" + a
+                + "\",\"purpose\":\"INVOICE\",\"currency\":\"USD\"}]}", "ops", 422).get("code").asString())
                 .isEqualTo("currency_mismatch");
+        assertThat(post("/v1/virtual-accounts/bulk", "{\"items\":[]}", "ops", 422).get("code").asString()).isEqualTo("no_items");
         ledger.credit(vaLedger, "15.00", null);
         assertThat(dec(get("/v1/virtual-accounts/" + va.get("id").asString() + "/balance"), "posted_balance"))
                 .isEqualByComparingTo("15.00");
@@ -718,7 +768,18 @@ class DepositFlowIT {
         JsonNode large = json.readTree(evaluate("PAYMENT", "5000.00", CUSTOMER));
         assertThat(large.get("allowed").asBoolean()).isFalse();
         assertThat(large.get("required_approvals").asInt()).isEqualTo(2);
-        assertThat(json.readTree(evaluate("PAYMENT", "5000.00", CUSTOMER + "," + joint)).get("allowed").asBoolean()).isTrue();
+        assertThat(json.readTree(evaluate("PAYMENT", "5000.00", CUSTOMER, joint)).get("allowed").asBoolean()).isTrue();
+        assertThat(post("/v1/account-mandates", """
+                {"deposit_account_id":"%s","name":"Board","operation_type":"CLOSURE","rule":"CUSTOM",
+                 "approver_groups":["A","B"],"valid_from":"2026-01-01"}""".formatted(a), "ops", 422).get("code").asString())
+                .isEqualTo("invalid_approver_groups");
+        JsonNode custom = post("/v1/account-mandates", """
+                {"deposit_account_id":"%s","name":"Board","operation_type":"CLOSURE","rule":"CUSTOM",
+                 "approver_groups":[["A","B"]],"valid_from":"2026-01-01"}""".formatted(a), "ops", 201);
+        assertThat(custom.get("approver_groups").get(0)).hasSize(2);
+        JsonNode closure = json.readTree(evaluate("CLOSURE", null, CUSTOMER));
+        assertThat(closure.get("allowed").asBoolean()).isFalse();
+        assertThat(closure.get("required_groups").get(0).get(1).asString()).isEqualTo("B");
         assertThat(send("DELETE", "/v1/account-holders/" + holder.get("id").asString(), null, null, "ops", TENANT)
                 .statusCode()).isEqualTo(204);
         assertThat(events("accounts.account_holder.removed", null)).isEqualTo(1);
@@ -731,7 +792,8 @@ class DepositFlowIT {
                 {"product_id":"%s","product_version_id":"%s","effective_date":"%s"}"""
                 .formatted(PRODUCT, VERSION_2, LocalDate.now(CLOCK)), "ops", 200);
         assertThat(changed.get("product_version_id").asString()).isEqualTo(VERSION_2);
-        assertThat(changed.get("metadata").get("product_snapshot").get("interest_rates").get(0).get("tiers")).hasSize(2);
+        assertThat(changed.get("product_terms").get("interest_rates").get(0).get("tiers")).hasSize(2);
+        assertThat(changed.hasNonNull("pending_product_change")).isFalse();
         assertThat(post("/v1/deposit-accounts/" + b + "/change-product", """
                 {"product_id":"%s","product_version_id":"%s","effective_date":"%s"}"""
                 .formatted(PRODUCT, VERSION_2, LocalDate.now(CLOCK)), "ops", 409).get("code").asString())
@@ -739,6 +801,20 @@ class DepositFlowIT {
         assertThat(events("accounts.deposit_account.product_changed", b)).isEqualTo(1);
         HttpResponse<String> patch = send("PATCH", "/v1/deposit-accounts/" + b, "{\"currency\":\"USD\"}", null, "ops", TENANT);
         assertThat(patch.statusCode()).isEqualTo(422);
+
+        LocalDate tomorrow = LocalDate.now(CLOCK).plusDays(1);
+        JsonNode scheduled = post("/v1/deposit-accounts/" + b + "/change-product", """
+                {"product_id":"%s","product_version_id":"%s","effective_date":"%s"}"""
+                .formatted(PRODUCT, VERSION, tomorrow), "ops", 200);
+        assertThat(scheduled.get("product_version_id").asString()).isEqualTo(VERSION_2);
+        assertThat(scheduled.get("pending_product_change").get("effective_date").asString()).isEqualTo(tomorrow.toString());
+        JsonNode applied = post("/v1/deposit-accounts/eod/product-changes?business_date=" + tomorrow, null,
+                "system:business-day", 200);
+        assertThat(applied.get("counts").get("product_changes").asInt()).isEqualTo(1);
+        JsonNode moved = get("/v1/deposit-accounts/" + b);
+        assertThat(moved.get("product_version_id").asString()).isEqualTo(VERSION);
+        assertThat(moved.hasNonNull("pending_product_change")).isFalse();
+        assertThat(moved.get("product_terms").get("fees")).hasSize(2);
     }
 
     // ------------------------------------------------------------------ 10. dormancy and closure
@@ -747,8 +823,9 @@ class DepositFlowIT {
     @Order(17)
     void dormancyAndReactivation() throws Exception {
         String c = openActive("C");
-        Integer changed = asTenant(() -> depositAccounts.runDormancy(LocalDate.now(CLOCK).plusDays(800)));
-        assertThat(changed).isGreaterThanOrEqualTo(1);
+        JsonNode scan = post("/v1/deposit-accounts/eod/dormancy?business_date=" + LocalDate.now(CLOCK).plusDays(800), null,
+                "system:business-day", 200);
+        assertThat(scan.get("counts").get("accounts_changed").asInt()).isGreaterThanOrEqualTo(1);
         JsonNode dormant = get("/v1/deposit-accounts/" + c);
         assertThat(dormant.get("status").asString()).isEqualTo("DORMANT");
         assertThat(events("accounts.dormancy.marked_dormant", null)).isGreaterThanOrEqualTo(1);
@@ -768,6 +845,7 @@ class DepositFlowIT {
         String d = openActive("D");
         UUID dLedger = UUID.fromString(get("/v1/deposit-accounts/" + d).get("ledger_account_id").asString());
         ledger.credit(dLedger, "100.00", null);
+        assertThat(send("GET", "/v1/account-closures/quote", null, null, "ops", TENANT).statusCode()).isEqualTo(400);
         HttpResponse<String> q = send("GET", "/v1/account-closures/quote?deposit_account_id=" + d, null, null, "ops", TENANT);
         assertThat(q.statusCode()).as(q.body()).isEqualTo(200);
         JsonNode quote = json.readTree(q.body());
@@ -829,15 +907,15 @@ class DepositFlowIT {
 
     // ------------------------------------------------------------------ helpers
 
-    private String accountBody(String number) {
+    private String accountBody() {
         return """
-                {"account_number":"%s","account_type":"CURRENT","customer_id":"%s","product_id":"%s",
-                 "product_version_id":"%s","legal_entity_id":"%s","currency":"EUR","metadata":%s}"""
-                .formatted(number, CUSTOMER, PRODUCT, VERSION, UUID.randomUUID(), SNAPSHOT);
+                {"account_type":"CURRENT","customer_id":"%s","product_id":"%s",
+                 "product_version_id":"%s","legal_entity_id":"%s","currency":"EUR","metadata":{"channel_ref":"T-1"}}"""
+                .formatted(CUSTOMER, PRODUCT, VERSION, UUID.randomUUID());
     }
 
     private String openActive(String nickname) throws Exception {
-        String id = post("/v1/deposit-accounts", accountBody("AUTO").replace("\"CURRENT\"", "\"CURRENT\",\"nickname\":\""
+        String id = post("/v1/deposit-accounts", accountBody().replace("\"CURRENT\"", "\"CURRENT\",\"nickname\":\""
                 + nickname + "\""), "maker", 201).get("id").asString();
         post("/v1/deposit-accounts/" + id + "/approve", "{}", "checker", 200);
         post("/v1/deposit-accounts/" + id + "/activate", null, "checker", 200);
@@ -846,7 +924,7 @@ class DepositFlowIT {
 
     private String tdBody(LocalDate start, LocalDate maturity, String principal, String rollover) {
         return """
-                {"deposit_number":"AUTO","customer_id":"%s","product_id":"%s","product_version_id":"%s",
+                {"customer_id":"%s","product_id":"%s","product_version_id":"%s",
                  "funding_account_id":"%s","payout_account_id":"%s","principal_amount":"%s","currency":"EUR",
                  "interest_rate":"0.0365","day_count":"ACT_365","term_days":30,"start_date":"%s","maturity_date":"%s",
                  "rollover_instruction":"%s","premature_penalty_rate":"0.01"}"""
@@ -861,10 +939,12 @@ class DepositFlowIT {
         return x;
     }
 
-    private String evaluate(String op, String amount, String signatories) throws Exception {
-        HttpResponse<String> r = send("POST", "/v1/account-mandates/evaluate?signatories=" + signatories,
-                "{\"deposit_account_id\":\"" + a + "\",\"operation_type\":\"" + op + "\",\"amount\":\"" + amount + "\"}",
-                UUID.randomUUID().toString(), "ops", TENANT);
+    private String evaluate(String op, String amount, String... signatories) throws Exception {
+        String body = "{\"deposit_account_id\":\"" + a + "\",\"operation_type\":\"" + op + "\""
+                + (amount == null ? "" : ",\"amount\":\"" + amount + "\"")
+                + ",\"signatories\":[" + String.join(",", java.util.Arrays.stream(signatories).map(x -> "\"" + x + "\"").toList())
+                + "]}";
+        HttpResponse<String> r = send("POST", "/v1/account-mandates/evaluate", body, UUID.randomUUID().toString(), "ops", TENANT);
         assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
         return r.body();
     }

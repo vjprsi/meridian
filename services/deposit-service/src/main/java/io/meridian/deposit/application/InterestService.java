@@ -343,13 +343,21 @@ public class InterestService {
      */
     @Transactional
     public Capitalised capitalise(UUID accountId, boolean requireSomething) {
+        return capitalise(accountId, requireSomething, accounts.today());
+    }
+
+    /**
+     * Capitalisation as of business date {@code today}: interest accrued through {@code today - 1} is posted and the
+     * next capitalisation date is scheduled from {@code today} (the end-of-day job passes business date + 1).
+     */
+    @Transactional
+    public Capitalised capitalise(UUID accountId, boolean requireSomething, LocalDate today) {
         ObjectNode acc = accounts.lock(accountId);
         UUID ledgerAccount = accounts.requireLedger(acc);
         String status = str(acc, "status");
         if (!ACCRUING.contains(status)) {
             throw ApiException.conflict("invalid_transition", "Cannot capitalise interest on an account in status " + status);
         }
-        LocalDate today = accounts.today();
         accrueThrough(acc, today.minusDays(1));
         boolean newYear = rows.scalar("""
                 select max(created_at)::date from interest_capitalisation where deposit_account_id = ? and kind = 'CREDIT'""",
@@ -446,6 +454,41 @@ public class InterestService {
             s = s.add(decOr0(a, "amount"));
         }
         return s;
+    }
+
+    // ------------------------------------------------------------------ accrual history
+
+    private static final Set<String> ACCRUAL_KINDS = Set.of("CREDIT", "DEBIT", "OVERDRAFT", "UNARRANGED_OVERDRAFT",
+            "PENALTY", "BONUS");
+
+    /** Accruals of an account with accrual_date in [from, to] (both optional), newest first, keyset paged. */
+    public ObjectNode accruals(UUID accountId, LocalDate from, LocalDate to, String kind, Integer limit, String cursor) {
+        accounts.get(accountId);
+        if (from != null && to != null && to.isBefore(from)) {
+            throw ApiException.badRequest("invalid_range", "to must not be before from");
+        }
+        if (kind != null && !ACCRUAL_KINDS.contains(kind)) {
+            throw ApiException.badRequest("invalid_kind", "kind must be an InterestAccrualKind");
+        }
+        int n = io.meridian.common.page.Cursor.limit(limit);
+        UUID after = cursor == null || cursor.isBlank() ? null : io.meridian.common.page.Cursor.decode(cursor);
+        List<ObjectNode> data = rows.query("""
+                select row_to_json(a)::text from interest_accrual a where deposit_account_id = ?
+                  and (?::date is null or accrual_date >= ?::date) and (?::date is null or accrual_date <= ?::date)
+                  and (?::varchar is null or kind = ?::varchar) and (?::uuid is null or id < ?::uuid)
+                order by id desc limit ?""", accountId, from, from, to, to, kind, kind, after, after, n + 1);
+        boolean more = data.size() > n;
+        List<ObjectNode> page = more ? data.subList(0, n) : data;
+        ObjectNode out = rows.object();
+        ArrayNode arr = out.putArray("data");
+        page.forEach(arr::add);
+        out.put("has_more", more);
+        if (more) {
+            out.put("next_cursor", io.meridian.common.page.Cursor.encode(uuid(page.getLast(), "id")));
+        } else {
+            out.putNull("next_cursor");
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ projection

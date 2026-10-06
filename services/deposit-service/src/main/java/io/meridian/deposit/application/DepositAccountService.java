@@ -81,20 +81,17 @@ public class DepositAccountService {
         if (minBalance != null && minBalance.signum() < 0) {
             throw ApiException.unprocessable("invalid_minimum_balance", "minimum_balance must not be negative");
         }
-        ProductSnapshot snapshot = ProductSnapshot.of(v);
+        ObjectNode terms = catalog.snapshot(uuid(v, "product_id"), uuid(v, "product_version_id"), currency);
+        ProductSnapshot snapshot = ProductSnapshot.terms(terms);
         snapshot.rate("CREDIT_INTEREST"); // validates the pinned rate configuration early
         snapshot.rate("OVERDRAFT_INTEREST");
+        v.set("product_terms", terms);
 
-        String number = str(v, "account_number");
-        boolean generated = number == null || AUTO.contains(number.trim().toUpperCase(Locale.ROOT));
-        if (generated) {
-            number = uniqueAccountNumber();
-            v.put("account_number", number);
-        }
+        String number = uniqueAccountNumber();
+        v.put("account_number", number);
         String iban = str(v, "iban");
         if (iban == null || AUTO.contains(iban.trim().toUpperCase(Locale.ROOT))) {
-            Optional<String> built = generated || number.chars().allMatch(Character::isDigit)
-                    ? safeIban(number) : Optional.empty();
+            Optional<String> built = safeIban(number);
             if (built.isPresent()) {
                 v.put("iban", built.get());
                 v.put("bban", built.get().substring(4));
@@ -327,52 +324,43 @@ public class DepositAccountService {
             throw ApiException.unprocessable("effective_date_in_past",
                     "effective_date must be today or later; use recalculate-interest for back-valued corrections");
         }
-        ObjectNode snapshot = catalog.snapshot(productId, versionId, str(acc, "currency"));
-        ObjectNode metadata = acc.path("metadata").isObject() ? ((ObjectNode) acc.get("metadata")).deepCopy() : rows.object();
-        ObjectNode values = rows.object();
+        ObjectNode terms = catalog.snapshot(productId, versionId, str(acc, "currency"));
+        ProductSnapshot.terms(terms).rate("CREDIT_INTEREST"); // reject an invalid rate configuration up front
         if (effectiveDate.isAfter(today)) {
-            ObjectNode scheduled = metadata.putObject("scheduled_product_change");
+            ObjectNode scheduled = rows.object();
             scheduled.put("product_id", productId.toString());
             scheduled.put("product_version_id", versionId.toString());
             scheduled.put("effective_date", effectiveDate.toString());
-            scheduled.set("product_snapshot", snapshot);
-            values.set("metadata", metadata);
+            scheduled.set("product_terms", terms);
+            ObjectNode values = rows.object();
+            values.set("pending_product_change", scheduled);
             return rows.update(TABLE, id, values);
         }
-        return applyProduct(acc, metadata, productId, versionId, snapshot, effectiveDate);
+        return applyProduct(acc, productId, versionId, terms);
     }
 
-    private ObjectNode applyProduct(ObjectNode acc, ObjectNode metadata, UUID productId, UUID versionId,
-                                    JsonNode snapshot, LocalDate effective) {
-        var hist = metadata.get("product_history") instanceof tools.jackson.databind.node.ArrayNode a ? a
-                : metadata.putArray("product_history");
-        ObjectNode prior = hist.addObject();
-        prior.put("product_id", str(acc, "product_id"));
-        prior.put("product_version_id", str(acc, "product_version_id"));
-        prior.put("until", effective.minusDays(1).toString());
-        metadata.set("product_snapshot", snapshot);
-        metadata.remove("scheduled_product_change");
+    private ObjectNode applyProduct(ObjectNode acc, UUID productId, UUID versionId, JsonNode terms) {
         ObjectNode values = rows.object();
         values.put("product_id", productId.toString());
         values.put("product_version_id", versionId.toString());
-        values.set("metadata", metadata);
+        values.set("product_terms", terms);
+        values.putNull("pending_product_change");
         ObjectNode updated = rows.update(TABLE, uuid(acc, "id"), values);
         events.publish("accounts.deposit_account.product_changed", TABLE, updated);
         return updated;
     }
 
-    /** Applies product changes scheduled for {@code asOf} (end-of-day job). */
+    /** Applies product changes scheduled on or before {@code asOf} (end-of-day job). */
     @Transactional
     public int applyScheduledProductChanges(LocalDate asOf) {
         int n = 0;
         for (ObjectNode acc : rows.query("""
                 select row_to_json(a)::text from deposit_account a
-                where metadata->'scheduled_product_change' is not null
-                  and (metadata->'scheduled_product_change'->>'effective_date')::date <= ? for update""", asOf)) {
-            JsonNode s = acc.get("metadata").get("scheduled_product_change");
-            applyProduct(acc, ((ObjectNode) acc.get("metadata")).deepCopy(), UUID.fromString(s.get("product_id").asString()),
-                    UUID.fromString(s.get("product_version_id").asString()), s.get("product_snapshot"),
-                    LocalDate.parse(s.get("effective_date").asString()));
+                where pending_product_change is not null
+                  and (pending_product_change->>'effective_date')::date <= ? for update""", asOf)) {
+            JsonNode s = acc.get("pending_product_change");
+            applyProduct(acc, UUID.fromString(s.get("product_id").asString()),
+                    UUID.fromString(s.get("product_version_id").asString()), s.get("product_terms"));
             n++;
         }
         return n;

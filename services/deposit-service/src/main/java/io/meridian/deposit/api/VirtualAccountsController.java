@@ -11,6 +11,7 @@ import io.meridian.deposit.api.generated.model.VirtualAccountsBulkRequest;
 import io.meridian.deposit.api.generated.model.VirtualAccountsCloseRequest;
 import io.meridian.deposit.application.VirtualAccountService;
 import io.meridian.web.crud.CrudEngine;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -42,14 +43,13 @@ public class VirtualAccountsController implements VirtualAccountsApi {
             throw io.meridian.common.error.ApiException.unprocessable("field_not_updatable", "use POST /close to close");
         }
         return actions.guardedUpdate(crud, "virtual_account", VirtualAccount.class, id, ifMatch, body,
-                Set.of("master_account_id", "currency", "virtual_account_number", "iban"), null);
+                Set.of("master_account_id", "currency", "iban"), null);
     }
 
     @Override
-    public ResponseEntity<Void> virtualAccountsBulk(String idempotencyKey, VirtualAccountsBulkRequest body) {
+    public ResponseEntity<Map<String, Object>> virtualAccountsBulk(String idempotencyKey, VirtualAccountsBulkRequest body) {
         JsonNode req = actions.tree(body);
-        JsonNode result = actions.document(idempotencyKey, "bulk", body, () -> virtualAccounts.bulk(req.path("items")));
-        return Http.json(actions.json(), result);
+        return actions.objectAction(idempotencyKey, "bulk", body, () -> virtualAccounts.bulk(req.get("items")));
     }
 
     @Override

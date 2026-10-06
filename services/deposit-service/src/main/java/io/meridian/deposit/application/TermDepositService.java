@@ -16,6 +16,7 @@ import io.meridian.deposit.domain.DayCount;
 import io.meridian.deposit.domain.Lifecycle;
 import io.meridian.deposit.domain.Schedule;
 import io.meridian.deposit.domain.TermDepositCalculator;
+import io.meridian.deposit.infrastructure.ProductCatalogClient;
 import io.meridian.deposit.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -23,7 +24,6 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -50,16 +50,19 @@ public class TermDepositService {
     private final Events events;
     private final DepositProperties props;
     private final Schedule.BusinessCalendar calendar;
+    private final ProductCatalogClient catalog;
     private final SecureRandom random = new SecureRandom();
 
     public TermDepositService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events,
-                              DepositProperties props, Schedule.BusinessCalendar calendar) {
+                              DepositProperties props, Schedule.BusinessCalendar calendar,
+                              ProductCatalogClient catalog) {
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
         this.events = events;
         this.props = props;
         this.calendar = calendar;
+        this.catalog = catalog;
     }
 
     // ------------------------------------------------------------------ placement
@@ -118,10 +121,8 @@ public class TermDepositService {
         if (PAYS_OUT.contains(instruction) && payout == null && funding == null) {
             throw ApiException.unprocessable("payout_account_required", instruction + " needs a payout_account_id");
         }
-        String number = str(v, "deposit_number");
-        if (number == null || Set.of("", "AUTO", "GENERATE").contains(number.trim().toUpperCase(Locale.ROOT))) {
-            v.put("deposit_number", "TD" + AccountNumbers.generate(12, random));
-        }
+        v.set("product_terms", catalog.snapshot(uuid(v, "product_id"), uuid(v, "product_version_id"), ccy));
+        v.put("deposit_number", uniqueDepositNumber());
         v.put("expected_interest", TermDepositCalculator.expectedInterest(principal, rate, dc, start, maturity, ccy)
                 .toPlainString());
         v.put("status", "PENDING_FUNDING");
@@ -564,7 +565,7 @@ public class TermDepositService {
         UUID id = Ids.newId();
         ObjectNode v = rows.object();
         v.put("id", id.toString());
-        v.put("deposit_number", "TD" + AccountNumbers.generate(12, random));
+        v.put("deposit_number", uniqueDepositNumber());
         for (String f : List.of("customer_id", "product_id", "product_version_id", "funding_account_id",
                 "payout_account_id", "currency", "interest_rate", "day_count", "interest_payout_mode",
                 "rollover_instruction", "premature_penalty_rate", "allow_partial_withdrawal")) {
@@ -583,8 +584,8 @@ public class TermDepositService {
         v.put("status", "ACTIVE");
         ObjectNode meta = rows.object();
         meta.put("principal_since", start.toString());
-        if (old.path("metadata").has("product_snapshot")) {
-            meta.set("product_snapshot", old.get("metadata").get("product_snapshot"));
+        if (old.hasNonNull("product_terms")) {
+            v.set("product_terms", old.get("product_terms"));
         }
         v.set("metadata", meta);
         v.put("ledger_account_id", ledger.openAccount(LedgerPort.key("td-ledger-account", id, null),
@@ -594,6 +595,16 @@ public class TermDepositService {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private String uniqueDepositNumber() {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String candidate = "TD" + AccountNumbers.generate(12, random);
+            if (rows.scalar("select 1 from term_deposit where deposit_number = ?", Integer.class, candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw ApiException.conflict("deposit_number_exhausted", "Could not allocate a unique deposit number");
+    }
 
     private ObjectNode payoutAccount(JsonNode td) {
         UUID payout = uuid(td, "payout_account_id") != null ? uuid(td, "payout_account_id") : uuid(td, "funding_account_id");

@@ -57,7 +57,8 @@ public interface LedgerPort {
     /** Sets the ledger posting restriction: ACTIVE, FROZEN, FROZEN_DEBIT, FROZEN_CREDIT or CLOSED. */
     void restrict(UUID ledgerAccountId, String fromStatus, String toStatus, String reason, String key);
 
-    void setOverdraftLimit(UUID ledgerAccountId, BigDecimal limit);
+    /** Sets the ledger overdraft limit (ledger action, idempotent per key). */
+    void setOverdraftLimit(UUID ledgerAccountId, BigDecimal limit, String reason, String key);
 
     /** Posted balance from a balance document. */
     static BigDecimal posted(JsonNode balance) {

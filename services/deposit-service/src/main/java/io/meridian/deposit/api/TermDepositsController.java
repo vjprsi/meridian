@@ -16,6 +16,7 @@ import io.meridian.deposit.application.TermDepositService;
 import io.meridian.deposit.infrastructure.Rows;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +47,7 @@ public class TermDepositsController implements TermDepositsApi {
     public ResponseEntity<TermDeposit> termDepositsUpdate(UUID id, String ifMatch, TermDepositUpdate body) {
         return actions.guardedUpdate(crud, "term_deposit", TermDeposit.class, id, ifMatch, body,
                 Set.of("currency", "principal_amount", "interest_rate", "day_count", "term_days", "start_date",
-                        "maturity_date", "deposit_number", "funding_account_id", "payout_account_id",
+                        "maturity_date", "funding_account_id", "payout_account_id",
                         "rollover_instruction", "product_id", "product_version_id", "previous_deposit_id",
                         "premature_penalty_rate", "allow_partial_withdrawal", "interest_payout_mode", "metadata"),
                 "use the term deposit actions");
@@ -71,9 +72,9 @@ public class TermDepositsController implements TermDepositsApi {
     }
 
     @Override
-    public ResponseEntity<Void> termDepositsBreakQuote(UUID id) {
+    public ResponseEntity<Map<String, Object>> termDepositsBreakQuote(UUID id) {
         TenantContext.require();
-        return Http.json(actions.json(), deposits.breakQuote(id));
+        return actions.object(deposits.breakQuote(id));
     }
 
     @Override
@@ -115,8 +116,8 @@ public class TermDepositsController implements TermDepositsApi {
     }
 
     @Override
-    public ResponseEntity<Void> termDepositsCertificate(UUID id) {
+    public ResponseEntity<String> termDepositsCertificate(UUID id) {
         TenantContext.require();
-        return Http.text(deposits.certificate(id), "term-deposit-certificate-" + id + ".txt");
+        return Actions.text(deposits.certificate(id), "term-deposit-certificate-" + id + ".txt");
     }
 }

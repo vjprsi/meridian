@@ -64,23 +64,41 @@ public class ScheduleService {
         }
     }
 
-    /**
-     * {@code formats} is an object in the contract; accepted shapes: {"formats": ["PDF","CSV"]} (also "values")
-     * or {"PDF": true, "CSV": true}.
-     */
+    /** {@code formats}: a list of StatementFormat values, e.g. {@code ["PDF","CSV"]} (duplicates ignored). */
     public static List<String> formats(JsonNode node) {
         List<String> out = new ArrayList<>();
         if (node == null || node.isNull()) {
             return out;
         }
-        JsonNode list = node.isArray() ? node : node.has("formats") ? node.get("formats") : node.get("values");
-        if (list != null && list.isArray()) {
-            list.forEach(f -> out.add(f.asString()));
-            return out;
+        if (!node.isArray()) {
+            throw ApiException.unprocessable("invalid_formats", "formats must be a list of StatementFormat values");
         }
-        for (String name : node.propertyNames()) {
-            if (node.get(name).asBoolean(false)) {
-                out.add(name);
+        for (JsonNode f : node) {
+            if (!f.isString()) {
+                throw ApiException.unprocessable("invalid_format", "formats must contain StatementFormat names");
+            }
+            if (!out.contains(f.asString())) {
+                out.add(f.asString());
+            }
+        }
+        return out;
+    }
+
+    /** The cycle for {@code date} as a summary (end-of-day endpoint); a re-run for the same date produces nothing new. */
+    @Transactional
+    public ObjectNode cycleResult(LocalDate date) {
+        List<ObjectNode> produced = runCycle(date);
+        ObjectNode out = rows.object();
+        out.put("business_date", date.toString());
+        out.put("produced", produced.size());
+        out.put("failed", (int) produced.stream().filter(s -> "FAILED".equals(str(s, "status"))).count());
+        var list = out.putArray("statements");
+        for (ObjectNode s : produced) {
+            ObjectNode item = list.addObject();
+            for (String f : List.of("id", "deposit_account_id", "statement_no", "format", "status", "failure_reason")) {
+                if (s.hasNonNull(f)) {
+                    item.set(f, s.get(f));
+                }
             }
         }
         return out;
@@ -101,8 +119,6 @@ public class ScheduleService {
             }
             UUID account = uuid(s, "deposit_account_id");
             JsonNode acc = bank.account(account);
-            int next = rows.scalar("select coalesce(max(statement_no), 0) + 1 from statement where deposit_account_id = ?",
-                    Integer.class, account).orElse(1);
             for (String format : formats(s.get("formats"))) {
                 if (rows.scalar("""
                         select 1 from statement where deposit_account_id = ? and format = ? and period_start = ? and period_end = ?""",
@@ -111,7 +127,6 @@ public class ScheduleService {
                 }
                 ObjectNode req = rows.object();
                 req.put("deposit_account_id", account.toString());
-                req.put("statement_no", next);
                 req.put("period_start", period.get().start().toString());
                 req.put("period_end", period.get().end().toString());
                 req.put("format", format);
