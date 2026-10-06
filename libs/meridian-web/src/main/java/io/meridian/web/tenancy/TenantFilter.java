@@ -37,6 +37,13 @@ public class TenantFilter extends OncePerRequestFilter {
             String claim = jwt.getClaimAsString(props.tenantClaim());
             tenant = parse(claim);
             principal = jwt.getSubject();
+            // Internal service tokens act for the tenant named in X-Tenant-Id (scheduled jobs, callbacks).
+            // User tokens can never choose their tenant: the claim always wins for them.
+            if (isInternal(jwt) && parse(req.getHeader(TENANT_HEADER)) != null) {
+                tenant = parse(req.getHeader(TENANT_HEADER));
+                String onBehalf = req.getHeader(USER_HEADER);
+                principal = "svc:" + jwt.getClaimAsString("azp") + (onBehalf == null ? "" : "/" + onBehalf);
+            }
         } else if (props.devMode()) {
             tenant = parse(req.getHeader(TENANT_HEADER));
             String user = req.getHeader(USER_HEADER);
@@ -50,6 +57,11 @@ public class TenantFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    static boolean isInternal(Jwt jwt) {
+        Object scope = jwt.getClaims().get("scope");
+        return scope instanceof String s && java.util.Arrays.asList(s.split(" ")).contains("meridian:internal");
     }
 
     private static UUID parse(String value) {

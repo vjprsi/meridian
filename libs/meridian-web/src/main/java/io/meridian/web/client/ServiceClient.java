@@ -30,10 +30,16 @@ public class ServiceClient {
     private final Map<String, Integer> ports = new HashMap<>();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
     private final Duration timeout;
+    private final ServiceTokenProvider serviceTokens;
 
     public ServiceClient(JsonMapper json, Environment env) {
+        this(json, env, new ServiceTokenProvider(json, env));
+    }
+
+    public ServiceClient(JsonMapper json, Environment env, ServiceTokenProvider serviceTokens) {
         this.json = json;
         this.env = env;
+        this.serviceTokens = serviceTokens;
         this.timeout = Duration.ofMillis(env.getProperty("meridian.services.timeout-ms", Long.class, 10_000L));
         ClassPathResource manifest = new ClassPathResource("meridian/services.json");
         if (manifest.exists()) {
@@ -66,7 +72,9 @@ public class ServiceClient {
         b.header("X-User", TenantContext.principal());
         String auth = currentAuthorization();
         if (auth != null) {
-            b.header("Authorization", auth);
+            b.header("Authorization", auth);                         // act on behalf of the calling user
+        } else if (serviceTokens.configured()) {
+            b.header("Authorization", "Bearer " + serviceTokens.token()); // job/callback: service identity
         }
         if (key != null) {
             if (key.startsWith("if-match:")) {

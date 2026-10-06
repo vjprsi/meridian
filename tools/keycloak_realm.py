@@ -20,9 +20,10 @@ def main():
     manifest = json.loads((ROOT / "generated" / "services.json").read_text(encoding="utf-8"))
     domains = sorted({s["domain"] for s in manifest})
     scope_names = [f"{d}:{a}" for d in domains for a in ("read", "write", "*")] + ["meridian:admin"]
+    # meridian:internal = service identity allowed to act for the tenant in X-Tenant-Id (jobs, callbacks).
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
-              for n in scope_names]
+              for n in scope_names + ["meridian:internal"]]
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
@@ -47,7 +48,7 @@ def main():
             {"clientId": "meridian-service", "name": "Meridian service account", "publicClient": False,
              "secret": "meridian-service-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,
-             "protocolMappers": [tenant_mapper], "defaultClientScopes": scope_names},
+             "protocolMappers": [tenant_mapper], "defaultClientScopes": scope_names + ["meridian:internal"]},
             {"clientId": "meridian-readonly", "name": "Read-only integration", "publicClient": False,
              "secret": "meridian-readonly-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,

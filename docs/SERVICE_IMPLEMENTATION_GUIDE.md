@@ -49,6 +49,16 @@ coupling to generated getter names. Responses: `crud.read(rowJson, Model.class)`
 - Every state change publishes its domain event via the outbox in the same transaction.
 - Money movements never update balances directly: they post to `ledger-service` (journal entries / holds).
 
+## Service identity (JWT mode)
+
+- A call made while handling a user request forwards the user's token (the user's permissions apply).
+- A call with no user context (scheduled job, provider callback, Kafka consumer) uses a client-credentials token
+  with scope `meridian:internal`; set `meridian.service-auth.token-uri / client-id / client-secret`
+  (local: `http://localhost:15180/realms/meridian/protocol/openid-connect/token`, `meridian-service`,
+  `meridian-service-secret`). Bind the tenant first (`TenantContext.callAs(tenant, "job:<name>", ...)`);
+  ServiceClient sends it as `X-Tenant-Id`, which receivers honour only for internal tokens.
+- Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
+
 ## Time
 
 - Validity windows, expiries and "is it effective now" checks must use one clock. When SQL compares with `now()`,
