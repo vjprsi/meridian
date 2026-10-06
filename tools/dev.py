@@ -46,7 +46,8 @@ def ensure_database(db: str, reset: bool = False) -> None:
     ddl = ROOT / "generated" / "db" / db / "V001__init.sql"
     digest = hashlib.sha256(ddl.read_bytes()).hexdigest() if ddl.exists() else ""
     marker = RUN / f"{db}.schema"
-    changed = marker.exists() and marker.read_text() != digest
+    # Unknown to the launcher (e.g. loaded by apply-ddl.sh without Flyway history) or schema changed: recreate.
+    changed = (not marker.exists()) or marker.read_text() != digest
     if reset or changed:
         print(f"  {'resetting' if reset else 'schema changed; recreating'} local database {db} (dev data discarded)")
         docker(f"docker exec meridian-postgres psql -U meridian -d meridian -c \"drop database if exists {db} with (force)\"")
@@ -55,7 +56,7 @@ def ensure_database(db: str, reset: bool = False) -> None:
     if exists != "1":
         docker(f"docker exec meridian-postgres psql -U meridian -d meridian -c \"create database {db}\"")
         print(f"  created database {db}")
-    marker.write_text(digest)
+        marker.write_text(digest)  # only databases the launcher created are tracked
 
 
 def ensure_app_role() -> None:

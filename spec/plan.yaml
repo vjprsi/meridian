@@ -35,7 +35,7 @@ steps:
   - {id: S10, phase: 1, name: "Deposits and accounts", status: Done,
      deliverables: "deposit-service: current, savings, term deposits, interest accrual, fees, statements, standing orders",
      exit: "Accounts accrue and capitalise interest correctly against golden test sets"}
-  - {id: S11, phase: 1, name: "Back-office console v1 and developer portal v1",
+  - {id: S11, phase: 1, name: "Back-office console v1 and developer portal v1", status: In progress,
      deliverables: "Console: customer 360, accounts, ledger explorer, approvals; developer portal with sandbox and keys",
      exit: "Ops can service a customer end to end from the console"}
   - {id: S12, phase: 2, name: "Payments hub",
@@ -109,7 +109,9 @@ tasks:
   - {id: PLT-KEYCLOAK-REALM, phase: 1, type: Security, title: "Keycloak realm generated from spec (49 scopes, console PKCE client, service and read-only clients, tenant claim) imported by local stack; JWT mode verified live", priority: P0, est: 1, status: Done}
   - {id: PLT-MULTI-TENANT-USERS, phase: 1, type: Security, title: "Per-user tenant claim from identity-service (replace hardcoded demo-tenant claim); token exchange for platform operators", priority: P1, est: 3}
 
-# Services whose business logic is implemented and covered by integration tests (all their build tasks Done).
+# Services whose business logic is implemented and covered by integration tests (all their build tasks Done).  - {id: WEB-CONSOLE-FOUNDATION, phase: 1, type: Web/Mobile, title: "Console foundation: Next.js 16 + React 19 + Tailwind 4, typed API client generated from OpenAPI (190k lines of types), OIDC PKCE + dev auth, design tokens (light/dark), problem+json error banner", priority: P0, est: 4, status: Done}
+  - {id: WEB-CONSOLE-E2E, phase: 1, type: Test, title: "Playwright E2E of console against live services: ledger, accounts, posting, customer, approvals, products, audit", priority: P1, est: 2, status: Done}
+
 done_services:
   - ledger-service
   - gl-service
@@ -137,6 +139,17 @@ done_services:
   - archive-service
 
 status:
+  "APP-console-SHELL": Done
+  "UI-console-staff-login-with-sso-and-mfa": Done
+  "UI-console-customer-360": In progress
+  "UI-console-customer-edit-tier-change-suspend-merge": In progress
+  "UI-console-approvals-inbox-maker-checker": Done
+  "UI-console-ledger-explorer": Done
+  "UI-console-manual-journal-entry-and-reversal": In progress
+  "UI-console-audit-log-viewer": Done
+  "APP-product-studio-SHELL": Done
+  "UI-product-studio-product-catalogue": Done
+  "UI-product-studio-review-approve-and-publish": Done
   "SVC-*-SCAFFOLD": Done          # all 63 services scaffolded, compile, boot in tests
   "SVC-*-DB": Done                # Flyway migrations from generated DDL, verified per service in tests
   "SVC-ledger-service-*": Done    # posting engine, holds, reversals, freezes + 10 integration tests
