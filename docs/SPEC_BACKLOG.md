@@ -48,4 +48,9 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
   document reference + failure reason; cheque book dispatch/activate actions; ledger needs an idempotent
   set-overdraft-limit action and idempotent freeze/unfreeze; EOD jobs (accrual, maturity, standing orders,
   dormancy) need endpoints callable by business-day-service (G8); external payouts should go via payment-service.
-- operations: pending report.
+- operations: list fields (G1); none-responses (G2); undeclared query params (G3); service added endpoints not in
+  spec — `POST /v1/operations/business-days` (open first day), `POST/DELETE /v1/search/documents`,
+  `GET /v1/files/blobs`, purge approve/reject → add to spec; file content and secret refs missing from create
+  models; purge needs CANCELLED + reason; batch-lock force-release reason column; every data-owning service needs
+  `/v1/internal/data-lifecycle/{count,extract,confirm,purge}` for archive/purge (new cross-cutting capability);
+  background schedulers blocked by RLS (G8).
