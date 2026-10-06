@@ -4146,7 +4146,7 @@ API: /v1/loan-applications · Requirements: LND-01, LND-06, LND-07
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| application_number | varchar(32) | no | UQ | application_number (read-only) | Human-readable application number |
+| application_number | varchar(32) | no | UQ | application_number (read-only) | Human-readable application number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Primary applicant |
 | product_id | uuid | no | ref → product | product_id | Lending product applied for |
 | product_version_id | uuid | yes | ref → product_version | product_version_id | Product version in force at submission |
@@ -4160,16 +4160,23 @@ API: /v1/loan-applications · Requirements: LND-01, LND-06, LND-07
 | currency | char(3) | no |  | currency | Currency |
 | requested_term_months | integer | yes |  | requested_term_months | Term requested in months |
 | requested_frequency | varchar(40) (RepaymentFrequency) | yes |  | requested_frequency | Preferred repayment frequency |
+| requested_schedule_type | varchar(40) (ScheduleType) | yes |  | requested_schedule_type | Preferred schedule type (default ANNUITY) |
 | merchant_id | uuid | yes | ref → merchant | merchant_id | Merchant for BNPL / point-of-sale financing |
 | wallet_id | uuid | yes | ref → wallet | wallet_id | Wallet scored for nano-loans |
 | agent_id | uuid | yes |  | agent_id | Agent who assisted the application |
+| disbursement_account_id | uuid | yes | ref → deposit_account | disbursement_account_id | Deposit account to receive the funds |
+| repayment_account_id | uuid | yes | ref → deposit_account | repayment_account_id | Deposit account auto-debited for instalments |
 | status | varchar(40) (LoanApplicationStatus) | no |  | status (read-only) | Lifecycle status |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
 | expires_at | timestamptz | yes |  | expires_at | Application expiry |
-| assigned_to | varchar(64) | yes |  | assigned_to | Underwriter assigned for manual review |
+| assigned_to | varchar(64) | yes |  | assigned_to (read-only) | Underwriter assigned for manual review (set by /assign) |
 | consent_bureau | boolean | no |  | consent_bureau | Applicant consented to a credit bureau check |
 | consent_at | timestamptz | yes |  | consent_at | Consent time |
+| risk_grade | varchar(8) | yes |  | risk_grade (read-only) | Risk grade of the latest score |
+| loan_id | uuid | yes | ref → loan | loan_id (read-only) | Loan booked in loan-service |
+| booking_error | varchar(500) | yes |  | booking_error (read-only) | Last error when booking the loan failed (retry with /book) |
+| withdrawal_reason | varchar(255) | yes |  | withdrawal_reason (read-only) | Reason given on withdrawal |
 | ip_address | inet | yes |  | — | IP address at submission (fraud signals) |
 | device_id | varchar(128) | yes |  | — | Device fingerprint at submission |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
@@ -4197,6 +4204,7 @@ API: /v1/loan-applications/{loan_application_id}/applicants · Requirements: LND
 | loan_application_id | uuid | no | FK → loan_application | loan_application_id | Application |
 | customer_id | uuid | no | ref → customer | customer_id | Applicant customer |
 | role | varchar(40) (LoanApplicantRole) | no |  | role | Role on the application |
+| date_of_birth | date | yes |  | date_of_birth | Date of birth (age feature of the scorecard) PII |
 | employment_status | varchar(32) | yes |  | employment_status | EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT |
 | employer_name | varchar(160) | yes |  | employer_name | Employer PII |
 | occupation | varchar(120) | yes |  | occupation | Occupation |
@@ -4259,8 +4267,9 @@ API: /v1/loan-applications/{loan_application_id}/documents · Requirements: LND-
 | loan_applicant_id | uuid | yes | FK → loan_applicant | loan_applicant_id | Applicant the document belongs to |
 | document_type | varchar(40) (LoanDocumentType) | no |  | document_type | Type |
 | document_id | uuid | yes | ref → document | document_id | Stored document |
-| status | varchar(40) (LoanDocumentStatus) | no |  | status | Status |
-| rejection_reason | varchar(255) | yes |  | rejection_reason | Why it was rejected |
+| status | varchar(40) (LoanDocumentStatus) | no |  | status (read-only) | Status (UPLOADED when document_id is set; /verify, /reject) |
+| is_mandatory | boolean | no |  | is_mandatory | Required before the application can be decided |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Why it was rejected |
 | verified_by | varchar(64) | yes |  | verified_by (read-only) | Verifier |
 | verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -4285,21 +4294,25 @@ API: /v1/bureau-reports · Requirements: LND-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | loan_application_id | uuid | yes | FK → loan_application | loan_application_id | Application (empty for periodic reviews) |
+| loan_applicant_id | uuid | yes | FK → loan_applicant | loan_applicant_id | Applicant the report is for |
 | customer_id | uuid | no | ref → customer | customer_id | Subject of the report |
-| provider | varchar(40) | no |  | provider | Bureau provider, e.g. EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA |
+| provider | varchar(40) | no |  | provider | Bureau provider adapter, e.g. SANDBOX, SANDBOX_ASYNC, EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA |
 | pull_type | varchar(16) | no |  | pull_type | HARD or SOFT inquiry |
 | status | varchar(40) (BureauReportStatus) | no |  | status (read-only) | Status |
 | bureau_reference | varchar(128) | yes |  | bureau_reference (read-only) | Provider reference |
 | bureau_score | integer | yes |  | bureau_score (read-only) | Score returned by the bureau |
 | score_band | varchar(16) | yes |  | score_band (read-only) | Band returned by the bureau |
 | total_debt | numeric(28,8) | yes |  | total_debt (read-only) | Total outstanding debt reported |
+| monthly_debt_service | numeric(28,8) | yes |  | monthly_debt_service (read-only) | Monthly instalments of reported credit |
 | open_accounts | integer | yes |  | open_accounts (read-only) | Open credit accounts |
 | delinquent_accounts | integer | yes |  | delinquent_accounts (read-only) | Accounts in delinquency |
 | worst_dpd_24m | integer | yes |  | worst_dpd_24m (read-only) | Worst days past due in 24 months |
 | inquiries_6m | integer | yes |  | inquiries_6m (read-only) | Inquiries in the last 6 months |
+| tradelines | jsonb | yes |  | tradelines (read-only) | Normalised tradelines (lender, type, balance, monthly payment, worst DPD) |
 | summary | jsonb | yes |  | summary (read-only) | Normalised summary of the report |
 | raw_document_id | uuid | yes | ref → document | raw_document_id (read-only) | Raw report stored as an encrypted document |
 | consent_reference | varchar(128) | no |  | consent_reference | Consent captured for this pull |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Why the pull failed |
 | requested_at | timestamptz | no |  | requested_at (read-only) | Request time |
 | received_at | timestamptz | yes |  | received_at (read-only) | Response time |
 | valid_until | date | yes |  | valid_until (read-only) | Report reuse expiry |
@@ -4338,7 +4351,8 @@ API: /v1/scorecards · Requirements: LND-01, LND-07, AI-02
 
 #### `scorecard_version`
 
-A versioned scorecard or ML model with cut-offs; champion/challenger supported
+A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
+
 
 API: /v1/scorecards/{scorecard_id}/versions · Requirements: LND-01, AI-02
 
@@ -4353,14 +4367,20 @@ API: /v1/scorecards/{scorecard_id}/versions · Requirements: LND-01, AI-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | scorecard_id | uuid | no | FK → scorecard | scorecard_id | Scorecard |
 | version | varchar(32) | no |  | version | Version label |
-| status | varchar(40) (ScorecardStatus) | no |  | status | Status |
+| status | varchar(40) (ScorecardStatus) | no |  | status (read-only) | Status (changed by /activate, /set-challenger, /retire) |
 | model_uri | varchar(500) | yes |  | model_uri | Model artefact location (model registry) |
-| features | jsonb | no |  | features | Input features and transformations |
-| cutoffs | jsonb | no |  | cutoffs | Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers |
-| challenger_traffic_pct | numeric(18,10) | yes |  | challenger_traffic_pct | Share of traffic routed to this challenger |
+| base_points | integer | no |  | base_points | Points every applicant starts with |
+| features | jsonb | no |  | features | Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]} |
+| cutoffs | jsonb | no |  | cutoffs | Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment} |
+| target_score | integer | no |  | target_score | Score at the target odds (PD calibration) |
+| target_odds | numeric(18,10) | no |  | target_odds | Good:bad odds at the target score |
+| points_to_double_odds | numeric(18,10) | no |  | points_to_double_odds | Points that double the odds |
+| challenger_traffic_pct | numeric(18,10) | yes |  | challenger_traffic_pct (read-only) | Share of traffic routed to this challenger (0..1) |
 | validation_report_document_id | uuid | yes | ref → document | validation_report_document_id | Validation and bias-test report |
-| approved_by | varchar(64) | yes |  | approved_by | Model risk approver |
-| activated_at | timestamptz | yes |  | activated_at | Activation time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Model risk approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Model risk approver (must differ from the author) |
+| activated_at | timestamptz | yes |  | activated_at (read-only) | Activation time |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4382,10 +4402,15 @@ API: /v1/credit-scores · Requirements: LND-01, LND-07, AI-02
 | loan_application_id | uuid | no | FK → loan_application | loan_application_id | Application |
 | loan_applicant_id | uuid | yes | FK → loan_applicant | loan_applicant_id | Applicant scored |
 | scorecard_version_id | uuid | no | FK → scorecard_version | scorecard_version_id | Scorecard version used |
+| routing | varchar(16) | no |  | routing | CHAMPION or CHALLENGER traffic |
 | score | integer | no |  | score | Score |
 | probability_of_default | numeric(18,10) | yes |  | probability_of_default | Estimated PD |
 | risk_grade | varchar(8) | no |  | risk_grade | Risk grade, e.g. A1..E5 |
-| reason_codes | jsonb | no |  | reason_codes | Top adverse-action reason codes with contribution |
+| cutoff_outcome | varchar(16) | yes |  | cutoff_outcome | Outcome of the cut-off band: APPROVE, REFER, DECLINE |
+| rate_adjustment | numeric(18,10) | yes |  | rate_adjustment | Pricing adjustment of the cut-off band |
+| reason_codes | jsonb | no |  | reason_codes | Top adverse-action reason codes with points lost, most adverse first |
+| contributions | jsonb | no |  | contributions | Points per feature (feature, value, bin, points, max_points) |
+| inputs | jsonb | yes |  | inputs | Feature values used |
 | inputs_hash | varchar(64) | no |  | inputs_hash | Hash of feature inputs for reproducibility |
 | latency_ms | integer | yes |  | latency_ms | Scoring latency |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -4407,15 +4432,18 @@ API: /v1/affordability-assessments · Requirements: LND-01
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | loan_application_id | uuid | no | FK → loan_application | loan_application_id | Application |
-| verified_monthly_income | numeric(28,8) | no |  | verified_monthly_income | Verified monthly income |
+| verified_monthly_income | numeric(28,8) | no |  | verified_monthly_income | Verified (or declared, haircut) monthly income |
 | monthly_commitments | numeric(28,8) | no |  | monthly_commitments | Existing monthly commitments |
 | living_costs | numeric(28,8) | no |  | living_costs | Living costs (declared or statistical floor) |
 | proposed_instalment | numeric(28,8) | no |  | proposed_instalment | Instalment of the requested loan |
 | stressed_instalment | numeric(28,8) | yes |  | stressed_instalment | Instalment at stressed rate |
-| debt_to_income | numeric(18,10) | no |  | debt_to_income | Debt-to-income ratio |
-| disposable_income | numeric(28,8) | no |  | disposable_income | Disposable income after the new loan |
-| max_affordable_amount | numeric(28,8) | yes |  | max_affordable_amount | Largest affordable amount |
+| stress_rate | numeric(18,10) | yes |  | stress_rate | Rate used for the stressed instalment |
+| debt_to_income | numeric(18,10) | no |  | debt_to_income | Total debt / annual income (DTI) |
+| debt_service_ratio | numeric(18,10) | no |  | debt_service_ratio | Monthly debt service incl. the stressed instalment / monthly income (DSR) |
+| disposable_income | numeric(28,8) | no |  | disposable_income | Residual income after commitments, living costs and the stressed instalment |
+| max_affordable_amount | numeric(28,8) | yes |  | max_affordable_amount | Largest affordable amount at the requested term |
 | result | varchar(40) (AffordabilityResult) | no |  | result | Outcome |
+| reason_codes | jsonb | yes |  | reason_codes | Reasons for FAIL / MARGINAL |
 | currency | char(3) | no |  | currency | Currency |
 | policy_version | varchar(32) | no |  | policy_version | Affordability policy version |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -4439,16 +4467,57 @@ API: /v1/credit-decisions · Requirements: LND-01, LIM-02
 | loan_application_id | uuid | no | FK → loan_application | loan_application_id | Application |
 | outcome | varchar(40) (CreditDecisionOutcome) | no |  | outcome | Decision |
 | method | varchar(40) (CreditDecisionMethod) | no |  | method | Automatic or manual |
-| decided_by | varchar(64) | yes |  | decided_by | Underwriter for manual decisions |
+| decided_by | varchar(64) | yes |  | decided_by | Underwriter (maker) for manual decisions |
+| approved_by | varchar(64) | yes |  | approved_by | Checker who approved a manual decision |
 | approved_amount | numeric(28,8) | yes |  | approved_amount | Approved amount |
 | approved_term_months | integer | yes |  | approved_term_months | Approved term |
 | approved_rate | numeric(18,10) | yes |  | approved_rate | Approved nominal annual rate |
 | risk_grade | varchar(8) | yes |  | risk_grade | Risk grade at decision |
+| credit_score_id | uuid | yes | FK → credit_score | credit_score_id | Score the decision used |
+| affordability_assessment_id | uuid | yes | FK → affordability_assessment | affordability_assessment_id | Affordability the decision used |
 | conditions | jsonb | yes |  | conditions | Conditions precedent (documents, collateral, guarantor) |
+| reason_codes | jsonb | yes |  | reason_codes | Reason codes for the outcome (adverse action, referral or counter-offer) |
 | decline_reasons | jsonb | yes |  | decline_reasons | Adverse action reasons communicated to the applicant |
 | policy_rules_fired | jsonb | yes |  | policy_rules_fired | Policy rules evaluated and their results |
+| decision_request_id | uuid | yes |  | decision_request_id | Maker-checker request of a manual decision |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval for overrides |
 | notes | text | yes |  | notes | Underwriter notes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `credit_decision_request`
+
+A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)
+
+API: /v1/credit-decision-requests · Requirements: LND-01, LIM-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| loan_application_id | uuid | no | FK → loan_application | loan_application_id | Application |
+| outcome | varchar(40) (CreditDecisionOutcome) | no |  | outcome | Proposed decision |
+| approved_amount | numeric(28,8) | yes |  | approved_amount | Proposed amount |
+| approved_term_months | integer | yes |  | approved_term_months | Proposed term |
+| approved_rate | numeric(18,10) | yes |  | approved_rate | Proposed rate |
+| conditions | jsonb | yes |  | conditions | Conditions precedent |
+| reason_codes | jsonb | yes |  | reason_codes | Reason codes for the outcome |
+| is_override | boolean | no |  | is_override (read-only) | Overrides the latest automatic decision |
+| notes | text | yes |  | notes | Underwriter notes |
+| status | varchar(40) (DecisionRequestStatus) | no |  | status (read-only) | Status |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Maker |
+| reviewed_by | varchar(64) | yes |  | reviewed_by (read-only) | Checker |
+| reviewed_at | timestamptz | yes |  | reviewed_at (read-only) | Review time |
+| review_comment | varchar(500) | yes |  | review_comment (read-only) | Checker comment or rejection reason |
+| credit_decision_id | uuid | yes | FK → credit_decision | credit_decision_id (read-only) | Decision recorded on approval |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4478,14 +4547,18 @@ API: /v1/loan-offers · Requirements: LND-01, LND-02
 | repayment_frequency | varchar(40) (RepaymentFrequency) | no |  | repayment_frequency | Frequency |
 | schedule_type | varchar(40) (ScheduleType) | no |  | schedule_type | Schedule type |
 | interest_rate | numeric(18,10) | no |  | interest_rate | Nominal annual rate |
-| apr | numeric(18,10) | no |  | apr | Annual percentage rate including fees |
+| apr | numeric(18,10) | no |  | apr (read-only) | Annual percentage rate including fees (IRR of the cash flows) |
 | upfront_fees | numeric(28,8) | no |  | upfront_fees | Fees deducted or charged at disbursement |
-| instalment_amount | numeric(28,8) | no |  | instalment_amount | Regular instalment |
-| total_repayable | numeric(28,8) | no |  | total_repayable | Total amount repayable |
-| schedule_preview | jsonb | no |  | schedule_preview | Indicative repayment schedule |
+| balloon_amount | numeric(28,8) | yes |  | balloon_amount | Final balloon for BALLOON schedules |
+| first_repayment_date | date | yes |  | first_repayment_date | First instalment date (default: one period after acceptance) |
+| instalment_amount | numeric(28,8) | no |  | instalment_amount (read-only) | Regular instalment |
+| total_interest | numeric(28,8) | no |  | total_interest (read-only) | Total interest over the term |
+| total_repayable | numeric(28,8) | no |  | total_repayable (read-only) | Total amount repayable (principal, interest and fees) |
+| schedule_preview | jsonb | no |  | schedule_preview (read-only) | Indicative repayment schedule |
 | status | varchar(40) (LoanOfferStatus) | no |  | status (read-only) | Status |
-| expires_at | timestamptz | no |  | expires_at | Offer expiry |
+| expires_at | timestamptz | yes |  | expires_at | Offer expiry (default: now + offer validity days) |
 | accepted_at | timestamptz | yes |  | accepted_at (read-only) | Acceptance time |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason given on decline or withdrawal |
 | terms_document_id | uuid | yes | ref → document | terms_document_id | Pre-contract information / key facts document |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -4509,19 +4582,42 @@ API: /v1/e-signature-requests · Requirements: LND-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | loan_offer_id | uuid | no | FK → loan_offer | loan_offer_id | Offer being signed |
-| provider | varchar(40) | no |  | provider | DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER |
+| provider | varchar(40) | no |  | provider | SANDBOX, DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER |
 | provider_envelope_id | varchar(128) | yes |  | provider_envelope_id (read-only) | Provider reference |
 | status | varchar(40) (ESignatureStatus) | no |  | status (read-only) | Status |
-| signers | jsonb | no |  | signers | Signers and their order |
+| signers | jsonb | no |  | signers | Signers and their order ({customer_id, name, email, order}) |
 | agreement_document_id | uuid | yes | ref → document | agreement_document_id | Agreement to sign |
 | signed_document_id | uuid | yes | ref → document | signed_document_id (read-only) | Signed agreement |
+| sent_at | timestamptz | yes |  | sent_at (read-only) | Last time the envelope was sent |
+| send_count | integer | no |  | send_count (read-only) | Times the envelope was sent |
 | signed_at | timestamptz | yes |  | signed_at (read-only) | Completion time |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Void or decline reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `lending_callback_route`
+
+Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope or report
+
+API: internal only
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| kind | varchar(40) (LendingCallbackKind) | no |  | kind | E-signature envelope or bureau report |
+| provider | varchar(40) | no |  | provider | Provider |
+| provider_reference | varchar(128) | no |  | provider_reference | Provider envelope id or bureau reference |
+| entity_id | uuid | no |  | entity_id | E-signature request or bureau report in the owning tenant |
+| owner_tenant_id | uuid | no |  | owner_tenant_id | Tenant owning the entity |
 
 ### Service `loan-service` — database `loan_db`
 
@@ -4543,7 +4639,7 @@ API: /v1/loans · Requirements: LND-01, LND-02, LND-05, LND-06, LND-07
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| loan_number | varchar(32) | no | UQ | loan_number (read-only) | Human-readable loan number |
+| loan_number | varchar(32) | no | UQ | loan_number (read-only) | Human-readable loan number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Primary borrower |
 | loan_application_id | uuid | yes | ref → loan_application | loan_application_id | Originating application |
 | loan_offer_id | uuid | yes | ref → loan_offer | loan_offer_id | Accepted offer |
@@ -4561,6 +4657,7 @@ API: /v1/loans · Requirements: LND-01, LND-02, LND-05, LND-06, LND-07
 | outstanding_penalties | numeric(28,8) | no |  | outstanding_penalties (read-only) | Unpaid penalty interest and charges |
 | total_outstanding | numeric(28,8) | no |  | total_outstanding (read-only) | Total outstanding |
 | overdue_amount | numeric(28,8) | no |  | overdue_amount (read-only) | Amount past due |
+| credit_balance | numeric(28,8) | no |  | credit_balance (read-only) | Overpayment held as credit |
 | interest_rate_type | varchar(40) (InterestRateType) | no |  | interest_rate_type | Fixed, floating, stepped or zero |
 | interest_rate | numeric(18,10) | no |  | interest_rate | Current nominal annual rate |
 | rate_index | varchar(32) | yes |  | rate_index | Reference index for floating rates, e.g. SOFR, EURIBOR_3M |
@@ -4569,24 +4666,33 @@ API: /v1/loans · Requirements: LND-01, LND-02, LND-05, LND-06, LND-07
 | day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day-count convention |
 | schedule_type | varchar(40) (ScheduleType) | no |  | schedule_type | Schedule type |
 | repayment_frequency | varchar(40) (RepaymentFrequency) | no |  | repayment_frequency | Repayment frequency |
+| business_day_convention | varchar(40) (BusinessDayConvention) | no |  | business_day_convention | Due-date adjustment for weekends and holidays |
 | term_months | integer | no |  | term_months | Contractual term |
+| balloon_amount | numeric(28,8) | yes |  | balloon_amount | Final balloon for BALLOON schedules |
+| interest_only_periods | integer | yes |  | interest_only_periods | Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity) |
+| custom_schedule | jsonb | yes |  | custom_schedule | CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance) |
 | grace_period_days | integer | no |  | grace_period_days | Grace before an instalment counts as overdue |
 | first_repayment_date | date | yes |  | first_repayment_date | First instalment date |
-| maturity_date | date | yes |  | maturity_date | Final maturity |
+| maturity_date | date | yes |  | maturity_date (read-only) | Final maturity |
+| next_due_date | date | yes |  | next_due_date (read-only) | Next unpaid instalment due date |
 | start_date | date | yes |  | start_date | Contract start / first disbursement date |
+| cooling_off_until | date | yes |  | cooling_off_until (read-only) | End of the cooling-off period (cancellation allowed until then) |
 | disbursement_account_id | uuid | yes | ref → deposit_account | disbursement_account_id | Account receiving funds |
 | disbursement_wallet_id | uuid | yes | ref → wallet | disbursement_wallet_id | Wallet receiving funds |
 | repayment_account_id | uuid | yes | ref → deposit_account | repayment_account_id | Account auto-debited |
 | auto_debit_enabled | boolean | no |  | auto_debit_enabled | Collect instalments automatically |
-| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Loan receivable account in the ledger |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id (read-only) | Loan receivable account in the ledger |
 | merchant_id | uuid | yes | ref → merchant | merchant_id | Merchant for BNPL / merchant financing |
 | credit_line_id | uuid | yes | FK → credit_line | credit_line_id | Credit line the loan was drawn from |
+| product_terms | jsonb | yes |  | product_terms (read-only) | Product terms pinned at booking (rates, fees, limits) |
 | status | varchar(40) (LoanStatus) | no |  | status (read-only) | Lifecycle status |
 | days_past_due | integer | no |  | days_past_due (read-only) | Days past due of the oldest unpaid instalment |
 | delinquency_bucket | varchar(40) (DelinquencyBucket) | no |  | delinquency_bucket (read-only) | DPD bucket |
-| ecl_stage | varchar(40) (EclStage) | no |  | ecl_stage (read-only) | IFRS 9 stage |
+| ecl_stage | varchar(40) (EclStage) | no |  | ecl_stage (read-only) | IFRS 9 stage hint (DPD, forbearance, write-off) |
+| is_forborne | boolean | no |  | is_forborne (read-only) | Restructured for hardship (forbearance) |
 | risk_grade | varchar(8) | yes |  | risk_grade | Risk grade at origination or last review |
 | is_nano | boolean | no |  | is_nano | Nano-loan scored on wallet transaction data |
+| last_accrual_date | date | yes |  | last_accrual_date (read-only) | Last business date accrued |
 | paid_off_at | timestamptz | yes |  | paid_off_at (read-only) | Pay-off time |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closing time |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
@@ -4612,8 +4718,14 @@ API: internal only · Requirements: LND-05, GL-04
 | from_status | varchar(40) (LoanStatus) | yes |  | from_status | Previous status |
 | to_status | varchar(40) (LoanStatus) | no |  | to_status | New status |
 | days_past_due | integer | no |  | days_past_due | DPD at transition |
+| from_bucket | varchar(40) (DelinquencyBucket) | yes |  | from_bucket | Bucket before the transition |
 | delinquency_bucket | varchar(40) (DelinquencyBucket) | no |  | delinquency_bucket | Bucket at transition |
 | ecl_stage | varchar(40) (EclStage) | yes |  | ecl_stage | IFRS 9 stage at transition |
+| overdue_amount | numeric(28,8) | yes |  | overdue_amount | Overdue amount at transition |
+| total_outstanding | numeric(28,8) | yes |  | total_outstanding | Total outstanding at transition |
+| customer_id | uuid | yes | ref → customer | customer_id | Borrower (for consumers of the event) |
+| currency | char(3) | yes |  | currency | Currency |
+| business_date | date | yes |  | business_date | Business date of the transition |
 | reason | varchar(255) | yes |  | reason | Reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -4652,6 +4764,7 @@ API: /v1/loan-disbursements · Requirements: LND-01
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | disbursed_at | timestamptz | yes |  | disbursed_at (read-only) | Completion time |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
+| attempts | integer | no |  | attempts (read-only) | Posting attempts |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -4684,6 +4797,7 @@ API: internal only · Requirements: LND-02
 | total_fees | numeric(28,8) | no |  | total_fees | Total scheduled fees |
 | currency | char(3) | no |  | currency | Currency |
 | effective_from | date | no |  | effective_from | Effective date |
+| interest_rate | numeric(18,10) | yes |  | interest_rate | Rate the schedule was generated with |
 | reason | varchar(255) | yes |  | reason | ORIGINATION, RESTRUCTURE, RATE_CHANGE, PREPAYMENT |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -4709,7 +4823,8 @@ API: /v1/schedule-installments · Requirements: LND-02, LND-04, LND-05
 | repayment_schedule_id | uuid | no | FK → repayment_schedule | repayment_schedule_id | Schedule |
 | loan_id | uuid | no | FK → loan | loan_id | Loan |
 | installment_no | integer | no |  | installment_no | Sequence number |
-| due_date | date | no |  | due_date | Due date |
+| period_start | date | yes |  | period_start | Start of the interest period |
+| due_date | date | no |  | due_date | Due date (business-day adjusted) |
 | principal_due | numeric(28,8) | no |  | principal_due | Principal due |
 | interest_due | numeric(28,8) | no |  | interest_due | Interest due |
 | fees_due | numeric(28,8) | no |  | fees_due | Fees due |
@@ -4719,6 +4834,7 @@ API: /v1/schedule-installments · Requirements: LND-02, LND-04, LND-05
 | interest_paid | numeric(28,8) | no |  | interest_paid (read-only) | Interest paid |
 | fees_paid | numeric(28,8) | no |  | fees_paid (read-only) | Fees paid |
 | penalties_paid | numeric(28,8) | no |  | penalties_paid (read-only) | Penalties paid |
+| waived_amount | numeric(28,8) | no |  | waived_amount (read-only) | Amount waived |
 | outstanding_balance_after | numeric(28,8) | no |  | outstanding_balance_after | Principal balance after this instalment |
 | status | varchar(40) (InstallmentStatus) | no |  | status (read-only) | Status |
 | paid_at | timestamptz | yes |  | paid_at (read-only) | Date fully paid |
@@ -4747,9 +4863,9 @@ API: /v1/allocation-rules · Requirements: LND-04
 | product_id | uuid | yes | ref → product | product_id | Product (empty = tenant default) |
 | name | varchar(120) | no |  | name | Rule name |
 | applies_to_status | varchar(40) (LoanStatus) | yes |  | applies_to_status | Loan status the rule applies to (empty = any) |
-| order_of_components | jsonb | no |  | order_of_components | Ordered list of AllocationComponent values |
-| allocate_oldest_first | boolean | no |  | allocate_oldest_first | Oldest instalment first vs component-first across instalments |
-| excess_handling | varchar(32) | no |  | excess_handling | REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND |
+| order_of_components | jsonb | no |  | order_of_components | Components in allocation order |
+| allocate_oldest_first | boolean | no |  | allocate_oldest_first | Oldest instalment first (all components) vs component-first across instalments |
+| excess_handling | varchar(40) (ExcessHandling) | no |  | excess_handling | What happens to money left after all due amounts |
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Effective to |
 | is_active | boolean | no |  | is_active | Active |
@@ -4771,7 +4887,8 @@ API: /v1/loan-repayments · Requirements: LND-04, COL-02
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| loan_id | uuid | no | FK → loan | loan_id | Loan |
+| loan_id | uuid | yes | FK → loan | loan_id | Loan (empty for credit-line payments) |
+| credit_line_id | uuid | yes | FK → credit_line | credit_line_id | Credit line paid (revolving facilities) |
 | amount | numeric(28,8) | no |  | amount | Amount received |
 | currency | char(3) | no |  | currency | Currency |
 | source | varchar(40) (RepaymentSource) | no |  | source | Source of funds |
@@ -4786,8 +4903,11 @@ API: /v1/loan-repayments · Requirements: LND-04, COL-02
 | allocation_rule_id | uuid | yes | FK → allocation_rule | allocation_rule_id | Waterfall used |
 | status | varchar(40) (RepaymentStatus) | no |  | status | Posted or reversed (reversal is a new row) |
 | reversal_of_id | uuid | yes | FK → loan_repayment | reversal_of_id | Repayment this row reverses |
+| reason | varchar(255) | yes |  | reason | Reversal reason |
 | payment_id | uuid | yes | ref → payment | payment_id | Underlying payment |
+| source_account_id | uuid | yes | ref → deposit_account | source_account_id | Deposit account debited |
 | promise_to_pay_id | uuid | yes |  | promise_to_pay_id | Promise this repayment fulfils |
+| prepayment_quote_id | uuid | yes |  | prepayment_quote_id | Prepayment quote this repayment settled |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
 | external_reference | varchar(128) | yes |  | external_reference | Payer reference |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
@@ -4845,12 +4965,13 @@ API: /v1/loan-fee-charges · Requirements: PRC-02, LND-05
 | fee_type | varchar(40) (LoanFeeType) | no |  | fee_type | Fee type |
 | amount | numeric(28,8) | no |  | amount | Fee amount |
 | tax_amount | numeric(28,8) | no |  | tax_amount | Tax on the fee |
+| paid_amount | numeric(28,8) | no |  | paid_amount (read-only) | Paid so far |
 | currency | char(3) | no |  | currency | Currency |
 | charge_date | date | no |  | charge_date | Charge date |
 | schedule_installment_id | uuid | yes | FK → schedule_installment | schedule_installment_id | Instalment the fee is due with |
-| status | varchar(40) (LoanFeeStatus) | no |  | status | Status |
+| status | varchar(40) (LoanFeeStatus) | no |  | status (read-only) | Status |
 | waived_by | varchar(64) | yes |  | waived_by (read-only) | Who waived it |
-| waiver_reason | varchar(255) | yes |  | waiver_reason | Waiver reason |
+| waiver_reason | varchar(255) | yes |  | waiver_reason (read-only) | Waiver reason |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -4902,14 +5023,18 @@ API: /v1/loan-restructures · Requirements: LND-05, LIM-02
 | restructure_type | varchar(40) (RestructureType) | no |  | restructure_type | Type |
 | status | varchar(40) (RestructureStatus) | no |  | status (read-only) | Status |
 | reason | varchar(500) | no |  | reason | Reason, e.g. hardship |
-| new_term_months | integer | yes |  | new_term_months | New term |
+| new_term_months | integer | yes |  | new_term_months | New remaining term in months |
 | new_interest_rate | numeric(18,10) | yes |  | new_interest_rate | New rate |
 | holiday_months | integer | yes |  | holiday_months | Payment holiday length |
 | capitalise_arrears | boolean | no |  | capitalise_arrears | Capitalise overdue amounts |
 | settlement_amount | numeric(28,8) | yes |  | settlement_amount | Agreed settlement amount |
 | proposed_schedule | jsonb | yes |  | proposed_schedule (read-only) | Proposed schedule preview |
 | new_schedule_id | uuid | yes | FK → repayment_schedule | new_schedule_id (read-only) | Schedule applied |
+| capitalised_amount | numeric(28,8) | yes |  | capitalised_amount (read-only) | Arrears and interest capitalised on application |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why it was rejected |
 | effective_date | date | yes |  | effective_date | Effective date |
 | applied_at | timestamptz | yes |  | applied_at (read-only) | Application time |
 | is_forborne | boolean | no |  | is_forborne | Flag for regulatory forbearance reporting |
@@ -4921,7 +5046,7 @@ API: /v1/loan-restructures · Requirements: LND-05, LIM-02
 
 #### `loan_prepayment_quote`
 
-A pay-off / partial prepayment quote valid until a date
+A pay-off / partial prepayment quote valid until a time
 
 API: /v1/loan-prepayment-quotes · Requirements: LND-02
 
@@ -4935,16 +5060,19 @@ API: /v1/loan-prepayment-quotes · Requirements: LND-02
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | loan_id | uuid | no | FK → loan | loan_id | Loan |
-| quote_type | varchar(16) | no |  | quote_type | FULL or PARTIAL |
+| quote_type | varchar(40) (PrepaymentQuoteType) | no |  | quote_type | FULL or PARTIAL |
+| partial_option | varchar(40) (PartialPrepaymentOption) | yes |  | partial_option | PARTIAL: reduce the term or the instalment |
 | requested_amount | numeric(28,8) | yes |  | requested_amount | Requested partial amount |
+| quote_date | date | no |  | quote_date (read-only) | Date the quote was calculated for |
 | principal | numeric(28,8) | no |  | principal (read-only) | Principal component |
 | interest | numeric(28,8) | no |  | interest (read-only) | Interest to the quote date |
-| fees | numeric(28,8) | no |  | fees (read-only) | Fees outstanding |
+| fees | numeric(28,8) | no |  | fees (read-only) | Fees and penalties outstanding |
 | prepayment_penalty | numeric(28,8) | no |  | prepayment_penalty (read-only) | Early repayment charge |
 | total_amount | numeric(28,8) | no |  | total_amount (read-only) | Amount to pay |
-| currency | char(3) | no |  | currency | Currency |
-| valid_until | date | no |  | valid_until (read-only) | Quote validity |
+| currency | char(3) | no |  | currency (read-only) | Currency |
+| valid_until | timestamptz | no |  | valid_until (read-only) | Quote validity (database clock) |
 | status | varchar(40) (PrepaymentQuoteStatus) | no |  | status (read-only) | Status |
+| loan_repayment_id | uuid | yes |  | loan_repayment_id (read-only) | Repayment that used the quote |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4972,10 +5100,13 @@ API: /v1/loan-write-offs · Requirements: LND-05, GL-04
 | interest_amount | numeric(28,8) | no |  | interest_amount | Interest written off |
 | fees_amount | numeric(28,8) | no |  | fees_amount | Fees and penalties written off |
 | total_amount | numeric(28,8) | no |  | total_amount | Total |
+| recovered_amount | numeric(28,8) | no |  | recovered_amount (read-only) | Recovered after write-off |
 | currency | char(3) | no |  | currency | Currency |
 | reason | varchar(500) | no |  | reason | Reason |
 | status | varchar(40) (WriteOffStatus) | no |  | status (read-only) | Status |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why it was rejected |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | posted_at | timestamptz | yes |  | posted_at (read-only) | Posting time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -5003,7 +5134,8 @@ API: /v1/loan-recoveries · Requirements: LND-05
 | source | varchar(40) | no |  | source | CUSTOMER, AGENCY, COLLATERAL_SALE, INSURANCE, DEBT_SALE, LEGAL |
 | agency_commission | numeric(28,8) | no |  | agency_commission | Commission paid to a collection agency |
 | received_at | timestamptz | no |  | received_at | Receipt time |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
+| external_reference | varchar(128) | yes |  | external_reference | Payer or sale reference |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5025,7 +5157,7 @@ API: /v1/credit-lines · Requirements: LND-03, LND-06, CRD-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| credit_line_number | varchar(32) | no | UQ | credit_line_number (read-only) | Facility number |
+| credit_line_number | varchar(32) | no | UQ | credit_line_number (read-only) | Facility number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Borrower |
 | loan_application_id | uuid | yes | ref → loan_application | loan_application_id | Originating application |
 | product_id | uuid | no | ref → product | product_id | Product |
@@ -5033,18 +5165,19 @@ API: /v1/credit-lines · Requirements: LND-03, LND-06, CRD-01
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Lending legal entity |
 | line_type | varchar(40) (CreditLineType) | no |  | line_type | Facility type |
 | currency | char(3) | no |  | currency | Currency |
-| credit_limit | numeric(28,8) | no |  | credit_limit | Approved limit |
-| temporary_limit | numeric(28,8) | yes |  | temporary_limit | Temporary limit increase |
-| temporary_limit_expires_at | timestamptz | yes |  | temporary_limit_expires_at | Temporary limit expiry |
-| utilised_amount | numeric(28,8) | no |  | utilised_amount (read-only) | Drawn principal |
-| available_amount | numeric(28,8) | no |  | available_amount (read-only) | Limit minus utilisation and holds |
+| credit_limit | numeric(28,8) | no |  | credit_limit | Approved limit (change via /change-limit) |
+| temporary_limit | numeric(28,8) | yes |  | temporary_limit (read-only) | Temporary limit |
+| temporary_limit_expires_at | timestamptz | yes |  | temporary_limit_expires_at (read-only) | Temporary limit expiry |
+| utilised_amount | numeric(28,8) | no |  | utilised_amount (read-only) | Drawn principal (revolving balance) |
+| instalment_balance | numeric(28,8) | no |  | instalment_balance (read-only) | Balance converted to instalment loans still counted against the limit |
+| available_amount | numeric(28,8) | no |  | available_amount (read-only) | Limit minus utilisation, unpaid interest and fees |
 | outstanding_interest | numeric(28,8) | no |  | outstanding_interest (read-only) | Unpaid interest |
 | outstanding_fees | numeric(28,8) | no |  | outstanding_fees (read-only) | Unpaid fees |
 | purchase_rate | numeric(18,10) | no |  | purchase_rate | Annual rate on purchases / draws |
 | cash_advance_rate | numeric(18,10) | yes |  | cash_advance_rate | Annual rate on cash advances |
 | penalty_rate | numeric(18,10) | yes |  | penalty_rate | Penalty rate |
 | day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day-count convention |
-| statement_day | integer | no |  | statement_day | Day of month the statement cycle closes |
+| statement_day | integer | no |  | statement_day | Day of month the statement cycle closes (1-28) |
 | payment_due_days | integer | no |  | payment_due_days | Days from statement to due date |
 | minimum_payment_pct | numeric(18,10) | no |  | minimum_payment_pct | Minimum payment percentage of balance |
 | minimum_payment_floor | numeric(28,8) | no |  | minimum_payment_floor | Minimum payment floor amount |
@@ -5052,11 +5185,13 @@ API: /v1/credit-lines · Requirements: LND-03, LND-06, CRD-01
 | card_id | uuid | yes | ref → card | card_id | Linked card for credit card accounts |
 | repayment_account_id | uuid | yes | ref → deposit_account | repayment_account_id | Auto-pay source |
 | autopay_mode | varchar(16) | yes |  | autopay_mode | NONE, MINIMUM, STATEMENT, FULL |
-| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Receivable account in the ledger |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id (read-only) | Receivable account in the ledger |
 | status | varchar(40) (CreditLineStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last freeze, unfreeze or close |
 | days_past_due | integer | no |  | days_past_due (read-only) | Days past due |
 | delinquency_bucket | varchar(40) (DelinquencyBucket) | no |  | delinquency_bucket (read-only) | DPD bucket |
 | ecl_stage | varchar(40) (EclStage) | no |  | ecl_stage (read-only) | IFRS 9 stage |
+| last_statement_date | date | yes |  | last_statement_date (read-only) | Last statement cycle end |
 | review_date | date | yes |  | review_date | Next limit review date |
 | opened_at | timestamptz | yes |  | opened_at (read-only) | Activation time |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closing time |
@@ -5083,6 +5218,7 @@ API: internal only · Requirements: LND-03, LIM-02
 | old_limit | numeric(28,8) | no |  | old_limit | Previous limit |
 | new_limit | numeric(28,8) | no |  | new_limit | New limit |
 | is_temporary | boolean | no |  | is_temporary | Temporary change |
+| expires_at | timestamptz | yes |  | expires_at | Expiry of a temporary change |
 | reason | varchar(255) | no |  | reason | CUSTOMER_REQUEST, PROACTIVE_INCREASE, RISK_DECREASE, REVIEW |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -5107,15 +5243,18 @@ API: /v1/credit-line-drawdowns · Requirements: LND-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | credit_line_id | uuid | no | FK → credit_line | credit_line_id | Credit line |
-| draw_type | varchar(32) | no |  | draw_type | PURCHASE, CASH_ADVANCE, BALANCE_TRANSFER, TRANSFER_TO_ACCOUNT, FEE, INSTALMENT_CONVERSION |
+| draw_type | varchar(40) (DrawType) | no |  | draw_type | Draw type |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
 | rate | numeric(18,10) | no |  | rate | Rate applicable to this draw |
 | destination_account_id | uuid | yes | ref → deposit_account | destination_account_id | Destination for transfers |
 | card_authorization_id | uuid | yes |  | card_authorization_id | Card authorisation for purchases |
 | status | varchar(40) (DrawdownStatus) | no |  | status (read-only) | Status |
+| decline_reason | varchar(255) | yes |  | decline_reason (read-only) | Why the draw was declined |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | posted_at | timestamptz | yes |  | posted_at (read-only) | Posting time |
+| reversal_reason | varchar(255) | yes |  | reversal_reason (read-only) | Reversal reason |
+| reversed_at | timestamptz | yes |  | reversed_at (read-only) | Reversal time |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5175,18 +5314,54 @@ API: /v1/bnpl-plans · Requirements: LND-06
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| loan_id | uuid | no | FK → loan | loan_id | Underlying loan |
+| loan_id | uuid | yes | FK → loan | loan_id (read-only) | Underlying loan (booked on create) |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| product_id | uuid | no | ref → product | product_id | BNPL product |
+| product_version_id | uuid | no | ref → product_version | product_version_id | Product version |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Lending legal entity |
 | merchant_order_ref | varchar(128) | no |  | merchant_order_ref | Merchant order reference |
 | purchase_amount | numeric(28,8) | no |  | purchase_amount | Purchase amount |
 | down_payment | numeric(28,8) | no |  | down_payment | Down payment at checkout |
 | installment_count | integer | no |  | installment_count | Number of instalments |
+| frequency | varchar(40) (RepaymentFrequency) | no |  | frequency | Instalment frequency |
+| interest_rate | numeric(18,10) | no |  | interest_rate | Customer rate (0 for pay-in-N) |
 | merchant_discount_rate | numeric(18,10) | no |  | merchant_discount_rate | Merchant discount fee rate |
-| merchant_settlement_amount | numeric(28,8) | no |  | merchant_settlement_amount | Amount settled to merchant |
+| merchant_settlement_amount | numeric(28,8) | no |  | merchant_settlement_amount (read-only) | Amount settled to merchant |
+| merchant_settlement_account_id | uuid | no | ref → deposit_account | merchant_settlement_account_id | Merchant settlement account |
+| repayment_account_id | uuid | yes | ref → deposit_account | repayment_account_id | Customer account auto-debited |
 | currency | char(3) | no |  | currency | Currency |
 | status | varchar(40) (BnplPlanStatus) | no |  | status (read-only) | Status |
 | refunded_amount | numeric(28,8) | no |  | refunded_amount (read-only) | Refunded to date |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Cancellation or refund reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `loan_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/loan-eod-runs · Requirements: LND-05, PRC-01, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (LendingEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (LendingEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5213,23 +5388,29 @@ API: /v1/collaterals · Requirements: LND-06
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| collateral_number | varchar(32) | no | UQ | collateral_number (read-only) | Registry number |
+| collateral_number | varchar(32) | no | UQ | collateral_number (read-only) | Registry number (server-generated) |
 | owner_customer_id | uuid | no | ref → customer | owner_customer_id | Owner / guarantor |
 | collateral_type | varchar(40) (CollateralType) | no |  | collateral_type | Type |
 | description | varchar(500) | no |  | description | Description of the asset |
 | currency | char(3) | no |  | currency | Valuation currency |
-| market_value | numeric(28,8) | no |  | market_value | Latest market value |
+| market_value | numeric(28,8) | no |  | market_value | Latest market value (changed by valuations) |
 | forced_sale_value | numeric(28,8) | yes |  | forced_sale_value | Latest forced-sale value |
-| haircut_pct | numeric(18,10) | no |  | haircut_pct | Haircut applied for lending value |
+| haircut_pct | numeric(18,10) | yes |  | haircut_pct | Haircut applied for lending value (empty = type default) |
 | lending_value | numeric(28,8) | no |  | lending_value (read-only) | Value after haircut |
-| registration_reference | varchar(128) | yes |  | registration_reference | Land registry / vehicle registration / lien reference |
+| allocated_value | numeric(28,8) | no |  | allocated_value (read-only) | Lending value allocated to active links |
+| registration_reference | varchar(128) | yes |  | registration_reference (read-only) | Land registry / vehicle registration / lien reference (set by /pledge) |
 | registration_authority | varchar(120) | yes |  | registration_authority | Registry authority |
-| lien_registered_at | date | yes |  | lien_registered_at | Lien registration date |
+| lien_registered_at | date | yes |  | lien_registered_at (read-only) | Lien registration date |
 | location | jsonb | yes |  | location | Address or geo-location for property and field visits |
 | deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Pledged deposit (cash-collateral) |
-| asset_details | jsonb | yes |  | asset_details | Type-specific attributes (VIN, title number, carat weight, ...) |
-| status | varchar(40) (CollateralStatus) | no |  | status | Status |
+| asset_details | jsonb | yes |  | asset_details | Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams; SECURITIES isin, quantity; GUARANTEE guarantor_name) |
+| status | varchar(40) (CollateralStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last rejection, release or liquidation |
 | next_valuation_date | date | yes |  | next_valuation_date | Next revaluation due |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Verifier |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
+| liquidation_proceeds | numeric(28,8) | yes |  | liquidation_proceeds (read-only) | Net proceeds of the liquidation |
+| liquidated_at | timestamptz | yes |  | liquidated_at (read-only) | Liquidation time |
 | released_at | timestamptz | yes |  | released_at (read-only) | Release time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5253,6 +5434,8 @@ API: /v1/collaterals/{collateral_id}/valuations · Requirements: LND-06
 | valuation_date | date | no |  | valuation_date | Valuation date |
 | market_value | numeric(28,8) | no |  | market_value | Market value |
 | forced_sale_value | numeric(28,8) | yes |  | forced_sale_value | Forced-sale value |
+| haircut_pct | numeric(18,10) | yes |  | haircut_pct (read-only) | Haircut applied at this valuation |
+| lending_value | numeric(28,8) | yes |  | lending_value (read-only) | Lending value after haircut |
 | currency | char(3) | no |  | currency | Currency |
 | valuer | varchar(160) | yes |  | valuer | Valuer name / firm |
 | method | varchar(40) | no |  | method | FULL_SURVEY, DESKTOP, INDEX, AUTOMATED_AVM, MARKET_PRICE |
@@ -5283,8 +5466,13 @@ API: /v1/collateral-links · Requirements: LND-06
 | exposure_id | uuid | no |  | exposure_id | Loan or credit line id |
 | allocated_value | numeric(28,8) | no |  | allocated_value | Lending value allocated to this exposure |
 | charge_rank | integer | no |  | charge_rank | First, second charge |
-| ltv | numeric(18,10) | yes |  | ltv (read-only) | Loan-to-value at last calculation |
-| is_active | boolean | no |  | is_active | Active link |
+| max_ltv | numeric(18,10) | yes |  | max_ltv | LTV limit; above it the link is in BREACH (warning at 90% of the limit) |
+| exposure_amount | numeric(28,8) | yes |  | exposure_amount (read-only) | Exposure outstanding at the last calculation |
+| ltv | numeric(18,10) | yes |  | ltv (read-only) | Loan-to-value at last calculation (exposure / lending value allocated to it) |
+| ltv_status | varchar(40) (LtvStatus) | yes |  | ltv_status (read-only) | OK, WARNING or BREACH |
+| ltv_calculated_at | timestamptz | yes |  | ltv_calculated_at (read-only) | Last LTV calculation |
+| is_active | boolean | no |  | is_active (read-only) | Active link |
+| release_reason | varchar(255) | yes |  | release_reason (read-only) | Why the link was released |
 | released_at | timestamptz | yes |  | released_at (read-only) | Release time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5317,6 +5505,35 @@ API: /v1/collateral-insurances · Requirements: LND-06
 | end_date | date | no |  | end_date | Expiry |
 | lender_noted | boolean | no |  | lender_noted | Lender noted as loss payee |
 | document_id | uuid | yes | ref → document | document_id | Policy document |
+| expiry_notified_at | timestamptz | yes |  | expiry_notified_at (read-only) | When the expiry warning was raised |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `collateral_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/collateral-eod-runs · Requirements: LND-06, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (LendingEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (LendingEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5346,12 +5563,12 @@ API: /v1/collections/strategies · Requirements: COL-01
 | code | varchar(40) | no | UQ | code | Strategy code |
 | name | varchar(120) | no |  | name | Name |
 | exposure_type | varchar(40) (CollectionExposureType) | yes |  | exposure_type | Exposure type (empty = any) |
-| segment_rules | jsonb | no |  | segment_rules | Segment criteria (product, risk grade, balance, customer type) |
+| segment_rules | jsonb | no |  | segment_rules | Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable} |
 | min_dpd | integer | no |  | min_dpd | Lower DPD bound |
 | max_dpd | integer | yes |  | max_dpd | Upper DPD bound |
 | priority | integer | no |  | priority | Lower wins when several match |
 | max_contacts_per_week | integer | no |  | max_contacts_per_week | Contact-frequency cap (conduct rules) |
-| quiet_hours | jsonb | yes |  | quiet_hours | Hours when no contact is allowed |
+| quiet_hours | jsonb | yes |  | quiet_hours | Hours when no contact is allowed: {start: '21:00', end: '08:00'} |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5380,7 +5597,7 @@ API: /v1/collections/strategies/{collection_strategy_id}/steps · Requirements: 
 | action_type | varchar(40) (CollectionActionType) | no |  | action_type | Action |
 | template_code | varchar(64) | yes |  | template_code | Notification / letter template |
 | queue_id | uuid | yes |  | queue_id | Queue for manual actions |
-| condition | jsonb | yes |  | condition | Extra condition, e.g. no active promise |
+| condition | jsonb | yes |  | condition | Extra condition: {no_active_promise: true, min_overdue: '100.00'} |
 | fee_code | varchar(40) | yes |  | fee_code | Fee to charge, if any |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5406,8 +5623,9 @@ API: /v1/collections/queues · Requirements: COL-02
 | code | varchar(40) | no | UQ | code | Queue code |
 | name | varchar(120) | no |  | name | Name |
 | team | varchar(64) | yes |  | team | Team |
-| assignment_mode | varchar(16) | no |  | assignment_mode | ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY |
+| assignment_mode | varchar(40) (CollectionAssignmentMode) | no |  | assignment_mode | How cases are distributed |
 | agent_user_ids | jsonb | yes |  | agent_user_ids | Collectors assigned (app_user ids) |
+| max_cases_per_agent | integer | yes |  | max_cases_per_agent | Capacity per collector (empty = unlimited) |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5430,28 +5648,35 @@ API: /v1/collections/cases · Requirements: COL-01, COL-02, LND-05
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| case_number | varchar(32) | no | UQ | case_number (read-only) | Case number |
+| case_number | varchar(32) | no | UQ | case_number (read-only) | Case number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | exposure_type | varchar(40) (CollectionExposureType) | no |  | exposure_type | Exposure type |
 | exposure_id | uuid | no |  | exposure_id | Loan, credit line, card account or overdraft id |
-| collection_strategy_id | uuid | yes | FK → collection_strategy | collection_strategy_id | Strategy in force |
-| collection_queue_id | uuid | yes | FK → collection_queue | collection_queue_id | Queue |
-| assigned_to | varchar(64) | yes |  | assigned_to | Collector |
-| status | varchar(40) (CollectionCaseStatus) | no |  | status | Status |
+| product_id | uuid | yes | ref → product | product_id | Product of the exposure |
+| risk_grade | varchar(8) | yes |  | risk_grade | Risk grade of the exposure |
+| collection_strategy_id | uuid | yes | FK → collection_strategy | collection_strategy_id (read-only) | Strategy in force |
+| collection_queue_id | uuid | yes | FK → collection_queue | collection_queue_id (read-only) | Queue (set by /assign or the strategy) |
+| assigned_to | varchar(64) | yes |  | assigned_to (read-only) | Collector (set by /assign or queue distribution) |
+| status | varchar(40) (CollectionCaseStatus) | no |  | status (read-only) | Status |
 | days_past_due | integer | no |  | days_past_due (read-only) | Current DPD |
 | delinquency_bucket | varchar(40) (DelinquencyBucket) | no |  | delinquency_bucket (read-only) | Bucket |
+| max_days_past_due | integer | no |  | max_days_past_due (read-only) | Highest DPD reached |
 | overdue_amount | numeric(28,8) | no |  | overdue_amount (read-only) | Overdue amount |
 | total_outstanding | numeric(28,8) | no |  | total_outstanding (read-only) | Total outstanding |
 | currency | char(3) | no |  | currency | Currency |
-| priority_score | integer | yes |  | priority_score (read-only) | AI / rules priority for working the queue |
+| priority_score | integer | yes |  | priority_score (read-only) | Rules priority for working the queue (0-1000) |
+| last_step_no | integer | no |  | last_step_no (read-only) | Last strategy step executed |
+| broken_promises | integer | no |  | broken_promises (read-only) | Promises broken on this case |
 | last_contact_at | timestamptz | yes |  | last_contact_at (read-only) | Last contact attempt |
+| last_payment_at | timestamptz | yes |  | last_payment_at (read-only) | Last payment seen |
 | next_action_at | timestamptz | yes |  | next_action_at | Next scheduled action |
-| is_disputed | boolean | no |  | is_disputed | Customer disputes the debt |
+| is_disputed | boolean | no |  | is_disputed (read-only) | Customer disputes the debt (set by /mark-dispute; automated contact suppressed) |
 | is_vulnerable | boolean | no |  | is_vulnerable | Vulnerable-customer flag (adjusted treatment) |
-| agency_name | varchar(120) | yes |  | agency_name | External agency if outsourced |
+| agency_name | varchar(120) | yes |  | agency_name (read-only) | External agency if outsourced |
+| agency_assigned_at | timestamptz | yes |  | agency_assigned_at (read-only) | When the case was sent to the agency |
 | opened_at | timestamptz | no |  | opened_at (read-only) | Opening time |
 | resolved_at | timestamptz | yes |  | resolved_at (read-only) | Resolution time |
-| resolution | varchar(40) | yes |  | resolution (read-only) | CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD |
+| resolution | varchar(40) (CollectionCaseResolution) | yes |  | resolution (read-only) | How the case ended |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5479,6 +5704,7 @@ API: /v1/collections/actions · Requirements: COL-01, COL-02
 | notes | text | yes |  | notes | Notes |
 | recording_document_id | uuid | yes | ref → document | recording_document_id | Call recording / letter copy |
 | notification_id | uuid | yes |  | notification_id | Notification sent |
+| business_date | date | yes |  | business_date | Business date of an automated action |
 | performed_at | timestamptz | no |  | performed_at | Time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5508,7 +5734,9 @@ API: /v1/collections/promises · Requirements: COL-02
 | paid_amount | numeric(28,8) | no |  | paid_amount (read-only) | Paid against the promise |
 | status | varchar(40) (PromiseToPayStatus) | no |  | status (read-only) | Status |
 | channel | varchar(32) | yes |  | channel | How the promise was made |
-| taken_by | varchar(64) | yes |  | taken_by | Collector |
+| taken_by | varchar(64) | yes |  | taken_by (read-only) | Collector |
+| resolved_at | timestamptz | yes |  | resolved_at (read-only) | When it was kept, broken or cancelled |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5536,11 +5764,15 @@ API: /v1/collections/payment-plans · Requirements: COL-02, LND-05
 | installment_count | integer | no |  | installment_count | Number of instalments |
 | frequency | varchar(40) (RepaymentFrequency) | no |  | frequency | Frequency |
 | start_date | date | no |  | start_date | First instalment |
-| installments | jsonb | no |  | installments | Planned instalments (date, amount, paid) |
+| installments | jsonb | no |  | installments (read-only) | Planned instalments ({no, due_date, amount, paid}) |
 | paid_amount | numeric(28,8) | no |  | paid_amount (read-only) | Paid to date |
 | status | varchar(40) (PaymentPlanStatus) | no |  | status (read-only) | Status |
 | interest_frozen | boolean | no |  | interest_frozen | Interest frozen during the plan |
+| requires_approval | boolean | no |  | requires_approval (read-only) | Outside policy: activation needs a second user |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval if outside policy |
+| activated_by | varchar(64) | yes |  | activated_by (read-only) | Who activated it |
+| activated_at | timestamptz | yes |  | activated_at (read-only) | Activation time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
 | broken_at | timestamptz | yes |  | broken_at (read-only) | When the plan broke |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5550,7 +5782,7 @@ API: /v1/collections/payment-plans · Requirements: COL-02, LND-05
 
 #### `next_best_action`
 
-AI-suggested next action for a case (channel, time, offer) with explanation
+Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason codes
 
 API: /v1/collections/next-best-actions · Requirements: COL-03, AI-01
 
@@ -5568,10 +5800,13 @@ API: /v1/collections/next-best-actions · Requirements: COL-03, AI-01
 | suggested_at_time | timestamptz | yes |  | suggested_at_time | Best time to contact |
 | suggested_offer | jsonb | yes |  | suggested_offer | Offer, e.g. settlement discount or plan terms |
 | propensity_to_pay | numeric(18,10) | yes |  | propensity_to_pay | Model propensity to pay |
+| reason_codes | jsonb | yes |  | reason_codes | Reason codes with their contribution |
+| alternatives | jsonb | yes |  | alternatives | Other actions with their scores |
 | explanation | text | yes |  | explanation | Why the model suggests this |
 | model_version | varchar(32) | no |  | model_version | Model version |
-| status | varchar(40) (NbaStatus) | no |  | status | Status |
-| decided_by | varchar(64) | yes |  | decided_by | Collector who accepted or rejected |
+| status | varchar(40) (NbaStatus) | no |  | status (read-only) | Status |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Collector who accepted or rejected |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Why it was rejected |
 | expires_at | timestamptz | yes |  | expires_at | Suggestion expiry |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -5601,12 +5836,42 @@ API: /v1/collections/legal-proceedings · Requirements: COL-01, LND-05
 | claim_amount | numeric(28,8) | no |  | claim_amount | Amount claimed |
 | legal_costs | numeric(28,8) | no |  | legal_costs | Costs incurred |
 | currency | char(3) | no |  | currency | Currency |
-| status | varchar(40) (LegalProceedingStatus) | no |  | status | Status |
+| status | varchar(40) (LegalProceedingStatus) | no |  | status (read-only) | Status (changed by /approve, /reject, /advance) |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Who asked to litigate |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Who approved (must differ from the requester) |
 | filed_at | date | yes |  | filed_at | Filing date |
 | next_hearing_date | date | yes |  | next_hearing_date | Next hearing |
 | judgement_amount | numeric(28,8) | yes |  | judgement_amount | Judgement amount |
 | notes | text | yes |  | notes | Notes |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval to litigate |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `collections_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/collections/eod-runs · Requirements: COL-01, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (LendingEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (LendingEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

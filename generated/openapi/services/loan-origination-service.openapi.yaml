@@ -30,13 +30,18 @@ tags:
 - name: Scorecards
   description: A credit scorecard / model family (application, behavioural, collections, wallet)
 - name: Scorecard Versions
-  description: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+  description: 'A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered
+    bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
+
+    '
 - name: Credit Scores
   description: A score produced for an application with explainable reason codes. Append-only.
 - name: Affordability Assessments
   description: Affordability calculation (income, commitments, stressed instalment). Append-only.
 - name: Credit Decisions
   description: The credit decision for an application. Append-only; a new decision supersedes the last.
+- name: Credit Decision Requests
+  description: A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)
 - name: Loan Offers
   description: A priced offer made to the applicant
 - name: E Signature Requests
@@ -82,6 +87,7 @@ paths:
           - DECLINED
           - OFFER_ACCEPTED
           - SIGNED
+          - BOOKED
           - DISBURSED
           - WITHDRAWN
           - EXPIRED
@@ -299,7 +305,7 @@ paths:
   /v1/loan-applications/{id}/submit:
     post:
       operationId: loanApplicationsSubmit
-      summary: Submit the application for decisioning
+      summary: Submit the application for decisioning (applicant, consent and amount checks)
       tags:
       - Loan Applications
       security:
@@ -389,7 +395,7 @@ paths:
   /v1/loan-applications/{id}/assign:
     post:
       operationId: loanApplicationsAssign
-      summary: Assign to an underwriter
+      summary: Assign to an underwriter for manual review
       tags:
       - Loan Applications
       security:
@@ -437,7 +443,7 @@ paths:
   /v1/loan-applications/{id}/bureau-pull:
     post:
       operationId: loanApplicationsBureauPull
-      summary: Pull a credit bureau report
+      summary: Pull a credit bureau report through the provider adapter (reuses a valid report unless force)
       tags:
       - Loan Applications
       security:
@@ -485,7 +491,7 @@ paths:
   /v1/loan-applications/{id}/score:
     post:
       operationId: loanApplicationsScore
-      summary: Run the scorecard
+      summary: Run the champion (or routed challenger) scorecard with explainable reason codes
       tags:
       - Loan Applications
       security:
@@ -527,7 +533,7 @@ paths:
   /v1/loan-applications/{id}/affordability:
     post:
       operationId: loanApplicationsAffordability
-      summary: Run the affordability assessment
+      summary: Run the affordability assessment (DTI, DSR, residual income, stressed instalment)
       tags:
       - Loan Applications
       security:
@@ -569,7 +575,55 @@ paths:
   /v1/loan-applications/{id}/decide:
     post:
       operationId: loanApplicationsDecide
-      summary: Record a manual decision (maker)
+      summary: Propose a manual decision or override (maker); a different user approves it
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsDecideRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan_application
+  /v1/loan-applications/{id}/auto-decide:
+    post:
+      operationId: loanApplicationsAutoDecide
+      summary: Run automatic decisioning end to end (bureau, score, affordability, policy rules, offer)
       tags:
       - Loan Applications
       security:
@@ -600,12 +654,6 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoanApplicationsDecideRequest'
       x-requirements:
       - LND-01
       - LND-06
@@ -614,10 +662,10 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
       x-table: loan_application
-  /v1/loan-applications/{id}/auto-decide:
+  /v1/loan-applications/{id}/book:
     post:
-      operationId: loanApplicationsAutoDecide
-      summary: Run automatic decisioning end to end
+      operationId: loanApplicationsBook
+      summary: Book the loan in loan-service for a signed application (retry after a booking failure)
       tags:
       - Loan Applications
       security:
@@ -637,7 +685,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditDecision'
+                $ref: '#/components/schemas/LoanApplication'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -773,10 +821,49 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
       x-required-scope: lending:read
       x-table: loan_application
+  /v1/loan-applications/{id}/decision-requests:
+    get:
+      operationId: loanApplicationsDecisionRequests
+      summary: Manual decision requests
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: loan_application
   /v1/loan-applications/quick-quote:
     post:
       operationId: loanApplicationsQuickQuote
-      summary: Indicative price without a bureau hard pull
+      summary: Indicative price without a bureau hard pull (rate, APR, instalment, total cost)
       tags:
       - Loan Applications
       security:
@@ -785,8 +872,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -803,6 +896,50 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LoanApplicationsQuickQuoteRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan_application
+  /v1/loan-applications/eod/expire:
+    post:
+      operationId: loanApplicationsEodExpire
+      summary: End of day - expire lapsed offers, signature envelopes and stale applications (idempotent per business date)
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - LND-01
       - LND-06
@@ -1517,7 +1654,7 @@ paths:
   /v1/loan-applications/{loan_application_id}/documents/{id}/verify:
     post:
       operationId: loanApplicationDocumentsVerify
-      summary: Mark a document verified
+      summary: Mark an uploaded document verified (verifier must differ from the uploader)
       tags:
       - Loan Application Documents
       security:
@@ -1734,6 +1871,51 @@ paths:
       x-table: bureau_report
       x-crud: true
       x-crud-get: true
+  /v1/bureau-reports/callbacks/{provider}/events:
+    post:
+      operationId: bureauReportsCallbacksEvents
+      summary: Asynchronous bureau report delivery (HMAC-signed body; tenant resolved from the bureau reference)
+      tags:
+      - Bureau Reports
+      security: []
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BureauReportsCallbacksEventsRequest'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: bureau_report
   /v1/scorecards:
     get:
       operationId: scorecardsList
@@ -2144,7 +2326,7 @@ paths:
   /v1/scorecards/{scorecard_id}/versions/{id}/activate:
     post:
       operationId: scorecardVersionsActivate
-      summary: Activate as champion (requires model risk approval)
+      summary: Activate as champion (model risk approval by a user other than the author); the previous champion is retired
       tags:
       - Scorecard Versions
       security:
@@ -2287,6 +2469,61 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: scorecard_version
+  /v1/scorecards/{scorecard_id}/versions/{id}/test:
+    post:
+      operationId: scorecardVersionsTest
+      summary: Score sample inputs with this version without storing anything (explainable)
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardVersionsTestRequest'
       x-requirements:
       - AI-02
       - LND-01
@@ -2634,6 +2871,220 @@ paths:
       x-table: credit_decision
       x-crud: true
       x-crud-get: true
+  /v1/credit-decision-requests:
+    get:
+      operationId: creditDecisionRequestsList
+      summary: List credit decision requests
+      tags:
+      - Credit Decision Requests
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+      - name: outcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - DECLINED
+          - REFER
+          - COUNTER_OFFER
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: credit_decision_request
+      x-crud: true
+      x-crud-list: true
+  /v1/credit-decision-requests/{id}:
+    get:
+      operationId: creditDecisionRequestsGet
+      summary: Retrieve credit decision request
+      tags:
+      - Credit Decision Requests
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: credit_decision_request
+      x-crud: true
+      x-crud-get: true
+  /v1/credit-decision-requests/{id}/approve:
+    post:
+      operationId: creditDecisionRequestsApprove
+      summary: Approve a proposed manual decision (checker; must differ from the maker)
+      tags:
+      - Credit Decision Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecision'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditDecisionRequestsApproveRequest'
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: credit_decision_request
+  /v1/credit-decision-requests/{id}/reject:
+    post:
+      operationId: creditDecisionRequestsReject
+      summary: Reject a proposed manual decision (checker)
+      tags:
+      - Credit Decision Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditDecisionRequestsRejectRequest'
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: credit_decision_request
   /v1/loan-offers:
     get:
       operationId: loanOffersList
@@ -2789,7 +3240,7 @@ paths:
   /v1/loan-offers/{id}/accept:
     post:
       operationId: loanOffersAccept
-      summary: Accept the offer
+      summary: Accept the offer and create the e-signature envelope
       tags:
       - Loan Offers
       security:
@@ -2820,6 +3271,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanOffersAcceptRequest'
       x-requirements:
       - LND-01
       - LND-02
@@ -2920,6 +3377,44 @@ paths:
       x-service: loan-origination-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
+      x-table: loan_offer
+  /v1/loan-offers/{id}/schedule-preview:
+    get:
+      operationId: loanOffersSchedulePreview
+      summary: Indicative schedule with APR and totals
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
       x-table: loan_offer
   /v1/e-signature-requests:
     get:
@@ -3033,6 +3528,46 @@ paths:
       x-table: e_signature_request
       x-crud: true
       x-crud-get: true
+  /v1/e-signature-requests/{id}/send:
+    post:
+      operationId: eSignatureRequestsSend
+      summary: Send the envelope to the signers
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: e_signature_request
   /v1/e-signature-requests/{id}/resend:
     post:
       operationId: eSignatureRequestsResend
@@ -3119,26 +3654,28 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
       x-table: e_signature_request
-  /v1/e-signature-requests/{id}/callback:
+  /v1/e-signature-requests/callbacks/{provider}/events:
     post:
-      operationId: eSignatureRequestsCallback
-      summary: Provider status callback
+      operationId: eSignatureRequestsCallbacksEvents
+      summary: Provider status callback (HMAC-signed body; tenant resolved from the envelope id)
       tags:
       - E Signature Requests
-      security:
-      - oauth2:
-        - lending:write
+      security: []
       parameters:
-      - name: id
+      - name: provider
         in: path
         required: true
         schema:
           type: string
-          format: uuid
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3154,12 +3691,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ESignatureRequestsCallbackRequest'
+              $ref: '#/components/schemas/ESignatureRequestsCallbacksEventsRequest'
       x-requirements:
       - LND-01
       x-service: loan-origination-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
-      x-required-scope: lending:write
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: e_signature_request
 components:
   schemas:
@@ -3243,6 +3781,8 @@ components:
         pull_type:
           type: string
           maxLength: 16
+        force:
+          type: boolean
       required:
       - loan_applicant_id
     LoanApplicationsDecideRequest:
@@ -3269,8 +3809,11 @@ components:
           examples:
           - '125.50'
         conditions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
+        reason_codes:
+          type: array
+          items: {}
         notes:
           type: string
       required:
@@ -3329,10 +3872,31 @@ components:
       required:
       - data
       - has_more
+    CreditDecisionRequestPage:
+      type: object
+      description: One page of CreditDecisionRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditDecisionRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LoanApplicationsQuickQuoteRequest:
       type: object
       properties:
         product_id:
+          type: string
+          format: uuid
+        product_version_id:
           type: string
           format: uuid
         amount:
@@ -3347,6 +3911,29 @@ components:
         term_months:
           type: integer
           format: int32
+        repayment_frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+        schedule_type:
+          type: string
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+        risk_grade:
+          type: string
+          maxLength: 8
       required:
       - product_id
       - amount
@@ -3432,6 +4019,52 @@ components:
       required:
       - data
       - has_more
+    BureauReportsCallbacksEventsRequest:
+      type: object
+      properties:
+        bureau_reference:
+          type: string
+          maxLength: 128
+        status:
+          type: string
+          maxLength: 16
+        bureau_score:
+          type: integer
+          format: int32
+        score_band:
+          type: string
+          maxLength: 16
+        total_debt:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        monthly_debt_service:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        open_accounts:
+          type: integer
+          format: int32
+        delinquent_accounts:
+          type: integer
+          format: int32
+        worst_dpd_24m:
+          type: integer
+          format: int32
+        inquiries_6m:
+          type: integer
+          format: int32
+        tradelines:
+          type: array
+          items: {}
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - bureau_reference
+      - status
     ScorecardPage:
       type: object
       description: One page of Scorecard results (newest first)
@@ -3484,6 +4117,14 @@ components:
           - '125.50'
       required:
       - challenger_traffic_pct
+    ScorecardVersionsTestRequest:
+      type: object
+      properties:
+        inputs:
+          type: object
+          additionalProperties: true
+      required:
+      - inputs
     AffordabilityAssessmentPage:
       type: object
       description: One page of AffordabilityAssessment results (newest first)
@@ -3502,6 +4143,26 @@ components:
       required:
       - data
       - has_more
+    CreditDecisionRequestsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    CreditDecisionRequestsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    LoanOffersAcceptRequest:
+      type: object
+      properties:
+        provider:
+          type: string
+          maxLength: 40
     LoanOffersDeclineRequest:
       type: object
       properties:
@@ -3542,16 +4203,26 @@ components:
           maxLength: 255
       required:
       - reason
-    ESignatureRequestsCallbackRequest:
+    ESignatureRequestsCallbacksEventsRequest:
       type: object
       properties:
+        provider_envelope_id:
+          type: string
+          maxLength: 128
         provider_status:
           type: string
           maxLength: 40
+        signed_document_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
         payload:
           type: object
           additionalProperties: true
       required:
+      - provider_envelope_id
       - provider_status
     AffordabilityAssessment:
       type: object
@@ -3583,7 +4254,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Verified monthly income
+          description: Verified (or declared, haircut) monthly income
         monthly_commitments:
           type: string
           format: decimal
@@ -3610,18 +4281,32 @@ components:
           examples:
           - '125.50'
           description: Instalment at stressed rate
+        stress_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate used for the stressed instalment
         debt_to_income:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Debt-to-income ratio
+          description: Total debt / annual income (DTI)
+        debt_service_ratio:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly debt service incl. the stressed instalment / monthly income (DSR)
         disposable_income:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Disposable income after the new loan
+          description: Residual income after commitments, living costs and the stressed instalment
         max_affordable_amount:
           type:
           - string
@@ -3629,7 +4314,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Largest affordable amount
+          description: Largest affordable amount at the requested term
         result:
           type: string
           enum:
@@ -3637,6 +4322,12 @@ components:
           - FAIL
           - MARGINAL
           description: Outcome
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reasons for FAIL / MARGINAL
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -3684,6 +4375,7 @@ components:
       - living_costs
       - proposed_instalment
       - debt_to_income
+      - debt_service_ratio
       - disposable_income
       - result
       - currency
@@ -3732,6 +4424,12 @@ components:
           - 'null'
           format: uuid
           description: Application (empty for periodic reviews)
+        loan_applicant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Applicant the report is for
         customer_id:
           type: string
           format: uuid
@@ -3739,7 +4437,7 @@ components:
         provider:
           type: string
           maxLength: 40
-          description: Bureau provider, e.g. EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA
+          description: Bureau provider adapter, e.g. SANDBOX, SANDBOX_ASYNC, EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA
         pull_type:
           type: string
           maxLength: 16
@@ -3784,6 +4482,15 @@ components:
           - '125.50'
           description: Total outstanding debt reported
           readOnly: true
+        monthly_debt_service:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly instalments of reported credit
+          readOnly: true
         open_accounts:
           type:
           - integer
@@ -3812,6 +4519,13 @@ components:
           format: int32
           description: Inquiries in the last 6 months
           readOnly: true
+        tradelines:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Normalised tradelines (lender, type, balance, monthly payment, worst DPD)
+          readOnly: true
         summary:
           type:
           - object
@@ -3830,6 +4544,13 @@ components:
           type: string
           maxLength: 128
           description: Consent captured for this pull
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the pull failed
+          readOnly: true
         requested_at:
           type: string
           format: date-time
@@ -3934,7 +4655,13 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Underwriter for manual decisions
+          description: Underwriter (maker) for manual decisions
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved a manual decision
         approved_amount:
           type:
           - string
@@ -3963,24 +4690,48 @@ components:
           - 'null'
           maxLength: 8
           description: Risk grade at decision
+        credit_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Score the decision used
+        affordability_assessment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Affordability the decision used
         conditions:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Conditions precedent (documents, collateral, guarantor)
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes for the outcome (adverse action, referral or counter-offer)
         decline_reasons:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Adverse action reasons communicated to the applicant
         policy_rules_fired:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Policy rules evaluated and their results
+        decision_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker request of a manual decision
         approval_request_id:
           type:
           - string
@@ -4028,6 +4779,182 @@ components:
       - loan_application_id
       - outcome
       - method
+    CreditDecisionRequest:
+      type: object
+      description: A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        loan_application_id:
+          type: string
+          format: uuid
+          description: Application
+        outcome:
+          type: string
+          enum:
+          - APPROVED
+          - DECLINED
+          - REFER
+          - COUNTER_OFFER
+          description: Proposed decision
+        approved_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Proposed amount
+        approved_term_months:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Proposed term
+        approved_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Proposed rate
+        conditions:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Conditions precedent
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes for the outcome
+        is_override:
+          type: boolean
+          description: Overrides the latest automatic decision
+          readOnly: true
+        notes:
+          type:
+          - string
+          - 'null'
+          description: Underwriter notes
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Review time
+          readOnly: true
+        review_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment or rejection reason
+          readOnly: true
+        credit_decision_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Decision recorded on approval
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_application_id
+      - outcome
+      - is_override
+      - status
     CreditScore:
       type: object
       description: A score produced for an application with explainable reason codes. Append-only.
@@ -4063,6 +4990,10 @@ components:
           type: string
           format: uuid
           description: Scorecard version used
+        routing:
+          type: string
+          maxLength: 16
+          description: CHAMPION or CHALLENGER traffic
         score:
           type: integer
           format: int32
@@ -4079,10 +5010,34 @@ components:
           type: string
           maxLength: 8
           description: Risk grade, e.g. A1..E5
+        cutoff_outcome:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: 'Outcome of the cut-off band: APPROVE, REFER, DECLINE'
+        rate_adjustment:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Pricing adjustment of the cut-off band
         reason_codes:
-          type: object
+          type: array
+          items: {}
+          description: Top adverse-action reason codes with points lost, most adverse first
+        contributions:
+          type: array
+          items: {}
+          description: Points per feature (feature, value, bin, points, max_points)
+        inputs:
+          type:
+          - object
+          - 'null'
           additionalProperties: true
-          description: Top adverse-action reason codes with contribution
+          description: Feature values used
         inputs_hash:
           type: string
           maxLength: 64
@@ -4128,9 +5083,11 @@ components:
       - created_at
       - loan_application_id
       - scorecard_version_id
+      - routing
       - score
       - risk_grade
       - reason_codes
+      - contributions
       - inputs_hash
     ESignatureRequest:
       type: object
@@ -4177,7 +5134,7 @@ components:
         provider:
           type: string
           maxLength: 40
-          description: DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER
+          description: SANDBOX, DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER
         provider_envelope_id:
           type:
           - string
@@ -4198,9 +5155,9 @@ components:
           description: Status
           readOnly: true
         signers:
-          type: object
-          additionalProperties: true
-          description: Signers and their order
+          type: array
+          items: {}
+          description: Signers and their order ({customer_id, name, email, order})
         agreement_document_id:
           type:
           - string
@@ -4213,6 +5170,18 @@ components:
           - 'null'
           format: uuid
           description: Signed agreement
+          readOnly: true
+        sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last time the envelope was sent
+          readOnly: true
+        send_count:
+          type: integer
+          format: int32
+          description: Times the envelope was sent
           readOnly: true
         signed_at:
           type:
@@ -4227,6 +5196,13 @@ components:
           - 'null'
           format: date-time
           description: Expiry
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Void or decline reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4266,6 +5242,7 @@ components:
       - provider
       - status
       - signers
+      - send_count
     LoanApplicant:
       type: object
       description: A person or business on an application (primary, co-applicant, guarantor)
@@ -4319,6 +5296,12 @@ components:
           - CO_APPLICANT
           - GUARANTOR
           description: Role on the application
+        date_of_birth:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date of birth (age feature of the scorecard)
         employment_status:
           type:
           - string
@@ -4427,6 +5410,10 @@ components:
           - CO_APPLICANT
           - GUARANTOR
           description: Role on the application
+        date_of_birth:
+          type: string
+          format: date
+          description: Date of birth (age feature of the scorecard)
         employment_status:
           type: string
           maxLength: 32
@@ -4484,7 +5471,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - loan_application_id
       - customer_id
       - role
     LoanApplicantUpdate:
@@ -4505,6 +5491,10 @@ components:
           - CO_APPLICANT
           - GUARANTOR
           description: Role on the application
+        date_of_birth:
+          type: string
+          format: date
+          description: Date of birth (age feature of the scorecard)
         employment_status:
           type: string
           maxLength: 32
@@ -4602,7 +5592,7 @@ components:
         application_number:
           type: string
           maxLength: 32
-          description: Human-readable application number
+          description: Human-readable application number (server-generated)
           readOnly: true
         customer_id:
           type: string
@@ -4704,6 +5694,18 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Preferred repayment frequency
+        requested_schedule_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+          description: Preferred schedule type (default ANNUITY)
         merchant_id:
           type:
           - string
@@ -4722,6 +5724,18 @@ components:
           - 'null'
           format: uuid
           description: Agent who assisted the application
+        disbursement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit account to receive the funds
+        repayment_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit account auto-debited for instalments
         status:
           type: string
           enum:
@@ -4736,6 +5750,7 @@ components:
           - DECLINED
           - OFFER_ACCEPTED
           - SIGNED
+          - BOOKED
           - DISBURSED
           - WITHDRAWN
           - EXPIRED
@@ -4767,7 +5782,8 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Underwriter assigned for manual review
+          description: Underwriter assigned for manual review (set by /assign)
+          readOnly: true
         consent_bureau:
           type: boolean
           description: Applicant consented to a credit bureau check
@@ -4777,6 +5793,34 @@ components:
           - 'null'
           format: date-time
           description: Consent time
+        risk_grade:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Risk grade of the latest score
+          readOnly: true
+        loan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Loan booked in loan-service
+          readOnly: true
+        booking_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Last error when booking the loan failed (retry with /book)
+          readOnly: true
+        withdrawal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on withdrawal
+          readOnly: true
         metadata:
           type:
           - object
@@ -4919,6 +5963,16 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Preferred repayment frequency
+        requested_schedule_type:
+          type: string
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+          description: Preferred schedule type (default ANNUITY)
         merchant_id:
           type: string
           format: uuid
@@ -4931,14 +5985,18 @@ components:
           type: string
           format: uuid
           description: Agent who assisted the application
+        disbursement_account_id:
+          type: string
+          format: uuid
+          description: Deposit account to receive the funds
+        repayment_account_id:
+          type: string
+          format: uuid
+          description: Deposit account auto-debited for instalments
         expires_at:
           type: string
           format: date-time
           description: Application expiry
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Underwriter assigned for manual review
         consent_bureau:
           type: boolean
           description: Applicant consented to a credit bureau check
@@ -5069,6 +6127,16 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Preferred repayment frequency
+        requested_schedule_type:
+          type: string
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+          description: Preferred schedule type (default ANNUITY)
         merchant_id:
           type: string
           format: uuid
@@ -5081,14 +6149,18 @@ components:
           type: string
           format: uuid
           description: Agent who assisted the application
+        disbursement_account_id:
+          type: string
+          format: uuid
+          description: Deposit account to receive the funds
+        repayment_account_id:
+          type: string
+          format: uuid
+          description: Deposit account auto-debited for instalments
         expires_at:
           type: string
           format: date-time
           description: Application expiry
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Underwriter assigned for manual review
         consent_bureau:
           type: boolean
           description: Applicant consented to a credit bureau check
@@ -5196,13 +6268,18 @@ components:
           - VERIFIED
           - REJECTED
           - EXPIRED
-          description: Status
+          description: Status (UPLOADED when document_id is set; /verify, /reject)
+          readOnly: true
+        is_mandatory:
+          type: boolean
+          description: Required before the application can be decided
         rejection_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Why it was rejected
+          readOnly: true
         verified_by:
           type:
           - string
@@ -5255,6 +6332,7 @@ components:
       - loan_application_id
       - document_type
       - status
+      - is_mandatory
     LoanApplicationDocumentCreate:
       type: object
       properties:
@@ -5284,19 +6362,9 @@ components:
           type: string
           format: uuid
           description: Stored document
-        status:
-          type: string
-          enum:
-          - REQUESTED
-          - UPLOADED
-          - VERIFIED
-          - REJECTED
-          - EXPIRED
-          description: Status
-        rejection_reason:
-          type: string
-          maxLength: 255
-          description: Why it was rejected
+        is_mandatory:
+          type: boolean
+          description: Required before the application can be decided
         custom_field_1:
           type: string
           maxLength: 500
@@ -5318,7 +6386,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - loan_application_id
       - document_type
     LoanApplicationDocumentUpdate:
       type: object
@@ -5349,19 +6416,9 @@ components:
           type: string
           format: uuid
           description: Stored document
-        status:
-          type: string
-          enum:
-          - REQUESTED
-          - UPLOADED
-          - VERIFIED
-          - REJECTED
-          - EXPIRED
-          description: Status
-        rejection_reason:
-          type: string
-          maxLength: 255
-          description: Why it was rejected
+        is_mandatory:
+          type: boolean
+          description: Required before the application can be decided
         custom_field_1:
           type: string
           maxLength: 500
@@ -5760,29 +6817,54 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Annual percentage rate including fees
+          description: Annual percentage rate including fees (IRR of the cash flows)
+          readOnly: true
         upfront_fees:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Fees deducted or charged at disbursement
+        balloon_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Final balloon for BALLOON schedules
+        first_repayment_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: 'First instalment date (default: one period after acceptance)'
         instalment_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Regular instalment
+          readOnly: true
+        total_interest:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total interest over the term
+          readOnly: true
         total_repayable:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Total amount repayable
+          description: Total amount repayable (principal, interest and fees)
+          readOnly: true
         schedule_preview:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Indicative repayment schedule
+          readOnly: true
         status:
           type: string
           enum:
@@ -5794,15 +6876,24 @@ components:
           description: Status
           readOnly: true
         expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          description: Offer expiry
+          description: 'Offer expiry (default: now + offer validity days)'
         accepted_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Acceptance time
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on decline or withdrawal
           readOnly: true
         terms_document_id:
           type:
@@ -5856,10 +6947,10 @@ components:
       - apr
       - upfront_fees
       - instalment_amount
+      - total_interest
       - total_repayable
       - schedule_preview
       - status
-      - expires_at
     LoanOfferCreate:
       type: object
       properties:
@@ -5913,38 +7004,26 @@ components:
           examples:
           - '125.50'
           description: Nominal annual rate
-        apr:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Annual percentage rate including fees
         upfront_fees:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Fees deducted or charged at disbursement
-        instalment_amount:
+        balloon_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Regular instalment
-        total_repayable:
+          description: Final balloon for BALLOON schedules
+        first_repayment_date:
           type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Total amount repayable
-        schedule_preview:
-          type: object
-          additionalProperties: true
-          description: Indicative repayment schedule
+          format: date
+          description: 'First instalment date (default: one period after acceptance)'
         expires_at:
           type: string
           format: date-time
-          description: Offer expiry
+          description: 'Offer expiry (default: now + offer validity days)'
         terms_document_id:
           type: string
           format: uuid
@@ -5977,11 +7056,6 @@ components:
       - term_months
       - repayment_frequency
       - interest_rate
-      - apr
-      - instalment_amount
-      - total_repayable
-      - schedule_preview
-      - expires_at
     Scorecard:
       type: object
       description: A credit scorecard / model family (application, behavioural, collections, wallet)
@@ -6196,7 +7270,10 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     ScorecardVersion:
       type: object
-      description: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+      description: 'A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered
+        bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
+
+        '
       properties:
         id:
           type: string
@@ -6249,21 +7326,42 @@ components:
           - CHAMPION
           - CHALLENGER
           - RETIRED
-          description: Status
+          description: Status (changed by /activate, /set-challenger, /retire)
+          readOnly: true
         model_uri:
           type:
           - string
           - 'null'
           maxLength: 500
           description: Model artefact location (model registry)
+        base_points:
+          type: integer
+          format: int32
+          description: Points every applicant starts with
         features:
-          type: object
-          additionalProperties: true
-          description: Input features and transformations
+          type: array
+          items: {}
+          description: 'Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]}'
         cutoffs:
-          type: object
-          additionalProperties: true
-          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
+          type: array
+          items: {}
+          description: 'Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment}'
+        target_score:
+          type: integer
+          format: int32
+          description: Score at the target odds (PD calibration)
+        target_odds:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Good:bad odds at the target score
+        points_to_double_odds:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points that double the odds
         challenger_traffic_pct:
           type:
           - string
@@ -6271,25 +7369,42 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Share of traffic routed to this challenger
+          description: Share of traffic routed to this challenger (0..1)
+          readOnly: true
         validation_report_document_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Validation and bias-test report
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Model risk approval
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Model risk approver
+          description: Model risk approver (must differ from the author)
+          readOnly: true
         activated_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Activation time
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -6328,8 +7443,12 @@ components:
       - scorecard_id
       - version
       - status
+      - base_points
       - features
       - cutoffs
+      - target_score
+      - target_odds
+      - points_to_double_odds
     ScorecardVersionCreate:
       type: object
       properties:
@@ -6341,46 +7460,42 @@ components:
           type: string
           maxLength: 32
           description: Version label
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - VALIDATING
-          - ACTIVE
-          - CHAMPION
-          - CHALLENGER
-          - RETIRED
-          description: Status
         model_uri:
           type: string
           maxLength: 500
           description: Model artefact location (model registry)
+        base_points:
+          type: integer
+          format: int32
+          description: Points every applicant starts with
         features:
-          type: object
-          additionalProperties: true
-          description: Input features and transformations
+          type: array
+          items: {}
+          description: 'Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]}'
         cutoffs:
-          type: object
-          additionalProperties: true
-          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
-        challenger_traffic_pct:
+          type: array
+          items: {}
+          description: 'Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment}'
+        target_score:
+          type: integer
+          format: int32
+          description: Score at the target odds (PD calibration)
+        target_odds:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Share of traffic routed to this challenger
+          description: Good:bad odds at the target score
+        points_to_double_odds:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points that double the odds
         validation_report_document_id:
           type: string
           format: uuid
           description: Validation and bias-test report
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Model risk approver
-        activated_at:
-          type: string
-          format: date-time
-          description: Activation time
         custom_field_1:
           type: string
           maxLength: 500
@@ -6402,7 +7517,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - scorecard_id
       - version
       - features
       - cutoffs
@@ -6417,46 +7531,42 @@ components:
           type: string
           maxLength: 32
           description: Version label
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - VALIDATING
-          - ACTIVE
-          - CHAMPION
-          - CHALLENGER
-          - RETIRED
-          description: Status
         model_uri:
           type: string
           maxLength: 500
           description: Model artefact location (model registry)
+        base_points:
+          type: integer
+          format: int32
+          description: Points every applicant starts with
         features:
-          type: object
-          additionalProperties: true
-          description: Input features and transformations
+          type: array
+          items: {}
+          description: 'Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]}'
         cutoffs:
-          type: object
-          additionalProperties: true
-          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
-        challenger_traffic_pct:
+          type: array
+          items: {}
+          description: 'Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment}'
+        target_score:
+          type: integer
+          format: int32
+          description: Score at the target odds (PD calibration)
+        target_odds:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Share of traffic routed to this challenger
+          description: Good:bad odds at the target score
+        points_to_double_odds:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Points that double the odds
         validation_report_document_id:
           type: string
           format: uuid
           description: Validation and bias-test report
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Model risk approver
-        activated_at:
-          type: string
-          format: date-time
-          description: Activation time
         custom_field_1:
           type: string
           maxLength: 500

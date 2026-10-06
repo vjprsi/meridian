@@ -32,7 +32,7 @@ CREATE TABLE allocation_rule (
   applies_to_status            varchar(40) CHECK (applies_to_status IN ('PENDING_DISBURSEMENT', 'ACTIVE', 'IN_ARREARS', 'RESTRUCTURED', 'PAID_OFF', 'CLOSED', 'WRITTEN_OFF', 'CHARGED_OFF', 'CANCELLED')),
   order_of_components          jsonb NOT NULL,
   allocate_oldest_first        boolean NOT NULL DEFAULT true,
-  excess_handling              varchar(32) NOT NULL DEFAULT 'REDUCE_TERM',
+  excess_handling              varchar(40) NOT NULL DEFAULT 'REDUCE_TERM' CHECK (excess_handling IN ('REDUCE_TERM', 'REDUCE_INSTALMENT', 'HOLD_AS_CREDIT', 'REFUND')),
   valid_from                   date NOT NULL,
   valid_to                     date,
   is_active                    boolean NOT NULL DEFAULT true,
@@ -53,9 +53,9 @@ COMMENT ON COLUMN allocation_rule.row_version IS 'Optimistic lock version; send 
 COMMENT ON COLUMN allocation_rule.product_id IS 'Product (empty = tenant default)';
 COMMENT ON COLUMN allocation_rule.name IS 'Rule name';
 COMMENT ON COLUMN allocation_rule.applies_to_status IS 'Loan status the rule applies to (empty = any)';
-COMMENT ON COLUMN allocation_rule.order_of_components IS 'Ordered list of AllocationComponent values';
-COMMENT ON COLUMN allocation_rule.allocate_oldest_first IS 'Oldest instalment first vs component-first across instalments';
-COMMENT ON COLUMN allocation_rule.excess_handling IS 'REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND';
+COMMENT ON COLUMN allocation_rule.order_of_components IS 'Components in allocation order';
+COMMENT ON COLUMN allocation_rule.allocate_oldest_first IS 'Oldest instalment first (all components) vs component-first across instalments';
+COMMENT ON COLUMN allocation_rule.excess_handling IS 'What happens to money left after all due amounts';
 COMMENT ON COLUMN allocation_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN allocation_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN allocation_rule.is_active IS 'Active';
@@ -91,6 +91,7 @@ CREATE TABLE credit_line (
   temporary_limit              numeric(28,8),
   temporary_limit_expires_at   timestamptz,
   utilised_amount              numeric(28,8) NOT NULL DEFAULT 0,
+  instalment_balance           numeric(28,8) NOT NULL DEFAULT 0,
   available_amount             numeric(28,8) NOT NULL DEFAULT 0,
   outstanding_interest         numeric(28,8) NOT NULL DEFAULT 0,
   outstanding_fees             numeric(28,8) NOT NULL DEFAULT 0,
@@ -108,9 +109,11 @@ CREATE TABLE credit_line (
   autopay_mode                 varchar(16),
   ledger_account_id            uuid,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_ACTIVATION' CHECK (status IN ('PENDING_ACTIVATION', 'ACTIVE', 'FROZEN', 'SUSPENDED', 'IN_ARREARS', 'CLOSED', 'CHARGED_OFF')),
+  status_reason                varchar(255),
   days_past_due                integer NOT NULL DEFAULT 0,
   delinquency_bucket           varchar(40) NOT NULL DEFAULT 'CURRENT' CHECK (delinquency_bucket IN ('CURRENT', 'DPD_1_29', 'DPD_30_59', 'DPD_60_89', 'DPD_90_119', 'DPD_120_179', 'DPD_180_PLUS')),
   ecl_stage                    varchar(40) NOT NULL DEFAULT 'STAGE_1' CHECK (ecl_stage IN ('STAGE_1', 'STAGE_2', 'STAGE_3', 'POCI')),
+  last_statement_date          date,
   review_date                  date,
   opened_at                    timestamptz,
   closed_at                    timestamptz,
@@ -130,7 +133,7 @@ COMMENT ON COLUMN credit_line.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN credit_line.updated_at IS 'Last update time';
 COMMENT ON COLUMN credit_line.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN credit_line.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN credit_line.credit_line_number IS 'Facility number';
+COMMENT ON COLUMN credit_line.credit_line_number IS 'Facility number (server-generated)';
 COMMENT ON COLUMN credit_line.customer_id IS 'Borrower';
 COMMENT ON COLUMN credit_line.loan_application_id IS 'Originating application';
 COMMENT ON COLUMN credit_line.product_id IS 'Product';
@@ -138,18 +141,19 @@ COMMENT ON COLUMN credit_line.product_version_id IS 'Product version';
 COMMENT ON COLUMN credit_line.legal_entity_id IS 'Lending legal entity';
 COMMENT ON COLUMN credit_line.line_type IS 'Facility type';
 COMMENT ON COLUMN credit_line.currency IS 'Currency';
-COMMENT ON COLUMN credit_line.credit_limit IS 'Approved limit';
-COMMENT ON COLUMN credit_line.temporary_limit IS 'Temporary limit increase';
+COMMENT ON COLUMN credit_line.credit_limit IS 'Approved limit (change via /change-limit)';
+COMMENT ON COLUMN credit_line.temporary_limit IS 'Temporary limit';
 COMMENT ON COLUMN credit_line.temporary_limit_expires_at IS 'Temporary limit expiry';
-COMMENT ON COLUMN credit_line.utilised_amount IS 'Drawn principal';
-COMMENT ON COLUMN credit_line.available_amount IS 'Limit minus utilisation and holds';
+COMMENT ON COLUMN credit_line.utilised_amount IS 'Drawn principal (revolving balance)';
+COMMENT ON COLUMN credit_line.instalment_balance IS 'Balance converted to instalment loans still counted against the limit';
+COMMENT ON COLUMN credit_line.available_amount IS 'Limit minus utilisation, unpaid interest and fees';
 COMMENT ON COLUMN credit_line.outstanding_interest IS 'Unpaid interest';
 COMMENT ON COLUMN credit_line.outstanding_fees IS 'Unpaid fees';
 COMMENT ON COLUMN credit_line.purchase_rate IS 'Annual rate on purchases / draws';
 COMMENT ON COLUMN credit_line.cash_advance_rate IS 'Annual rate on cash advances';
 COMMENT ON COLUMN credit_line.penalty_rate IS 'Penalty rate';
 COMMENT ON COLUMN credit_line.day_count IS 'Day-count convention';
-COMMENT ON COLUMN credit_line.statement_day IS 'Day of month the statement cycle closes';
+COMMENT ON COLUMN credit_line.statement_day IS 'Day of month the statement cycle closes (1-28)';
 COMMENT ON COLUMN credit_line.payment_due_days IS 'Days from statement to due date';
 COMMENT ON COLUMN credit_line.minimum_payment_pct IS 'Minimum payment percentage of balance';
 COMMENT ON COLUMN credit_line.minimum_payment_floor IS 'Minimum payment floor amount';
@@ -159,9 +163,11 @@ COMMENT ON COLUMN credit_line.repayment_account_id IS 'Auto-pay source';
 COMMENT ON COLUMN credit_line.autopay_mode IS 'NONE, MINIMUM, STATEMENT, FULL';
 COMMENT ON COLUMN credit_line.ledger_account_id IS 'Receivable account in the ledger';
 COMMENT ON COLUMN credit_line.status IS 'Status';
+COMMENT ON COLUMN credit_line.status_reason IS 'Reason of the last freeze, unfreeze or close';
 COMMENT ON COLUMN credit_line.days_past_due IS 'Days past due';
 COMMENT ON COLUMN credit_line.delinquency_bucket IS 'DPD bucket';
 COMMENT ON COLUMN credit_line.ecl_stage IS 'IFRS 9 stage';
+COMMENT ON COLUMN credit_line.last_statement_date IS 'Last statement cycle end';
 COMMENT ON COLUMN credit_line.review_date IS 'Next limit review date';
 COMMENT ON COLUMN credit_line.opened_at IS 'Activation time';
 COMMENT ON COLUMN credit_line.closed_at IS 'Closing time';
@@ -194,6 +200,7 @@ CREATE TABLE credit_line_limit_change (
   old_limit                    numeric(28,8) NOT NULL,
   new_limit                    numeric(28,8) NOT NULL,
   is_temporary                 boolean NOT NULL DEFAULT false,
+  expires_at                   timestamptz,
   reason                       varchar(255) NOT NULL,
   approval_request_id          uuid,
   custom_field_1               varchar(500),
@@ -211,6 +218,7 @@ COMMENT ON COLUMN credit_line_limit_change.credit_line_id IS 'Credit line';
 COMMENT ON COLUMN credit_line_limit_change.old_limit IS 'Previous limit';
 COMMENT ON COLUMN credit_line_limit_change.new_limit IS 'New limit';
 COMMENT ON COLUMN credit_line_limit_change.is_temporary IS 'Temporary change';
+COMMENT ON COLUMN credit_line_limit_change.expires_at IS 'Expiry of a temporary change';
 COMMENT ON COLUMN credit_line_limit_change.reason IS 'CUSTOMER_REQUEST, PROACTIVE_INCREASE, RISK_DECREASE, REVIEW';
 COMMENT ON COLUMN credit_line_limit_change.approval_request_id IS 'Approval';
 COMMENT ON COLUMN credit_line_limit_change.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -235,15 +243,18 @@ CREATE TABLE credit_line_drawdown (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   credit_line_id               uuid NOT NULL REFERENCES credit_line(id),
-  draw_type                    varchar(32) NOT NULL,
+  draw_type                    varchar(40) NOT NULL CHECK (draw_type IN ('PURCHASE', 'CASH_ADVANCE', 'BALANCE_TRANSFER', 'TRANSFER_TO_ACCOUNT', 'FEE', 'INSTALMENT_CONVERSION')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   rate                         numeric(18,10) NOT NULL,
   destination_account_id       uuid,
   card_authorization_id        uuid,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'POSTED', 'REVERSED', 'DECLINED')),
+  decline_reason               varchar(255),
   journal_entry_id             uuid,
   posted_at                    timestamptz,
+  reversal_reason              varchar(255),
+  reversed_at                  timestamptz,
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -261,15 +272,18 @@ COMMENT ON COLUMN credit_line_drawdown.updated_at IS 'Last update time';
 COMMENT ON COLUMN credit_line_drawdown.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN credit_line_drawdown.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN credit_line_drawdown.credit_line_id IS 'Credit line';
-COMMENT ON COLUMN credit_line_drawdown.draw_type IS 'PURCHASE, CASH_ADVANCE, BALANCE_TRANSFER, TRANSFER_TO_ACCOUNT, FEE, INSTALMENT_CONVERSION';
+COMMENT ON COLUMN credit_line_drawdown.draw_type IS 'Draw type';
 COMMENT ON COLUMN credit_line_drawdown.amount IS 'Amount';
 COMMENT ON COLUMN credit_line_drawdown.currency IS 'Currency';
 COMMENT ON COLUMN credit_line_drawdown.rate IS 'Rate applicable to this draw';
 COMMENT ON COLUMN credit_line_drawdown.destination_account_id IS 'Destination for transfers';
 COMMENT ON COLUMN credit_line_drawdown.card_authorization_id IS 'Card authorisation for purchases';
 COMMENT ON COLUMN credit_line_drawdown.status IS 'Status';
+COMMENT ON COLUMN credit_line_drawdown.decline_reason IS 'Why the draw was declined';
 COMMENT ON COLUMN credit_line_drawdown.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN credit_line_drawdown.posted_at IS 'Posting time';
+COMMENT ON COLUMN credit_line_drawdown.reversal_reason IS 'Reversal reason';
+COMMENT ON COLUMN credit_line_drawdown.reversed_at IS 'Reversal time';
 COMMENT ON COLUMN credit_line_drawdown.idempotency_key IS 'Client key';
 COMMENT ON COLUMN credit_line_drawdown.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN credit_line_drawdown.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -352,6 +366,54 @@ ALTER TABLE credit_line_statement ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON credit_line_statement USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_credit_line_statement_touch BEFORE UPDATE ON credit_line_statement FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- loan_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE loan_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('DAILY_ACCRUAL', 'INSTALLMENT_DUE', 'AUTO_DEBIT', 'DELINQUENCY_UPDATE', 'CREDIT_LINE_STATEMENTS', 'COLLECTIONS_STRATEGY_RUN', 'COLLATERAL_MONITORING')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_loan_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE loan_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN loan_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN loan_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN loan_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN loan_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN loan_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN loan_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN loan_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN loan_eod_run.job IS 'Job';
+COMMENT ON COLUMN loan_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN loan_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN loan_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN loan_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN loan_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN loan_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN loan_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN loan_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN loan_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN loan_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN loan_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_loan_eod_run_tenant ON loan_eod_run (tenant_id, created_at);
+ALTER TABLE loan_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON loan_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_loan_eod_run_touch BEFORE UPDATE ON loan_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- loan: A booked loan (instalment, BNPL, nano, merchant financing, mortgage, SME term)
 CREATE TABLE loan (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -379,6 +441,7 @@ CREATE TABLE loan (
   outstanding_penalties        numeric(28,8) NOT NULL DEFAULT 0,
   total_outstanding            numeric(28,8) NOT NULL DEFAULT 0,
   overdue_amount               numeric(28,8) NOT NULL DEFAULT 0,
+  credit_balance               numeric(28,8) NOT NULL DEFAULT 0,
   interest_rate_type           varchar(40) NOT NULL CHECK (interest_rate_type IN ('FIXED', 'FLOATING', 'STEPPED', 'ZERO')),
   interest_rate                numeric(18,10) NOT NULL,
   rate_index                   varchar(32),
@@ -387,11 +450,17 @@ CREATE TABLE loan (
   day_count                    varchar(40) NOT NULL DEFAULT 'ACT_365' CHECK (day_count IN ('ACT_360', 'ACT_365', 'ACT_365L', 'ACT_ACT_ISDA', 'THIRTY_360', 'THIRTY_E_360')),
   schedule_type                varchar(40) NOT NULL CHECK (schedule_type IN ('ANNUITY', 'EQUAL_PRINCIPAL', 'BULLET', 'BALLOON', 'INTEREST_ONLY', 'CUSTOM')),
   repayment_frequency          varchar(40) NOT NULL CHECK (repayment_frequency IN ('DAILY', 'WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'ANNUAL', 'AT_MATURITY')),
+  business_day_convention      varchar(40) NOT NULL DEFAULT 'MODIFIED_FOLLOWING' CHECK (business_day_convention IN ('NONE', 'FOLLOWING', 'MODIFIED_FOLLOWING', 'PRECEDING')),
   term_months                  integer NOT NULL,
+  balloon_amount               numeric(28,8),
+  interest_only_periods        integer,
+  custom_schedule              jsonb,
   grace_period_days            integer NOT NULL DEFAULT 0,
   first_repayment_date         date,
   maturity_date                date,
+  next_due_date                date,
   start_date                   date,
+  cooling_off_until            date,
   disbursement_account_id      uuid,
   disbursement_wallet_id       uuid,
   repayment_account_id         uuid,
@@ -399,12 +468,15 @@ CREATE TABLE loan (
   ledger_account_id            uuid,
   merchant_id                  uuid,
   credit_line_id               uuid REFERENCES credit_line(id),
+  product_terms                jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_DISBURSEMENT' CHECK (status IN ('PENDING_DISBURSEMENT', 'ACTIVE', 'IN_ARREARS', 'RESTRUCTURED', 'PAID_OFF', 'CLOSED', 'WRITTEN_OFF', 'CHARGED_OFF', 'CANCELLED')),
   days_past_due                integer NOT NULL DEFAULT 0,
   delinquency_bucket           varchar(40) NOT NULL DEFAULT 'CURRENT' CHECK (delinquency_bucket IN ('CURRENT', 'DPD_1_29', 'DPD_30_59', 'DPD_60_89', 'DPD_90_119', 'DPD_120_179', 'DPD_180_PLUS')),
   ecl_stage                    varchar(40) NOT NULL DEFAULT 'STAGE_1' CHECK (ecl_stage IN ('STAGE_1', 'STAGE_2', 'STAGE_3', 'POCI')),
+  is_forborne                  boolean NOT NULL DEFAULT false,
   risk_grade                   varchar(8),
   is_nano                      boolean NOT NULL DEFAULT false,
+  last_accrual_date            date,
   paid_off_at                  timestamptz,
   closed_at                    timestamptz,
   metadata                     jsonb,
@@ -423,7 +495,7 @@ COMMENT ON COLUMN loan.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN loan.updated_at IS 'Last update time';
 COMMENT ON COLUMN loan.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN loan.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN loan.loan_number IS 'Human-readable loan number';
+COMMENT ON COLUMN loan.loan_number IS 'Human-readable loan number (server-generated)';
 COMMENT ON COLUMN loan.customer_id IS 'Primary borrower';
 COMMENT ON COLUMN loan.loan_application_id IS 'Originating application';
 COMMENT ON COLUMN loan.loan_offer_id IS 'Accepted offer';
@@ -441,6 +513,7 @@ COMMENT ON COLUMN loan.outstanding_fees IS 'Unpaid fees';
 COMMENT ON COLUMN loan.outstanding_penalties IS 'Unpaid penalty interest and charges';
 COMMENT ON COLUMN loan.total_outstanding IS 'Total outstanding';
 COMMENT ON COLUMN loan.overdue_amount IS 'Amount past due';
+COMMENT ON COLUMN loan.credit_balance IS 'Overpayment held as credit';
 COMMENT ON COLUMN loan.interest_rate_type IS 'Fixed, floating, stepped or zero';
 COMMENT ON COLUMN loan.interest_rate IS 'Current nominal annual rate';
 COMMENT ON COLUMN loan.rate_index IS 'Reference index for floating rates, e.g. SOFR, EURIBOR_3M';
@@ -449,11 +522,17 @@ COMMENT ON COLUMN loan.penalty_rate IS 'Penalty rate on overdue amounts';
 COMMENT ON COLUMN loan.day_count IS 'Day-count convention';
 COMMENT ON COLUMN loan.schedule_type IS 'Schedule type';
 COMMENT ON COLUMN loan.repayment_frequency IS 'Repayment frequency';
+COMMENT ON COLUMN loan.business_day_convention IS 'Due-date adjustment for weekends and holidays';
 COMMENT ON COLUMN loan.term_months IS 'Contractual term';
+COMMENT ON COLUMN loan.balloon_amount IS 'Final balloon for BALLOON schedules';
+COMMENT ON COLUMN loan.interest_only_periods IS 'Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity)';
+COMMENT ON COLUMN loan.custom_schedule IS 'CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance)';
 COMMENT ON COLUMN loan.grace_period_days IS 'Grace before an instalment counts as overdue';
 COMMENT ON COLUMN loan.first_repayment_date IS 'First instalment date';
 COMMENT ON COLUMN loan.maturity_date IS 'Final maturity';
+COMMENT ON COLUMN loan.next_due_date IS 'Next unpaid instalment due date';
 COMMENT ON COLUMN loan.start_date IS 'Contract start / first disbursement date';
+COMMENT ON COLUMN loan.cooling_off_until IS 'End of the cooling-off period (cancellation allowed until then)';
 COMMENT ON COLUMN loan.disbursement_account_id IS 'Account receiving funds';
 COMMENT ON COLUMN loan.disbursement_wallet_id IS 'Wallet receiving funds';
 COMMENT ON COLUMN loan.repayment_account_id IS 'Account auto-debited';
@@ -461,12 +540,15 @@ COMMENT ON COLUMN loan.auto_debit_enabled IS 'Collect instalments automatically'
 COMMENT ON COLUMN loan.ledger_account_id IS 'Loan receivable account in the ledger';
 COMMENT ON COLUMN loan.merchant_id IS 'Merchant for BNPL / merchant financing';
 COMMENT ON COLUMN loan.credit_line_id IS 'Credit line the loan was drawn from';
+COMMENT ON COLUMN loan.product_terms IS 'Product terms pinned at booking (rates, fees, limits)';
 COMMENT ON COLUMN loan.status IS 'Lifecycle status';
 COMMENT ON COLUMN loan.days_past_due IS 'Days past due of the oldest unpaid instalment';
 COMMENT ON COLUMN loan.delinquency_bucket IS 'DPD bucket';
-COMMENT ON COLUMN loan.ecl_stage IS 'IFRS 9 stage';
+COMMENT ON COLUMN loan.ecl_stage IS 'IFRS 9 stage hint (DPD, forbearance, write-off)';
+COMMENT ON COLUMN loan.is_forborne IS 'Restructured for hardship (forbearance)';
 COMMENT ON COLUMN loan.risk_grade IS 'Risk grade at origination or last review';
 COMMENT ON COLUMN loan.is_nano IS 'Nano-loan scored on wallet transaction data';
+COMMENT ON COLUMN loan.last_accrual_date IS 'Last business date accrued';
 COMMENT ON COLUMN loan.paid_off_at IS 'Pay-off time';
 COMMENT ON COLUMN loan.closed_at IS 'Closing time';
 COMMENT ON COLUMN loan.metadata IS 'Client-defined key/value metadata';
@@ -505,8 +587,14 @@ CREATE TABLE loan_status_history (
   from_status                  varchar(40) CHECK (from_status IN ('PENDING_DISBURSEMENT', 'ACTIVE', 'IN_ARREARS', 'RESTRUCTURED', 'PAID_OFF', 'CLOSED', 'WRITTEN_OFF', 'CHARGED_OFF', 'CANCELLED')),
   to_status                    varchar(40) NOT NULL CHECK (to_status IN ('PENDING_DISBURSEMENT', 'ACTIVE', 'IN_ARREARS', 'RESTRUCTURED', 'PAID_OFF', 'CLOSED', 'WRITTEN_OFF', 'CHARGED_OFF', 'CANCELLED')),
   days_past_due                integer NOT NULL,
+  from_bucket                  varchar(40) CHECK (from_bucket IN ('CURRENT', 'DPD_1_29', 'DPD_30_59', 'DPD_60_89', 'DPD_90_119', 'DPD_120_179', 'DPD_180_PLUS')),
   delinquency_bucket           varchar(40) NOT NULL CHECK (delinquency_bucket IN ('CURRENT', 'DPD_1_29', 'DPD_30_59', 'DPD_60_89', 'DPD_90_119', 'DPD_120_179', 'DPD_180_PLUS')),
   ecl_stage                    varchar(40) CHECK (ecl_stage IN ('STAGE_1', 'STAGE_2', 'STAGE_3', 'POCI')),
+  overdue_amount               numeric(28,8),
+  total_outstanding            numeric(28,8),
+  customer_id                  uuid,
+  currency                     char(3),
+  business_date                date,
   reason                       varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -523,8 +611,14 @@ COMMENT ON COLUMN loan_status_history.loan_id IS 'Loan';
 COMMENT ON COLUMN loan_status_history.from_status IS 'Previous status';
 COMMENT ON COLUMN loan_status_history.to_status IS 'New status';
 COMMENT ON COLUMN loan_status_history.days_past_due IS 'DPD at transition';
+COMMENT ON COLUMN loan_status_history.from_bucket IS 'Bucket before the transition';
 COMMENT ON COLUMN loan_status_history.delinquency_bucket IS 'Bucket at transition';
 COMMENT ON COLUMN loan_status_history.ecl_stage IS 'IFRS 9 stage at transition';
+COMMENT ON COLUMN loan_status_history.overdue_amount IS 'Overdue amount at transition';
+COMMENT ON COLUMN loan_status_history.total_outstanding IS 'Total outstanding at transition';
+COMMENT ON COLUMN loan_status_history.customer_id IS 'Borrower (for consumers of the event)';
+COMMENT ON COLUMN loan_status_history.currency IS 'Currency';
+COMMENT ON COLUMN loan_status_history.business_date IS 'Business date of the transition';
 COMMENT ON COLUMN loan_status_history.reason IS 'Reason';
 COMMENT ON COLUMN loan_status_history.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_status_history.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -533,6 +627,7 @@ COMMENT ON COLUMN loan_status_history.custom_field_4 IS 'Tenant-defined custom f
 COMMENT ON COLUMN loan_status_history.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_loan_status_history_tenant ON loan_status_history (tenant_id, created_at);
 CREATE INDEX ix_loan_status_history_loan_id ON loan_status_history (loan_id);
+CREATE INDEX ix_loan_status_history_customer_id ON loan_status_history (customer_id);
 ALTER TABLE loan_status_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON loan_status_history USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_loan_status_history_append_only BEFORE UPDATE OR DELETE ON loan_status_history FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -562,6 +657,7 @@ CREATE TABLE loan_disbursement (
   journal_entry_id             uuid,
   disbursed_at                 timestamptz,
   failure_reason               varchar(255),
+  attempts                     integer NOT NULL DEFAULT 1,
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -594,6 +690,7 @@ COMMENT ON COLUMN loan_disbursement.status IS 'Status';
 COMMENT ON COLUMN loan_disbursement.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN loan_disbursement.disbursed_at IS 'Completion time';
 COMMENT ON COLUMN loan_disbursement.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN loan_disbursement.attempts IS 'Posting attempts';
 COMMENT ON COLUMN loan_disbursement.idempotency_key IS 'Client key';
 COMMENT ON COLUMN loan_disbursement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_disbursement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -630,6 +727,7 @@ CREATE TABLE repayment_schedule (
   total_fees                   numeric(28,8) NOT NULL DEFAULT 0,
   currency                     char(3) NOT NULL,
   effective_from               date NOT NULL,
+  interest_rate                numeric(18,10),
   reason                       varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -656,6 +754,7 @@ COMMENT ON COLUMN repayment_schedule.total_interest IS 'Total scheduled interest
 COMMENT ON COLUMN repayment_schedule.total_fees IS 'Total scheduled fees';
 COMMENT ON COLUMN repayment_schedule.currency IS 'Currency';
 COMMENT ON COLUMN repayment_schedule.effective_from IS 'Effective date';
+COMMENT ON COLUMN repayment_schedule.interest_rate IS 'Rate the schedule was generated with';
 COMMENT ON COLUMN repayment_schedule.reason IS 'ORIGINATION, RESTRUCTURE, RATE_CHANGE, PREPAYMENT';
 COMMENT ON COLUMN repayment_schedule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN repayment_schedule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -680,6 +779,7 @@ CREATE TABLE schedule_installment (
   repayment_schedule_id        uuid NOT NULL REFERENCES repayment_schedule(id),
   loan_id                      uuid NOT NULL REFERENCES loan(id),
   installment_no               integer NOT NULL,
+  period_start                 date,
   due_date                     date NOT NULL,
   principal_due                numeric(28,8) NOT NULL,
   interest_due                 numeric(28,8) NOT NULL,
@@ -690,8 +790,9 @@ CREATE TABLE schedule_installment (
   interest_paid                numeric(28,8) NOT NULL DEFAULT 0,
   fees_paid                    numeric(28,8) NOT NULL DEFAULT 0,
   penalties_paid               numeric(28,8) NOT NULL DEFAULT 0,
+  waived_amount                numeric(28,8) NOT NULL DEFAULT 0,
   outstanding_balance_after    numeric(28,8) NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'DUE' CHECK (status IN ('DUE', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'WAIVED', 'RESCHEDULED')),
+  status                       varchar(40) NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'DUE', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'WAIVED', 'RESCHEDULED')),
   paid_at                      timestamptz,
   days_late                    integer NOT NULL DEFAULT 0,
   custom_field_1               varchar(500),
@@ -712,7 +813,8 @@ COMMENT ON COLUMN schedule_installment.row_version IS 'Optimistic lock version; 
 COMMENT ON COLUMN schedule_installment.repayment_schedule_id IS 'Schedule';
 COMMENT ON COLUMN schedule_installment.loan_id IS 'Loan';
 COMMENT ON COLUMN schedule_installment.installment_no IS 'Sequence number';
-COMMENT ON COLUMN schedule_installment.due_date IS 'Due date';
+COMMENT ON COLUMN schedule_installment.period_start IS 'Start of the interest period';
+COMMENT ON COLUMN schedule_installment.due_date IS 'Due date (business-day adjusted)';
 COMMENT ON COLUMN schedule_installment.principal_due IS 'Principal due';
 COMMENT ON COLUMN schedule_installment.interest_due IS 'Interest due';
 COMMENT ON COLUMN schedule_installment.fees_due IS 'Fees due';
@@ -722,6 +824,7 @@ COMMENT ON COLUMN schedule_installment.principal_paid IS 'Principal paid';
 COMMENT ON COLUMN schedule_installment.interest_paid IS 'Interest paid';
 COMMENT ON COLUMN schedule_installment.fees_paid IS 'Fees paid';
 COMMENT ON COLUMN schedule_installment.penalties_paid IS 'Penalties paid';
+COMMENT ON COLUMN schedule_installment.waived_amount IS 'Amount waived';
 COMMENT ON COLUMN schedule_installment.outstanding_balance_after IS 'Principal balance after this instalment';
 COMMENT ON COLUMN schedule_installment.status IS 'Status';
 COMMENT ON COLUMN schedule_installment.paid_at IS 'Date fully paid';
@@ -745,7 +848,8 @@ CREATE TABLE loan_repayment (
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
-  loan_id                      uuid NOT NULL REFERENCES loan(id),
+  loan_id                      uuid REFERENCES loan(id),
+  credit_line_id               uuid REFERENCES credit_line(id),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   source                       varchar(40) NOT NULL CHECK (source IN ('AUTO_DEBIT', 'MANUAL', 'WALLET', 'CARD', 'EXTERNAL_TRANSFER', 'CASH', 'COLLATERAL_LIQUIDATION', 'RECOVERY', 'PAYROLL')),
@@ -760,8 +864,11 @@ CREATE TABLE loan_repayment (
   allocation_rule_id           uuid REFERENCES allocation_rule(id),
   status                       varchar(40) NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED', 'REVERSED')),
   reversal_of_id               uuid REFERENCES loan_repayment(id),
+  reason                       varchar(255),
   payment_id                   uuid,
+  source_account_id            uuid,
   promise_to_pay_id            uuid,
+  prepayment_quote_id          uuid,
   journal_entry_id             uuid,
   external_reference           varchar(128),
   idempotency_key              varchar(128) NOT NULL,
@@ -777,7 +884,8 @@ COMMENT ON COLUMN loan_repayment.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN loan_repayment.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN loan_repayment.created_at IS 'Creation time';
 COMMENT ON COLUMN loan_repayment.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN loan_repayment.loan_id IS 'Loan';
+COMMENT ON COLUMN loan_repayment.loan_id IS 'Loan (empty for credit-line payments)';
+COMMENT ON COLUMN loan_repayment.credit_line_id IS 'Credit line paid (revolving facilities)';
 COMMENT ON COLUMN loan_repayment.amount IS 'Amount received';
 COMMENT ON COLUMN loan_repayment.currency IS 'Currency';
 COMMENT ON COLUMN loan_repayment.source IS 'Source of funds';
@@ -792,8 +900,11 @@ COMMENT ON COLUMN loan_repayment.allocation_detail IS 'Allocation per instalment
 COMMENT ON COLUMN loan_repayment.allocation_rule_id IS 'Waterfall used';
 COMMENT ON COLUMN loan_repayment.status IS 'Posted or reversed (reversal is a new row)';
 COMMENT ON COLUMN loan_repayment.reversal_of_id IS 'Repayment this row reverses';
+COMMENT ON COLUMN loan_repayment.reason IS 'Reversal reason';
 COMMENT ON COLUMN loan_repayment.payment_id IS 'Underlying payment';
+COMMENT ON COLUMN loan_repayment.source_account_id IS 'Deposit account debited';
 COMMENT ON COLUMN loan_repayment.promise_to_pay_id IS 'Promise this repayment fulfils';
+COMMENT ON COLUMN loan_repayment.prepayment_quote_id IS 'Prepayment quote this repayment settled';
 COMMENT ON COLUMN loan_repayment.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN loan_repayment.external_reference IS 'Payer reference';
 COMMENT ON COLUMN loan_repayment.idempotency_key IS 'Client key';
@@ -804,9 +915,11 @@ COMMENT ON COLUMN loan_repayment.custom_field_4 IS 'Tenant-defined custom field 
 COMMENT ON COLUMN loan_repayment.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_loan_repayment_tenant ON loan_repayment (tenant_id, created_at);
 CREATE INDEX ix_loan_repayment_loan_id ON loan_repayment (loan_id);
+CREATE INDEX ix_loan_repayment_credit_line_id ON loan_repayment (credit_line_id);
 CREATE INDEX ix_loan_repayment_allocation_rule_id ON loan_repayment (allocation_rule_id);
 CREATE INDEX ix_loan_repayment_reversal_of_id ON loan_repayment (reversal_of_id);
 CREATE INDEX ix_loan_repayment_payment_id ON loan_repayment (payment_id);
+CREATE INDEX ix_loan_repayment_source_account_id ON loan_repayment (source_account_id);
 CREATE INDEX ix_loan_repayment_journal_entry_id ON loan_repayment (journal_entry_id);
 ALTER TABLE loan_repayment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON loan_repayment USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -876,10 +989,11 @@ CREATE TABLE loan_fee_charge (
   fee_type                     varchar(40) NOT NULL CHECK (fee_type IN ('ORIGINATION', 'LATE_PAYMENT', 'PREPAYMENT', 'RESTRUCTURING', 'ANNUAL', 'INSURANCE', 'DOCUMENTATION', 'OTHER')),
   amount                       numeric(28,8) NOT NULL,
   tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  paid_amount                  numeric(28,8) NOT NULL DEFAULT 0,
   currency                     char(3) NOT NULL,
   charge_date                  date NOT NULL,
   schedule_installment_id      uuid REFERENCES schedule_installment(id),
-  status                       varchar(40) NOT NULL DEFAULT 'CHARGED' CHECK (status IN ('CHARGED', 'PAID', 'WAIVED', 'REVERSED')),
+  status                       varchar(40) NOT NULL DEFAULT 'CHARGED' CHECK (status IN ('CHARGED', 'PARTIALLY_PAID', 'PAID', 'WAIVED', 'REVERSED')),
   waived_by                    varchar(64),
   waiver_reason                varchar(255),
   journal_entry_id             uuid,
@@ -902,6 +1016,7 @@ COMMENT ON COLUMN loan_fee_charge.fee_definition_id IS 'Product fee definition';
 COMMENT ON COLUMN loan_fee_charge.fee_type IS 'Fee type';
 COMMENT ON COLUMN loan_fee_charge.amount IS 'Fee amount';
 COMMENT ON COLUMN loan_fee_charge.tax_amount IS 'Tax on the fee';
+COMMENT ON COLUMN loan_fee_charge.paid_amount IS 'Paid so far';
 COMMENT ON COLUMN loan_fee_charge.currency IS 'Currency';
 COMMENT ON COLUMN loan_fee_charge.charge_date IS 'Charge date';
 COMMENT ON COLUMN loan_fee_charge.schedule_installment_id IS 'Instalment the fee is due with';
@@ -986,7 +1101,11 @@ CREATE TABLE loan_restructure (
   settlement_amount            numeric(28,8),
   proposed_schedule            jsonb,
   new_schedule_id              uuid REFERENCES repayment_schedule(id),
+  capitalised_amount           numeric(28,8),
   approval_request_id          uuid,
+  submitted_by                 varchar(64),
+  approved_by                  varchar(64),
+  rejection_reason             varchar(500),
   effective_date               date,
   applied_at                   timestamptz,
   is_forborne                  boolean NOT NULL DEFAULT true,
@@ -1008,14 +1127,18 @@ COMMENT ON COLUMN loan_restructure.loan_id IS 'Loan';
 COMMENT ON COLUMN loan_restructure.restructure_type IS 'Type';
 COMMENT ON COLUMN loan_restructure.status IS 'Status';
 COMMENT ON COLUMN loan_restructure.reason IS 'Reason, e.g. hardship';
-COMMENT ON COLUMN loan_restructure.new_term_months IS 'New term';
+COMMENT ON COLUMN loan_restructure.new_term_months IS 'New remaining term in months';
 COMMENT ON COLUMN loan_restructure.new_interest_rate IS 'New rate';
 COMMENT ON COLUMN loan_restructure.holiday_months IS 'Payment holiday length';
 COMMENT ON COLUMN loan_restructure.capitalise_arrears IS 'Capitalise overdue amounts';
 COMMENT ON COLUMN loan_restructure.settlement_amount IS 'Agreed settlement amount';
 COMMENT ON COLUMN loan_restructure.proposed_schedule IS 'Proposed schedule preview';
 COMMENT ON COLUMN loan_restructure.new_schedule_id IS 'Schedule applied';
+COMMENT ON COLUMN loan_restructure.capitalised_amount IS 'Arrears and interest capitalised on application';
 COMMENT ON COLUMN loan_restructure.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN loan_restructure.submitted_by IS 'Maker';
+COMMENT ON COLUMN loan_restructure.approved_by IS 'Checker';
+COMMENT ON COLUMN loan_restructure.rejection_reason IS 'Why it was rejected';
 COMMENT ON COLUMN loan_restructure.effective_date IS 'Effective date';
 COMMENT ON COLUMN loan_restructure.applied_at IS 'Application time';
 COMMENT ON COLUMN loan_restructure.is_forborne IS 'Flag for regulatory forbearance reporting';
@@ -1032,7 +1155,7 @@ ALTER TABLE loan_restructure ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON loan_restructure USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_loan_restructure_touch BEFORE UPDATE ON loan_restructure FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- loan_prepayment_quote: A pay-off / partial prepayment quote valid until a date
+-- loan_prepayment_quote: A pay-off / partial prepayment quote valid until a time
 CREATE TABLE loan_prepayment_quote (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -1042,23 +1165,26 @@ CREATE TABLE loan_prepayment_quote (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   loan_id                      uuid NOT NULL REFERENCES loan(id),
-  quote_type                   varchar(16) NOT NULL,
+  quote_type                   varchar(40) NOT NULL CHECK (quote_type IN ('FULL', 'PARTIAL')),
+  partial_option               varchar(40) CHECK (partial_option IN ('REDUCE_TERM', 'REDUCE_INSTALMENT')),
   requested_amount             numeric(28,8),
+  quote_date                   date NOT NULL,
   principal                    numeric(28,8) NOT NULL,
   interest                     numeric(28,8) NOT NULL,
   fees                         numeric(28,8) NOT NULL,
   prepayment_penalty           numeric(28,8) NOT NULL,
   total_amount                 numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
-  valid_until                  date NOT NULL,
+  valid_until                  timestamptz NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED', 'USED', 'EXPIRED')),
+  loan_repayment_id            uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE loan_prepayment_quote IS 'A pay-off / partial prepayment quote valid until a date';
+COMMENT ON TABLE loan_prepayment_quote IS 'A pay-off / partial prepayment quote valid until a time';
 COMMENT ON COLUMN loan_prepayment_quote.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN loan_prepayment_quote.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN loan_prepayment_quote.created_at IS 'Creation time';
@@ -1068,15 +1194,18 @@ COMMENT ON COLUMN loan_prepayment_quote.updated_by IS 'Principal that last updat
 COMMENT ON COLUMN loan_prepayment_quote.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN loan_prepayment_quote.loan_id IS 'Loan';
 COMMENT ON COLUMN loan_prepayment_quote.quote_type IS 'FULL or PARTIAL';
+COMMENT ON COLUMN loan_prepayment_quote.partial_option IS 'PARTIAL: reduce the term or the instalment';
 COMMENT ON COLUMN loan_prepayment_quote.requested_amount IS 'Requested partial amount';
+COMMENT ON COLUMN loan_prepayment_quote.quote_date IS 'Date the quote was calculated for';
 COMMENT ON COLUMN loan_prepayment_quote.principal IS 'Principal component';
 COMMENT ON COLUMN loan_prepayment_quote.interest IS 'Interest to the quote date';
-COMMENT ON COLUMN loan_prepayment_quote.fees IS 'Fees outstanding';
+COMMENT ON COLUMN loan_prepayment_quote.fees IS 'Fees and penalties outstanding';
 COMMENT ON COLUMN loan_prepayment_quote.prepayment_penalty IS 'Early repayment charge';
 COMMENT ON COLUMN loan_prepayment_quote.total_amount IS 'Amount to pay';
 COMMENT ON COLUMN loan_prepayment_quote.currency IS 'Currency';
-COMMENT ON COLUMN loan_prepayment_quote.valid_until IS 'Quote validity';
+COMMENT ON COLUMN loan_prepayment_quote.valid_until IS 'Quote validity (database clock)';
 COMMENT ON COLUMN loan_prepayment_quote.status IS 'Status';
+COMMENT ON COLUMN loan_prepayment_quote.loan_repayment_id IS 'Repayment that used the quote';
 COMMENT ON COLUMN loan_prepayment_quote.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_prepayment_quote.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_prepayment_quote.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -1103,10 +1232,13 @@ CREATE TABLE loan_write_off (
   interest_amount              numeric(28,8) NOT NULL,
   fees_amount                  numeric(28,8) NOT NULL,
   total_amount                 numeric(28,8) NOT NULL,
+  recovered_amount             numeric(28,8) NOT NULL DEFAULT 0,
   currency                     char(3) NOT NULL,
   reason                       varchar(500) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'POSTED', 'REJECTED')),
   approval_request_id          uuid,
+  approved_by                  varchar(64),
+  rejection_reason             varchar(500),
   journal_entry_id             uuid,
   posted_at                    timestamptz,
   custom_field_1               varchar(500),
@@ -1129,10 +1261,13 @@ COMMENT ON COLUMN loan_write_off.principal_amount IS 'Principal written off';
 COMMENT ON COLUMN loan_write_off.interest_amount IS 'Interest written off';
 COMMENT ON COLUMN loan_write_off.fees_amount IS 'Fees and penalties written off';
 COMMENT ON COLUMN loan_write_off.total_amount IS 'Total';
+COMMENT ON COLUMN loan_write_off.recovered_amount IS 'Recovered after write-off';
 COMMENT ON COLUMN loan_write_off.currency IS 'Currency';
 COMMENT ON COLUMN loan_write_off.reason IS 'Reason';
 COMMENT ON COLUMN loan_write_off.status IS 'Status';
 COMMENT ON COLUMN loan_write_off.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN loan_write_off.approved_by IS 'Checker';
+COMMENT ON COLUMN loan_write_off.rejection_reason IS 'Why it was rejected';
 COMMENT ON COLUMN loan_write_off.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN loan_write_off.posted_at IS 'Posting time';
 COMMENT ON COLUMN loan_write_off.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -1161,6 +1296,7 @@ CREATE TABLE loan_recovery (
   source                       varchar(40) NOT NULL,
   agency_commission            numeric(28,8) NOT NULL DEFAULT 0,
   received_at                  timestamptz NOT NULL,
+  external_reference           varchar(128),
   journal_entry_id             uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -1180,6 +1316,7 @@ COMMENT ON COLUMN loan_recovery.currency IS 'Currency';
 COMMENT ON COLUMN loan_recovery.source IS 'CUSTOMER, AGENCY, COLLATERAL_SALE, INSURANCE, DEBT_SALE, LEGAL';
 COMMENT ON COLUMN loan_recovery.agency_commission IS 'Commission paid to a collection agency';
 COMMENT ON COLUMN loan_recovery.received_at IS 'Receipt time';
+COMMENT ON COLUMN loan_recovery.external_reference IS 'Payer or sale reference';
 COMMENT ON COLUMN loan_recovery.journal_entry_id IS 'Ledger posting';
 COMMENT ON COLUMN loan_recovery.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_recovery.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -1203,18 +1340,26 @@ CREATE TABLE bnpl_plan (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  loan_id                      uuid NOT NULL REFERENCES loan(id),
+  loan_id                      uuid REFERENCES loan(id),
   customer_id                  uuid NOT NULL,
   merchant_id                  uuid NOT NULL,
+  product_id                   uuid NOT NULL,
+  product_version_id           uuid NOT NULL,
+  legal_entity_id              uuid NOT NULL,
   merchant_order_ref           varchar(128) NOT NULL,
   purchase_amount              numeric(28,8) NOT NULL,
   down_payment                 numeric(28,8) NOT NULL DEFAULT 0,
   installment_count            integer NOT NULL,
+  frequency                    varchar(40) NOT NULL DEFAULT 'FORTNIGHTLY' CHECK (frequency IN ('DAILY', 'WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'ANNUAL', 'AT_MATURITY')),
+  interest_rate                numeric(18,10) NOT NULL DEFAULT 0,
   merchant_discount_rate       numeric(18,10) NOT NULL DEFAULT 0,
   merchant_settlement_amount   numeric(28,8) NOT NULL,
+  merchant_settlement_account_id uuid NOT NULL,
+  repayment_account_id         uuid,
   currency                     char(3) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'COMPLETED', 'DEFAULTED', 'REFUNDED', 'CANCELLED')),
   refunded_amount              numeric(28,8) NOT NULL DEFAULT 0,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -1230,18 +1375,26 @@ COMMENT ON COLUMN bnpl_plan.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN bnpl_plan.updated_at IS 'Last update time';
 COMMENT ON COLUMN bnpl_plan.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN bnpl_plan.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN bnpl_plan.loan_id IS 'Underlying loan';
+COMMENT ON COLUMN bnpl_plan.loan_id IS 'Underlying loan (booked on create)';
 COMMENT ON COLUMN bnpl_plan.customer_id IS 'Customer';
 COMMENT ON COLUMN bnpl_plan.merchant_id IS 'Merchant';
+COMMENT ON COLUMN bnpl_plan.product_id IS 'BNPL product';
+COMMENT ON COLUMN bnpl_plan.product_version_id IS 'Product version';
+COMMENT ON COLUMN bnpl_plan.legal_entity_id IS 'Lending legal entity';
 COMMENT ON COLUMN bnpl_plan.merchant_order_ref IS 'Merchant order reference';
 COMMENT ON COLUMN bnpl_plan.purchase_amount IS 'Purchase amount';
 COMMENT ON COLUMN bnpl_plan.down_payment IS 'Down payment at checkout';
 COMMENT ON COLUMN bnpl_plan.installment_count IS 'Number of instalments';
+COMMENT ON COLUMN bnpl_plan.frequency IS 'Instalment frequency';
+COMMENT ON COLUMN bnpl_plan.interest_rate IS 'Customer rate (0 for pay-in-N)';
 COMMENT ON COLUMN bnpl_plan.merchant_discount_rate IS 'Merchant discount fee rate';
 COMMENT ON COLUMN bnpl_plan.merchant_settlement_amount IS 'Amount settled to merchant';
+COMMENT ON COLUMN bnpl_plan.merchant_settlement_account_id IS 'Merchant settlement account';
+COMMENT ON COLUMN bnpl_plan.repayment_account_id IS 'Customer account auto-debited';
 COMMENT ON COLUMN bnpl_plan.currency IS 'Currency';
 COMMENT ON COLUMN bnpl_plan.status IS 'Status';
 COMMENT ON COLUMN bnpl_plan.refunded_amount IS 'Refunded to date';
+COMMENT ON COLUMN bnpl_plan.status_reason IS 'Cancellation or refund reason';
 COMMENT ON COLUMN bnpl_plan.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN bnpl_plan.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN bnpl_plan.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -1250,6 +1403,11 @@ COMMENT ON COLUMN bnpl_plan.custom_field_5 IS 'Tenant-defined custom field 5; la
 CREATE INDEX ix_bnpl_plan_tenant ON bnpl_plan (tenant_id, created_at);
 CREATE INDEX ix_bnpl_plan_customer_id ON bnpl_plan (customer_id);
 CREATE INDEX ix_bnpl_plan_merchant_id ON bnpl_plan (merchant_id);
+CREATE INDEX ix_bnpl_plan_product_id ON bnpl_plan (product_id);
+CREATE INDEX ix_bnpl_plan_product_version_id ON bnpl_plan (product_version_id);
+CREATE INDEX ix_bnpl_plan_legal_entity_id ON bnpl_plan (legal_entity_id);
+CREATE INDEX ix_bnpl_plan_merchant_settlement_account_id ON bnpl_plan (merchant_settlement_account_id);
+CREATE INDEX ix_bnpl_plan_repayment_account_id ON bnpl_plan (repayment_account_id);
 ALTER TABLE bnpl_plan ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON bnpl_plan USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_bnpl_plan_touch BEFORE UPDATE ON bnpl_plan FOR EACH ROW EXECUTE FUNCTION touch_row();

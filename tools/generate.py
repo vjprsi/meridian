@@ -670,6 +670,9 @@ def oa_type(c: Column, enums) -> dict:
     return s
 
 
+NESTED_PATH_COLUMNS: dict = {}   # table -> columns supplied by a parent path segment (e.g. customer_id)
+
+
 def table_schemas(t: Table, enums) -> dict:
     name = pascal(t.name)
     props, req = {}, []
@@ -692,6 +695,8 @@ def table_schemas(t: Table, enums) -> dict:
             cprops[c.name] = s
             if c.nn and c.default is None:
                 creq.append(c.name)
+    # Columns taken from a parent path segment (/v1/parents/{parent_id}/children) are not required in the body.
+    creq = [c for c in creq if c not in NESTED_PATH_COLUMNS.get(t.name, set())]
     create = {"type": "object", "properties": cprops}
     if creq:
         create["required"] = creq
@@ -837,6 +842,15 @@ def page_schema(doc: dict, bundle: dict, name: str) -> None:
 
 
 def gen_openapi(domains, enums, tables_global) -> list:
+    NESTED_PATH_COLUMNS.clear()
+    for d0 in domains:
+        for s0 in d0.services:
+            for a0 in s0.apis:
+                if "create" in a0.ops:
+                    tbl = tables_global[a0.table]
+                    for pname in re.findall(r"{([^}]+)}", a0.path):
+                        if tbl.col(pname):
+                            NESTED_PATH_COLUMNS.setdefault(a0.table, set()).add(pname)
     endpoints: list = []
     bundle = {"openapi": "3.1.0",
               "info": {"title": "Meridian Core API", "version": "1.0.0",

@@ -25,6 +25,8 @@ tags:
   description: A work queue for collectors
 - name: Collection Cases
   description: A collections case for one delinquent exposure
+- name: Collections Eod Runs
+  description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
 - name: Collection Actions
   description: A contact or action taken on a case. Append-only.
 - name: Promises To Pay
@@ -32,7 +34,7 @@ tags:
 - name: Payment Plans
   description: An arrangement to clear arrears in instalments
 - name: Next Best Actions
-  description: AI-suggested next action for a case (channel, time, offer) with explanation
+  description: Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason codes
 - name: Legal Proceedings
   description: Legal action on a collections case
 paths:
@@ -649,7 +651,7 @@ paths:
   /v1/collections/queues/{id}/cases:
     get:
       operationId: collectionQueuesCases
-      summary: Cases in the queue ordered by priority
+      summary: Open cases in the queue ordered by priority
       tags:
       - Collection Queues
       security:
@@ -686,7 +688,7 @@ paths:
   /v1/collections/queues/{id}/rebalance:
     post:
       operationId: collectionQueuesRebalance
-      summary: Redistribute cases across collectors
+      summary: Redistribute the queue's open cases evenly across its collectors
       tags:
       - Collection Queues
       security:
@@ -706,7 +708,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionQueue'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -926,6 +930,48 @@ paths:
       x-table: collection_case
       x-crud: true
       x-crud-update: true
+  /v1/collections/cases/open:
+    post:
+      operationId: collectionCasesOpen
+      summary: Open a case for a delinquent exposure, or refresh the open one (delinquency event, EOD run or manual)
+      tags:
+      - Collection Cases
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionCase'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionCasesOpenRequest'
+      x-requirements:
+      - COL-01
+      - COL-02
+      - LND-05
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: collection_case
   /v1/collections/cases/{id}/assign:
     post:
       operationId: collectionCasesAssign
@@ -1073,7 +1119,7 @@ paths:
   /v1/collections/cases/{id}/payment-plan:
     post:
       operationId: collectionCasesPaymentPlan
-      summary: Propose a payment plan
+      summary: Propose a payment plan for the arrears
       tags:
       - Collection Cases
       security:
@@ -1121,7 +1167,7 @@ paths:
   /v1/collections/cases/{id}/next-best-action:
     post:
       operationId: collectionCasesNextBestAction
-      summary: Ask the model for the next best action
+      summary: Score the next best action (deterministic model with reason codes)
       tags:
       - Collection Cases
       security:
@@ -1211,7 +1257,7 @@ paths:
   /v1/collections/cases/{id}/start-legal:
     post:
       operationId: collectionCasesStartLegal
-      summary: Start legal proceedings (requires approval)
+      summary: Propose legal proceedings (approved by a second user)
       tags:
       - Collection Cases
       security:
@@ -1391,6 +1437,173 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
       x-required-scope: lending:read
       x-table: collection_case
+  /v1/collections/cases/eod/strategy-run:
+    post:
+      operationId: collectionCasesEodStrategyRun
+      summary: End of day - sync delinquent exposures from loan-service, open/refresh/cure cases, check promises and plans,
+        run due strategy steps, distribute queues (idempotent per business date)
+      tags:
+      - Collection Cases
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - COL-01
+      - COL-02
+      - LND-05
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: collection_case
+  /v1/collections/eod-runs:
+    get:
+      operationId: collectionsEodRunsList
+      summary: List collections eod runs
+      tags:
+      - Collections Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionsEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - COL-01
+      - OPS-01
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: collections_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/collections/eod-runs/{id}:
+    get:
+      operationId: collectionsEodRunsGet
+      summary: Retrieve collections eod run
+      tags:
+      - Collections Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionsEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - COL-01
+      - OPS-01
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: collections_eod_run
+      x-crud: true
+      x-crud-get: true
   /v1/collections/actions:
     get:
       operationId: collectionActionsList
@@ -1440,6 +1653,7 @@ paths:
           - REFUSED
           - PAID
           - DISPUTED
+          - SUPPRESSED
       - name: performed_by
         in: query
         schema:
@@ -1891,7 +2105,7 @@ paths:
   /v1/collections/payment-plans/{id}/activate:
     post:
       operationId: paymentPlansActivate
-      summary: Activate an agreed plan
+      summary: Activate an agreed plan (a second user when outside policy)
       tags:
       - Payment Plans
       security:
@@ -2215,6 +2429,7 @@ paths:
         schema:
           type: string
           enum:
+          - PENDING_APPROVAL
           - INITIATED
           - FILED
           - HEARING
@@ -2222,6 +2437,7 @@ paths:
           - ENFORCEMENT
           - SETTLED
           - CLOSED
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -2349,6 +2565,147 @@ paths:
       x-table: legal_proceeding
       x-crud: true
       x-crud-update: true
+  /v1/collections/legal-proceedings/{id}/approve:
+    post:
+      operationId: legalProceedingsApprove
+      summary: Approve litigation (must differ from the requester)
+      tags:
+      - Legal Proceedings
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalProceeding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalProceedingsApproveRequest'
+      x-requirements:
+      - COL-01
+      - LND-05
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: legal_proceeding
+  /v1/collections/legal-proceedings/{id}/reject:
+    post:
+      operationId: legalProceedingsReject
+      summary: Reject litigation
+      tags:
+      - Legal Proceedings
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalProceeding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalProceedingsRejectRequest'
+      x-requirements:
+      - COL-01
+      - LND-05
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: legal_proceeding
+  /v1/collections/legal-proceedings/{id}/advance:
+    post:
+      operationId: legalProceedingsAdvance
+      summary: Move to the next stage
+      tags:
+      - Legal Proceedings
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalProceeding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalProceedingsAdvanceRequest'
+      x-requirements:
+      - COL-01
+      - LND-05
+      x-service: collections-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: legal_proceeding
 components:
   schemas:
     Problem:
@@ -2459,6 +2816,54 @@ components:
       required:
       - data
       - has_more
+    CollectionCasesOpenRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        exposure_type:
+          type: string
+          enum:
+          - LOAN
+          - CREDIT_LINE
+          - CARD
+          - OVERDRAFT
+          - BNPL
+        exposure_id:
+          type: string
+          format: uuid
+        days_past_due:
+          type: integer
+          format: int32
+        overdue_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        total_outstanding:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        product_id:
+          type: string
+          format: uuid
+        risk_grade:
+          type: string
+          maxLength: 8
+      required:
+      - customer_id
+      - exposure_type
+      - exposure_id
+      - days_past_due
+      - overdue_amount
+      - total_outstanding
+      - currency
     CollectionCasesAssignRequest:
       type: object
       properties:
@@ -2497,8 +2902,12 @@ components:
           - REFUSED
           - PAID
           - DISPUTED
+          - SUPPRESSED
         notes:
           type: string
+        contact_channel_address:
+          type: string
+          maxLength: 320
       required:
       - action_type
       - outcome
@@ -2541,6 +2950,11 @@ components:
           format: date
         interest_frozen:
           type: boolean
+        total_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - installment_count
       - frequency
@@ -2561,6 +2975,11 @@ components:
           format: decimal
           examples:
           - '125.50'
+        law_firm:
+          type: string
+          maxLength: 160
+        notes:
+          type: string
       required:
       - claim_amount
     CollectionCasesMarkDisputeRequest:
@@ -2577,7 +2996,16 @@ components:
       properties:
         resolution:
           type: string
-          maxLength: 40
+          enum:
+          - CURED
+          - PAID_OFF
+          - RESTRUCTURED
+          - SETTLED
+          - WRITTEN_OFF
+          - SOLD
+          - OTHER
+        notes:
+          type: string
       required:
       - resolution
     CollectionActionPage:
@@ -2588,6 +3016,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CollectionAction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CollectionsEodRunPage:
+      type: object
+      description: One page of CollectionsEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionsEodRun'
         next_cursor:
           type:
           - string
@@ -2692,6 +3138,61 @@ components:
       required:
       - data
       - has_more
+    LegalProceedingsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    LegalProceedingsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    LegalProceedingsAdvanceRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - INITIATED
+          - FILED
+          - HEARING
+          - JUDGEMENT
+          - ENFORCEMENT
+          - SETTLED
+          - CLOSED
+          - REJECTED
+        court:
+          type: string
+          maxLength: 160
+        case_reference:
+          type: string
+          maxLength: 128
+        filed_at:
+          type: string
+          format: date
+        next_hearing_date:
+          type: string
+          format: date
+        judgement_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        legal_costs:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        notes:
+          type: string
+      required:
+      - status
     CollectionAction:
       type: object
       description: A contact or action taken on a case. Append-only.
@@ -2756,6 +3257,7 @@ components:
           - REFUSED
           - PAID
           - DISPUTED
+          - SUPPRESSED
           description: Outcome
         contact_channel_address:
           type:
@@ -2780,6 +3282,12 @@ components:
           - 'null'
           format: uuid
           description: Notification sent
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date of an automated action
         performed_at:
           type: string
           format: date-time
@@ -2862,7 +3370,7 @@ components:
         case_number:
           type: string
           maxLength: 32
-          description: Case number
+          description: Case number (server-generated)
           readOnly: true
         customer_id:
           type: string
@@ -2881,24 +3389,39 @@ components:
           type: string
           format: uuid
           description: Loan, credit line, card account or overdraft id
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product of the exposure
+        risk_grade:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Risk grade of the exposure
         collection_strategy_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Strategy in force
+          readOnly: true
         collection_queue_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Queue
+          description: Queue (set by /assign or the strategy)
+          readOnly: true
         assigned_to:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Collector
+          description: Collector (set by /assign or queue distribution)
+          readOnly: true
         status:
           type: string
           enum:
@@ -2911,6 +3434,7 @@ components:
           - CLOSED
           - WRITTEN_OFF
           description: Status
+          readOnly: true
         days_past_due:
           type: integer
           format: int32
@@ -2927,6 +3451,11 @@ components:
           - DPD_120_179
           - DPD_180_PLUS
           description: Bucket
+          readOnly: true
+        max_days_past_due:
+          type: integer
+          format: int32
+          description: Highest DPD reached
           readOnly: true
         overdue_amount:
           type: string
@@ -2951,7 +3480,17 @@ components:
           - integer
           - 'null'
           format: int32
-          description: AI / rules priority for working the queue
+          description: Rules priority for working the queue (0-1000)
+          readOnly: true
+        last_step_no:
+          type: integer
+          format: int32
+          description: Last strategy step executed
+          readOnly: true
+        broken_promises:
+          type: integer
+          format: int32
+          description: Promises broken on this case
           readOnly: true
         last_contact_at:
           type:
@@ -2959,6 +3498,13 @@ components:
           - 'null'
           format: date-time
           description: Last contact attempt
+          readOnly: true
+        last_payment_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last payment seen
           readOnly: true
         next_action_at:
           type:
@@ -2968,7 +3514,8 @@ components:
           description: Next scheduled action
         is_disputed:
           type: boolean
-          description: Customer disputes the debt
+          description: Customer disputes the debt (set by /mark-dispute; automated contact suppressed)
+          readOnly: true
         is_vulnerable:
           type: boolean
           description: Vulnerable-customer flag (adjusted treatment)
@@ -2978,6 +3525,14 @@ components:
           - 'null'
           maxLength: 120
           description: External agency if outsourced
+          readOnly: true
+        agency_assigned_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the case was sent to the agency
+          readOnly: true
         opened_at:
           type: string
           format: date-time
@@ -2994,8 +3549,15 @@ components:
           type:
           - string
           - 'null'
-          maxLength: 40
-          description: CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD
+          enum:
+          - CURED
+          - PAID_OFF
+          - RESTRUCTURED
+          - SETTLED
+          - WRITTEN_OFF
+          - SOLD
+          - OTHER
+          description: How the case ended
           readOnly: true
         custom_field_1:
           type:
@@ -3039,9 +3601,12 @@ components:
       - status
       - days_past_due
       - delinquency_bucket
+      - max_days_past_due
       - overdue_amount
       - total_outstanding
       - currency
+      - last_step_no
+      - broken_promises
       - is_disputed
       - is_vulnerable
       - opened_at
@@ -3065,30 +3630,14 @@ components:
           type: string
           format: uuid
           description: Loan, credit line, card account or overdraft id
-        collection_strategy_id:
+        product_id:
           type: string
           format: uuid
-          description: Strategy in force
-        collection_queue_id:
+          description: Product of the exposure
+        risk_grade:
           type: string
-          format: uuid
-          description: Queue
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Collector
-        status:
-          type: string
-          enum:
-          - OPEN
-          - IN_PROGRESS
-          - PROMISE_ACTIVE
-          - PLAN_ACTIVE
-          - LEGAL
-          - RESOLVED
-          - CLOSED
-          - WRITTEN_OFF
-          description: Status
+          maxLength: 8
+          description: Risk grade of the exposure
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -3097,16 +3646,9 @@ components:
           type: string
           format: date-time
           description: Next scheduled action
-        is_disputed:
-          type: boolean
-          description: Customer disputes the debt
         is_vulnerable:
           type: boolean
           description: Vulnerable-customer flag (adjusted treatment)
-        agency_name:
-          type: string
-          maxLength: 120
-          description: External agency if outsourced
         custom_field_1:
           type: string
           maxLength: 500
@@ -3181,14 +3723,26 @@ components:
           description: Team
         assignment_mode:
           type: string
-          maxLength: 16
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+          enum:
+          - ROUND_ROBIN
+          - SKILL_BASED
+          - MANUAL
+          - AI_PRIORITY
+          description: How cases are distributed
         agent_user_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 64
           description: Collectors assigned (app_user ids)
+        max_cases_per_agent:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Capacity per collector (empty = unlimited)
         is_active:
           type: boolean
           description: Active
@@ -3248,12 +3802,22 @@ components:
           description: Team
         assignment_mode:
           type: string
-          maxLength: 16
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+          enum:
+          - ROUND_ROBIN
+          - SKILL_BASED
+          - MANUAL
+          - AI_PRIORITY
+          description: How cases are distributed
         agent_user_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 64
           description: Collectors assigned (app_user ids)
+        max_cases_per_agent:
+          type: integer
+          format: int32
+          description: Capacity per collector (empty = unlimited)
         is_active:
           type: boolean
           description: Active
@@ -3297,12 +3861,22 @@ components:
           description: Team
         assignment_mode:
           type: string
-          maxLength: 16
-          description: ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY
+          enum:
+          - ROUND_ROBIN
+          - SKILL_BASED
+          - MANUAL
+          - AI_PRIORITY
+          description: How cases are distributed
         agent_user_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 64
           description: Collectors assigned (app_user ids)
+        max_cases_per_agent:
+          type: integer
+          format: int32
+          description: Capacity per collector (empty = unlimited)
         is_active:
           type: boolean
           description: Active
@@ -3386,7 +3960,7 @@ components:
         segment_rules:
           type: object
           additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
+          description: 'Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable}'
         min_dpd:
           type: integer
           format: int32
@@ -3410,7 +3984,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Hours when no contact is allowed
+          description: 'Hours when no contact is allowed: {start: ''21:00'', end: ''08:00''}'
         is_active:
           type: boolean
           description: Active
@@ -3479,7 +4053,7 @@ components:
         segment_rules:
           type: object
           additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
+          description: 'Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable}'
         min_dpd:
           type: integer
           format: int32
@@ -3499,7 +4073,7 @@ components:
         quiet_hours:
           type: object
           additionalProperties: true
-          description: Hours when no contact is allowed
+          description: 'Hours when no contact is allowed: {start: ''21:00'', end: ''08:00''}'
         is_active:
           type: boolean
           description: Active
@@ -3550,7 +4124,7 @@ components:
         segment_rules:
           type: object
           additionalProperties: true
-          description: Segment criteria (product, risk grade, balance, customer type)
+          description: 'Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable}'
         min_dpd:
           type: integer
           format: int32
@@ -3570,7 +4144,7 @@ components:
         quiet_hours:
           type: object
           additionalProperties: true
-          description: Hours when no contact is allowed
+          description: 'Hours when no contact is allowed: {start: ''21:00'', end: ''08:00''}'
         is_active:
           type: boolean
           description: Active
@@ -3675,7 +4249,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Extra condition, e.g. no active promise
+          description: 'Extra condition: {no_active_promise: true, min_overdue: ''100.00''}'
         fee_code:
           type:
           - string
@@ -3761,7 +4335,7 @@ components:
         condition:
           type: object
           additionalProperties: true
-          description: Extra condition, e.g. no active promise
+          description: 'Extra condition: {no_active_promise: true, min_overdue: ''100.00''}'
         fee_code:
           type: string
           maxLength: 40
@@ -3787,7 +4361,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - collection_strategy_id
       - step_no
       - trigger_dpd
       - action_type
@@ -3831,7 +4404,7 @@ components:
         condition:
           type: object
           additionalProperties: true
-          description: Extra condition, e.g. no active promise
+          description: 'Extra condition: {no_active_promise: true, min_overdue: ''100.00''}'
         fee_code:
           type: string
           maxLength: 40
@@ -3856,6 +4429,131 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CollectionsEodRun:
+      type: object
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     LegalProceeding:
       type: object
       description: Legal action on a collections case
@@ -3935,6 +4633,7 @@ components:
         status:
           type: string
           enum:
+          - PENDING_APPROVAL
           - INITIATED
           - FILED
           - HEARING
@@ -3942,7 +4641,23 @@ components:
           - ENFORCEMENT
           - SETTLED
           - CLOSED
-          description: Status
+          - REJECTED
+          description: Status (changed by /approve, /reject, /advance)
+          readOnly: true
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who asked to litigate
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who approved (must differ from the requester)
+          readOnly: true
         filed_at:
           type:
           - string
@@ -4049,17 +4764,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        status:
-          type: string
-          enum:
-          - INITIATED
-          - FILED
-          - HEARING
-          - JUDGEMENT
-          - ENFORCEMENT
-          - SETTLED
-          - CLOSED
-          description: Status
         filed_at:
           type: string
           format: date
@@ -4103,7 +4807,8 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     NextBestAction:
       type: object
-      description: AI-suggested next action for a case (channel, time, offer) with explanation
+      description: Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason
+        codes
       properties:
         id:
           type: string
@@ -4177,6 +4882,18 @@ components:
           examples:
           - '125.50'
           description: Model propensity to pay
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes with their contribution
+        alternatives:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Other actions with their scores
         explanation:
           type:
           - string
@@ -4195,12 +4912,21 @@ components:
           - EXECUTED
           - EXPIRED
           description: Status
+          readOnly: true
         decided_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Collector who accepted or rejected
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was rejected
+          readOnly: true
         expires_at:
           type:
           - string
@@ -4319,9 +5045,10 @@ components:
           format: date
           description: First instalment
         installments:
-          type: object
-          additionalProperties: true
-          description: Planned instalments (date, amount, paid)
+          type: array
+          items: {}
+          description: Planned instalments ({no, due_date, amount, paid})
+          readOnly: true
         paid_amount:
           type: string
           format: decimal
@@ -4342,12 +5069,37 @@ components:
         interest_frozen:
           type: boolean
           description: Interest frozen during the plan
+        requires_approval:
+          type: boolean
+          description: 'Outside policy: activation needs a second user'
+          readOnly: true
         approval_request_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Approval if outside policy
+        activated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who activated it
+          readOnly: true
+        activated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Activation time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
+          readOnly: true
         broken_at:
           type:
           - string
@@ -4400,6 +5152,7 @@ components:
       - paid_amount
       - status
       - interest_frozen
+      - requires_approval
     PaymentPlanUpdate:
       type: object
       properties:
@@ -4437,10 +5190,6 @@ components:
           type: string
           format: date
           description: First instalment
-        installments:
-          type: object
-          additionalProperties: true
-          description: Planned instalments (date, amount, paid)
         interest_frozen:
           type: boolean
           description: Interest frozen during the plan
@@ -4553,6 +5302,21 @@ components:
           - 'null'
           maxLength: 64
           description: Collector
+          readOnly: true
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When it was kept, broken or cancelled
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4619,10 +5383,6 @@ components:
           type: string
           maxLength: 32
           description: How the promise was made
-        taken_by:
-          type: string
-          maxLength: 64
-          description: Collector
         custom_field_1:
           type: string
           maxLength: 500

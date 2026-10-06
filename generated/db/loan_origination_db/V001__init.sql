@@ -41,16 +41,23 @@ CREATE TABLE loan_application (
   currency                     char(3) NOT NULL,
   requested_term_months        integer,
   requested_frequency          varchar(40) CHECK (requested_frequency IN ('DAILY', 'WEEKLY', 'FORTNIGHTLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'ANNUAL', 'AT_MATURITY')),
+  requested_schedule_type      varchar(40) CHECK (requested_schedule_type IN ('ANNUITY', 'EQUAL_PRINCIPAL', 'BULLET', 'BALLOON', 'INTEREST_ONLY', 'CUSTOM')),
   merchant_id                  uuid,
   wallet_id                    uuid,
   agent_id                     uuid,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'IN_REVIEW', 'BUREAU_PENDING', 'SCORED', 'REFERRED', 'APPROVED', 'COUNTER_OFFERED', 'DECLINED', 'OFFER_ACCEPTED', 'SIGNED', 'DISBURSED', 'WITHDRAWN', 'EXPIRED', 'CANCELLED')),
+  disbursement_account_id      uuid,
+  repayment_account_id         uuid,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'IN_REVIEW', 'BUREAU_PENDING', 'SCORED', 'REFERRED', 'APPROVED', 'COUNTER_OFFERED', 'DECLINED', 'OFFER_ACCEPTED', 'SIGNED', 'BOOKED', 'DISBURSED', 'WITHDRAWN', 'EXPIRED', 'CANCELLED')),
   submitted_at                 timestamptz,
   decided_at                   timestamptz,
   expires_at                   timestamptz,
   assigned_to                  varchar(64),
   consent_bureau               boolean NOT NULL DEFAULT false,
   consent_at                   timestamptz,
+  risk_grade                   varchar(8),
+  loan_id                      uuid,
+  booking_error                varchar(500),
+  withdrawal_reason            varchar(255),
   ip_address                   inet,
   device_id                    varchar(128),
   metadata                     jsonb,
@@ -69,7 +76,7 @@ COMMENT ON COLUMN loan_application.created_by IS 'Principal that created the row
 COMMENT ON COLUMN loan_application.updated_at IS 'Last update time';
 COMMENT ON COLUMN loan_application.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN loan_application.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN loan_application.application_number IS 'Human-readable application number';
+COMMENT ON COLUMN loan_application.application_number IS 'Human-readable application number (server-generated)';
 COMMENT ON COLUMN loan_application.customer_id IS 'Primary applicant';
 COMMENT ON COLUMN loan_application.product_id IS 'Lending product applied for';
 COMMENT ON COLUMN loan_application.product_version_id IS 'Product version in force at submission';
@@ -83,16 +90,23 @@ COMMENT ON COLUMN loan_application.requested_amount IS 'Amount requested';
 COMMENT ON COLUMN loan_application.currency IS 'Currency';
 COMMENT ON COLUMN loan_application.requested_term_months IS 'Term requested in months';
 COMMENT ON COLUMN loan_application.requested_frequency IS 'Preferred repayment frequency';
+COMMENT ON COLUMN loan_application.requested_schedule_type IS 'Preferred schedule type (default ANNUITY)';
 COMMENT ON COLUMN loan_application.merchant_id IS 'Merchant for BNPL / point-of-sale financing';
 COMMENT ON COLUMN loan_application.wallet_id IS 'Wallet scored for nano-loans';
 COMMENT ON COLUMN loan_application.agent_id IS 'Agent who assisted the application';
+COMMENT ON COLUMN loan_application.disbursement_account_id IS 'Deposit account to receive the funds';
+COMMENT ON COLUMN loan_application.repayment_account_id IS 'Deposit account auto-debited for instalments';
 COMMENT ON COLUMN loan_application.status IS 'Lifecycle status';
 COMMENT ON COLUMN loan_application.submitted_at IS 'Submission time';
 COMMENT ON COLUMN loan_application.decided_at IS 'Decision time';
 COMMENT ON COLUMN loan_application.expires_at IS 'Application expiry';
-COMMENT ON COLUMN loan_application.assigned_to IS 'Underwriter assigned for manual review';
+COMMENT ON COLUMN loan_application.assigned_to IS 'Underwriter assigned for manual review (set by /assign)';
 COMMENT ON COLUMN loan_application.consent_bureau IS 'Applicant consented to a credit bureau check';
 COMMENT ON COLUMN loan_application.consent_at IS 'Consent time';
+COMMENT ON COLUMN loan_application.risk_grade IS 'Risk grade of the latest score';
+COMMENT ON COLUMN loan_application.loan_id IS 'Loan booked in loan-service';
+COMMENT ON COLUMN loan_application.booking_error IS 'Last error when booking the loan failed (retry with /book)';
+COMMENT ON COLUMN loan_application.withdrawal_reason IS 'Reason given on withdrawal';
 COMMENT ON COLUMN loan_application.ip_address IS 'IP address at submission (fraud signals)';
 COMMENT ON COLUMN loan_application.device_id IS 'Device fingerprint at submission';
 COMMENT ON COLUMN loan_application.metadata IS 'Client-defined key/value metadata';
@@ -109,7 +123,10 @@ CREATE INDEX ix_loan_application_legal_entity_id ON loan_application (legal_enti
 CREATE INDEX ix_loan_application_branch_id ON loan_application (branch_id);
 CREATE INDEX ix_loan_application_merchant_id ON loan_application (merchant_id);
 CREATE INDEX ix_loan_application_wallet_id ON loan_application (wallet_id);
+CREATE INDEX ix_loan_application_disbursement_account_id ON loan_application (disbursement_account_id);
+CREATE INDEX ix_loan_application_repayment_account_id ON loan_application (repayment_account_id);
 CREATE INDEX ix_loan_application_assigned_to ON loan_application (assigned_to);
+CREATE INDEX ix_loan_application_loan_id ON loan_application (loan_id);
 ALTER TABLE loan_application ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON loan_application USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_loan_application_touch BEFORE UPDATE ON loan_application FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -126,6 +143,7 @@ CREATE TABLE loan_applicant (
   loan_application_id          uuid NOT NULL REFERENCES loan_application(id),
   customer_id                  uuid NOT NULL,
   role                         varchar(40) NOT NULL CHECK (role IN ('PRIMARY', 'CO_APPLICANT', 'GUARANTOR')),
+  date_of_birth                date,
   employment_status            varchar(32),
   employer_name                varchar(160),
   occupation                   varchar(120),
@@ -151,6 +169,7 @@ COMMENT ON COLUMN loan_applicant.row_version IS 'Optimistic lock version; send a
 COMMENT ON COLUMN loan_applicant.loan_application_id IS 'Application';
 COMMENT ON COLUMN loan_applicant.customer_id IS 'Applicant customer';
 COMMENT ON COLUMN loan_applicant.role IS 'Role on the application';
+COMMENT ON COLUMN loan_applicant.date_of_birth IS 'Date of birth (age feature of the scorecard) [PII]';
 COMMENT ON COLUMN loan_applicant.employment_status IS 'EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT';
 COMMENT ON COLUMN loan_applicant.employer_name IS 'Employer [PII]';
 COMMENT ON COLUMN loan_applicant.occupation IS 'Occupation';
@@ -235,6 +254,7 @@ CREATE TABLE loan_application_document (
   document_type                varchar(40) NOT NULL CHECK (document_type IN ('ID_PROOF', 'INCOME_PROOF', 'BANK_STATEMENT', 'TAX_RETURN', 'ADDRESS_PROOF', 'BUSINESS_REGISTRATION', 'FINANCIAL_STATEMENTS', 'COLLATERAL_DOCUMENT', 'SIGNED_AGREEMENT', 'OTHER')),
   document_id                  uuid,
   status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'UPLOADED', 'VERIFIED', 'REJECTED', 'EXPIRED')),
+  is_mandatory                 boolean NOT NULL DEFAULT true,
   rejection_reason             varchar(255),
   verified_by                  varchar(64),
   verified_at                  timestamptz,
@@ -256,7 +276,8 @@ COMMENT ON COLUMN loan_application_document.loan_application_id IS 'Application'
 COMMENT ON COLUMN loan_application_document.loan_applicant_id IS 'Applicant the document belongs to';
 COMMENT ON COLUMN loan_application_document.document_type IS 'Type';
 COMMENT ON COLUMN loan_application_document.document_id IS 'Stored document';
-COMMENT ON COLUMN loan_application_document.status IS 'Status';
+COMMENT ON COLUMN loan_application_document.status IS 'Status (UPLOADED when document_id is set; /verify, /reject)';
+COMMENT ON COLUMN loan_application_document.is_mandatory IS 'Required before the application can be decided';
 COMMENT ON COLUMN loan_application_document.rejection_reason IS 'Why it was rejected';
 COMMENT ON COLUMN loan_application_document.verified_by IS 'Verifier';
 COMMENT ON COLUMN loan_application_document.verified_at IS 'Verification time';
@@ -283,6 +304,7 @@ CREATE TABLE bureau_report (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   loan_application_id          uuid REFERENCES loan_application(id),
+  loan_applicant_id            uuid REFERENCES loan_applicant(id),
   customer_id                  uuid NOT NULL,
   provider                     varchar(40) NOT NULL,
   pull_type                    varchar(16) NOT NULL,
@@ -291,13 +313,16 @@ CREATE TABLE bureau_report (
   bureau_score                 integer,
   score_band                   varchar(16),
   total_debt                   numeric(28,8),
+  monthly_debt_service         numeric(28,8),
   open_accounts                integer,
   delinquent_accounts          integer,
   worst_dpd_24m                integer,
   inquiries_6m                 integer,
+  tradelines                   jsonb,
   summary                      jsonb,
   raw_document_id              uuid,
   consent_reference            varchar(128) NOT NULL,
+  failure_reason               varchar(255),
   requested_at                 timestamptz NOT NULL DEFAULT now(),
   received_at                  timestamptz,
   valid_until                  date,
@@ -316,21 +341,25 @@ COMMENT ON COLUMN bureau_report.updated_at IS 'Last update time';
 COMMENT ON COLUMN bureau_report.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN bureau_report.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN bureau_report.loan_application_id IS 'Application (empty for periodic reviews)';
+COMMENT ON COLUMN bureau_report.loan_applicant_id IS 'Applicant the report is for';
 COMMENT ON COLUMN bureau_report.customer_id IS 'Subject of the report';
-COMMENT ON COLUMN bureau_report.provider IS 'Bureau provider, e.g. EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA';
+COMMENT ON COLUMN bureau_report.provider IS 'Bureau provider adapter, e.g. SANDBOX, SANDBOX_ASYNC, EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA';
 COMMENT ON COLUMN bureau_report.pull_type IS 'HARD or SOFT inquiry';
 COMMENT ON COLUMN bureau_report.status IS 'Status';
 COMMENT ON COLUMN bureau_report.bureau_reference IS 'Provider reference';
 COMMENT ON COLUMN bureau_report.bureau_score IS 'Score returned by the bureau';
 COMMENT ON COLUMN bureau_report.score_band IS 'Band returned by the bureau';
 COMMENT ON COLUMN bureau_report.total_debt IS 'Total outstanding debt reported';
+COMMENT ON COLUMN bureau_report.monthly_debt_service IS 'Monthly instalments of reported credit';
 COMMENT ON COLUMN bureau_report.open_accounts IS 'Open credit accounts';
 COMMENT ON COLUMN bureau_report.delinquent_accounts IS 'Accounts in delinquency';
 COMMENT ON COLUMN bureau_report.worst_dpd_24m IS 'Worst days past due in 24 months';
 COMMENT ON COLUMN bureau_report.inquiries_6m IS 'Inquiries in the last 6 months';
+COMMENT ON COLUMN bureau_report.tradelines IS 'Normalised tradelines (lender, type, balance, monthly payment, worst DPD)';
 COMMENT ON COLUMN bureau_report.summary IS 'Normalised summary of the report';
 COMMENT ON COLUMN bureau_report.raw_document_id IS 'Raw report stored as an encrypted document';
 COMMENT ON COLUMN bureau_report.consent_reference IS 'Consent captured for this pull';
+COMMENT ON COLUMN bureau_report.failure_reason IS 'Why the pull failed';
 COMMENT ON COLUMN bureau_report.requested_at IS 'Request time';
 COMMENT ON COLUMN bureau_report.received_at IS 'Response time';
 COMMENT ON COLUMN bureau_report.valid_until IS 'Report reuse expiry';
@@ -341,6 +370,7 @@ COMMENT ON COLUMN bureau_report.custom_field_4 IS 'Tenant-defined custom field 4
 COMMENT ON COLUMN bureau_report.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_bureau_report_tenant ON bureau_report (tenant_id, created_at);
 CREATE INDEX ix_bureau_report_loan_application_id ON bureau_report (loan_application_id);
+CREATE INDEX ix_bureau_report_loan_applicant_id ON bureau_report (loan_applicant_id);
 CREATE INDEX ix_bureau_report_customer_id ON bureau_report (customer_id);
 CREATE INDEX ix_bureau_report_raw_document_id ON bureau_report (raw_document_id);
 ALTER TABLE bureau_report ENABLE ROW LEVEL SECURITY;
@@ -393,7 +423,8 @@ ALTER TABLE scorecard ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON scorecard USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_scorecard_touch BEFORE UPDATE ON scorecard FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- scorecard_version: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+-- scorecard_version: A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
+
 CREATE TABLE scorecard_version (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -406,12 +437,18 @@ CREATE TABLE scorecard_version (
   version                      varchar(32) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'VALIDATING', 'ACTIVE', 'CHAMPION', 'CHALLENGER', 'RETIRED')),
   model_uri                    varchar(500),
+  base_points                  integer NOT NULL DEFAULT 0,
   features                     jsonb NOT NULL,
   cutoffs                      jsonb NOT NULL,
+  target_score                 integer NOT NULL DEFAULT 600,
+  target_odds                  numeric(18,10) NOT NULL DEFAULT 50,
+  points_to_double_odds        numeric(18,10) NOT NULL DEFAULT 20,
   challenger_traffic_pct       numeric(18,10),
   validation_report_document_id uuid,
+  approval_request_id          uuid,
   approved_by                  varchar(64),
   activated_at                 timestamptz,
+  retired_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -419,7 +456,8 @@ CREATE TABLE scorecard_version (
   custom_field_5               varchar(500),
   CONSTRAINT uq_scorecard_version_1 UNIQUE (tenant_id, scorecard_id, version)
 );
-COMMENT ON TABLE scorecard_version IS 'A versioned scorecard or ML model with cut-offs; champion/challenger supported';
+COMMENT ON TABLE scorecard_version IS 'A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
+';
 COMMENT ON COLUMN scorecard_version.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN scorecard_version.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN scorecard_version.created_at IS 'Creation time';
@@ -429,14 +467,20 @@ COMMENT ON COLUMN scorecard_version.updated_by IS 'Principal that last updated t
 COMMENT ON COLUMN scorecard_version.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN scorecard_version.scorecard_id IS 'Scorecard';
 COMMENT ON COLUMN scorecard_version.version IS 'Version label';
-COMMENT ON COLUMN scorecard_version.status IS 'Status';
+COMMENT ON COLUMN scorecard_version.status IS 'Status (changed by /activate, /set-challenger, /retire)';
 COMMENT ON COLUMN scorecard_version.model_uri IS 'Model artefact location (model registry)';
-COMMENT ON COLUMN scorecard_version.features IS 'Input features and transformations';
-COMMENT ON COLUMN scorecard_version.cutoffs IS 'Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers';
-COMMENT ON COLUMN scorecard_version.challenger_traffic_pct IS 'Share of traffic routed to this challenger';
+COMMENT ON COLUMN scorecard_version.base_points IS 'Points every applicant starts with';
+COMMENT ON COLUMN scorecard_version.features IS 'Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]}';
+COMMENT ON COLUMN scorecard_version.cutoffs IS 'Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment}';
+COMMENT ON COLUMN scorecard_version.target_score IS 'Score at the target odds (PD calibration)';
+COMMENT ON COLUMN scorecard_version.target_odds IS 'Good:bad odds at the target score';
+COMMENT ON COLUMN scorecard_version.points_to_double_odds IS 'Points that double the odds';
+COMMENT ON COLUMN scorecard_version.challenger_traffic_pct IS 'Share of traffic routed to this challenger (0..1)';
 COMMENT ON COLUMN scorecard_version.validation_report_document_id IS 'Validation and bias-test report';
-COMMENT ON COLUMN scorecard_version.approved_by IS 'Model risk approver';
+COMMENT ON COLUMN scorecard_version.approval_request_id IS 'Model risk approval';
+COMMENT ON COLUMN scorecard_version.approved_by IS 'Model risk approver (must differ from the author)';
 COMMENT ON COLUMN scorecard_version.activated_at IS 'Activation time';
+COMMENT ON COLUMN scorecard_version.retired_at IS 'Retirement time';
 COMMENT ON COLUMN scorecard_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN scorecard_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN scorecard_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -445,6 +489,7 @@ COMMENT ON COLUMN scorecard_version.custom_field_5 IS 'Tenant-defined custom fie
 CREATE INDEX ix_scorecard_version_tenant ON scorecard_version (tenant_id, created_at);
 CREATE INDEX ix_scorecard_version_scorecard_id ON scorecard_version (scorecard_id);
 CREATE INDEX ix_scorecard_version_validation_report_document_id ON scorecard_version (validation_report_document_id);
+CREATE INDEX ix_scorecard_version_approval_request_id ON scorecard_version (approval_request_id);
 ALTER TABLE scorecard_version ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON scorecard_version USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_scorecard_version_touch BEFORE UPDATE ON scorecard_version FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -458,10 +503,15 @@ CREATE TABLE credit_score (
   loan_application_id          uuid NOT NULL REFERENCES loan_application(id),
   loan_applicant_id            uuid REFERENCES loan_applicant(id),
   scorecard_version_id         uuid NOT NULL REFERENCES scorecard_version(id),
+  routing                      varchar(16) NOT NULL DEFAULT 'CHAMPION',
   score                        integer NOT NULL,
   probability_of_default       numeric(18,10),
   risk_grade                   varchar(8) NOT NULL,
+  cutoff_outcome               varchar(16),
+  rate_adjustment              numeric(18,10),
   reason_codes                 jsonb NOT NULL,
+  contributions                jsonb NOT NULL,
+  inputs                       jsonb,
   inputs_hash                  varchar(64) NOT NULL,
   latency_ms                   integer,
   custom_field_1               varchar(500),
@@ -478,10 +528,15 @@ COMMENT ON COLUMN credit_score.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN credit_score.loan_application_id IS 'Application';
 COMMENT ON COLUMN credit_score.loan_applicant_id IS 'Applicant scored';
 COMMENT ON COLUMN credit_score.scorecard_version_id IS 'Scorecard version used';
+COMMENT ON COLUMN credit_score.routing IS 'CHAMPION or CHALLENGER traffic';
 COMMENT ON COLUMN credit_score.score IS 'Score';
 COMMENT ON COLUMN credit_score.probability_of_default IS 'Estimated PD';
 COMMENT ON COLUMN credit_score.risk_grade IS 'Risk grade, e.g. A1..E5';
-COMMENT ON COLUMN credit_score.reason_codes IS 'Top adverse-action reason codes with contribution';
+COMMENT ON COLUMN credit_score.cutoff_outcome IS 'Outcome of the cut-off band: APPROVE, REFER, DECLINE';
+COMMENT ON COLUMN credit_score.rate_adjustment IS 'Pricing adjustment of the cut-off band';
+COMMENT ON COLUMN credit_score.reason_codes IS 'Top adverse-action reason codes with points lost, most adverse first';
+COMMENT ON COLUMN credit_score.contributions IS 'Points per feature (feature, value, bin, points, max_points)';
+COMMENT ON COLUMN credit_score.inputs IS 'Feature values used';
 COMMENT ON COLUMN credit_score.inputs_hash IS 'Hash of feature inputs for reproducibility';
 COMMENT ON COLUMN credit_score.latency_ms IS 'Scoring latency';
 COMMENT ON COLUMN credit_score.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -509,10 +564,13 @@ CREATE TABLE affordability_assessment (
   living_costs                 numeric(28,8) NOT NULL,
   proposed_instalment          numeric(28,8) NOT NULL,
   stressed_instalment          numeric(28,8),
+  stress_rate                  numeric(18,10),
   debt_to_income               numeric(18,10) NOT NULL,
+  debt_service_ratio           numeric(18,10) NOT NULL,
   disposable_income            numeric(28,8) NOT NULL,
   max_affordable_amount        numeric(28,8),
   result                       varchar(40) NOT NULL CHECK (result IN ('PASS', 'FAIL', 'MARGINAL')),
+  reason_codes                 jsonb,
   currency                     char(3) NOT NULL,
   policy_version               varchar(32) NOT NULL,
   custom_field_1               varchar(500),
@@ -527,15 +585,18 @@ COMMENT ON COLUMN affordability_assessment.tenant_id IS 'Owning tenant; enforced
 COMMENT ON COLUMN affordability_assessment.created_at IS 'Creation time';
 COMMENT ON COLUMN affordability_assessment.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN affordability_assessment.loan_application_id IS 'Application';
-COMMENT ON COLUMN affordability_assessment.verified_monthly_income IS 'Verified monthly income';
+COMMENT ON COLUMN affordability_assessment.verified_monthly_income IS 'Verified (or declared, haircut) monthly income';
 COMMENT ON COLUMN affordability_assessment.monthly_commitments IS 'Existing monthly commitments';
 COMMENT ON COLUMN affordability_assessment.living_costs IS 'Living costs (declared or statistical floor)';
 COMMENT ON COLUMN affordability_assessment.proposed_instalment IS 'Instalment of the requested loan';
 COMMENT ON COLUMN affordability_assessment.stressed_instalment IS 'Instalment at stressed rate';
-COMMENT ON COLUMN affordability_assessment.debt_to_income IS 'Debt-to-income ratio';
-COMMENT ON COLUMN affordability_assessment.disposable_income IS 'Disposable income after the new loan';
-COMMENT ON COLUMN affordability_assessment.max_affordable_amount IS 'Largest affordable amount';
+COMMENT ON COLUMN affordability_assessment.stress_rate IS 'Rate used for the stressed instalment';
+COMMENT ON COLUMN affordability_assessment.debt_to_income IS 'Total debt / annual income (DTI)';
+COMMENT ON COLUMN affordability_assessment.debt_service_ratio IS 'Monthly debt service incl. the stressed instalment / monthly income (DSR)';
+COMMENT ON COLUMN affordability_assessment.disposable_income IS 'Residual income after commitments, living costs and the stressed instalment';
+COMMENT ON COLUMN affordability_assessment.max_affordable_amount IS 'Largest affordable amount at the requested term';
 COMMENT ON COLUMN affordability_assessment.result IS 'Outcome';
+COMMENT ON COLUMN affordability_assessment.reason_codes IS 'Reasons for FAIL / MARGINAL';
 COMMENT ON COLUMN affordability_assessment.currency IS 'Currency';
 COMMENT ON COLUMN affordability_assessment.policy_version IS 'Affordability policy version';
 COMMENT ON COLUMN affordability_assessment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -559,13 +620,18 @@ CREATE TABLE credit_decision (
   outcome                      varchar(40) NOT NULL CHECK (outcome IN ('APPROVED', 'DECLINED', 'REFER', 'COUNTER_OFFER')),
   method                       varchar(40) NOT NULL CHECK (method IN ('AUTOMATIC', 'MANUAL')),
   decided_by                   varchar(64),
+  approved_by                  varchar(64),
   approved_amount              numeric(28,8),
   approved_term_months         integer,
   approved_rate                numeric(18,10),
   risk_grade                   varchar(8),
+  credit_score_id              uuid REFERENCES credit_score(id),
+  affordability_assessment_id  uuid REFERENCES affordability_assessment(id),
   conditions                   jsonb,
+  reason_codes                 jsonb,
   decline_reasons              jsonb,
   policy_rules_fired           jsonb,
+  decision_request_id          uuid,
   approval_request_id          uuid,
   notes                        text,
   custom_field_1               varchar(500),
@@ -582,14 +648,19 @@ COMMENT ON COLUMN credit_decision.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN credit_decision.loan_application_id IS 'Application';
 COMMENT ON COLUMN credit_decision.outcome IS 'Decision';
 COMMENT ON COLUMN credit_decision.method IS 'Automatic or manual';
-COMMENT ON COLUMN credit_decision.decided_by IS 'Underwriter for manual decisions';
+COMMENT ON COLUMN credit_decision.decided_by IS 'Underwriter (maker) for manual decisions';
+COMMENT ON COLUMN credit_decision.approved_by IS 'Checker who approved a manual decision';
 COMMENT ON COLUMN credit_decision.approved_amount IS 'Approved amount';
 COMMENT ON COLUMN credit_decision.approved_term_months IS 'Approved term';
 COMMENT ON COLUMN credit_decision.approved_rate IS 'Approved nominal annual rate';
 COMMENT ON COLUMN credit_decision.risk_grade IS 'Risk grade at decision';
+COMMENT ON COLUMN credit_decision.credit_score_id IS 'Score the decision used';
+COMMENT ON COLUMN credit_decision.affordability_assessment_id IS 'Affordability the decision used';
 COMMENT ON COLUMN credit_decision.conditions IS 'Conditions precedent (documents, collateral, guarantor)';
+COMMENT ON COLUMN credit_decision.reason_codes IS 'Reason codes for the outcome (adverse action, referral or counter-offer)';
 COMMENT ON COLUMN credit_decision.decline_reasons IS 'Adverse action reasons communicated to the applicant';
 COMMENT ON COLUMN credit_decision.policy_rules_fired IS 'Policy rules evaluated and their results';
+COMMENT ON COLUMN credit_decision.decision_request_id IS 'Maker-checker request of a manual decision';
 COMMENT ON COLUMN credit_decision.approval_request_id IS 'Maker-checker approval for overrides';
 COMMENT ON COLUMN credit_decision.notes IS 'Underwriter notes';
 COMMENT ON COLUMN credit_decision.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -599,10 +670,77 @@ COMMENT ON COLUMN credit_decision.custom_field_4 IS 'Tenant-defined custom field
 COMMENT ON COLUMN credit_decision.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_credit_decision_tenant ON credit_decision (tenant_id, created_at);
 CREATE INDEX ix_credit_decision_loan_application_id ON credit_decision (loan_application_id);
+CREATE INDEX ix_credit_decision_credit_score_id ON credit_decision (credit_score_id);
+CREATE INDEX ix_credit_decision_affordability_assessment_id ON credit_decision (affordability_assessment_id);
 CREATE INDEX ix_credit_decision_approval_request_id ON credit_decision (approval_request_id);
 ALTER TABLE credit_decision ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON credit_decision USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_credit_decision_append_only BEFORE UPDATE OR DELETE ON credit_decision FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- credit_decision_request: A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)
+CREATE TABLE credit_decision_request (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  loan_application_id          uuid NOT NULL REFERENCES loan_application(id),
+  outcome                      varchar(40) NOT NULL CHECK (outcome IN ('APPROVED', 'DECLINED', 'REFER', 'COUNTER_OFFER')),
+  approved_amount              numeric(28,8),
+  approved_term_months         integer,
+  approved_rate                numeric(18,10),
+  conditions                   jsonb,
+  reason_codes                 jsonb,
+  is_override                  boolean NOT NULL DEFAULT false,
+  notes                        text,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED')),
+  requested_by                 varchar(64),
+  reviewed_by                  varchar(64),
+  reviewed_at                  timestamptz,
+  review_comment               varchar(500),
+  credit_decision_id           uuid REFERENCES credit_decision(id),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE credit_decision_request IS 'A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)';
+COMMENT ON COLUMN credit_decision_request.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN credit_decision_request.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN credit_decision_request.created_at IS 'Creation time';
+COMMENT ON COLUMN credit_decision_request.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN credit_decision_request.updated_at IS 'Last update time';
+COMMENT ON COLUMN credit_decision_request.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN credit_decision_request.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN credit_decision_request.loan_application_id IS 'Application';
+COMMENT ON COLUMN credit_decision_request.outcome IS 'Proposed decision';
+COMMENT ON COLUMN credit_decision_request.approved_amount IS 'Proposed amount';
+COMMENT ON COLUMN credit_decision_request.approved_term_months IS 'Proposed term';
+COMMENT ON COLUMN credit_decision_request.approved_rate IS 'Proposed rate';
+COMMENT ON COLUMN credit_decision_request.conditions IS 'Conditions precedent';
+COMMENT ON COLUMN credit_decision_request.reason_codes IS 'Reason codes for the outcome';
+COMMENT ON COLUMN credit_decision_request.is_override IS 'Overrides the latest automatic decision';
+COMMENT ON COLUMN credit_decision_request.notes IS 'Underwriter notes';
+COMMENT ON COLUMN credit_decision_request.status IS 'Status';
+COMMENT ON COLUMN credit_decision_request.requested_by IS 'Maker';
+COMMENT ON COLUMN credit_decision_request.reviewed_by IS 'Checker';
+COMMENT ON COLUMN credit_decision_request.reviewed_at IS 'Review time';
+COMMENT ON COLUMN credit_decision_request.review_comment IS 'Checker comment or rejection reason';
+COMMENT ON COLUMN credit_decision_request.credit_decision_id IS 'Decision recorded on approval';
+COMMENT ON COLUMN credit_decision_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN credit_decision_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN credit_decision_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN credit_decision_request.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN credit_decision_request.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_credit_decision_request_tenant ON credit_decision_request (tenant_id, created_at);
+CREATE INDEX ix_credit_decision_request_loan_application_id ON credit_decision_request (loan_application_id);
+CREATE INDEX ix_credit_decision_request_credit_decision_id ON credit_decision_request (credit_decision_id);
+ALTER TABLE credit_decision_request ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON credit_decision_request USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_credit_decision_request_touch BEFORE UPDATE ON credit_decision_request FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- loan_offer: A priced offer made to the applicant
 CREATE TABLE loan_offer (
@@ -623,12 +761,16 @@ CREATE TABLE loan_offer (
   interest_rate                numeric(18,10) NOT NULL,
   apr                          numeric(18,10) NOT NULL,
   upfront_fees                 numeric(28,8) NOT NULL DEFAULT 0,
+  balloon_amount               numeric(28,8),
+  first_repayment_date         date,
   instalment_amount            numeric(28,8) NOT NULL,
+  total_interest               numeric(28,8) NOT NULL,
   total_repayable              numeric(28,8) NOT NULL,
   schedule_preview             jsonb NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'WITHDRAWN')),
-  expires_at                   timestamptz NOT NULL,
+  expires_at                   timestamptz,
   accepted_at                  timestamptz,
+  status_reason                varchar(255),
   terms_document_id            uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -652,14 +794,18 @@ COMMENT ON COLUMN loan_offer.term_months IS 'Term';
 COMMENT ON COLUMN loan_offer.repayment_frequency IS 'Frequency';
 COMMENT ON COLUMN loan_offer.schedule_type IS 'Schedule type';
 COMMENT ON COLUMN loan_offer.interest_rate IS 'Nominal annual rate';
-COMMENT ON COLUMN loan_offer.apr IS 'Annual percentage rate including fees';
+COMMENT ON COLUMN loan_offer.apr IS 'Annual percentage rate including fees (IRR of the cash flows)';
 COMMENT ON COLUMN loan_offer.upfront_fees IS 'Fees deducted or charged at disbursement';
+COMMENT ON COLUMN loan_offer.balloon_amount IS 'Final balloon for BALLOON schedules';
+COMMENT ON COLUMN loan_offer.first_repayment_date IS 'First instalment date (default: one period after acceptance)';
 COMMENT ON COLUMN loan_offer.instalment_amount IS 'Regular instalment';
-COMMENT ON COLUMN loan_offer.total_repayable IS 'Total amount repayable';
+COMMENT ON COLUMN loan_offer.total_interest IS 'Total interest over the term';
+COMMENT ON COLUMN loan_offer.total_repayable IS 'Total amount repayable (principal, interest and fees)';
 COMMENT ON COLUMN loan_offer.schedule_preview IS 'Indicative repayment schedule';
 COMMENT ON COLUMN loan_offer.status IS 'Status';
-COMMENT ON COLUMN loan_offer.expires_at IS 'Offer expiry';
+COMMENT ON COLUMN loan_offer.expires_at IS 'Offer expiry (default: now + offer validity days)';
 COMMENT ON COLUMN loan_offer.accepted_at IS 'Acceptance time';
+COMMENT ON COLUMN loan_offer.status_reason IS 'Reason given on decline or withdrawal';
 COMMENT ON COLUMN loan_offer.terms_document_id IS 'Pre-contract information / key facts document';
 COMMENT ON COLUMN loan_offer.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN loan_offer.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -690,8 +836,11 @@ CREATE TABLE e_signature_request (
   signers                      jsonb NOT NULL,
   agreement_document_id        uuid,
   signed_document_id           uuid,
+  sent_at                      timestamptz,
+  send_count                   integer NOT NULL DEFAULT 0,
   signed_at                    timestamptz,
   expires_at                   timestamptz,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -707,14 +856,17 @@ COMMENT ON COLUMN e_signature_request.updated_at IS 'Last update time';
 COMMENT ON COLUMN e_signature_request.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN e_signature_request.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN e_signature_request.loan_offer_id IS 'Offer being signed';
-COMMENT ON COLUMN e_signature_request.provider IS 'DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER';
+COMMENT ON COLUMN e_signature_request.provider IS 'SANDBOX, DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER';
 COMMENT ON COLUMN e_signature_request.provider_envelope_id IS 'Provider reference';
 COMMENT ON COLUMN e_signature_request.status IS 'Status';
-COMMENT ON COLUMN e_signature_request.signers IS 'Signers and their order';
+COMMENT ON COLUMN e_signature_request.signers IS 'Signers and their order ({customer_id, name, email, order})';
 COMMENT ON COLUMN e_signature_request.agreement_document_id IS 'Agreement to sign';
 COMMENT ON COLUMN e_signature_request.signed_document_id IS 'Signed agreement';
+COMMENT ON COLUMN e_signature_request.sent_at IS 'Last time the envelope was sent';
+COMMENT ON COLUMN e_signature_request.send_count IS 'Times the envelope was sent';
 COMMENT ON COLUMN e_signature_request.signed_at IS 'Completion time';
 COMMENT ON COLUMN e_signature_request.expires_at IS 'Expiry';
+COMMENT ON COLUMN e_signature_request.status_reason IS 'Void or decline reason';
 COMMENT ON COLUMN e_signature_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN e_signature_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN e_signature_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -727,6 +879,35 @@ CREATE INDEX ix_e_signature_request_signed_document_id ON e_signature_request (s
 ALTER TABLE e_signature_request ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON e_signature_request USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_e_signature_request_touch BEFORE UPDATE ON e_signature_request FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- lending_callback_route: Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope or report
+CREATE TABLE lending_callback_route (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  kind                         varchar(40) NOT NULL CHECK (kind IN ('E_SIGNATURE', 'BUREAU')),
+  provider                     varchar(40) NOT NULL,
+  provider_reference           varchar(128) NOT NULL,
+  entity_id                    uuid NOT NULL,
+  owner_tenant_id              uuid NOT NULL,
+  CONSTRAINT uq_lending_callback_route_1 UNIQUE (kind, provider, provider_reference)
+);
+COMMENT ON TABLE lending_callback_route IS 'Routes provider callbacks (which carry no tenant context) to the owning tenant''s envelope or report';
+COMMENT ON COLUMN lending_callback_route.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN lending_callback_route.created_at IS 'Creation time';
+COMMENT ON COLUMN lending_callback_route.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN lending_callback_route.updated_at IS 'Last update time';
+COMMENT ON COLUMN lending_callback_route.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN lending_callback_route.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN lending_callback_route.kind IS 'E-signature envelope or bureau report';
+COMMENT ON COLUMN lending_callback_route.provider IS 'Provider';
+COMMENT ON COLUMN lending_callback_route.provider_reference IS 'Provider envelope id or bureau reference';
+COMMENT ON COLUMN lending_callback_route.entity_id IS 'E-signature request or bureau report in the owning tenant';
+COMMENT ON COLUMN lending_callback_route.owner_tenant_id IS 'Tenant owning the entity';
+CREATE TRIGGER trg_lending_callback_route_touch BEFORE UPDATE ON lending_callback_route FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

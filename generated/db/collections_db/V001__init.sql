@@ -55,12 +55,12 @@ COMMENT ON COLUMN collection_strategy.row_version IS 'Optimistic lock version; s
 COMMENT ON COLUMN collection_strategy.code IS 'Strategy code';
 COMMENT ON COLUMN collection_strategy.name IS 'Name';
 COMMENT ON COLUMN collection_strategy.exposure_type IS 'Exposure type (empty = any)';
-COMMENT ON COLUMN collection_strategy.segment_rules IS 'Segment criteria (product, risk grade, balance, customer type)';
+COMMENT ON COLUMN collection_strategy.segment_rules IS 'Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable}';
 COMMENT ON COLUMN collection_strategy.min_dpd IS 'Lower DPD bound';
 COMMENT ON COLUMN collection_strategy.max_dpd IS 'Upper DPD bound';
 COMMENT ON COLUMN collection_strategy.priority IS 'Lower wins when several match';
 COMMENT ON COLUMN collection_strategy.max_contacts_per_week IS 'Contact-frequency cap (conduct rules)';
-COMMENT ON COLUMN collection_strategy.quiet_hours IS 'Hours when no contact is allowed';
+COMMENT ON COLUMN collection_strategy.quiet_hours IS 'Hours when no contact is allowed: {start: ''21:00'', end: ''08:00''}';
 COMMENT ON COLUMN collection_strategy.is_active IS 'Active';
 COMMENT ON COLUMN collection_strategy.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_strategy.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -93,7 +93,8 @@ CREATE TABLE collection_strategy_step (
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_collection_strategy_step_1 UNIQUE (collection_strategy_id, step_no)
 );
 COMMENT ON TABLE collection_strategy_step IS 'An action of a strategy triggered at a DPD or after an event';
 COMMENT ON COLUMN collection_strategy_step.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -109,7 +110,7 @@ COMMENT ON COLUMN collection_strategy_step.trigger_dpd IS 'DPD at which the step
 COMMENT ON COLUMN collection_strategy_step.action_type IS 'Action';
 COMMENT ON COLUMN collection_strategy_step.template_code IS 'Notification / letter template';
 COMMENT ON COLUMN collection_strategy_step.queue_id IS 'Queue for manual actions';
-COMMENT ON COLUMN collection_strategy_step.condition IS 'Extra condition, e.g. no active promise';
+COMMENT ON COLUMN collection_strategy_step.condition IS 'Extra condition: {no_active_promise: true, min_overdue: ''100.00''}';
 COMMENT ON COLUMN collection_strategy_step.fee_code IS 'Fee to charge, if any';
 COMMENT ON COLUMN collection_strategy_step.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_strategy_step.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -134,8 +135,9 @@ CREATE TABLE collection_queue (
   code                         varchar(40) NOT NULL,
   name                         varchar(120) NOT NULL,
   team                         varchar(64),
-  assignment_mode              varchar(16) NOT NULL DEFAULT 'ROUND_ROBIN',
+  assignment_mode              varchar(40) NOT NULL DEFAULT 'ROUND_ROBIN' CHECK (assignment_mode IN ('ROUND_ROBIN', 'SKILL_BASED', 'MANUAL', 'AI_PRIORITY')),
   agent_user_ids               jsonb,
+  max_cases_per_agent          integer,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -155,8 +157,9 @@ COMMENT ON COLUMN collection_queue.row_version IS 'Optimistic lock version; send
 COMMENT ON COLUMN collection_queue.code IS 'Queue code';
 COMMENT ON COLUMN collection_queue.name IS 'Name';
 COMMENT ON COLUMN collection_queue.team IS 'Team';
-COMMENT ON COLUMN collection_queue.assignment_mode IS 'ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY';
+COMMENT ON COLUMN collection_queue.assignment_mode IS 'How cases are distributed';
 COMMENT ON COLUMN collection_queue.agent_user_ids IS 'Collectors assigned (app_user ids)';
+COMMENT ON COLUMN collection_queue.max_cases_per_agent IS 'Capacity per collector (empty = unlimited)';
 COMMENT ON COLUMN collection_queue.is_active IS 'Active';
 COMMENT ON COLUMN collection_queue.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_queue.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -181,24 +184,31 @@ CREATE TABLE collection_case (
   customer_id                  uuid NOT NULL,
   exposure_type                varchar(40) NOT NULL CHECK (exposure_type IN ('LOAN', 'CREDIT_LINE', 'CARD', 'OVERDRAFT', 'BNPL')),
   exposure_id                  uuid NOT NULL,
+  product_id                   uuid,
+  risk_grade                   varchar(8),
   collection_strategy_id       uuid REFERENCES collection_strategy(id),
   collection_queue_id          uuid REFERENCES collection_queue(id),
   assigned_to                  varchar(64),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'IN_PROGRESS', 'PROMISE_ACTIVE', 'PLAN_ACTIVE', 'LEGAL', 'RESOLVED', 'CLOSED', 'WRITTEN_OFF')),
   days_past_due                integer NOT NULL,
   delinquency_bucket           varchar(40) NOT NULL CHECK (delinquency_bucket IN ('CURRENT', 'DPD_1_29', 'DPD_30_59', 'DPD_60_89', 'DPD_90_119', 'DPD_120_179', 'DPD_180_PLUS')),
+  max_days_past_due            integer NOT NULL DEFAULT 0,
   overdue_amount               numeric(28,8) NOT NULL,
   total_outstanding            numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   priority_score               integer,
+  last_step_no                 integer NOT NULL DEFAULT 0,
+  broken_promises              integer NOT NULL DEFAULT 0,
   last_contact_at              timestamptz,
+  last_payment_at              timestamptz,
   next_action_at               timestamptz,
   is_disputed                  boolean NOT NULL DEFAULT false,
   is_vulnerable                boolean NOT NULL DEFAULT false,
   agency_name                  varchar(120),
+  agency_assigned_at           timestamptz,
   opened_at                    timestamptz NOT NULL DEFAULT now(),
   resolved_at                  timestamptz,
-  resolution                   varchar(40),
+  resolution                   varchar(40) CHECK (resolution IN ('CURED', 'PAID_OFF', 'RESTRUCTURED', 'SETTLED', 'WRITTEN_OFF', 'SOLD', 'OTHER')),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -214,28 +224,35 @@ COMMENT ON COLUMN collection_case.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN collection_case.updated_at IS 'Last update time';
 COMMENT ON COLUMN collection_case.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN collection_case.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN collection_case.case_number IS 'Case number';
+COMMENT ON COLUMN collection_case.case_number IS 'Case number (server-generated)';
 COMMENT ON COLUMN collection_case.customer_id IS 'Customer';
 COMMENT ON COLUMN collection_case.exposure_type IS 'Exposure type';
 COMMENT ON COLUMN collection_case.exposure_id IS 'Loan, credit line, card account or overdraft id';
+COMMENT ON COLUMN collection_case.product_id IS 'Product of the exposure';
+COMMENT ON COLUMN collection_case.risk_grade IS 'Risk grade of the exposure';
 COMMENT ON COLUMN collection_case.collection_strategy_id IS 'Strategy in force';
-COMMENT ON COLUMN collection_case.collection_queue_id IS 'Queue';
-COMMENT ON COLUMN collection_case.assigned_to IS 'Collector';
+COMMENT ON COLUMN collection_case.collection_queue_id IS 'Queue (set by /assign or the strategy)';
+COMMENT ON COLUMN collection_case.assigned_to IS 'Collector (set by /assign or queue distribution)';
 COMMENT ON COLUMN collection_case.status IS 'Status';
 COMMENT ON COLUMN collection_case.days_past_due IS 'Current DPD';
 COMMENT ON COLUMN collection_case.delinquency_bucket IS 'Bucket';
+COMMENT ON COLUMN collection_case.max_days_past_due IS 'Highest DPD reached';
 COMMENT ON COLUMN collection_case.overdue_amount IS 'Overdue amount';
 COMMENT ON COLUMN collection_case.total_outstanding IS 'Total outstanding';
 COMMENT ON COLUMN collection_case.currency IS 'Currency';
-COMMENT ON COLUMN collection_case.priority_score IS 'AI / rules priority for working the queue';
+COMMENT ON COLUMN collection_case.priority_score IS 'Rules priority for working the queue (0-1000)';
+COMMENT ON COLUMN collection_case.last_step_no IS 'Last strategy step executed';
+COMMENT ON COLUMN collection_case.broken_promises IS 'Promises broken on this case';
 COMMENT ON COLUMN collection_case.last_contact_at IS 'Last contact attempt';
+COMMENT ON COLUMN collection_case.last_payment_at IS 'Last payment seen';
 COMMENT ON COLUMN collection_case.next_action_at IS 'Next scheduled action';
-COMMENT ON COLUMN collection_case.is_disputed IS 'Customer disputes the debt';
+COMMENT ON COLUMN collection_case.is_disputed IS 'Customer disputes the debt (set by /mark-dispute; automated contact suppressed)';
 COMMENT ON COLUMN collection_case.is_vulnerable IS 'Vulnerable-customer flag (adjusted treatment)';
 COMMENT ON COLUMN collection_case.agency_name IS 'External agency if outsourced';
+COMMENT ON COLUMN collection_case.agency_assigned_at IS 'When the case was sent to the agency';
 COMMENT ON COLUMN collection_case.opened_at IS 'Opening time';
 COMMENT ON COLUMN collection_case.resolved_at IS 'Resolution time';
-COMMENT ON COLUMN collection_case.resolution IS 'CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD';
+COMMENT ON COLUMN collection_case.resolution IS 'How the case ended';
 COMMENT ON COLUMN collection_case.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_case.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_case.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -244,6 +261,7 @@ COMMENT ON COLUMN collection_case.custom_field_5 IS 'Tenant-defined custom field
 CREATE INDEX ix_collection_case_tenant ON collection_case (tenant_id, created_at);
 CREATE INDEX ix_collection_case_customer_id ON collection_case (customer_id);
 CREATE INDEX ix_collection_case_exposure_id ON collection_case (exposure_id);
+CREATE INDEX ix_collection_case_product_id ON collection_case (product_id);
 CREATE INDEX ix_collection_case_collection_strategy_id ON collection_case (collection_strategy_id);
 CREATE INDEX ix_collection_case_collection_queue_id ON collection_case (collection_queue_id);
 CREATE INDEX ix_collection_case_assigned_to ON collection_case (assigned_to);
@@ -263,11 +281,12 @@ CREATE TABLE collection_action (
   action_type                  varchar(40) NOT NULL CHECK (action_type IN ('SMS', 'PUSH', 'EMAIL', 'WHATSAPP', 'CALL', 'FIELD_VISIT', 'LETTER', 'LEGAL_NOTICE', 'AUTO_DEBIT_RETRY', 'SKIP_TRACE')),
   collection_strategy_step_id  uuid REFERENCES collection_strategy_step(id),
   performed_by                 varchar(64),
-  outcome                      varchar(40) NOT NULL CHECK (outcome IN ('SENT', 'DELIVERED', 'FAILED', 'NO_ANSWER', 'RIGHT_PARTY_CONTACT', 'WRONG_PARTY', 'PROMISE_MADE', 'REFUSED', 'PAID', 'DISPUTED')),
+  outcome                      varchar(40) NOT NULL CHECK (outcome IN ('SENT', 'DELIVERED', 'FAILED', 'NO_ANSWER', 'RIGHT_PARTY_CONTACT', 'WRONG_PARTY', 'PROMISE_MADE', 'REFUSED', 'PAID', 'DISPUTED', 'SUPPRESSED')),
   contact_channel_address      varchar(320),
   notes                        text,
   recording_document_id        uuid,
   notification_id              uuid,
+  business_date                date,
   performed_at                 timestamptz NOT NULL DEFAULT now(),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -289,6 +308,7 @@ COMMENT ON COLUMN collection_action.contact_channel_address IS 'Phone / email us
 COMMENT ON COLUMN collection_action.notes IS 'Notes';
 COMMENT ON COLUMN collection_action.recording_document_id IS 'Call recording / letter copy';
 COMMENT ON COLUMN collection_action.notification_id IS 'Notification sent';
+COMMENT ON COLUMN collection_action.business_date IS 'Business date of an automated action';
 COMMENT ON COLUMN collection_action.performed_at IS 'Time';
 COMMENT ON COLUMN collection_action.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collection_action.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -320,6 +340,8 @@ CREATE TABLE promise_to_pay (
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'KEPT', 'PARTIALLY_KEPT', 'BROKEN', 'CANCELLED')),
   channel                      varchar(32),
   taken_by                     varchar(64),
+  resolved_at                  timestamptz,
+  cancel_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -342,6 +364,8 @@ COMMENT ON COLUMN promise_to_pay.paid_amount IS 'Paid against the promise';
 COMMENT ON COLUMN promise_to_pay.status IS 'Status';
 COMMENT ON COLUMN promise_to_pay.channel IS 'How the promise was made';
 COMMENT ON COLUMN promise_to_pay.taken_by IS 'Collector';
+COMMENT ON COLUMN promise_to_pay.resolved_at IS 'When it was kept, broken or cancelled';
+COMMENT ON COLUMN promise_to_pay.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN promise_to_pay.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN promise_to_pay.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN promise_to_pay.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -372,7 +396,11 @@ CREATE TABLE payment_plan (
   paid_amount                  numeric(28,8) NOT NULL DEFAULT 0,
   status                       varchar(40) NOT NULL DEFAULT 'PROPOSED' CHECK (status IN ('PROPOSED', 'ACTIVE', 'COMPLETED', 'BROKEN', 'CANCELLED')),
   interest_frozen              boolean NOT NULL DEFAULT false,
+  requires_approval            boolean NOT NULL DEFAULT false,
   approval_request_id          uuid,
+  activated_by                 varchar(64),
+  activated_at                 timestamptz,
+  cancel_reason                varchar(255),
   broken_at                    timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -394,11 +422,15 @@ COMMENT ON COLUMN payment_plan.currency IS 'Currency';
 COMMENT ON COLUMN payment_plan.installment_count IS 'Number of instalments';
 COMMENT ON COLUMN payment_plan.frequency IS 'Frequency';
 COMMENT ON COLUMN payment_plan.start_date IS 'First instalment';
-COMMENT ON COLUMN payment_plan.installments IS 'Planned instalments (date, amount, paid)';
+COMMENT ON COLUMN payment_plan.installments IS 'Planned instalments ({no, due_date, amount, paid})';
 COMMENT ON COLUMN payment_plan.paid_amount IS 'Paid to date';
 COMMENT ON COLUMN payment_plan.status IS 'Status';
 COMMENT ON COLUMN payment_plan.interest_frozen IS 'Interest frozen during the plan';
+COMMENT ON COLUMN payment_plan.requires_approval IS 'Outside policy: activation needs a second user';
 COMMENT ON COLUMN payment_plan.approval_request_id IS 'Approval if outside policy';
+COMMENT ON COLUMN payment_plan.activated_by IS 'Who activated it';
+COMMENT ON COLUMN payment_plan.activated_at IS 'Activation time';
+COMMENT ON COLUMN payment_plan.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN payment_plan.broken_at IS 'When the plan broke';
 COMMENT ON COLUMN payment_plan.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN payment_plan.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -412,7 +444,7 @@ ALTER TABLE payment_plan ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON payment_plan USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_payment_plan_touch BEFORE UPDATE ON payment_plan FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- next_best_action: AI-suggested next action for a case (channel, time, offer) with explanation
+-- next_best_action: Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason codes
 CREATE TABLE next_best_action (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -426,10 +458,13 @@ CREATE TABLE next_best_action (
   suggested_at_time            timestamptz,
   suggested_offer              jsonb,
   propensity_to_pay            numeric(18,10),
+  reason_codes                 jsonb,
+  alternatives                 jsonb,
   explanation                  text,
   model_version                varchar(32) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'SUGGESTED' CHECK (status IN ('SUGGESTED', 'ACCEPTED', 'REJECTED', 'EXECUTED', 'EXPIRED')),
   decided_by                   varchar(64),
+  rejection_reason             varchar(255),
   expires_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -437,7 +472,7 @@ CREATE TABLE next_best_action (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE next_best_action IS 'AI-suggested next action for a case (channel, time, offer) with explanation';
+COMMENT ON TABLE next_best_action IS 'Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason codes';
 COMMENT ON COLUMN next_best_action.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN next_best_action.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN next_best_action.created_at IS 'Creation time';
@@ -450,10 +485,13 @@ COMMENT ON COLUMN next_best_action.suggested_action IS 'Suggested action';
 COMMENT ON COLUMN next_best_action.suggested_at_time IS 'Best time to contact';
 COMMENT ON COLUMN next_best_action.suggested_offer IS 'Offer, e.g. settlement discount or plan terms';
 COMMENT ON COLUMN next_best_action.propensity_to_pay IS 'Model propensity to pay';
+COMMENT ON COLUMN next_best_action.reason_codes IS 'Reason codes with their contribution';
+COMMENT ON COLUMN next_best_action.alternatives IS 'Other actions with their scores';
 COMMENT ON COLUMN next_best_action.explanation IS 'Why the model suggests this';
 COMMENT ON COLUMN next_best_action.model_version IS 'Model version';
 COMMENT ON COLUMN next_best_action.status IS 'Status';
 COMMENT ON COLUMN next_best_action.decided_by IS 'Collector who accepted or rejected';
+COMMENT ON COLUMN next_best_action.rejection_reason IS 'Why it was rejected';
 COMMENT ON COLUMN next_best_action.expires_at IS 'Suggestion expiry';
 COMMENT ON COLUMN next_best_action.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN next_best_action.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -482,7 +520,9 @@ CREATE TABLE legal_proceeding (
   claim_amount                 numeric(28,8) NOT NULL,
   legal_costs                  numeric(28,8) NOT NULL DEFAULT 0,
   currency                     char(3) NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'FILED', 'HEARING', 'JUDGEMENT', 'ENFORCEMENT', 'SETTLED', 'CLOSED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'INITIATED', 'FILED', 'HEARING', 'JUDGEMENT', 'ENFORCEMENT', 'SETTLED', 'CLOSED', 'REJECTED')),
+  requested_by                 varchar(64),
+  approved_by                  varchar(64),
   filed_at                     date,
   next_hearing_date            date,
   judgement_amount             numeric(28,8),
@@ -509,7 +549,9 @@ COMMENT ON COLUMN legal_proceeding.law_firm IS 'Panel law firm';
 COMMENT ON COLUMN legal_proceeding.claim_amount IS 'Amount claimed';
 COMMENT ON COLUMN legal_proceeding.legal_costs IS 'Costs incurred';
 COMMENT ON COLUMN legal_proceeding.currency IS 'Currency';
-COMMENT ON COLUMN legal_proceeding.status IS 'Status';
+COMMENT ON COLUMN legal_proceeding.status IS 'Status (changed by /approve, /reject, /advance)';
+COMMENT ON COLUMN legal_proceeding.requested_by IS 'Who asked to litigate';
+COMMENT ON COLUMN legal_proceeding.approved_by IS 'Who approved (must differ from the requester)';
 COMMENT ON COLUMN legal_proceeding.filed_at IS 'Filing date';
 COMMENT ON COLUMN legal_proceeding.next_hearing_date IS 'Next hearing';
 COMMENT ON COLUMN legal_proceeding.judgement_amount IS 'Judgement amount';
@@ -526,6 +568,54 @@ CREATE INDEX ix_legal_proceeding_approval_request_id ON legal_proceeding (approv
 ALTER TABLE legal_proceeding ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON legal_proceeding USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_legal_proceeding_touch BEFORE UPDATE ON legal_proceeding FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- collections_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE collections_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('DAILY_ACCRUAL', 'INSTALLMENT_DUE', 'AUTO_DEBIT', 'DELINQUENCY_UPDATE', 'CREDIT_LINE_STATEMENTS', 'COLLECTIONS_STRATEGY_RUN', 'COLLATERAL_MONITORING')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_collections_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE collections_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN collections_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN collections_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN collections_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN collections_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN collections_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN collections_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN collections_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN collections_eod_run.job IS 'Job';
+COMMENT ON COLUMN collections_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN collections_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN collections_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN collections_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN collections_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN collections_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN collections_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collections_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collections_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collections_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collections_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_collections_eod_run_tenant ON collections_eod_run (tenant_id, created_at);
+ALTER TABLE collections_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON collections_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_collections_eod_run_touch BEFORE UPDATE ON collections_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

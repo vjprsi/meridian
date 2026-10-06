@@ -19,6 +19,8 @@ security:
 tags:
 - name: Collaterals
   description: A pledged asset or guarantee securing one or more exposures
+- name: Collateral Eod Runs
+  description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
 - name: Collateral Valuations
   description: Valuation history of a collateral item. Append-only.
 - name: Collateral Links
@@ -242,7 +244,7 @@ paths:
   /v1/collaterals/{id}/verify:
     post:
       operationId: collateralsVerify
-      summary: Mark collateral verified
+      summary: Mark collateral verified (type-specific attributes and a valuation required)
       tags:
       - Collaterals
       security:
@@ -273,6 +275,52 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-06
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: collateral
+  /v1/collaterals/{id}/reject:
+    post:
+      operationId: collateralsReject
+      summary: Reject proposed collateral
+      tags:
+      - Collaterals
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collateral'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollateralsRejectRequest'
       x-requirements:
       - LND-06
       x-service: collateral-service
@@ -328,7 +376,7 @@ paths:
   /v1/collaterals/{id}/release:
     post:
       operationId: collateralsRelease
-      summary: Release the collateral
+      summary: Release the collateral (no active links may remain unless force)
       tags:
       - Collaterals
       security:
@@ -374,7 +422,8 @@ paths:
   /v1/collaterals/{id}/liquidate:
     post:
       operationId: collateralsLiquidate
-      summary: Record liquidation proceeds
+      summary: Record liquidation proceeds and apply them to the linked exposures by charge rank (loan repayment or post-write-off
+        recovery)
       tags:
       - Collaterals
       security:
@@ -394,7 +443,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoanRecovery'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -417,6 +468,207 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
       x-table: collateral
+  /v1/collaterals/{id}/ltv:
+    get:
+      operationId: collateralsLtv
+      summary: Current LTV of every exposure the collateral secures
+      tags:
+      - Collaterals
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-06
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: collateral
+  /v1/collaterals/eod/monitor:
+    post:
+      operationId: collateralsEodMonitor
+      summary: End of day - recompute LTV (alerts), insurance expiry and revaluation due (idempotent per business date)
+      tags:
+      - Collaterals
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-06
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: collateral
+  /v1/collateral-eod-runs:
+    get:
+      operationId: collateralEodRunsList
+      summary: List collateral eod runs
+      tags:
+      - Collateral Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollateralEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-06
+      - OPS-01
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: collateral_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/collateral-eod-runs/{id}:
+    get:
+      operationId: collateralEodRunsGet
+      summary: Retrieve collateral eod run
+      tags:
+      - Collateral Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollateralEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-06
+      - OPS-01
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: collateral_eod_run
+      x-crud: true
+      x-crud-get: true
   /v1/collaterals/{collateral_id}/valuations:
     get:
       operationId: collateralValuationsList
@@ -608,6 +860,14 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: ltv_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OK
+          - WARNING
+          - BREACH
       - name: custom_field_1
         in: query
         schema:
@@ -811,6 +1071,46 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CollateralLinksReleaseRequest'
+      x-requirements:
+      - LND-06
+      x-service: collateral-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: collateral_link
+  /v1/collateral-links/{id}/recalculate-ltv:
+    post:
+      operationId: collateralLinksRecalculateLtv
+      summary: Recalculate the LTV from the exposure outstanding in loan-service
+      tags:
+      - Collateral Links
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollateralLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - LND-06
       x-service: collateral-service
@@ -1055,6 +1355,14 @@ components:
       required:
       - data
       - has_more
+    CollateralsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     CollateralsPledgeRequest:
       type: object
       properties:
@@ -1073,6 +1381,8 @@ components:
         reason:
           type: string
           maxLength: 255
+        force:
+          type: boolean
       required:
       - reason
     CollateralsLiquidateRequest:
@@ -1086,9 +1396,35 @@ components:
         sale_date:
           type: string
           format: date
+        costs:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reference:
+          type: string
+          maxLength: 128
       required:
       - proceeds
       - sale_date
+    CollateralEodRunPage:
+      type: object
+      description: One page of CollateralEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollateralEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CollateralValuationPage:
       type: object
       description: One page of CollateralValuation results (newest first)
@@ -1192,7 +1528,7 @@ components:
         collateral_number:
           type: string
           maxLength: 32
-          description: Registry number
+          description: Registry number (server-generated)
           readOnly: true
         owner_customer_id:
           type: string
@@ -1226,7 +1562,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latest market value
+          description: Latest market value (changed by valuations)
         forced_sale_value:
           type:
           - string
@@ -1236,11 +1572,13 @@ components:
           - '125.50'
           description: Latest forced-sale value
         haircut_pct:
-          type: string
+          type:
+          - string
+          - 'null'
           format: decimal
           examples:
           - '125.50'
-          description: Haircut applied for lending value
+          description: Haircut applied for lending value (empty = type default)
         lending_value:
           type: string
           format: decimal
@@ -1248,12 +1586,20 @@ components:
           - '125.50'
           description: Value after haircut
           readOnly: true
+        allocated_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lending value allocated to active links
+          readOnly: true
         registration_reference:
           type:
           - string
           - 'null'
           maxLength: 128
-          description: Land registry / vehicle registration / lien reference
+          description: Land registry / vehicle registration / lien reference (set by /pledge)
+          readOnly: true
         registration_authority:
           type:
           - string
@@ -1266,6 +1612,7 @@ components:
           - 'null'
           format: date
           description: Lien registration date
+          readOnly: true
         location:
           type:
           - object
@@ -1283,7 +1630,8 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Type-specific attributes (VIN, title number, carat weight, ...)
+          description: Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams;
+            SECURITIES isin, quantity; GUARANTEE guarantor_name)
         status:
           type: string
           enum:
@@ -1294,12 +1642,50 @@ components:
           - LIQUIDATED
           - REJECTED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last rejection, release or liquidation
+          readOnly: true
         next_valuation_date:
           type:
           - string
           - 'null'
           format: date
           description: Next revaluation due
+        verified_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Verifier
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        liquidation_proceeds:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net proceeds of the liquidation
+          readOnly: true
+        liquidated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Liquidation time
+          readOnly: true
         released_at:
           type:
           - string
@@ -1348,8 +1734,8 @@ components:
       - description
       - currency
       - market_value
-      - haircut_pct
       - lending_value
+      - allocated_value
       - status
     CollateralCreate:
       type: object
@@ -1386,7 +1772,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latest market value
+          description: Latest market value (changed by valuations)
         forced_sale_value:
           type: string
           format: decimal
@@ -1398,19 +1784,11 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Haircut applied for lending value
-        registration_reference:
-          type: string
-          maxLength: 128
-          description: Land registry / vehicle registration / lien reference
+          description: Haircut applied for lending value (empty = type default)
         registration_authority:
           type: string
           maxLength: 120
           description: Registry authority
-        lien_registered_at:
-          type: string
-          format: date
-          description: Lien registration date
         location:
           type: object
           additionalProperties: true
@@ -1422,17 +1800,8 @@ components:
         asset_details:
           type: object
           additionalProperties: true
-          description: Type-specific attributes (VIN, title number, carat weight, ...)
-        status:
-          type: string
-          enum:
-          - PROPOSED
-          - VERIFIED
-          - PLEDGED
-          - RELEASED
-          - LIQUIDATED
-          - REJECTED
-          description: Status
+          description: Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams;
+            SECURITIES isin, quantity; GUARANTEE guarantor_name)
         next_valuation_date:
           type: string
           format: date
@@ -1498,7 +1867,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latest market value
+          description: Latest market value (changed by valuations)
         forced_sale_value:
           type: string
           format: decimal
@@ -1510,19 +1879,11 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Haircut applied for lending value
-        registration_reference:
-          type: string
-          maxLength: 128
-          description: Land registry / vehicle registration / lien reference
+          description: Haircut applied for lending value (empty = type default)
         registration_authority:
           type: string
           maxLength: 120
           description: Registry authority
-        lien_registered_at:
-          type: string
-          format: date
-          description: Lien registration date
         location:
           type: object
           additionalProperties: true
@@ -1534,17 +1895,8 @@ components:
         asset_details:
           type: object
           additionalProperties: true
-          description: Type-specific attributes (VIN, title number, carat weight, ...)
-        status:
-          type: string
-          enum:
-          - PROPOSED
-          - VERIFIED
-          - PLEDGED
-          - RELEASED
-          - LIQUIDATED
-          - REJECTED
-          description: Status
+          description: Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams;
+            SECURITIES isin, quantity; GUARANTEE guarantor_name)
         next_valuation_date:
           type: string
           format: date
@@ -1569,6 +1921,131 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    CollateralEodRun:
+      type: object
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     CollateralInsurance:
       type: object
       description: Insurance policy covering a collateral item
@@ -1654,6 +2131,13 @@ components:
           - 'null'
           format: uuid
           description: Policy document
+        expiry_notified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the expiry warning was raised
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -1902,6 +2386,23 @@ components:
           type: integer
           format: int32
           description: First, second charge
+        max_ltv:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: LTV limit; above it the link is in BREACH (warning at 90% of the limit)
+        exposure_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Exposure outstanding at the last calculation
+          readOnly: true
         ltv:
           type:
           - string
@@ -1909,11 +2410,36 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Loan-to-value at last calculation
+          description: Loan-to-value at last calculation (exposure / lending value allocated to it)
+          readOnly: true
+        ltv_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - OK
+          - WARNING
+          - BREACH
+          description: OK, WARNING or BREACH
+          readOnly: true
+        ltv_calculated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last LTV calculation
           readOnly: true
         is_active:
           type: boolean
           description: Active link
+          readOnly: true
+        release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the link was released
+          readOnly: true
         released_at:
           type:
           - string
@@ -1992,9 +2518,12 @@ components:
           type: integer
           format: int32
           description: First, second charge
-        is_active:
-          type: boolean
-          description: Active link
+        max_ltv:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: LTV limit; above it the link is in BREACH (warning at 90% of the limit)
         custom_field_1:
           type: string
           maxLength: 500
@@ -2050,9 +2579,12 @@ components:
           type: integer
           format: int32
           description: First, second charge
-        is_active:
-          type: boolean
-          description: Active link
+        max_ltv:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: LTV limit; above it the link is in BREACH (warning at 90% of the limit)
         custom_field_1:
           type: string
           maxLength: 500
@@ -2116,6 +2648,24 @@ components:
           examples:
           - '125.50'
           description: Forced-sale value
+        haircut_pct:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Haircut applied at this valuation
+          readOnly: true
+        lending_value:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Lending value after haircut
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -2234,111 +2784,10 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - collateral_id
       - valuation_date
       - market_value
       - currency
       - method
-    LoanRecovery:
-      type: object
-      description: Recovery received after write-off. Append-only.
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique id (UUIDv7, time-ordered)
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          description: Creation time
-          readOnly: true
-        created_by:
-          type:
-          - string
-          - 'null'
-          maxLength: 64
-          description: Principal that created the row
-          readOnly: true
-        loan_id:
-          type: string
-          format: uuid
-          description: Loan
-        loan_write_off_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-          description: Write-off being recovered
-        amount:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Amount recovered
-        currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
-        source:
-          type: string
-          maxLength: 40
-          description: CUSTOMER, AGENCY, COLLATERAL_SALE, INSURANCE, DEBT_SALE, LEGAL
-        agency_commission:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Commission paid to a collection agency
-        received_at:
-          type: string
-          format: date-time
-          description: Receipt time
-        journal_entry_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-          description: Ledger posting
-        custom_field_1:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type:
-          - string
-          - 'null'
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-      required:
-      - id
-      - created_at
-      - loan_id
-      - amount
-      - currency
-      - source
-      - agency_commission
-      - received_at
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

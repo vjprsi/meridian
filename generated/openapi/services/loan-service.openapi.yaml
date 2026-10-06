@@ -19,6 +19,8 @@ security:
 tags:
 - name: Loans
   description: A booked loan (instalment, BNPL, nano, merchant financing, mortgage, SME term)
+- name: Loan Eod Runs
+  description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
 - name: Loan Disbursements
   description: A disbursement (single or tranche) of loan funds
 - name: Schedule Installments
@@ -34,7 +36,7 @@ tags:
 - name: Loan Restructures
   description: Restructuring request (reschedule, refinance, payment holiday) with maker-checker
 - name: Loan Prepayment Quotes
-  description: A pay-off / partial prepayment quote valid until a date
+  description: A pay-off / partial prepayment quote valid until a time
 - name: Loan Write Offs
   description: Write-off of a loan balance with approval and ledger posting
 - name: Loan Recoveries
@@ -126,6 +128,11 @@ paths:
           type: string
           format: uuid
       - name: merchant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: loan_application_id
         in: query
         schema:
           type: string
@@ -316,7 +323,7 @@ paths:
   /v1/loans/{id}/disburse:
     post:
       operationId: loansDisburse
-      summary: Disburse the loan or the next tranche
+      summary: 'Disburse the loan or the next tranche (ledger: debit loan receivable, credit the customer account)'
       tags:
       - Loans
       security:
@@ -466,7 +473,7 @@ paths:
   /v1/loans/{id}/prepay:
     post:
       operationId: loansPrepay
-      summary: Prepay using a quote
+      summary: Prepay using a valid quote
       tags:
       - Loans
       security:
@@ -516,7 +523,7 @@ paths:
   /v1/loans/{id}/change-rate:
     post:
       operationId: loansChangeRate
-      summary: Change the interest rate
+      summary: Change the interest rate and regenerate the remaining schedule
       tags:
       - Loans
       security:
@@ -566,7 +573,7 @@ paths:
   /v1/loans/{id}/restructure:
     post:
       operationId: loansRestructure
-      summary: Propose a restructure
+      summary: Propose a restructure (schedule preview computed)
       tags:
       - Loans
       security:
@@ -616,7 +623,7 @@ paths:
   /v1/loans/{id}/write-off:
     post:
       operationId: loansWriteOff
-      summary: Request a write-off
+      summary: Request a write-off (approved by a second user)
       tags:
       - Loans
       security:
@@ -666,7 +673,7 @@ paths:
   /v1/loans/{id}/cancel:
     post:
       operationId: loansCancel
-      summary: Cancel before disbursement or within cooling-off
+      summary: Cancel before disbursement or within cooling-off (disbursed funds are returned)
       tags:
       - Loans
       security:
@@ -1015,7 +1022,7 @@ paths:
   /v1/loans/simulate:
     post:
       operationId: loansSimulate
-      summary: Simulate a schedule without booking
+      summary: Simulate a schedule without booking (instalment, totals, APR, instalments)
       tags:
       - Loans
       security:
@@ -1024,8 +1031,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1052,6 +1065,317 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
       x-table: loan
+  /v1/loans/eod/accrue:
+    post:
+      operationId: loansEodAccrue
+      summary: End of day - daily interest and penalty accrual of every active loan through business_date (idempotent per
+        business date)
+      tags:
+      - Loans
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-02
+      - LND-05
+      - LND-06
+      - LND-07
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan
+  /v1/loans/eod/installments-due:
+    post:
+      operationId: loansEodInstallmentsDue
+      summary: End of day - instalments falling due on business_date become DUE, past grace become OVERDUE with late fees
+        (idempotent per business date)
+      tags:
+      - Loans
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-02
+      - LND-05
+      - LND-06
+      - LND-07
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan
+  /v1/loans/eod/auto-debit:
+    post:
+      operationId: loansEodAutoDebit
+      summary: End of day - collect due and overdue amounts from linked repayment accounts (idempotent per business date)
+      tags:
+      - Loans
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-02
+      - LND-05
+      - LND-06
+      - LND-07
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan
+  /v1/loans/eod/delinquency:
+    post:
+      operationId: loansEodDelinquency
+      summary: End of day - recompute DPD, delinquency bucket, arrears status and ECL stage hint (idempotent per business
+        date)
+      tags:
+      - Loans
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-02
+      - LND-05
+      - LND-06
+      - LND-07
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
+      x-table: loan
+  /v1/loan-eod-runs:
+    get:
+      operationId: loanEodRunsList
+      summary: List loan eod runs
+      tags:
+      - Loan Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-05
+      - OPS-01
+      - PRC-01
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: loan_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/loan-eod-runs/{id}:
+    get:
+      operationId: loanEodRunsGet
+      summary: Retrieve loan eod run
+      tags:
+      - Loan Eod Runs
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-05
+      - OPS-01
+      - PRC-01
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
+      x-table: loan_eod_run
+      x-crud: true
+      x-crud-get: true
   /v1/loan-disbursements:
     get:
       operationId: loanDisbursementsList
@@ -1217,7 +1541,7 @@ paths:
   /v1/loan-disbursements/{id}/cancel:
     post:
       operationId: loanDisbursementsCancel
-      summary: Cancel a scheduled disbursement
+      summary: Cancel a scheduled or failed disbursement
       tags:
       - Loan Disbursements
       security:
@@ -1289,6 +1613,7 @@ paths:
         schema:
           type: string
           enum:
+          - SCHEDULED
           - DUE
           - PARTIALLY_PAID
           - PAID
@@ -1388,7 +1713,7 @@ paths:
   /v1/schedule-installments/{id}/waive:
     post:
       operationId: scheduleInstallmentsWaive
-      summary: Waive the remaining amount of an instalment
+      summary: Waive the remaining amount of an instalment (all or listed components)
       tags:
       - Schedule Installments
       security:
@@ -1664,6 +1989,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: credit_line_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: source
         in: query
         schema:
@@ -1686,6 +2016,11 @@ paths:
           - POSTED
           - REVERSED
       - name: payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: promise_to_pay_id
         in: query
         schema:
           type: string
@@ -1776,7 +2111,7 @@ paths:
   /v1/loan-repayments/{id}/reverse:
     post:
       operationId: loanRepaymentsReverse
-      summary: Reverse a repayment (e.g. returned direct debit)
+      summary: 'Reverse a repayment (e.g. returned direct debit): its allocation is undone and the ledger posting mirrored'
       tags:
       - Loan Repayments
       security:
@@ -1969,6 +2304,7 @@ paths:
           type: string
           enum:
           - CHARGED
+          - PARTIALLY_PAID
           - PAID
           - WAIVED
           - REVERSED
@@ -2098,7 +2434,7 @@ paths:
   /v1/loan-fee-charges/{id}/waive:
     post:
       operationId: loanFeeChargesWaive
-      summary: Waive a fee
+      summary: Waive the unpaid part of a fee
       tags:
       - Loan Fee Charges
       security:
@@ -2315,7 +2651,7 @@ paths:
   /v1/loan-restructures/{id}/approve:
     post:
       operationId: loanRestructuresApprove
-      summary: Approve (checker)
+      summary: Approve (checker; must differ from the maker)
       tags:
       - Loan Restructures
       security:
@@ -2669,7 +3005,7 @@ paths:
   /v1/loan-write-offs/{id}/approve:
     post:
       operationId: loanWriteOffsApprove
-      summary: Approve and post the write-off (checker)
+      summary: Approve and post the write-off (checker; must differ from the requester)
       tags:
       - Loan Write Offs
       security:
@@ -3146,7 +3482,7 @@ paths:
   /v1/credit-lines/{id}/activate:
     post:
       operationId: creditLinesActivate
-      summary: Activate the facility
+      summary: Activate the facility (opens the receivable account)
       tags:
       - Credit Lines
       security:
@@ -3236,7 +3572,7 @@ paths:
   /v1/credit-lines/{id}/repay:
     post:
       operationId: creditLinesRepay
-      summary: Make a payment
+      summary: Make a payment (interest and fees first, then the oldest statement)
       tags:
       - Credit Lines
       security:
@@ -3284,7 +3620,7 @@ paths:
   /v1/credit-lines/{id}/change-limit:
     post:
       operationId: creditLinesChangeLimit
-      summary: Change the limit (approval may be required)
+      summary: Change the limit (increases above the approval threshold need an approval request)
       tags:
       - Credit Lines
       security:
@@ -3332,7 +3668,7 @@ paths:
   /v1/credit-lines/{id}/convert-to-instalments:
     post:
       operationId: creditLinesConvertToInstalments
-      summary: Convert a balance into an instalment loan
+      summary: Convert part of the revolving balance into an instalment loan
       tags:
       - Credit Lines
       security:
@@ -3476,7 +3812,7 @@ paths:
   /v1/credit-lines/{id}/close:
     post:
       operationId: creditLinesClose
-      summary: Close the facility
+      summary: Close the facility (balance must be zero)
       tags:
       - Credit Lines
       security:
@@ -3520,6 +3856,45 @@ paths:
       x-service: loan-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
       x-required-scope: lending:write
+      x-table: credit_line
+  /v1/credit-lines/{id}/available:
+    get:
+      operationId: creditLinesAvailable
+      summary: Available credit breakdown (limit, temporary limit, utilisation, interest, fees)
+      tags:
+      - Credit Lines
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-01
+      - LND-03
+      - LND-06
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
+      x-required-scope: lending:read
       x-table: credit_line
   /v1/credit-lines/{id}/drawdowns:
     get:
@@ -3637,6 +4012,51 @@ paths:
       x-service: loan-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:read")'
       x-required-scope: lending:read
+      x-table: credit_line
+  /v1/credit-lines/eod/statements:
+    post:
+      operationId: creditLinesEodStatements
+      summary: End of day - close statement cycles ending on business_date (interest, minimum payment, due date) and mark
+        missed minimum payments (idempotent per business date)
+      tags:
+      - Credit Lines
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-01
+      - LND-03
+      - LND-06
+      x-service: loan-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("lending:write")'
+      x-required-scope: lending:write
       x-table: credit_line
   /v1/credit-line-drawdowns:
     get:
@@ -4073,7 +4493,7 @@ paths:
   /v1/bnpl-plans/check-eligibility:
     post:
       operationId: bnplPlansCheckEligibility
-      summary: Real-time BNPL eligibility at checkout
+      summary: Real-time BNPL eligibility at checkout (decision, limit, split schedule, reasons)
       tags:
       - Bnpl Plans
       security:
@@ -4082,8 +4502,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4155,7 +4581,7 @@ paths:
   /v1/bnpl-plans/{id}/cancel:
     post:
       operationId: bnplPlansCancel
-      summary: Cancel before first instalment
+      summary: Cancel before the first instalment is paid
       tags:
       - Bnpl Plans
       security:
@@ -4277,6 +4703,9 @@ components:
         destination_wallet_id:
           type: string
           format: uuid
+        scheduled_date:
+          type: string
+          format: date
       required:
       - method
     LoansRepayRequest:
@@ -4305,6 +4734,12 @@ components:
         external_reference:
           type: string
           maxLength: 128
+        source_account_id:
+          type: string
+          format: uuid
+        promise_to_pay_id:
+          type: string
+          format: uuid
       required:
       - amount
       - source
@@ -4313,18 +4748,40 @@ components:
       properties:
         quote_type:
           type: string
-          maxLength: 16
+          enum:
+          - FULL
+          - PARTIAL
         requested_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
+        partial_option:
+          type: string
+          enum:
+          - REDUCE_TERM
+          - REDUCE_INSTALMENT
       required:
       - quote_type
     LoansPrepayRequest:
       type: object
       properties:
         loan_prepayment_quote_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum:
+          - AUTO_DEBIT
+          - MANUAL
+          - WALLET
+          - CARD
+          - EXTERNAL_TRANSFER
+          - CASH
+          - COLLATERAL_LIQUIDATION
+          - RECOVERY
+          - PAYROLL
+        source_account_id:
           type: string
           format: uuid
       required:
@@ -4343,6 +4800,11 @@ components:
         reason:
           type: string
           maxLength: 255
+        index_value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - new_rate
       - effective_date
@@ -4376,6 +4838,14 @@ components:
           format: int32
         capitalise_arrears:
           type: boolean
+        settlement_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        effective_date:
+          type: string
+          format: date
       required:
       - restructure_type
       - reason
@@ -4512,11 +4982,18 @@ components:
         product_id:
           type: string
           format: uuid
+        product_version_id:
+          type: string
+          format: uuid
         principal_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
         term_months:
           type: integer
           format: int32
@@ -4545,10 +5022,56 @@ components:
           - SEMI_ANNUAL
           - ANNUAL
           - AT_MATURITY
+        day_count:
+          type: string
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+        start_date:
+          type: string
+          format: date
+        first_repayment_date:
+          type: string
+          format: date
+        balloon_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        interest_only_periods:
+          type: integer
+          format: int32
+        upfront_fees:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - product_id
       - principal_amount
       - term_months
+    LoanEodRunPage:
+      type: object
+      description: One page of LoanEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoanEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LoanDisbursementPage:
       type: object
       description: One page of LoanDisbursement results (newest first)
@@ -4582,8 +5105,16 @@ components:
           type: string
           maxLength: 255
         components:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            enum:
+            - PENALTY
+            - FEE
+            - INTEREST
+            - PRINCIPAL
+            - INSURANCE
+            - TAX
       required:
       - reason
     AllocationRulePage:
@@ -4761,13 +5292,22 @@ components:
       properties:
         draw_type:
           type: string
-          maxLength: 32
+          enum:
+          - PURCHASE
+          - CASH_ADVANCE
+          - BALANCE_TRANSFER
+          - TRANSFER_TO_ACCOUNT
+          - FEE
+          - INSTALMENT_CONVERSION
         amount:
           type: string
           format: decimal
           examples:
           - '125.50'
         destination_account_id:
+          type: string
+          format: uuid
+        card_authorization_id:
           type: string
           format: uuid
       required:
@@ -4793,6 +5333,12 @@ components:
           - COLLATERAL_LIQUIDATION
           - RECOVERY
           - PAYROLL
+        source_account_id:
+          type: string
+          format: uuid
+        external_reference:
+          type: string
+          maxLength: 128
       required:
       - amount
       - source
@@ -4806,9 +5352,15 @@ components:
           - '125.50'
         is_temporary:
           type: boolean
+        expires_at:
+          type: string
+          format: date-time
         reason:
           type: string
           maxLength: 255
+        approval_request_id:
+          type: string
+          format: uuid
       required:
       - new_limit
       - reason
@@ -4823,6 +5375,11 @@ components:
         term_months:
           type: integer
           format: int32
+        interest_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - amount
       - term_months
@@ -4946,6 +5503,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        installment_count:
+          type: integer
+          format: int32
+        product_id:
+          type: string
+          format: uuid
       required:
       - customer_id
       - merchant_id
@@ -5036,16 +5599,28 @@ components:
           - CANCELLED
           description: Loan status the rule applies to (empty = any)
         order_of_components:
-          type: object
-          additionalProperties: true
-          description: Ordered list of AllocationComponent values
+          type: array
+          items:
+            type: string
+            enum:
+            - PENALTY
+            - FEE
+            - INTEREST
+            - PRINCIPAL
+            - INSURANCE
+            - TAX
+          description: Components in allocation order
         allocate_oldest_first:
           type: boolean
-          description: Oldest instalment first vs component-first across instalments
+          description: Oldest instalment first (all components) vs component-first across instalments
         excess_handling:
           type: string
-          maxLength: 32
-          description: REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND
+          enum:
+          - REDUCE_TERM
+          - REDUCE_INSTALMENT
+          - HOLD_AS_CREDIT
+          - REFUND
+          description: What happens to money left after all due amounts
         valid_from:
           type: string
           format: date
@@ -5125,16 +5700,28 @@ components:
           - CANCELLED
           description: Loan status the rule applies to (empty = any)
         order_of_components:
-          type: object
-          additionalProperties: true
-          description: Ordered list of AllocationComponent values
+          type: array
+          items:
+            type: string
+            enum:
+            - PENALTY
+            - FEE
+            - INTEREST
+            - PRINCIPAL
+            - INSURANCE
+            - TAX
+          description: Components in allocation order
         allocate_oldest_first:
           type: boolean
-          description: Oldest instalment first vs component-first across instalments
+          description: Oldest instalment first (all components) vs component-first across instalments
         excess_handling:
           type: string
-          maxLength: 32
-          description: REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND
+          enum:
+          - REDUCE_TERM
+          - REDUCE_INSTALMENT
+          - HOLD_AS_CREDIT
+          - REFUND
+          description: What happens to money left after all due amounts
         valid_from:
           type: string
           format: date
@@ -5195,16 +5782,28 @@ components:
           - CANCELLED
           description: Loan status the rule applies to (empty = any)
         order_of_components:
-          type: object
-          additionalProperties: true
-          description: Ordered list of AllocationComponent values
+          type: array
+          items:
+            type: string
+            enum:
+            - PENALTY
+            - FEE
+            - INTEREST
+            - PRINCIPAL
+            - INSURANCE
+            - TAX
+          description: Components in allocation order
         allocate_oldest_first:
           type: boolean
-          description: Oldest instalment first vs component-first across instalments
+          description: Oldest instalment first (all components) vs component-first across instalments
         excess_handling:
           type: string
-          maxLength: 32
-          description: REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND
+          enum:
+          - REDUCE_TERM
+          - REDUCE_INSTALMENT
+          - HOLD_AS_CREDIT
+          - REFUND
+          description: What happens to money left after all due amounts
         valid_from:
           type: string
           format: date
@@ -5275,9 +5874,12 @@ components:
           description: Optimistic lock version; send as If-Match
           readOnly: true
         loan_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Underlying loan
+          description: Underlying loan (booked on create)
+          readOnly: true
         customer_id:
           type: string
           format: uuid
@@ -5286,6 +5888,18 @@ components:
           type: string
           format: uuid
           description: Merchant
+        product_id:
+          type: string
+          format: uuid
+          description: BNPL product
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Lending legal entity
         merchant_order_ref:
           type: string
           maxLength: 128
@@ -5306,6 +5920,24 @@ components:
           type: integer
           format: int32
           description: Number of instalments
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          description: Instalment frequency
+        interest_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Customer rate (0 for pay-in-N)
         merchant_discount_rate:
           type: string
           format: decimal
@@ -5318,6 +5950,17 @@ components:
           examples:
           - '125.50'
           description: Amount settled to merchant
+          readOnly: true
+        merchant_settlement_account_id:
+          type: string
+          format: uuid
+          description: Merchant settlement account
+        repayment_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer account auto-debited
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -5339,6 +5982,13 @@ components:
           examples:
           - '125.50'
           description: Refunded to date
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation or refund reason
           readOnly: true
         custom_field_1:
           type:
@@ -5375,25 +6025,26 @@ components:
       - created_at
       - updated_at
       - row_version
-      - loan_id
       - customer_id
       - merchant_id
+      - product_id
+      - product_version_id
+      - legal_entity_id
       - merchant_order_ref
       - purchase_amount
       - down_payment
       - installment_count
+      - frequency
+      - interest_rate
       - merchant_discount_rate
       - merchant_settlement_amount
+      - merchant_settlement_account_id
       - currency
       - status
       - refunded_amount
     BnplPlanCreate:
       type: object
       properties:
-        loan_id:
-          type: string
-          format: uuid
-          description: Underlying loan
         customer_id:
           type: string
           format: uuid
@@ -5402,6 +6053,18 @@ components:
           type: string
           format: uuid
           description: Merchant
+        product_id:
+          type: string
+          format: uuid
+          description: BNPL product
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Lending legal entity
         merchant_order_ref:
           type: string
           maxLength: 128
@@ -5422,18 +6085,38 @@ components:
           type: integer
           format: int32
           description: Number of instalments
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          description: Instalment frequency
+        interest_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Customer rate (0 for pay-in-N)
         merchant_discount_rate:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Merchant discount fee rate
-        merchant_settlement_amount:
+        merchant_settlement_account_id:
           type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Amount settled to merchant
+          format: uuid
+          description: Merchant settlement account
+        repayment_account_id:
+          type: string
+          format: uuid
+          description: Customer account auto-debited
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -5459,13 +6142,15 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - loan_id
       - customer_id
       - merchant_id
+      - product_id
+      - product_version_id
+      - legal_entity_id
       - merchant_order_ref
       - purchase_amount
       - installment_count
-      - merchant_settlement_amount
+      - merchant_settlement_account_id
       - currency
     CreditLine:
       type: object
@@ -5508,7 +6193,7 @@ components:
         credit_line_number:
           type: string
           maxLength: 32
-          description: Facility number
+          description: Facility number (server-generated)
           readOnly: true
         customer_id:
           type: string
@@ -5550,7 +6235,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Approved limit
+          description: Approved limit (change via /change-limit)
         temporary_limit:
           type:
           - string
@@ -5558,26 +6243,35 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Temporary limit increase
+          description: Temporary limit
+          readOnly: true
         temporary_limit_expires_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Temporary limit expiry
+          readOnly: true
         utilised_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Drawn principal
+          description: Drawn principal (revolving balance)
+          readOnly: true
+        instalment_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance converted to instalment loans still counted against the limit
           readOnly: true
         available_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Limit minus utilisation and holds
+          description: Limit minus utilisation, unpaid interest and fees
           readOnly: true
         outstanding_interest:
           type: string
@@ -5628,7 +6322,7 @@ components:
         statement_day:
           type: integer
           format: int32
-          description: Day of month the statement cycle closes
+          description: Day of month the statement cycle closes (1-28)
         payment_due_days:
           type: integer
           format: int32
@@ -5672,6 +6366,7 @@ components:
           - 'null'
           format: uuid
           description: Receivable account in the ledger
+          readOnly: true
         status:
           type: string
           enum:
@@ -5683,6 +6378,13 @@ components:
           - CLOSED
           - CHARGED_OFF
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last freeze, unfreeze or close
           readOnly: true
         days_past_due:
           type: integer
@@ -5709,6 +6411,13 @@ components:
           - STAGE_3
           - POCI
           description: IFRS 9 stage
+          readOnly: true
+        last_statement_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Last statement cycle end
           readOnly: true
         review_date:
           type:
@@ -5780,6 +6489,7 @@ components:
       - currency
       - credit_limit
       - utilised_amount
+      - instalment_balance
       - available_amount
       - outstanding_interest
       - outstanding_fees
@@ -5835,17 +6545,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Approved limit
-        temporary_limit:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Temporary limit increase
-        temporary_limit_expires_at:
-          type: string
-          format: date-time
-          description: Temporary limit expiry
+          description: Approved limit (change via /change-limit)
         purchase_rate:
           type: string
           format: decimal
@@ -5877,7 +6577,7 @@ components:
         statement_day:
           type: integer
           format: int32
-          description: Day of month the statement cycle closes
+          description: Day of month the statement cycle closes (1-28)
         payment_due_days:
           type: integer
           format: int32
@@ -5909,10 +6609,6 @@ components:
           type: string
           maxLength: 16
           description: NONE, MINIMUM, STATEMENT, FULL
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Receivable account in the ledger
         review_date:
           type: string
           format: date
@@ -5993,17 +6689,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Approved limit
-        temporary_limit:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Temporary limit increase
-        temporary_limit_expires_at:
-          type: string
-          format: date-time
-          description: Temporary limit expiry
+          description: Approved limit (change via /change-limit)
         purchase_rate:
           type: string
           format: decimal
@@ -6035,7 +6721,7 @@ components:
         statement_day:
           type: integer
           format: int32
-          description: Day of month the statement cycle closes
+          description: Day of month the statement cycle closes (1-28)
         payment_due_days:
           type: integer
           format: int32
@@ -6067,10 +6753,6 @@ components:
           type: string
           maxLength: 16
           description: NONE, MINIMUM, STATEMENT, FULL
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Receivable account in the ledger
         review_date:
           type: string
           format: date
@@ -6143,8 +6825,14 @@ components:
           description: Credit line
         draw_type:
           type: string
-          maxLength: 32
-          description: PURCHASE, CASH_ADVANCE, BALANCE_TRANSFER, TRANSFER_TO_ACCOUNT, FEE, INSTALMENT_CONVERSION
+          enum:
+          - PURCHASE
+          - CASH_ADVANCE
+          - BALANCE_TRANSFER
+          - TRANSFER_TO_ACCOUNT
+          - FEE
+          - INSTALMENT_CONVERSION
+          description: Draw type
         amount:
           type: string
           format: decimal
@@ -6182,6 +6870,13 @@ components:
           - DECLINED
           description: Status
           readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the draw was declined
+          readOnly: true
         journal_entry_id:
           type:
           - string
@@ -6195,6 +6890,20 @@ components:
           - 'null'
           format: date-time
           description: Posting time
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reversal reason
+          readOnly: true
+        reversed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Reversal time
           readOnly: true
         idempotency_key:
           type: string
@@ -6283,6 +6992,12 @@ components:
         is_temporary:
           type: boolean
           description: Temporary change
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry of a temporary change
         reason:
           type: string
           maxLength: 255
@@ -6551,7 +7266,7 @@ components:
         loan_number:
           type: string
           maxLength: 32
-          description: Human-readable loan number
+          description: Human-readable loan number (server-generated)
           readOnly: true
         customer_id:
           type: string
@@ -6658,6 +7373,13 @@ components:
           - '125.50'
           description: Amount past due
           readOnly: true
+        credit_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Overpayment held as credit
+          readOnly: true
         interest_rate_type:
           type: string
           enum:
@@ -6726,10 +7448,38 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Repayment frequency
+        business_day_convention:
+          type: string
+          enum:
+          - NONE
+          - FOLLOWING
+          - MODIFIED_FOLLOWING
+          - PRECEDING
+          description: Due-date adjustment for weekends and holidays
         term_months:
           type: integer
           format: int32
           description: Contractual term
+        balloon_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Final balloon for BALLOON schedules
+        interest_only_periods:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity)
+        custom_schedule:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance)'
         grace_period_days:
           type: integer
           format: int32
@@ -6746,12 +7496,27 @@ components:
           - 'null'
           format: date
           description: Final maturity
+          readOnly: true
+        next_due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next unpaid instalment due date
+          readOnly: true
         start_date:
           type:
           - string
           - 'null'
           format: date
           description: Contract start / first disbursement date
+        cooling_off_until:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: End of the cooling-off period (cancellation allowed until then)
+          readOnly: true
         disbursement_account_id:
           type:
           - string
@@ -6779,6 +7544,7 @@ components:
           - 'null'
           format: uuid
           description: Loan receivable account in the ledger
+          readOnly: true
         merchant_id:
           type:
           - string
@@ -6791,6 +7557,13 @@ components:
           - 'null'
           format: uuid
           description: Credit line the loan was drawn from
+        product_terms:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Product terms pinned at booking (rates, fees, limits)
+          readOnly: true
         status:
           type: string
           enum:
@@ -6829,7 +7602,11 @@ components:
           - STAGE_2
           - STAGE_3
           - POCI
-          description: IFRS 9 stage
+          description: IFRS 9 stage hint (DPD, forbearance, write-off)
+          readOnly: true
+        is_forborne:
+          type: boolean
+          description: Restructured for hardship (forbearance)
           readOnly: true
         risk_grade:
           type:
@@ -6840,6 +7617,13 @@ components:
         is_nano:
           type: boolean
           description: Nano-loan scored on wallet transaction data
+        last_accrual_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Last business date accrued
+          readOnly: true
         paid_off_at:
           type:
           - string
@@ -6910,11 +7694,13 @@ components:
       - outstanding_penalties
       - total_outstanding
       - overdue_amount
+      - credit_balance
       - interest_rate_type
       - interest_rate
       - day_count
       - schedule_type
       - repayment_frequency
+      - business_day_convention
       - term_months
       - grace_period_days
       - auto_debit_enabled
@@ -6922,6 +7708,7 @@ components:
       - days_past_due
       - delinquency_bucket
       - ecl_stage
+      - is_forborne
       - is_nano
     LoanCreate:
       type: object
@@ -7038,10 +7825,32 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Repayment frequency
+        business_day_convention:
+          type: string
+          enum:
+          - NONE
+          - FOLLOWING
+          - MODIFIED_FOLLOWING
+          - PRECEDING
+          description: Due-date adjustment for weekends and holidays
         term_months:
           type: integer
           format: int32
           description: Contractual term
+        balloon_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Final balloon for BALLOON schedules
+        interest_only_periods:
+          type: integer
+          format: int32
+          description: Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity)
+        custom_schedule:
+          type: array
+          items: {}
+          description: 'CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance)'
         grace_period_days:
           type: integer
           format: int32
@@ -7050,10 +7859,6 @@ components:
           type: string
           format: date
           description: First instalment date
-        maturity_date:
-          type: string
-          format: date
-          description: Final maturity
         start_date:
           type: string
           format: date
@@ -7073,10 +7878,6 @@ components:
         auto_debit_enabled:
           type: boolean
           description: Collect instalments automatically
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Loan receivable account in the ledger
         merchant_id:
           type: string
           format: uuid
@@ -7116,6 +7917,14 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        origination_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Origination fee charged at the first disbursement (default from product fees) (write-only; not stored
+            as a column)
+          writeOnly: true
       required:
       - customer_id
       - product_id
@@ -7244,10 +8053,32 @@ components:
           - ANNUAL
           - AT_MATURITY
           description: Repayment frequency
+        business_day_convention:
+          type: string
+          enum:
+          - NONE
+          - FOLLOWING
+          - MODIFIED_FOLLOWING
+          - PRECEDING
+          description: Due-date adjustment for weekends and holidays
         term_months:
           type: integer
           format: int32
           description: Contractual term
+        balloon_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Final balloon for BALLOON schedules
+        interest_only_periods:
+          type: integer
+          format: int32
+          description: Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity)
+        custom_schedule:
+          type: array
+          items: {}
+          description: 'CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance)'
         grace_period_days:
           type: integer
           format: int32
@@ -7256,10 +8087,6 @@ components:
           type: string
           format: date
           description: First instalment date
-        maturity_date:
-          type: string
-          format: date
-          description: Final maturity
         start_date:
           type: string
           format: date
@@ -7279,10 +8106,6 @@ components:
         auto_debit_enabled:
           type: boolean
           description: Collect instalments automatically
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Loan receivable account in the ledger
         merchant_id:
           type: string
           format: uuid
@@ -7576,6 +8399,11 @@ components:
           maxLength: 255
           description: Failure reason
           readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Posting attempts
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -7624,7 +8452,133 @@ components:
       - currency
       - method
       - status
+      - attempts
       - idempotency_key
+    LoanEodRun:
+      type: object
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - DAILY_ACCRUAL
+          - INSTALLMENT_DUE
+          - AUTO_DEBIT
+          - DELINQUENCY_UPDATE
+          - CREDIT_LINE_STATEMENTS
+          - COLLECTIONS_STRATEGY_RUN
+          - COLLATERAL_MONITORING
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     LoanFeeCharge:
       type: object
       description: A fee charged to a loan
@@ -7697,6 +8651,13 @@ components:
           examples:
           - '125.50'
           description: Tax on the fee
+        paid_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Paid so far
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -7715,10 +8676,12 @@ components:
           type: string
           enum:
           - CHARGED
+          - PARTIALLY_PAID
           - PAID
           - WAIVED
           - REVERSED
           description: Status
+          readOnly: true
         waived_by:
           type:
           - string
@@ -7732,6 +8695,7 @@ components:
           - 'null'
           maxLength: 255
           description: Waiver reason
+          readOnly: true
         journal_entry_id:
           type:
           - string
@@ -7778,6 +8742,7 @@ components:
       - fee_type
       - amount
       - tax_amount
+      - paid_amount
       - currency
       - charge_date
       - status
@@ -7828,18 +8793,6 @@ components:
           type: string
           format: uuid
           description: Instalment the fee is due with
-        status:
-          type: string
-          enum:
-          - CHARGED
-          - PAID
-          - WAIVED
-          - REVERSED
-          description: Status
-        waiver_reason:
-          type: string
-          maxLength: 255
-          description: Waiver reason
         custom_field_1:
           type: string
           maxLength: 500
@@ -7868,7 +8821,7 @@ components:
       - charge_date
     LoanPrepaymentQuote:
       type: object
-      description: A pay-off / partial prepayment quote valid until a date
+      description: A pay-off / partial prepayment quote valid until a time
       properties:
         id:
           type: string
@@ -7910,8 +8863,18 @@ components:
           description: Loan
         quote_type:
           type: string
-          maxLength: 16
+          enum:
+          - FULL
+          - PARTIAL
           description: FULL or PARTIAL
+        partial_option:
+          type:
+          - string
+          - 'null'
+          enum:
+          - REDUCE_TERM
+          - REDUCE_INSTALMENT
+          description: 'PARTIAL: reduce the term or the instalment'
         requested_amount:
           type:
           - string
@@ -7920,6 +8883,11 @@ components:
           examples:
           - '125.50'
           description: Requested partial amount
+        quote_date:
+          type: string
+          format: date
+          description: Date the quote was calculated for
+          readOnly: true
         principal:
           type: string
           format: decimal
@@ -7939,7 +8907,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Fees outstanding
+          description: Fees and penalties outstanding
           readOnly: true
         prepayment_penalty:
           type: string
@@ -7959,10 +8927,11 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+          readOnly: true
         valid_until:
           type: string
-          format: date
-          description: Quote validity
+          format: date-time
+          description: Quote validity (database clock)
           readOnly: true
         status:
           type: string
@@ -7971,6 +8940,13 @@ components:
           - USED
           - EXPIRED
           description: Status
+          readOnly: true
+        loan_repayment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Repayment that used the quote
           readOnly: true
         custom_field_1:
           type:
@@ -8009,6 +8985,7 @@ components:
       - row_version
       - loan_id
       - quote_type
+      - quote_date
       - principal
       - interest
       - fees
@@ -8169,12 +9146,19 @@ components:
           type: string
           format: date-time
           description: Receipt time
+        external_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Payer or sale reference
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Ledger posting
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -8249,10 +9233,10 @@ components:
           type: string
           format: date-time
           description: Receipt time
-        journal_entry_id:
+        external_reference:
           type: string
-          format: uuid
-          description: Ledger posting
+          maxLength: 128
+          description: Payer or sale reference
         custom_field_1:
           type: string
           maxLength: 500
@@ -8301,9 +9285,17 @@ components:
           description: Principal that created the row
           readOnly: true
         loan_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Loan
+          description: Loan (empty for credit-line payments)
+        credit_line_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Credit line paid (revolving facilities)
         amount:
           type: string
           format: decimal
@@ -8366,8 +9358,8 @@ components:
           - '125.50'
           description: Unallocated excess
         allocation_detail:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allocation per instalment and component
         allocation_rule_id:
           type:
@@ -8387,18 +9379,36 @@ components:
           - 'null'
           format: uuid
           description: Repayment this row reverses
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reversal reason
         payment_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Underlying payment
+        source_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit account debited
         promise_to_pay_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Promise this repayment fulfils
+        prepayment_quote_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Prepayment quote this repayment settled
         journal_entry_id:
           type:
           - string
@@ -8449,7 +9459,6 @@ components:
       required:
       - id
       - created_at
-      - loan_id
       - amount
       - currency
       - source
@@ -8536,7 +9545,7 @@ components:
           - integer
           - 'null'
           format: int32
-          description: New term
+          description: New remaining term in months
         new_interest_rate:
           type:
           - string
@@ -8564,9 +9573,9 @@ components:
           description: Agreed settlement amount
         proposed_schedule:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Proposed schedule preview
           readOnly: true
         new_schedule_id:
@@ -8576,12 +9585,42 @@ components:
           format: uuid
           description: Schedule applied
           readOnly: true
+        capitalised_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Arrears and interest capitalised on application
+          readOnly: true
         approval_request_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Maker-checker approval
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
         effective_date:
           type:
           - string
@@ -8696,6 +9735,19 @@ components:
           type: integer
           format: int32
           description: DPD at transition
+        from_bucket:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CURRENT
+          - DPD_1_29
+          - DPD_30_59
+          - DPD_60_89
+          - DPD_90_119
+          - DPD_120_179
+          - DPD_180_PLUS
+          description: Bucket before the transition
         delinquency_bucket:
           type: string
           enum:
@@ -8717,6 +9769,40 @@ components:
           - STAGE_3
           - POCI
           description: IFRS 9 stage at transition
+        overdue_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Overdue amount at transition
+        total_outstanding:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total outstanding at transition
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Borrower (for consumers of the event)
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date of the transition
         reason:
           type:
           - string
@@ -8832,6 +9918,13 @@ components:
           examples:
           - '125.50'
           description: Total
+        recovered_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Recovered after write-off
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -8855,6 +9948,20 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
         journal_entry_id:
           type:
           - string
@@ -8910,6 +10017,7 @@ components:
       - interest_amount
       - fees_amount
       - total_amount
+      - recovered_amount
       - currency
       - reason
       - status
@@ -9006,6 +10114,14 @@ components:
           type: string
           format: date
           description: Effective date
+        interest_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate the schedule was generated with
         reason:
           type:
           - string
@@ -9107,10 +10223,16 @@ components:
           type: integer
           format: int32
           description: Sequence number
+        period_start:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Start of the interest period
         due_date:
           type: string
           format: date
-          description: Due date
+          description: Due date (business-day adjusted)
         principal_due:
           type: string
           format: decimal
@@ -9170,6 +10292,13 @@ components:
           - '125.50'
           description: Penalties paid
           readOnly: true
+        waived_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount waived
+          readOnly: true
         outstanding_balance_after:
           type: string
           format: decimal
@@ -9179,6 +10308,7 @@ components:
         status:
           type: string
           enum:
+          - SCHEDULED
           - DUE
           - PARTIALLY_PAID
           - PAID
@@ -9247,6 +10377,7 @@ components:
       - interest_paid
       - fees_paid
       - penalties_paid
+      - waived_amount
       - outstanding_balance_after
       - status
       - days_late

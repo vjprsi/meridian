@@ -34,8 +34,9 @@ CREATE TABLE collateral (
   currency                     char(3) NOT NULL,
   market_value                 numeric(28,8) NOT NULL,
   forced_sale_value            numeric(28,8),
-  haircut_pct                  numeric(18,10) NOT NULL DEFAULT 0,
+  haircut_pct                  numeric(18,10),
   lending_value                numeric(28,8) NOT NULL,
+  allocated_value              numeric(28,8) NOT NULL DEFAULT 0,
   registration_reference       varchar(128),
   registration_authority       varchar(120),
   lien_registered_at           date,
@@ -43,7 +44,12 @@ CREATE TABLE collateral (
   deposit_account_id           uuid,
   asset_details                jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'PROPOSED' CHECK (status IN ('PROPOSED', 'VERIFIED', 'PLEDGED', 'RELEASED', 'LIQUIDATED', 'REJECTED')),
+  status_reason                varchar(255),
   next_valuation_date          date,
+  verified_by                  varchar(64),
+  verified_at                  timestamptz,
+  liquidation_proceeds         numeric(28,8),
+  liquidated_at                timestamptz,
   released_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -60,23 +66,29 @@ COMMENT ON COLUMN collateral.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN collateral.updated_at IS 'Last update time';
 COMMENT ON COLUMN collateral.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN collateral.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN collateral.collateral_number IS 'Registry number';
+COMMENT ON COLUMN collateral.collateral_number IS 'Registry number (server-generated)';
 COMMENT ON COLUMN collateral.owner_customer_id IS 'Owner / guarantor';
 COMMENT ON COLUMN collateral.collateral_type IS 'Type';
 COMMENT ON COLUMN collateral.description IS 'Description of the asset';
 COMMENT ON COLUMN collateral.currency IS 'Valuation currency';
-COMMENT ON COLUMN collateral.market_value IS 'Latest market value';
+COMMENT ON COLUMN collateral.market_value IS 'Latest market value (changed by valuations)';
 COMMENT ON COLUMN collateral.forced_sale_value IS 'Latest forced-sale value';
-COMMENT ON COLUMN collateral.haircut_pct IS 'Haircut applied for lending value';
+COMMENT ON COLUMN collateral.haircut_pct IS 'Haircut applied for lending value (empty = type default)';
 COMMENT ON COLUMN collateral.lending_value IS 'Value after haircut';
-COMMENT ON COLUMN collateral.registration_reference IS 'Land registry / vehicle registration / lien reference';
+COMMENT ON COLUMN collateral.allocated_value IS 'Lending value allocated to active links';
+COMMENT ON COLUMN collateral.registration_reference IS 'Land registry / vehicle registration / lien reference (set by /pledge)';
 COMMENT ON COLUMN collateral.registration_authority IS 'Registry authority';
 COMMENT ON COLUMN collateral.lien_registered_at IS 'Lien registration date';
 COMMENT ON COLUMN collateral.location IS 'Address or geo-location for property and field visits';
 COMMENT ON COLUMN collateral.deposit_account_id IS 'Pledged deposit (cash-collateral)';
-COMMENT ON COLUMN collateral.asset_details IS 'Type-specific attributes (VIN, title number, carat weight, ...)';
+COMMENT ON COLUMN collateral.asset_details IS 'Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams; SECURITIES isin, quantity; GUARANTEE guarantor_name)';
 COMMENT ON COLUMN collateral.status IS 'Status';
+COMMENT ON COLUMN collateral.status_reason IS 'Reason of the last rejection, release or liquidation';
 COMMENT ON COLUMN collateral.next_valuation_date IS 'Next revaluation due';
+COMMENT ON COLUMN collateral.verified_by IS 'Verifier';
+COMMENT ON COLUMN collateral.verified_at IS 'Verification time';
+COMMENT ON COLUMN collateral.liquidation_proceeds IS 'Net proceeds of the liquidation';
+COMMENT ON COLUMN collateral.liquidated_at IS 'Liquidation time';
 COMMENT ON COLUMN collateral.released_at IS 'Release time';
 COMMENT ON COLUMN collateral.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collateral.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -100,6 +112,8 @@ CREATE TABLE collateral_valuation (
   valuation_date               date NOT NULL,
   market_value                 numeric(28,8) NOT NULL,
   forced_sale_value            numeric(28,8),
+  haircut_pct                  numeric(18,10),
+  lending_value                numeric(28,8),
   currency                     char(3) NOT NULL,
   valuer                       varchar(160),
   method                       varchar(40) NOT NULL,
@@ -119,6 +133,8 @@ COMMENT ON COLUMN collateral_valuation.collateral_id IS 'Collateral';
 COMMENT ON COLUMN collateral_valuation.valuation_date IS 'Valuation date';
 COMMENT ON COLUMN collateral_valuation.market_value IS 'Market value';
 COMMENT ON COLUMN collateral_valuation.forced_sale_value IS 'Forced-sale value';
+COMMENT ON COLUMN collateral_valuation.haircut_pct IS 'Haircut applied at this valuation';
+COMMENT ON COLUMN collateral_valuation.lending_value IS 'Lending value after haircut';
 COMMENT ON COLUMN collateral_valuation.currency IS 'Currency';
 COMMENT ON COLUMN collateral_valuation.valuer IS 'Valuer name / firm';
 COMMENT ON COLUMN collateral_valuation.method IS 'FULL_SURVEY, DESKTOP, INDEX, AUTOMATED_AVM, MARKET_PRICE';
@@ -149,8 +165,13 @@ CREATE TABLE collateral_link (
   exposure_id                  uuid NOT NULL,
   allocated_value              numeric(28,8) NOT NULL,
   charge_rank                  integer NOT NULL DEFAULT 1,
+  max_ltv                      numeric(18,10),
+  exposure_amount              numeric(28,8),
   ltv                          numeric(18,10),
+  ltv_status                   varchar(40) CHECK (ltv_status IN ('OK', 'WARNING', 'BREACH')),
+  ltv_calculated_at            timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
+  release_reason               varchar(255),
   released_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -171,8 +192,13 @@ COMMENT ON COLUMN collateral_link.exposure_type IS 'LOAN or CREDIT_LINE';
 COMMENT ON COLUMN collateral_link.exposure_id IS 'Loan or credit line id';
 COMMENT ON COLUMN collateral_link.allocated_value IS 'Lending value allocated to this exposure';
 COMMENT ON COLUMN collateral_link.charge_rank IS 'First, second charge';
-COMMENT ON COLUMN collateral_link.ltv IS 'Loan-to-value at last calculation';
+COMMENT ON COLUMN collateral_link.max_ltv IS 'LTV limit; above it the link is in BREACH (warning at 90% of the limit)';
+COMMENT ON COLUMN collateral_link.exposure_amount IS 'Exposure outstanding at the last calculation';
+COMMENT ON COLUMN collateral_link.ltv IS 'Loan-to-value at last calculation (exposure / lending value allocated to it)';
+COMMENT ON COLUMN collateral_link.ltv_status IS 'OK, WARNING or BREACH';
+COMMENT ON COLUMN collateral_link.ltv_calculated_at IS 'Last LTV calculation';
 COMMENT ON COLUMN collateral_link.is_active IS 'Active link';
+COMMENT ON COLUMN collateral_link.release_reason IS 'Why the link was released';
 COMMENT ON COLUMN collateral_link.released_at IS 'Release time';
 COMMENT ON COLUMN collateral_link.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collateral_link.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -205,6 +231,7 @@ CREATE TABLE collateral_insurance (
   end_date                     date NOT NULL,
   lender_noted                 boolean NOT NULL DEFAULT true,
   document_id                  uuid,
+  expiry_notified_at           timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -229,6 +256,7 @@ COMMENT ON COLUMN collateral_insurance.start_date IS 'Start';
 COMMENT ON COLUMN collateral_insurance.end_date IS 'Expiry';
 COMMENT ON COLUMN collateral_insurance.lender_noted IS 'Lender noted as loss payee';
 COMMENT ON COLUMN collateral_insurance.document_id IS 'Policy document';
+COMMENT ON COLUMN collateral_insurance.expiry_notified_at IS 'When the expiry warning was raised';
 COMMENT ON COLUMN collateral_insurance.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collateral_insurance.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN collateral_insurance.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -240,6 +268,54 @@ CREATE INDEX ix_collateral_insurance_document_id ON collateral_insurance (docume
 ALTER TABLE collateral_insurance ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON collateral_insurance USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_collateral_insurance_touch BEFORE UPDATE ON collateral_insurance FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- collateral_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE collateral_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('DAILY_ACCRUAL', 'INSTALLMENT_DUE', 'AUTO_DEBIT', 'DELINQUENCY_UPDATE', 'CREDIT_LINE_STATEMENTS', 'COLLECTIONS_STRATEGY_RUN', 'COLLATERAL_MONITORING')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_collateral_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE collateral_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN collateral_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN collateral_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN collateral_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN collateral_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN collateral_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN collateral_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN collateral_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN collateral_eod_run.job IS 'Job';
+COMMENT ON COLUMN collateral_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN collateral_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN collateral_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN collateral_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN collateral_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN collateral_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN collateral_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collateral_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collateral_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collateral_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN collateral_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_collateral_eod_run_tenant ON collateral_eod_run (tenant_id, created_at);
+ALTER TABLE collateral_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON collateral_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_collateral_eod_run_touch BEFORE UPDATE ON collateral_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).
