@@ -42,4 +42,10 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
   eligibility-check/quote/fee-calculate need applicant/context bodies; diff `?against=`; rate-index values `?from&to`;
   decision table inputs/outputs/rules are lists (G1); `product_script` wasm_module_uri/sha required+ro without default;
   no rejection-reason/submitted_by columns; decision-table version lacks APPROVED/REJECTED; `version_no` should be ro.
-- accounts/operations: pending reports.
+- accounts: list fields (bulk items, approver_groups, formats) → G1; mandate evaluate needs `signatories`; many
+  read actions declared 204 (G2) and missing query params (G3); account/deposit/virtual-account/statement numbers
+  should be server-generated (`ro`); deposit account needs a product-terms snapshot column; statements need a
+  document reference + failure reason; cheque book dispatch/activate actions; ledger needs an idempotent
+  set-overdraft-limit action and idempotent freeze/unfreeze; EOD jobs (accrual, maturity, standing orders,
+  dormancy) need endpoints callable by business-day-service (G8); external payouts should go via payment-service.
+- operations: pending report.
