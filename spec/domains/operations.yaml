@@ -10,7 +10,10 @@ enums:
   EodCycleType: [EOD, EOM, EOQ, EOY, INTRADAY]
   EodJobType: [INTEREST_ACCRUAL, INTEREST_CAPITALISATION, FEE_CHARGING, DORMANCY, STATEMENTS, LOAN_ACCRUAL,
                DELINQUENCY_AGEING, ECL_PROVISION, RECONCILIATION, FX_REVALUATION, GL_CLOSE, REGULATORY_REPORTS,
-               BALANCE_SNAPSHOT, STANDING_ORDERS, TERM_DEPOSIT_MATURITY, CARD_STATEMENT_CYCLE, ARCHIVAL, CUSTOM]
+               BALANCE_SNAPSHOT, STANDING_ORDERS, TERM_DEPOSIT_MATURITY, CARD_STATEMENT_CYCLE, ARCHIVAL, CUSTOM,
+               PAYMENT_EXECUTION, EXPIRY_SCAN, SWEEP, INSTALMENT_DUE, COLLECTIONS, TREASURY, LIQUIDITY, LOYALTY, ENGAGEMENT,
+               ANALYTICS, MONITORING, NOTIFICATIONS]
+  EodSweepTrigger: [SCHEDULER, OPERATOR]
   EodFailurePolicy: [STOP_CYCLE, CONTINUE, RETRY_THEN_STOP, RETRY_THEN_CONTINUE]
   JobScheduleStatus: [ACTIVE, PAUSED, DISABLED]
   JobHttpMethod: [POST, PUT, PATCH, GET]
@@ -103,7 +106,50 @@ services:
           - "failure_policy enum:EodFailurePolicy nn default=RETRY_THEN_STOP | What happens on final failure"
           - "is_critical bool nn default=true | Blocks the date roll when it fails"
           - "is_active bool nn default=true | Active"
-          - "parameters json | Default parameters passed to the job"
+          - "parameters json | Default parameters passed to the job; {parameters.<name>} placeholders read them"
+          - "pack_code string(64) ro | Standard job pack the job was installed from (empty = tenant-defined job)"
+          - "pack_version string(32) ro | Version of the pack that last installed or upgraded the job"
+
+      - name: eod_trigger_policy
+        prefix: etp
+        description: >
+          When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger)
+          starts EOD for the current business date once the local cut-off time has passed in the policy's time zone
+          (default: the legal entity's, else the tenant's time zone). One policy per legal entity plus an optional
+          tenant default (empty legal_entity_id); without any policy the platform default cut-off applies.
+        fr: [OPS-01]
+        columns:
+          - "legal_entity_id uuid ref=legal_entity idx | Legal entity (empty = default for every legal entity of the tenant)"
+          - "is_enabled bool nn default=true | Start EOD automatically when the business date is due"
+          - "cut_off_time string(5) nn | Local cut-off time HH:mm after which the business date is due for EOD"
+          - "time_zone string(64) | IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone)"
+          - "auto_roll bool nn default=false | Roll to the next business date automatically after a fully successful EOD"
+          - "notes string(500) | Operator notes"
+
+      - name: eod_sweep
+        prefix: esw
+        description: >
+          One execution of the platform's cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service and,
+          per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant,
+          legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+        tenant: false
+        fr: [OPS-01]
+        columns:
+          - "trigger_source enum:EodSweepTrigger nn | Scheduler tick or operator request"
+          - "slot_key string(160) nn uq | De-duplication key: the scheduler time slot or the operator's Idempotency-Key"
+          - "as_of ts nn ro | Evaluation time (database clock)"
+          - "status enum:RunStatus nn default=RUNNING ro | Outcome (PARTIALLY_SUCCEEDED when some tenants failed)"
+          - "requested_by string(64) ro | Operator or SCHEDULER"
+          - "tenant_ids uuid[] | Tenants requested (empty = every ACTIVE tenant)"
+          - "tenants_total int nn default=0 ro | Tenants evaluated"
+          - "tenants_failed int nn default=0 ro | Tenants whose evaluation failed"
+          - "runs_started int nn default=0 ro | EOD runs started"
+          - "dates_rolled int nn default=0 ro | Business dates rolled automatically"
+          - "entities_skipped int nn default=0 ro | Legal entities skipped (not due, disabled, already run)"
+          - "results json[] ro | Per tenant and legal entity: tenant_id, legal_entity_id, business_date, decision, eod_run_id, due_at, error_code, error"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Failure summary"
 
       - name: eod_run
         prefix: eod
@@ -229,6 +275,23 @@ services:
         actions:
           - "GET /graph?cycle_type:enum:EodCycleType&legal_entity_id:uuid | Dependency graph (nodes, edges, execution levels) of the jobs of a cycle | | object"
           - "POST /validate | Validate the graph for cycles and missing dependencies and plan every cycle | | object"
+          - "GET /standard-pack | The standard EOD job pack shipped with the service: code, version and every job (owning service, method, path template, dependencies, cycles, criticality) | | object"
+          - "POST /install-standard-pack | Install or upgrade the standard EOD job pack into the tenant's job definitions (idempotent: unchanged jobs are left alone, tenant-defined jobs with the same code are never overwritten, jobs retired by the pack are deactivated); returns {pack_code, version, created, updated, unchanged, retired, skipped, dry_run} | version string(32), dry_run bool | object"
+      - resource: eod-trigger-policies
+        path: /v1/operations/eod-trigger-policies
+        table: eod_trigger_policy
+        ops: [list, get, create, update, delete]
+        filters: [legal_entity_id, is_enabled]
+        actions:
+          - "GET /evaluation | Evaluate the automatic EOD trigger for the tenant now without starting anything: per legal entity the current business date, effective policy, due time and decision | | object"
+      - resource: eod-sweeps
+        path: /v1/operations/eod-sweeps
+        table: eod_sweep
+        description: Platform-operator API of the cross-tenant EOD trigger
+        ops: [list, get]
+        filters: [trigger_source, status]
+        actions:
+          - "POST /run | Run the cross-tenant EOD trigger now (platform operators): start EOD for every due legal entity of every ACTIVE tenant (or of tenant_ids); one failing tenant never blocks the others | tenant_ids uuid[] | eod_sweep"
       - resource: eod-runs
         path: /v1/operations/eod-runs
         table: eod_run
@@ -281,6 +344,9 @@ services:
       - "operations.date_roll.completed | date_roll | The business date rolled forward"
       - "operations.job_schedule_run.completed | job_schedule_run | A scheduled batch job finished"
       - "operations.batch_job_lock.force_released | batch_job_lock | An operator force-released a batch job lock"
+      - "operations.eod_job_definition.installed | eod_job_definition | A job of the standard EOD pack was installed or upgraded"
+      - "operations.eod_sweep.completed | eod_sweep | A cross-tenant EOD trigger sweep finished (published under the platform tenant)"
+      - "operations.eod_sweep.tenant_failed | eod_sweep | The EOD trigger failed for one tenant (published under that tenant)"
 
   # ------------------------------------------------------------------ file-gateway-service
   - name: file-gateway-service

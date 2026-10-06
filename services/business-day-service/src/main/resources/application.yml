@@ -37,6 +37,19 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.operations.v1
+  business-day:
+    # Cross-tenant EOD trigger (G8). The scheduler is off by default; operators can always run a sweep with
+    # POST /v1/operations/eod-sweeps/run (meridian:admin). In JWT mode set meridian.service-auth.token-uri /
+    # client-id / client-secret so downstream job calls carry a meridian:internal service token.
+    auto-eod:
+      enabled: ${MERIDIAN_AUTO_EOD_ENABLED:false}
+      interval: PT5M
+      initial-delay: PT1M
+      default-enabled: true        # tenants without an eod_trigger_policy get automatic EOD
+      default-cut-off: "22:00"     # local time in the legal entity's (else tenant's) time zone
+      default-time-zone: UTC
+      tenant-concurrency: 8
+      tenant-timeout: PT2M
 
 management:
   endpoints:

@@ -4,7 +4,10 @@ import io.meridian.businessday.api.generated.EodJobDefinitionsApi;
 import io.meridian.businessday.api.generated.model.EodJobDefinition;
 import io.meridian.businessday.api.generated.model.EodJobDefinitionCreate;
 import io.meridian.businessday.api.generated.model.EodJobDefinitionUpdate;
+import io.meridian.businessday.api.generated.model.EodJobDefinitionsInstallStandardPackRequest;
 import io.meridian.businessday.application.JobDefinitions;
+import io.meridian.businessday.application.JobPackInstaller;
+import io.meridian.businessday.application.StandardJobPack;
 import io.meridian.businessday.domain.CycleType;
 import io.meridian.businessday.infrastructure.Rows;
 import io.meridian.common.error.ApiException;
@@ -35,9 +38,14 @@ public class EodJobDefinitionsController implements EodJobDefinitionsApi {
     private final TransactionTemplate tx;
     private final io.meridian.web.idempotency.Idempotency idempotency;
     private final JsonMapper json;
+    private final StandardJobPack pack;
+    private final JobPackInstaller installer;
 
     public EodJobDefinitionsController(JobDefinitions definitions, CrudEngine crud, Rows rows, TransactionTemplate tx,
-                                       io.meridian.web.idempotency.Idempotency idempotency, JsonMapper json) {
+                                       io.meridian.web.idempotency.Idempotency idempotency, JsonMapper json,
+                                       StandardJobPack pack, JobPackInstaller installer) {
+        this.pack = pack;
+        this.installer = installer;
         this.definitions = definitions;
         this.crud = crud;
         this.rows = rows;
@@ -119,6 +127,24 @@ public class EodJobDefinitionsController implements EodJobDefinitionsApi {
         TenantContext.require();
         return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("op", "validate"),
                 JsonNode.class, () -> ResponseEntity.ok(definitions.validationReport())));
+    }
+
+    /** The standard EOD job pack shipped with this service version. */
+    @Override
+    public ResponseEntity<Map<String, Object>> eodJobDefinitionsStandardPack() {
+        TenantContext.require();
+        return ResponseEntity.ok(Http.object(json, pack.document()));
+    }
+
+    /** Installs or upgrades the standard pack into the tenant's definitions (idempotent, optional dry run). */
+    @Override
+    public ResponseEntity<Map<String, Object>> eodJobDefinitionsInstallStandardPack(
+            String idempotencyKey, EodJobDefinitionsInstallStandardPackRequest body) {
+        TenantContext.require();
+        JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
+        boolean dryRun = req.path("dry_run").asBoolean(false);
+        return Http.object(json, idempotency.execute(idempotencyKey, req, JsonNode.class,
+                () -> ResponseEntity.ok(installer.install(Http.text(req, "version"), dryRun))));
     }
 
     /** Serialises graph changes within the tenant so two concurrent edits cannot together create a cycle. */

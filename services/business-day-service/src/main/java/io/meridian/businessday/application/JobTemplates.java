@@ -5,7 +5,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -14,6 +16,7 @@ import java.util.regex.Pattern;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.MissingNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -21,12 +24,16 @@ import tools.jackson.databind.node.ObjectNode;
  * with an optional JSON {@code body_template}. Placeholders ({@code {business_date}}, {@code {partition_no}}, ...)
  * are filled from the job context: URL-encoded in the path, and in the body a string that is exactly one
  * placeholder takes the typed context value while other strings get textual substitution.
+ * {@code {parameters.<name>}} reads the definition's {@code parameters} (tenant-specific values such as a ledger
+ * id): required when used in the path (an active job must define it), {@code null} in the body when absent.
  */
 public final class JobTemplates {
     /** Placeholders a job target may use (all are fields of the job context). */
     public static final Set<String> PLACEHOLDERS = Set.of("business_date", "legal_entity_id", "cycle_type", "eod_run_id",
             "eod_job_run_id", "job_code", "job_type", "partition_no", "partition_count", "partition_key", "attempt");
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+)}");
+    /** Prefix of placeholders that read the job definition's parameters. */
+    public static final String PARAMETERS = "parameters.";
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_]+(?:\\.[a-z][a-z0-9_]*)?)}");
     private static final int MAX_KEY = 128;
 
     private JobTemplates() {}
@@ -61,12 +68,26 @@ public final class JobTemplates {
         }
     }
 
+    /** Names of the {@code {parameters.<name>}} placeholders of a path (each must be set for an active job). */
+    public static List<String> pathParameters(String path) {
+        List<String> out = new ArrayList<>();
+        if (path != null) {
+            Matcher m = PLACEHOLDER.matcher(path);
+            while (m.find()) {
+                if (m.group(1).startsWith(PARAMETERS)) {
+                    out.add(m.group(1).substring(PARAMETERS.length()));
+                }
+            }
+        }
+        return out;
+    }
+
     /** The path with placeholders replaced by URL-encoded context values. */
     public static String renderPath(String path, JsonNode context) {
         Matcher m = PLACEHOLDER.matcher(path);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
-            String v = context.path(m.group(1)).asString("");
+            String v = value(context, m.group(1)).asString("");
             m.appendReplacement(out, Matcher.quoteReplacement(URLEncoder.encode(v, StandardCharsets.UTF_8)));
         }
         m.appendTail(out);
@@ -91,18 +112,25 @@ public final class JobTemplates {
             String s = template.asString();
             Matcher whole = PLACEHOLDER.matcher(s);
             if (whole.matches()) {
-                JsonNode v = context.get(whole.group(1));
-                return v == null ? JsonNodeFactory.instance.nullNode() : v.deepCopy();
+                JsonNode v = value(context, whole.group(1));
+                return v.isMissingNode() ? JsonNodeFactory.instance.nullNode() : v.deepCopy();
             }
             Matcher m = PLACEHOLDER.matcher(s);
             StringBuilder out = new StringBuilder();
             while (m.find()) {
-                m.appendReplacement(out, Matcher.quoteReplacement(context.path(m.group(1)).asString("")));
+                m.appendReplacement(out, Matcher.quoteReplacement(value(context, m.group(1)).asString("")));
             }
             m.appendTail(out);
             return JsonNodeFactory.instance.stringNode(out.toString());
         }
         return template.deepCopy();
+    }
+
+    private static JsonNode value(JsonNode context, String name) {
+        JsonNode v = name.startsWith(PARAMETERS)
+                ? context.path("parameters").path(name.substring(PARAMETERS.length()))
+                : context.path(name);
+        return v.isNull() ? MissingNode.getInstance() : v;
     }
 
     private static void walk(JsonNode n) {
@@ -118,9 +146,9 @@ public final class JobTemplates {
     private static void checkPlaceholders(String s) {
         Matcher m = PLACEHOLDER.matcher(s);
         while (m.find()) {
-            if (!PLACEHOLDERS.contains(m.group(1))) {
+            if (!PLACEHOLDERS.contains(m.group(1)) && !m.group(1).startsWith(PARAMETERS)) {
                 throw ApiException.unprocessable("unknown_placeholder", "Unknown placeholder {" + m.group(1)
-                        + "}; allowed: " + PLACEHOLDERS.stream().sorted().toList());
+                        + "}; allowed: " + PLACEHOLDERS.stream().sorted().toList() + " and {parameters.<name>}");
             }
         }
     }

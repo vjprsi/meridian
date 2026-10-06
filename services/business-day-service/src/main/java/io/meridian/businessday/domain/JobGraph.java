@@ -205,18 +205,34 @@ public final class JobGraph {
     }
 
     /**
-     * The sub-graph of the given jobs (e.g. those active in one cycle). Dependencies on jobs outside the set are
-     * dropped: they do not apply in that cycle. Unknown dependencies must be caught by validating the full graph.
+     * The sub-graph of the given jobs (e.g. those active in one cycle). A dependency on a job outside the set (not
+     * in the cycle, or inactive) is replaced by that job's own dependencies, transitively, so the ordering it
+     * implied still holds (X -> inactive Y -> Z keeps X after Z). Unknown dependencies must be caught by
+     * validating the full graph.
      */
     public JobGraph restrictTo(Set<String> codes) {
         List<Job> kept = new ArrayList<>();
         for (Job j : jobs.values()) {
             if (codes.contains(j.code())) {
-                kept.add(new Job(j.code(), j.dependsOn().stream().filter(codes::contains).toList(), j.sequence(),
-                        j.critical()));
+                Set<String> deps = new java.util.LinkedHashSet<>();
+                collectInside(j.dependsOn(), codes, deps, new java.util.HashSet<>());
+                kept.add(new Job(j.code(), List.copyOf(deps), j.sequence(), j.critical()));
             }
         }
         return of(kept);
+    }
+
+    private void collectInside(List<String> deps, Set<String> codes, Set<String> out, Set<String> visited) {
+        for (String d : deps) {
+            if (!visited.add(d)) {
+                continue;
+            }
+            if (codes.contains(d)) {
+                out.add(d);
+            } else if (jobs.containsKey(d)) {
+                collectInside(jobs.get(d).dependsOn(), codes, out, visited);
+            }
+        }
     }
 
     private List<String> sortedCodes() {
