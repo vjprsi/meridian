@@ -19,13 +19,57 @@ security:
 - oauth2: []
 tags:
 - name: Card Vault
-  description: Internal PCI APIs plus a reveal endpoint that returns PAN/CVV inside an encrypted, single-use response for
-    the cardholder app.
+  description: Internal PCI APIs (create = tokenize) plus a reveal endpoint for the cardholder app. PAN, CVV and PIN data
+    are accepted as write-only fields and returned only by reveal.
 - name: Card Vault Keys
   description: Key metadata for HSM-held keys (no key material stored)
 - name: Card Vault Access Logs
   description: Immutable log of every detokenisation and reveal request
 paths:
+  /v1/card-vault:
+    post:
+      operationId: cardVaultCreate
+      summary: Create card vault
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDataVaultCreate'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+      x-crud: true
+      x-crud-create: true
   /v1/card-vault/{id}:
     get:
       operationId: cardVaultGet
@@ -49,14 +93,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CardDataVault'
-        '400': &id001
-          $ref: '#/components/responses/BadRequest'
-        '401': &id002
-          $ref: '#/components/responses/Unauthorized'
-        '403': &id003
-          $ref: '#/components/responses/Forbidden'
-        '429': &id004
-          $ref: '#/components/responses/TooManyRequests'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
         '404':
           $ref: '#/components/responses/NotFound'
       x-requirements:
@@ -67,10 +107,11 @@ paths:
       x-table: card_data_vault
       x-crud: true
       x-crud-get: true
-  /v1/card-vault/tokenize:
+  /v1/card-vault/reveal:
     post:
-      operationId: cardVaultTokenize
-      summary: Store a PAN and return its token (internal)
+      operationId: cardVaultReveal
+      summary: Reveal PAN, CVV and expiry of a card's active record (step-up done by the caller); every access is audit-logged;
+        with public_key the values come back RSA-OAEP encrypted in encrypted_payload
       tags:
       - Card Vault
       security:
@@ -100,17 +141,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CardVaultTokenizeRequest'
+              $ref: '#/components/schemas/CardVaultRevealRequest'
       x-requirements:
       - CRD-07
       x-service: card-vault-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_data_vault
-  /v1/card-vault/reveal:
+  /v1/card-vault/lookup:
     post:
-      operationId: cardVaultReveal
-      summary: Return PAN, CVV and expiry encrypted to the cardholder app's public key (step-up required)
+      operationId: cardVaultLookup
+      summary: Find the active vault record of a PAN by its keyed fingerprint (3DS, token provisioning)
       tags:
       - Card Vault
       security:
@@ -119,8 +160,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -136,7 +181,176 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CardVaultRevealRequest'
+              $ref: '#/components/schemas/CardVaultLookupRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/verify:
+    post:
+      operationId: cardVaultVerify
+      summary: Verify CVV2, expiry and/or a PIN block for a token (authorisation path); returns {cvv_result, expiry_result,
+        pin_result, pin_try_count}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultVerifyRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/pin:
+    post:
+      operationId: cardVaultPin
+      summary: Set or change the PIN from an ISO 9564 format 0 PIN block wrapped under a zone key; returns {pan_token, pin_set,
+        event_type}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultPinRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/pin/unblock:
+    post:
+      operationId: cardVaultPinUnblock
+      summary: Reset the PIN try counter; returns {pan_token, pin_try_count}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultPinUnblockRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/reissue:
+    post:
+      operationId: cardVaultReissue
+      summary: Copy a PAN under a new token with a new expiry and CVV (renewal, replacement keeping the PAN); the source record
+        becomes inactive
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultReissueRequest'
       x-requirements:
       - CRD-07
       x-service: card-vault-service
@@ -146,7 +360,8 @@ paths:
   /v1/card-vault/rotate-keys:
     post:
       operationId: cardVaultRotateKeys
-      summary: Re-encrypt records under a new DEK (operator only)
+      summary: Create a new key version, retire the old one and re-encrypt every record under the new DEK (operator only);
+        returns {key_type, new_key_id, version, re_encrypted}
       tags:
       - Card Vault
       security:
@@ -155,8 +370,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -347,16 +568,35 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: purpose
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
       - name: caller_service
         in: query
         schema:
           type: string
           maxLength: 64
+      - name: success
+        in: query
+        schema:
+          type: boolean
       - name: custom_field_1
         in: query
         schema:
@@ -478,12 +718,58 @@ components:
       - title
       - status
       - code
-    CardVaultTokenizeRequest:
+    CardVaultRevealRequest:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+        public_key:
+          type: string
+      required:
+      - card_id
+      - purpose
+    CardVaultLookupRequest:
       type: object
       properties:
         pan:
           type: string
           maxLength: 19
+        purpose:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+      required:
+      - pan
+      - purpose
+    CardVaultVerifyRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
         cvv:
           type: string
           maxLength: 4
@@ -493,21 +779,61 @@ components:
         expiry_year:
           type: integer
           format: int32
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+        pin_key_id:
+          type: string
+          maxLength: 64
       required:
-      - pan
-      - expiry_month
-      - expiry_year
-    CardVaultRevealRequest:
+      - pan_token
+    CardVaultPinRequest:
       type: object
       properties:
+        pan_token:
+          type: string
+          maxLength: 64
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+        pin_key_id:
+          type: string
+          maxLength: 64
+      required:
+      - pan_token
+      - encrypted_pin_block
+      - pin_key_id
+    CardVaultPinUnblockRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - pan_token
+    CardVaultReissueRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
         card_id:
           type: string
           format: uuid
-        public_key:
-          type: string
+        expiry_month:
+          type: integer
+          format: int32
+        expiry_year:
+          type: integer
+          format: int32
       required:
+      - pan_token
       - card_id
-      - public_key
+      - expiry_month
+      - expiry_year
     CardVaultRotateKeysRequest:
       type: object
       properties:
@@ -599,21 +925,51 @@ components:
         pan_token:
           type: string
           maxLength: 64
-          description: Token of the PAN
+          description: Random token of the PAN (not derived from it)
+          readOnly: true
         pan_fingerprint:
           type: string
           maxLength: 64
-          description: Keyed HMAC of the PAN for lookup
+          description: Keyed HMAC-SHA256 of the PAN for de-duplication and lookup
+          readOnly: true
         dek_key_id:
           type: string
           format: uuid
           description: Data encryption key used
+          readOnly: true
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card
+        bin:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: BIN (first 6-8 digits; not sensitive)
+          readOnly: true
+        last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Last four digits
+          readOnly: true
+        pin_set:
+          type: boolean
+          description: A PIN is stored
+          readOnly: true
+        pin_try_count:
+          type: integer
+          format: int32
+          description: Consecutive wrong PIN attempts
+          readOnly: true
+        is_active:
+          type: boolean
+          description: False once superseded by a reissue
+          readOnly: true
         last_detokenized_at:
           type:
           - string
@@ -651,6 +1007,31 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pan:
+          type: string
+          maxLength: 19
+          description: PAN (reveal only) (returned once; never stored)
+          readOnly: true
+        cvv:
+          type: string
+          maxLength: 4
+          description: CVV2 (reveal only) (returned once; never stored)
+          readOnly: true
+        expiry_month:
+          type: integer
+          format: int32
+          description: Expiry month (reveal only) (returned once; never stored)
+          readOnly: true
+        expiry_year:
+          type: integer
+          format: int32
+          description: Expiry year (reveal only) (returned once; never stored)
+          readOnly: true
+        encrypted_payload:
+          type: string
+          description: 'Reveal with a public key: {pan, cvv, expiry_month, expiry_year} RSA-OAEP-256 encrypted, base64 (returned
+            once; never stored)'
+          readOnly: true
       required:
       - id
       - created_at
@@ -659,6 +1040,60 @@ components:
       - pan_token
       - pan_fingerprint
       - dek_key_id
+      - pin_set
+      - pin_try_count
+      - is_active
+    CardDataVaultCreate:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pan:
+          type: string
+          maxLength: 19
+          description: Primary account number (13-19 digits, Luhn-valid) (write-only; not stored as a column)
+          writeOnly: true
+        cvv:
+          type: string
+          maxLength: 4
+          description: CVV2; generated under the CVK when omitted (write-only; not stored as a column)
+          writeOnly: true
+        expiry_month:
+          type: integer
+          format: int32
+          description: Expiry month 1-12 (write-only; not stored as a column)
+          writeOnly: true
+        expiry_year:
+          type: integer
+          format: int32
+          description: Expiry year (4 digits) (write-only; not stored as a column)
+          writeOnly: true
+      required:
+      - pan
+      - expiry_month
+      - expiry_year
     CardVaultAccessLog:
       type: object
       description: Immutable log of every detokenisation and reveal request
@@ -681,13 +1116,31 @@ components:
           description: Principal that created the row
           readOnly: true
         pan_token:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Token accessed
+          description: Token accessed (empty when the lookup found nothing)
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card accessed
         purpose:
           type: string
-          maxLength: 32
-          description: AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+          description: Purpose of the access
         caller_service:
           type: string
           maxLength: 64
@@ -701,6 +1154,12 @@ components:
         success:
           type: boolean
           description: Outcome
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the access failed
         ip_address:
           type:
           - string
@@ -739,7 +1198,6 @@ components:
       required:
       - id
       - created_at
-      - pan_token
       - purpose
       - caller_service
       - success
@@ -798,15 +1256,17 @@ components:
         kcv:
           type: string
           maxLength: 6
-          description: Key check value
+          description: Key check value (computed by the HSM)
+          readOnly: true
         algorithm:
           type: string
           maxLength: 32
-          description: AES-256, TDES, etc.
+          description: AES-256-GCM, TDES, etc.
         version:
           type: integer
           format: int32
-          description: Key version
+          description: Key version (incremented on rotation)
+          readOnly: true
         active_from:
           type: string
           format: date-time
@@ -819,7 +1279,8 @@ components:
           description: Scheduled rotation
         is_active:
           type: boolean
-          description: Active
+          description: Active (one active key per type)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -879,18 +1340,10 @@ components:
           type: string
           maxLength: 128
           description: Label of the key inside the HSM
-        kcv:
-          type: string
-          maxLength: 6
-          description: Key check value
         algorithm:
           type: string
           maxLength: 32
-          description: AES-256, TDES, etc.
-        version:
-          type: integer
-          format: int32
-          description: Key version
+          description: AES-256-GCM, TDES, etc.
         active_from:
           type: string
           format: date-time
@@ -899,9 +1352,6 @@ components:
           type: string
           format: date-time
           description: Scheduled rotation
-        is_active:
-          type: boolean
-          description: Active
         custom_field_1:
           type: string
           maxLength: 500
@@ -925,9 +1375,6 @@ components:
       required:
       - key_type
       - hsm_key_label
-      - kcv
-      - algorithm
-      - active_from
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

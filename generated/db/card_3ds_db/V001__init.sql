@@ -28,6 +28,8 @@ CREATE TABLE threeds_authentication (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   card_id                      uuid NOT NULL,
+  customer_id                  uuid,
+  card_last4                   varchar(4),
   acs_transaction_id           varchar(64) NOT NULL,
   ds_transaction_id            varchar(64),
   threeds_server_transaction_id varchar(64),
@@ -38,11 +40,15 @@ CREATE TABLE threeds_authentication (
   amount                       numeric(28,8),
   currency                     char(3),
   risk_score                   integer,
+  risk_reasons                 jsonb,
   challenge_type               varchar(40) CHECK (challenge_type IN ('FRICTIONLESS', 'OTP_SMS', 'OTP_EMAIL', 'APP_PUSH', 'BIOMETRIC', 'DECOUPLED')),
   result                       varchar(40) NOT NULL DEFAULT 'CHALLENGE_PENDING' CHECK (result IN ('AUTHENTICATED', 'ATTEMPTED', 'FAILED', 'REJECTED', 'UNAVAILABLE', 'CHALLENGE_PENDING')),
   eci                          varchar(2),
   authentication_value         varchar(64),
+  otp_hash                     varchar(128),
+  challenge_expires_at         timestamptz,
   attempts                     integer NOT NULL DEFAULT 0,
+  decline_reason               varchar(255),
   completed_at                 timestamptz,
   device_channel               varchar(16),
   custom_field_1               varchar(500),
@@ -61,6 +67,8 @@ COMMENT ON COLUMN threeds_authentication.updated_at IS 'Last update time';
 COMMENT ON COLUMN threeds_authentication.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN threeds_authentication.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN threeds_authentication.card_id IS 'Card';
+COMMENT ON COLUMN threeds_authentication.customer_id IS 'Cardholder';
+COMMENT ON COLUMN threeds_authentication.card_last4 IS 'Last four digits of the card';
 COMMENT ON COLUMN threeds_authentication.acs_transaction_id IS 'ACS transaction id';
 COMMENT ON COLUMN threeds_authentication.ds_transaction_id IS 'Directory server transaction id';
 COMMENT ON COLUMN threeds_authentication.threeds_server_transaction_id IS '3DS server transaction id';
@@ -70,12 +78,16 @@ COMMENT ON COLUMN threeds_authentication.merchant_country IS 'Merchant country';
 COMMENT ON COLUMN threeds_authentication.mcc IS 'MCC';
 COMMENT ON COLUMN threeds_authentication.amount IS 'Purchase amount';
 COMMENT ON COLUMN threeds_authentication.currency IS 'Currency';
-COMMENT ON COLUMN threeds_authentication.risk_score IS 'Issuer risk score';
+COMMENT ON COLUMN threeds_authentication.risk_score IS 'Issuer risk score 0-1000';
+COMMENT ON COLUMN threeds_authentication.risk_reasons IS 'Factors that raised the risk score';
 COMMENT ON COLUMN threeds_authentication.challenge_type IS 'Challenge method used';
 COMMENT ON COLUMN threeds_authentication.result IS 'Outcome';
 COMMENT ON COLUMN threeds_authentication.eci IS 'ECI returned';
 COMMENT ON COLUMN threeds_authentication.authentication_value IS 'CAVV / AAV [SECRET]';
+COMMENT ON COLUMN threeds_authentication.otp_hash IS 'Hash of the challenge OTP';
+COMMENT ON COLUMN threeds_authentication.challenge_expires_at IS 'Challenge expiry';
 COMMENT ON COLUMN threeds_authentication.attempts IS 'Challenge attempts';
+COMMENT ON COLUMN threeds_authentication.decline_reason IS 'Why the authentication failed or was rejected';
 COMMENT ON COLUMN threeds_authentication.completed_at IS 'Completion time';
 COMMENT ON COLUMN threeds_authentication.device_channel IS 'APP, BROWSER, 3RI';
 COMMENT ON COLUMN threeds_authentication.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -85,6 +97,7 @@ COMMENT ON COLUMN threeds_authentication.custom_field_4 IS 'Tenant-defined custo
 COMMENT ON COLUMN threeds_authentication.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_threeds_authentication_tenant ON threeds_authentication (tenant_id, created_at);
 CREATE INDEX ix_threeds_authentication_card_id ON threeds_authentication (card_id);
+CREATE INDEX ix_threeds_authentication_customer_id ON threeds_authentication (customer_id);
 CREATE INDEX ix_threeds_authentication_ds_transaction_id ON threeds_authentication (ds_transaction_id);
 ALTER TABLE threeds_authentication ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON threeds_authentication USING (tenant_id = current_setting('app.tenant_id')::uuid);

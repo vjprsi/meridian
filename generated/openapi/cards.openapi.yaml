@@ -25,7 +25,9 @@ tags:
 - name: Card Bureaus
   description: Card manufacturing / personalisation bureau configuration
 - name: Cards
-  description: Issue and manage cards. Sensitive card data is shown only through the vault reveal endpoint.
+  description: Issue and manage cards. A virtual card is issued ACTIVE instantly; the PAN is generated from the program's
+    account range (Luhn) and stored only in card-vault-service. Sensitive card data is shown only through the vault reveal
+    endpoint.
 - name: Card Orders
   description: A physical card production and shipping order
 - name: Card Controls
@@ -37,14 +39,16 @@ tags:
 - name: Card Statement Cycles
   description: Billing cycle of a credit card, linked to the credit line in lending
 - name: Card Vault
-  description: Internal PCI APIs plus a reveal endpoint that returns PAN/CVV inside an encrypted, single-use response for
-    the cardholder app.
+  description: Internal PCI APIs (create = tokenize) plus a reveal endpoint for the cardholder app. PAN, CVV and PIN data
+    are accepted as write-only fields and returned only by reveal.
 - name: Card Vault Keys
   description: Key metadata for HSM-held keys (no key material stored)
 - name: Card Vault Access Logs
   description: Immutable log of every detokenisation and reveal request
 - name: Card Authorizations
-  description: Read authorisations; simulate them in sandbox. Live authorisations arrive through the ISO 8583 gateway.
+  description: Live authorisations arrive from the ISO 8583 gateway as create (0100/0200 auth, incremental, 0400 reversal,
+    0120 advice with parent_authorization_id); responses carry the ISO response code. Sandbox simulation endpoints run the
+    same decision path.
 - name: Card Stand In Records
   description: Authorisation approved in stand-in, awaiting replay against the ledger
 - name: Card Authorization Rules
@@ -54,7 +58,8 @@ tags:
 - name: Threeds Authentications
   description: One 3DS authentication request and its outcome
 - name: Clearing Files
-  description: An incoming or outgoing scheme clearing file
+  description: Upload (create) parses the file synchronously, matches presentments to authorisations, captures holds into
+    ledger postings and updates settlement positions.
 - name: Clearing Records
   description: One clearing record (presentment, refund, chargeback, fee). Append-only.
 - name: Card Settlements
@@ -297,10 +302,10 @@ paths:
       x-table: card_program
       x-crud: true
       x-crud-update: true
-  /v1/card-programs/{id}/activate:
+  /v1/card-programs/{id}/certify:
     post:
-      operationId: cardProgramsActivate
-      summary: Activate a certified program
+      operationId: cardProgramsCertify
+      summary: Start scheme certification of a draft program
       tags:
       - Card Programs
       security:
@@ -331,6 +336,52 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_program
+  /v1/card-programs/{id}/activate:
+    post:
+      operationId: cardProgramsActivate
+      summary: 'Approve go-live of a certified (or reactivate a suspended) program; four-eyes: not by its creator'
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProgramsActivateRequest'
       x-requirements:
       - CRD-01
       x-service: card-service
@@ -614,6 +665,94 @@ paths:
       x-table: card_product
       x-crud: true
       x-crud-update: true
+  /v1/card-products/{id}/activate:
+    post:
+      operationId: cardProductsActivate
+      summary: Make a draft product available for issuing (program must not be retired)
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_product
+  /v1/card-products/{id}/retire:
+    post:
+      operationId: cardProductsRetire
+      summary: Stop issuing new cards on the product
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProductsRetireRequest'
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_product
   /v1/card-bureaus:
     get:
       operationId: cardBureausList
@@ -865,6 +1004,11 @@ paths:
           - CREDIT_LINE
           - PREPAID_LEDGER
           - JIT_PROGRAM
+      - name: pan_fingerprint
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -1035,7 +1179,7 @@ paths:
   /v1/cards/{id}/activate:
     post:
       operationId: cardsActivate
-      summary: Activate a card (physical cards may require last4 / activation code)
+      summary: Activate a card (physical cards require the last four digits as activation code)
       tags:
       - Cards
       security:
@@ -1264,7 +1408,7 @@ paths:
   /v1/cards/{id}/replace:
     post:
       operationId: cardsReplace
-      summary: Replace a card
+      summary: Replace a card (new card issued; keep_pan reissues the same PAN with a new expiry)
       tags:
       - Cards
       security:
@@ -1311,7 +1455,7 @@ paths:
   /v1/cards/{id}/renew:
     post:
       operationId: cardsRenew
-      summary: Renew an expiring card with a new expiry date
+      summary: 'Renew an expiring card: same PAN under a new token with a new expiry and CVV'
       tags:
       - Cards
       security:
@@ -1399,7 +1543,8 @@ paths:
   /v1/cards/{id}/pin:
     post:
       operationId: cardsPin
-      summary: Set or change the PIN (PIN block encrypted under the session key)
+      summary: Set or change the PIN (ISO 9564 format 0 PIN block wrapped under the zone key; handled only by the vault, never
+        logged)
       tags:
       - Cards
       security:
@@ -1414,8 +1559,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardPinEvent'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1457,8 +1606,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardPinEvent'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1561,7 +1714,7 @@ paths:
   /v1/cards/{id}/authorizations:
     get:
       operationId: cardsAuthorizations
-      summary: Authorisations on the card
+      summary: Authorisations on the card (from card-authorization-service)
       tags:
       - Cards
       security:
@@ -1599,7 +1752,7 @@ paths:
   /v1/cards/{id}/controls:
     get:
       operationId: cardsControls
-      summary: Controls on the card
+      summary: Controls on the card and its program
       tags:
       - Cards
       security:
@@ -1637,7 +1790,7 @@ paths:
   /v1/cards/{id}/limits:
     get:
       operationId: cardsLimits
-      summary: Spend limits and usage
+      summary: Spend limits of the card and its program with current usage
       tags:
       - Cards
       security:
@@ -1671,6 +1824,95 @@ paths:
       x-service: card-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:read")'
       x-required-scope: cards:read
+      x-table: card
+  /v1/cards/{id}/auth-context:
+    get:
+      operationId: cardsAuthContext
+      summary: 'Authorisation context (internal): card, program funding and risk settings, product flags, active controls
+        and spend limits'
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:read")'
+      x-required-scope: cards:read
+      x-table: card
+  /v1/cards/expiry-scan:
+    post:
+      operationId: cardsExpiryScan
+      summary: Publish cards.card.expiring for active cards expiring within the renewal window and mark cards past expiry
+        EXPIRED (idempotent per day)
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: window_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
       x-table: card
   /v1/card-orders:
     get:
@@ -1709,6 +1951,11 @@ paths:
           - RETURNED
           - FAILED
           - CANCELLED
+      - name: bureau_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -1833,6 +2080,46 @@ paths:
       x-table: card_order
       x-crud: true
       x-crud-update: true
+  /v1/card-orders/{id}/submit:
+    post:
+      operationId: cardOrdersSubmit
+      summary: Send a pending order to the bureau (file or API)
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_order
   /v1/card-orders/{id}/cancel:
     post:
       operationId: cardOrdersCancel
@@ -1882,7 +2169,7 @@ paths:
   /v1/card-orders/{id}/reship:
     post:
       operationId: cardOrdersReship
-      summary: Reship a returned card
+      summary: Reship a returned card (new order)
       tags:
       - Card Orders
       security:
@@ -1924,6 +2211,51 @@ paths:
       x-service: card-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
+      x-table: card_order
+  /v1/card-orders/bureau-callbacks:
+    post:
+      operationId: cardOrdersBureauCallbacks
+      summary: Bureau production / shipping status update, HMAC-SHA256 over the raw body in X-Signature; tenant_id is part
+        of the callback URL registered with the bureau
+      tags:
+      - Card Orders
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardOrdersBureauCallbacksRequest'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: card_order
   /v1/card-controls:
     get:
@@ -2648,7 +2980,7 @@ paths:
   /v1/card-statement-cycles/{id}/close:
     post:
       operationId: cardStatementCyclesClose
-      summary: Close the cycle and produce the statement
+      summary: Close the cycle from the card account's ledger entries, compute the statement and open the next cycle
       tags:
       - Card Statement Cycles
       security:
@@ -2686,6 +3018,46 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_statement_cycle
+  /v1/card-vault:
+    post:
+      operationId: cardVaultCreate
+      summary: Create card vault
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDataVaultCreate'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+      x-crud: true
+      x-crud-create: true
   /v1/card-vault/{id}:
     get:
       operationId: cardVaultGet
@@ -2723,10 +3095,11 @@ paths:
       x-table: card_data_vault
       x-crud: true
       x-crud-get: true
-  /v1/card-vault/tokenize:
+  /v1/card-vault/reveal:
     post:
-      operationId: cardVaultTokenize
-      summary: Store a PAN and return its token (internal)
+      operationId: cardVaultReveal
+      summary: Reveal PAN, CVV and expiry of a card's active record (step-up done by the caller); every access is audit-logged;
+        with public_key the values come back RSA-OAEP encrypted in encrypted_payload
       tags:
       - Card Vault
       security:
@@ -2756,17 +3129,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CardVaultTokenizeRequest'
+              $ref: '#/components/schemas/CardVaultRevealRequest'
       x-requirements:
       - CRD-07
       x-service: card-vault-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_data_vault
-  /v1/card-vault/reveal:
+  /v1/card-vault/lookup:
     post:
-      operationId: cardVaultReveal
-      summary: Return PAN, CVV and expiry encrypted to the cardholder app's public key (step-up required)
+      operationId: cardVaultLookup
+      summary: Find the active vault record of a PAN by its keyed fingerprint (3DS, token provisioning)
       tags:
       - Card Vault
       security:
@@ -2775,8 +3148,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2792,7 +3169,176 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CardVaultRevealRequest'
+              $ref: '#/components/schemas/CardVaultLookupRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/verify:
+    post:
+      operationId: cardVaultVerify
+      summary: Verify CVV2, expiry and/or a PIN block for a token (authorisation path); returns {cvv_result, expiry_result,
+        pin_result, pin_try_count}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultVerifyRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/pin:
+    post:
+      operationId: cardVaultPin
+      summary: Set or change the PIN from an ISO 9564 format 0 PIN block wrapped under a zone key; returns {pan_token, pin_set,
+        event_type}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultPinRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/pin/unblock:
+    post:
+      operationId: cardVaultPinUnblock
+      summary: Reset the PIN try counter; returns {pan_token, pin_try_count}
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultPinUnblockRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_data_vault
+  /v1/card-vault/reissue:
+    post:
+      operationId: cardVaultReissue
+      summary: Copy a PAN under a new token with a new expiry and CVV (renewal, replacement keeping the PAN); the source record
+        becomes inactive
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultReissueRequest'
       x-requirements:
       - CRD-07
       x-service: card-vault-service
@@ -2802,7 +3348,8 @@ paths:
   /v1/card-vault/rotate-keys:
     post:
       operationId: cardVaultRotateKeys
-      summary: Re-encrypt records under a new DEK (operator only)
+      summary: Create a new key version, retire the old one and re-encrypt every record under the new DEK (operator only);
+        returns {key_type, new_key_id, version, re_encrypted}
       tags:
       - Card Vault
       security:
@@ -2811,8 +3358,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3003,16 +3556,35 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: purpose
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
       - name: caller_service
         in: query
         schema:
           type: string
           maxLength: 64
+      - name: success
+        in: query
+        schema:
+          type: boolean
       - name: custom_field_1
         in: query
         schema:
@@ -3180,6 +3752,16 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: auth_code
+        in: query
+        schema:
+          type: string
+          maxLength: 6
+      - name: parent_authorization_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -3227,6 +3809,48 @@ paths:
       x-table: card_authorization
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: cardAuthorizationsCreate
+      summary: Create card authorization
+      tags:
+      - Card Authorizations
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardAuthorization'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardAuthorizationCreate'
+      x-requirements:
+      - CRD-03
+      - CRD-09
+      - FRM-01
+      - LED-04
+      x-service: card-authorization-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_authorization
+      x-crud: true
+      x-crud-create: true
   /v1/card-authorizations/{id}:
     get:
       operationId: cardAuthorizationsGet
@@ -3313,7 +3937,7 @@ paths:
   /v1/card-authorizations/{id}/simulate-reversal:
     post:
       operationId: cardAuthorizationsSimulateReversal
-      summary: 'Sandbox: simulate a reversal'
+      summary: 'Sandbox: simulate a full or partial reversal'
       tags:
       - Card Authorizations
       security:
@@ -3411,7 +4035,7 @@ paths:
   /v1/card-authorizations/{id}/simulate-clearing:
     post:
       operationId: cardAuthorizationsSimulateClearing
-      summary: 'Sandbox: simulate a presentment'
+      summary: 'Sandbox: simulate a presentment through card-clearing-service'
       tags:
       - Card Authorizations
       security:
@@ -3448,6 +4072,55 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CardAuthorizationsSimulateClearingRequest'
+      x-requirements:
+      - CRD-03
+      - CRD-09
+      - FRM-01
+      - LED-04
+      x-service: card-authorization-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_authorization
+  /v1/card-authorizations/{id}/clear:
+    post:
+      operationId: cardAuthorizationsClear
+      summary: Record a clearing presentment captured against the authorisation (called by card-clearing-service)
+      tags:
+      - Card Authorizations
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardAuthorization'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardAuthorizationsClearRequest'
       x-requirements:
       - CRD-03
       - CRD-09
@@ -3505,6 +4178,92 @@ paths:
       x-service: card-authorization-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
+      x-table: card_authorization
+  /v1/card-authorizations/expire-stale:
+    post:
+      operationId: cardAuthorizationsExpireStale
+      summary: Expire uncleared authorisations past expires_at and release their holds
+      tags:
+      - Card Authorizations
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-03
+      - CRD-09
+      - FRM-01
+      - LED-04
+      x-service: card-authorization-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_authorization
+  /v1/card-authorizations/usage:
+    get:
+      operationId: cardAuthorizationsUsage
+      summary: 'Spend-limit usage of a card for its current periods: {card_id, counters[{limit_ref, period, channel, period_start,
+        used_amount, used_count, currency}]}'
+      tags:
+      - Card Authorizations
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: card_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-03
+      - CRD-09
+      - FRM-01
+      - LED-04
+      x-service: card-authorization-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:read")'
+      x-required-scope: cards:read
       x-table: card_authorization
   /v1/card-authorizations/{id}/jit-requests:
     get:
@@ -3609,6 +4368,19 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: replay_result
+        in: query
+        schema:
+          type: string
+          enum:
+          - POSTED
+          - OVERDRAWN
+          - FAILED
       - name: custom_field_1
         in: query
         schema:
@@ -3693,7 +4465,7 @@ paths:
   /v1/card-stand-in-records/replay:
     post:
       operationId: cardStandInRecordsReplay
-      summary: Replay pending stand-in approvals to the ledger
+      summary: Replay pending stand-in approvals to the ledger; returns {replayed, posted, overdrawn, failed}
       tags:
       - Card Stand In Records
       security:
@@ -3702,8 +4474,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3954,7 +4732,8 @@ paths:
   /v1/card-authorization-rules/test:
     post:
       operationId: cardAuthorizationRulesTest
-      summary: Evaluate rules against a sample authorisation
+      summary: Evaluate the active rules (or one expression) against a sample authorisation context; returns {matched, rule_id,
+        action, decline_reason, evaluations[]}
       tags:
       - Card Authorization Rules
       security:
@@ -3963,8 +4742,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4004,6 +4789,11 @@ paths:
       - $ref: '#/components/parameters/CreatedAfter'
       - $ref: '#/components/parameters/CreatedBefore'
       - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
         in: query
         schema:
           type: string
@@ -4114,7 +4904,8 @@ paths:
   /v1/card-tokens/push-provision:
     post:
       operationId: cardTokensPushProvision
-      summary: Push-provision a card to a wallet from the issuer app
+      summary: 'Push-provision a card to a wallet from the issuer app (cardholder already authenticated: GREEN unless the
+        card is not active)'
       tags:
       - Card Tokens
       security:
@@ -4123,8 +4914,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4141,6 +4936,139 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CardTokensPushProvisionRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_token
+  /v1/card-tokens/network/provision-requests:
+    post:
+      operationId: cardTokensNetworkProvisionRequests
+      summary: 'Token service (VTS / MDES) provisioning request: the card is resolved by PAN through the vault and the issuer
+        decides GREEN (activate), YELLOW (OTP step-up) or RED (decline); HMAC-SHA256 over the raw body in X-Signature'
+      tags:
+      - Card Tokens
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensNetworkProvisionRequestsRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: card_token
+  /v1/card-tokens/network/events:
+    post:
+      operationId: cardTokensNetworkEvents
+      summary: Token lifecycle notification from the token service (activated, suspended, resumed, deactivated, PAN updated);
+        HMAC-SHA256 over the raw body in X-Signature
+      tags:
+      - Card Tokens
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensNetworkEventsRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: card_token
+  /v1/card-tokens/card-status-sync:
+    post:
+      operationId: cardTokensCardStatusSync
+      summary: Apply a card status change to every token of the card (FROZEN suspends, ACTIVE resumes, BLOCKED / LOST / STOLEN
+        / CLOSED / EXPIRED deactivate); returns {card_id, updated}
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensCardStatusSyncRequest'
       x-requirements:
       - CRD-05
       x-service: card-tokenization-service
@@ -4381,6 +5309,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: result
         in: query
         schema:
@@ -4403,6 +5336,11 @@ paths:
           - APP_PUSH
           - BIOMETRIC
           - DECOUPLED
+      - name: ds_transaction_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -4484,6 +5422,99 @@ paths:
       x-table: threeds_authentication
       x-crud: true
       x-crud-get: true
+  /v1/threeds-authentications/authenticate:
+    post:
+      operationId: threedsAuthenticationsAuthenticate
+      summary: 'Authentication request (AReq) from the directory server: the card is resolved by PAN through the vault, the
+        issuer scores the risk and answers frictionless (ECI + CAVV), challenge or reject; HMAC-SHA256 over the raw body in
+        X-Signature'
+      tags:
+      - Threeds Authentications
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreedsAuthenticationsAuthenticateRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: threeds_authentication
+  /v1/threeds-authentications/{id}/result:
+    get:
+      operationId: threedsAuthenticationsResult
+      summary: 'Results request for the directory server: final result, ECI and CAVV; HMAC-SHA256 of the ds_transaction_id
+        in X-Signature'
+      tags:
+      - Threeds Authentications
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: ds_transaction_id
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: threeds_authentication
   /v1/threeds-authentications/{id}/approve:
     post:
       operationId: threedsAuthenticationsApprove
@@ -4579,7 +5610,7 @@ paths:
   /v1/threeds-authentications/{id}/verify-otp:
     post:
       operationId: threedsAuthenticationsVerifyOtp
-      summary: Verify an OTP challenge
+      summary: Verify an OTP challenge (3 attempts, 5 minutes)
       tags:
       - Threeds Authentications
       security:
@@ -4654,7 +5685,9 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 8
+          enum:
+          - INCOMING
+          - OUTGOING
       - name: status
         in: query
         schema:
@@ -4670,6 +5703,11 @@ paths:
         schema:
           type: string
           format: date
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -4793,7 +5831,7 @@ paths:
   /v1/card-clearing/files/{id}/reprocess:
     post:
       operationId: clearingFilesReprocess
-      summary: Re-parse and re-post a failed file
+      summary: Re-run matching and posting for the records of a failed file (records already posted are skipped)
       tags:
       - Clearing Files
       security:
@@ -4927,6 +5965,11 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: rrn
+        in: query
+        schema:
+          type: string
+          maxLength: 12
       - name: custom_field_1
         in: query
         schema:
@@ -5011,7 +6054,7 @@ paths:
   /v1/card-clearing/records/{id}/force-match:
     post:
       operationId: clearingRecordsForceMatch
-      summary: Manually match an unmatched record to an authorisation
+      summary: Manually match an unmatched record to an authorisation (appends a MATCHED record and posts it)
       tags:
       - Clearing Records
       security:
@@ -5190,7 +6233,7 @@ paths:
   /v1/card-clearing/settlements/{id}/confirm:
     post:
       operationId: cardSettlementsConfirm
-      summary: Confirm settlement after bank statement match
+      summary: Confirm settlement after bank statement match and post the settlement journal
       tags:
       - Card Settlements
       security:
@@ -5274,6 +6317,16 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: card_authorization_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: clearing_record_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -5400,7 +6453,7 @@ paths:
   /v1/card-fees/{id}/waive:
     post:
       operationId: cardFeesWaive
-      summary: Waive a fee with a compensating posting
+      summary: 'Waive a fee with a compensating posting (four-eyes: not by the principal that charged it)'
       tags:
       - Card Fees
       security:
@@ -5532,6 +6585,11 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: clearing_record_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -5787,10 +6845,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_dispute
+  /v1/card-disputes/{id}/request-retrieval:
+    post:
+      operationId: cardDisputesRequestRetrieval
+      summary: Request a copy of the transaction receipt from the acquirer
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesRequestRetrievalRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
   /v1/card-disputes/{id}/submit-chargeback:
     post:
       operationId: cardDisputesSubmitChargeback
-      summary: Submit the chargeback to the scheme
+      summary: Submit the chargeback to the scheme (evidence is marked submitted)
       tags:
       - Card Disputes
       security:
@@ -5833,10 +6937,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_dispute
+  /v1/card-disputes/{id}/record-representment:
+    post:
+      operationId: cardDisputesRecordRepresentment
+      summary: Record the merchant's representment received through the scheme
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesRecordRepresentmentRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
   /v1/card-disputes/{id}/accept-representment:
     post:
       operationId: cardDisputesAcceptRepresentment
-      summary: Accept the merchant's representment
+      summary: Accept the merchant's representment (case lost; provisional credit reversed unless the issuer absorbs the loss)
       tags:
       - Card Disputes
       security:
@@ -5928,7 +7078,7 @@ paths:
   /v1/card-disputes/{id}/close:
     post:
       operationId: cardDisputesClose
-      summary: Close with an outcome
+      summary: 'Close with an outcome and post it (four-eyes for an issuer write-off: not by the dispute creator)'
       tags:
       - Card Disputes
       security:
@@ -6057,7 +7207,7 @@ paths:
   /v1/card-disputes/{id}/ai-summary:
     post:
       operationId: cardDisputesAiSummary
-      summary: Generate a copilot summary and suggested reason code
+      summary: Generate a copilot summary and suggested reason code (deterministic template)
       tags:
       - Card Disputes
       security:
@@ -6078,6 +7228,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
+  /v1/card-disputes/deadline-scan:
+    post:
+      operationId: cardDisputesDeadlineScan
+      summary: Publish deadline_approaching for disputes whose stage deadline is within 3 days and expire disputes past it;
+        returns {approaching, expired}
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6332,6 +7525,12 @@ components:
       required:
       - data
       - has_more
+    CardProgramsActivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     CardProgramsSuspendRequest:
       type: object
       properties:
@@ -6376,6 +7575,12 @@ components:
       required:
       - data
       - has_more
+    CardProductsRetireRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     CardBureauPage:
       type: object
       description: One page of CardBureau results (newest first)
@@ -6453,6 +7658,16 @@ components:
           enum:
           - VIRTUAL
           - PHYSICAL
+        shipping_method:
+          type: string
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+        address:
+          type: object
+          additionalProperties: true
       required:
       - reason
     CardsOrderPhysicalRequest:
@@ -6615,6 +7830,35 @@ components:
         address:
           type: object
           additionalProperties: true
+    CardOrdersBureauCallbacksRequest:
+      type: object
+      properties:
+        bureau_reference:
+          type: string
+          maxLength: 64
+        status:
+          type: string
+          enum:
+          - PENDING
+          - SENT_TO_BUREAU
+          - IN_PRODUCTION
+          - SHIPPED
+          - DELIVERED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+        tracking_number:
+          type: string
+          maxLength: 64
+        carrier:
+          type: string
+          maxLength: 64
+        failure_reason:
+          type: string
+          maxLength: 255
+      required:
+      - bureau_reference
+      - status
     CardReplacementPage:
       type: object
       description: One page of CardReplacement results (newest first)
@@ -6651,12 +7895,58 @@ components:
       required:
       - data
       - has_more
-    CardVaultTokenizeRequest:
+    CardVaultRevealRequest:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+        public_key:
+          type: string
+      required:
+      - card_id
+      - purpose
+    CardVaultLookupRequest:
       type: object
       properties:
         pan:
           type: string
           maxLength: 19
+        purpose:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+      required:
+      - pan
+      - purpose
+    CardVaultVerifyRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
         cvv:
           type: string
           maxLength: 4
@@ -6666,21 +7956,61 @@ components:
         expiry_year:
           type: integer
           format: int32
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+        pin_key_id:
+          type: string
+          maxLength: 64
       required:
-      - pan
-      - expiry_month
-      - expiry_year
-    CardVaultRevealRequest:
+      - pan_token
+    CardVaultPinRequest:
       type: object
       properties:
+        pan_token:
+          type: string
+          maxLength: 64
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+        pin_key_id:
+          type: string
+          maxLength: 64
+      required:
+      - pan_token
+      - encrypted_pin_block
+      - pin_key_id
+    CardVaultPinUnblockRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - pan_token
+    CardVaultReissueRequest:
+      type: object
+      properties:
+        pan_token:
+          type: string
+          maxLength: 64
         card_id:
           type: string
           format: uuid
-        public_key:
-          type: string
+        expiry_month:
+          type: integer
+          format: int32
+        expiry_year:
+          type: integer
+          format: int32
       required:
+      - pan_token
       - card_id
-      - public_key
+      - expiry_month
+      - expiry_year
     CardVaultRotateKeysRequest:
       type: object
       properties:
@@ -6749,6 +8079,9 @@ components:
         mcc:
           type: string
           maxLength: 4
+        merchant_id:
+          type: string
+          maxLength: 32
         merchant_name:
           type: string
           maxLength: 64
@@ -6766,6 +8099,20 @@ components:
           - MOTO
           - RECURRING
           - ANY
+        pos_entry_mode:
+          type: string
+          enum:
+          - CHIP
+          - CONTACTLESS
+          - MAGSTRIPE
+          - MANUAL
+          - ECOMMERCE
+          - CREDENTIAL_ON_FILE
+          - TOKEN
+          - FALLBACK
+          - UNKNOWN
+        partial_approval_capable:
+          type: boolean
       required:
       - card_id
       - amount
@@ -6796,6 +8143,21 @@ components:
           format: decimal
           examples:
           - '125.50'
+      required:
+      - amount
+    CardAuthorizationsClearRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        clearing_record_id:
+          type: string
+          format: uuid
+        final:
+          type: boolean
       required:
       - amount
     CardAuthorizationsExpireRequest:
@@ -6864,6 +8226,11 @@ components:
         sample:
           type: object
           additionalProperties: true
+        card_program_id:
+          type: string
+          format: uuid
+        condition_expression:
+          type: string
       required:
       - sample
     CardTokenPage:
@@ -6899,6 +8266,9 @@ components:
           - MERCHANT_COF
           - CLICK_TO_PAY
           - OTHER
+        token_requestor_id:
+          type: string
+          maxLength: 16
         device_info:
           type: object
           additionalProperties: true
@@ -6906,6 +8276,107 @@ components:
       - card_id
       - token_requestor
       - device_info
+    CardTokensNetworkProvisionRequestsRequest:
+      type: object
+      properties:
+        pan:
+          type: string
+          maxLength: 19
+        expiry_month:
+          type: integer
+          format: int32
+        expiry_year:
+          type: integer
+          format: int32
+        token_requestor:
+          type: string
+          enum:
+          - APPLE_PAY
+          - GOOGLE_PAY
+          - SAMSUNG_PAY
+          - MERCHANT_COF
+          - CLICK_TO_PAY
+          - OTHER
+        token_requestor_id:
+          type: string
+          maxLength: 16
+        network_token_ref:
+          type: string
+          maxLength: 64
+        dpan_last4:
+          type: string
+          maxLength: 4
+        device_type:
+          type: string
+          maxLength: 32
+        device_name:
+          type: string
+          maxLength: 120
+        device_id_hash:
+          type: string
+          maxLength: 64
+        wallet_account_score:
+          type: integer
+          format: int32
+        device_score:
+          type: integer
+          format: int32
+        merchant_name:
+          type: string
+          maxLength: 120
+      required:
+      - pan
+      - expiry_month
+      - expiry_year
+      - token_requestor
+      - network_token_ref
+    CardTokensNetworkEventsRequest:
+      type: object
+      properties:
+        network_token_ref:
+          type: string
+          maxLength: 64
+        event_type:
+          type: string
+          enum:
+          - PROVISIONING_REQUESTED
+          - PROVISIONING_APPROVED
+          - PROVISIONING_DECLINED
+          - STEP_UP_SENT
+          - STEP_UP_VERIFIED
+          - STEP_UP_FAILED
+          - ACTIVATED
+          - SUSPENDED
+          - RESUMED
+          - DEACTIVATED
+          - PAN_UPDATED
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - network_token_ref
+      - event_type
+    CardTokensCardStatusSyncRequest:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        card_status:
+          type: string
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+      required:
+      - card_id
+      - card_status
     CardTokensSuspendRequest:
       type: object
       properties:
@@ -6962,6 +8433,56 @@ components:
       required:
       - data
       - has_more
+    ThreedsAuthenticationsAuthenticateRequest:
+      type: object
+      properties:
+        pan:
+          type: string
+          maxLength: 19
+        ds_transaction_id:
+          type: string
+          maxLength: 64
+        threeds_server_transaction_id:
+          type: string
+          maxLength: 64
+        protocol_version:
+          type: string
+          maxLength: 8
+        merchant_name:
+          type: string
+          maxLength: 64
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        mcc:
+          type: string
+          maxLength: 4
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        device_channel:
+          type: string
+          maxLength: 16
+        preferred_challenge:
+          type: string
+          enum:
+          - FRICTIONLESS
+          - OTP_SMS
+          - OTP_EMAIL
+          - APP_PUSH
+          - BIOMETRIC
+          - DECOUPLED
+      required:
+      - pan
+      - ds_transaction_id
+      - protocol_version
     ThreedsAuthenticationsApproveRequest:
       type: object
       properties:
@@ -7117,6 +8638,11 @@ components:
           maxLength: 255
       required:
       - reason
+    CardDisputesRequestRetrievalRequest:
+      type: object
+      properties:
+        note:
+          type: string
     CardDisputesSubmitChargebackRequest:
       type: object
       properties:
@@ -7131,11 +8657,28 @@ components:
       required:
       - reason_code
       - amount
+    CardDisputesRecordRepresentmentRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        note:
+          type: string
+        scheme_case_id:
+          type: string
+          maxLength: 64
+      required:
+      - amount
     CardDisputesAcceptRepresentmentRequest:
       type: object
       properties:
         note:
           type: string
+        customer_liable:
+          type: boolean
     CardDisputesEscalateRequest:
       type: object
       properties:
@@ -7158,7 +8701,19 @@ components:
       properties:
         outcome:
           type: string
-          maxLength: 32
+          enum:
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - EXPIRED
+        recovered_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        customer_liable:
+          type: boolean
         note:
           type: string
       required:
@@ -7298,7 +8853,7 @@ components:
         sequence_number:
           type: integer
           format: int32
-          description: PAN sequence number (PSN)
+          description: PAN sequence number (PSN), incremented on renewal
           readOnly: true
         cardholder_name:
           type: string
@@ -7322,13 +8877,15 @@ components:
           - EXPIRED
           - CLOSED
           - REPLACED
-          description: Lifecycle status
+          description: Lifecycle status (changed by actions only)
+          readOnly: true
         status_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason for the current status
+          readOnly: true
         linked_account_type:
           type: string
           enum:
@@ -7366,6 +8923,7 @@ components:
           - 'null'
           format: uuid
           description: Card this one replaced
+          readOnly: true
         pin_set:
           type: boolean
           description: Whether a PIN has been set
@@ -7488,23 +9046,6 @@ components:
           - VIRTUAL
           - PHYSICAL
           description: Virtual or physical
-        status:
-          type: string
-          enum:
-          - CREATED
-          - ACTIVE
-          - FROZEN
-          - BLOCKED
-          - LOST
-          - STOLEN
-          - EXPIRED
-          - CLOSED
-          - REPLACED
-          description: Lifecycle status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
         linked_account_type:
           type: string
           enum:
@@ -7530,10 +9071,6 @@ components:
           type: string
           format: uuid
           description: Linked credit line (credit cards)
-        replaces_card_id:
-          type: string
-          format: uuid
-          description: Card this one replaced
         nickname:
           type: string
           maxLength: 64
@@ -7562,6 +9099,32 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+          description: 'Initial PIN: ISO 9564 format 0 PIN block wrapped (AES-GCM, base64) under pin_key_id (write-only; not
+            stored as a column)'
+          writeOnly: true
+        pin_key_id:
+          type: string
+          maxLength: 64
+          description: Zone key (vault key id or HSM label) the PIN block is wrapped under (write-only; not stored as a column)
+          writeOnly: true
+        shipping_address:
+          type: object
+          additionalProperties: true
+          description: Delivery address for a PHYSICAL card {recipient_name, address_line1, address_line2, city, region, postal_code,
+            country, phone} (write-only; not stored as a column)
+          writeOnly: true
+        shipping_method:
+          type: string
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+          description: Shipping method for a PHYSICAL card (write-only; not stored as a column)
+          writeOnly: true
       required:
       - card_program_id
       - card_product_id
@@ -7599,23 +9162,6 @@ components:
           - VIRTUAL
           - PHYSICAL
           description: Virtual or physical
-        status:
-          type: string
-          enum:
-          - CREATED
-          - ACTIVE
-          - FROZEN
-          - BLOCKED
-          - LOST
-          - STOLEN
-          - EXPIRED
-          - CLOSED
-          - REPLACED
-          description: Lifecycle status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
         linked_account_type:
           type: string
           enum:
@@ -7641,10 +9187,6 @@ components:
           type: string
           format: uuid
           description: Linked credit line (credit cards)
-        replaces_card_id:
-          type: string
-          format: uuid
-          description: Card this one replaced
         nickname:
           type: string
           maxLength: 64
@@ -7718,13 +9260,15 @@ components:
         card_program_id:
           type: string
           format: uuid
-          description: Program
+          description: Program (from the card)
+          readOnly: true
         customer_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Cardholder
+          description: Cardholder (from the card)
+          readOnly: true
         message_type:
           type: string
           enum:
@@ -7747,7 +9291,7 @@ components:
           - string
           - 'null'
           maxLength: 6
-          description: ISO 8583 DE3
+          description: ISO 8583 DE3 (00 purchase, 01 cash, 20 refund, 30 balance inquiry)
         stan:
           type:
           - string
@@ -7873,11 +9417,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount in card billing currency (DE6)
+          description: Amount in card billing currency (DE6), incl. issuer FX markup
+          readOnly: true
         billing_currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Billing currency (ISO 4217)
+          description: Billing currency (program currency) (ISO 4217)
+          readOnly: true
         settlement_amount:
           type:
           - string
@@ -7899,7 +9445,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Billing conversion rate
+          description: Billing conversion rate (DE10); reference rate used when absent
         fx_markup:
           type:
           - string
@@ -7907,7 +9453,8 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Issuer FX markup
+          description: Issuer FX markup included in billing_amount
+          readOnly: true
         approved_amount:
           type:
           - string
@@ -7915,7 +9462,14 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Approved amount (partial approvals)
+          description: Approved amount in billing currency (partial approvals)
+          readOnly: true
+        reversed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount reversed so far
           readOnly: true
         decision:
           type:
@@ -7952,7 +9506,23 @@ components:
           - THREEDS_FAILED
           - SYSTEM_ERROR
           - OTHER
+          - CARD_LOST
+          - CARD_STOLEN
+          - CARD_BLOCKED
+          - PROGRAM_SUSPENDED
+          - RULE_DECLINED
+          - CONTROL_AMOUNT
+          - CONTROL_TIME
+          - CONTROL_CURRENCY
+          - ORIGINAL_NOT_FOUND
           description: Internal decline reason
+          readOnly: true
+        decline_detail:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Human-readable explanation of the decline
           readOnly: true
         status:
           type: string
@@ -7967,6 +9537,17 @@ components:
           - PARTIALLY_CLEARED
           description: Lifecycle status
           readOnly: true
+        funding_source:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LEDGER_HOLD
+          - JIT
+          - STAND_IN
+          - NONE
+          description: How the approval was funded
+          readOnly: true
         fraud_score:
           type:
           - integer
@@ -7974,18 +9555,47 @@ components:
           format: int32
           description: Fraud score 0-1000
           readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: ALLOW, REVIEW, BLOCK, STEP_UP, UNAVAILABLE
+          readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud evaluation
+          readOnly: true
         fraud_alert_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Fraud alert raised
+        authorization_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule that decided, if any
+          readOnly: true
         hold_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Ledger hold placed
+          readOnly: true
+        hold_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger account the hold is on
+          readOnly: true
         jit_used:
           type: boolean
           description: JIT funding was called
@@ -8035,7 +9645,8 @@ components:
           - string
           - 'null'
           maxLength: 1
-          description: CVV2 verification result
+          description: CVV2 verification result (M match, N no match, P not processed)
+          readOnly: true
         avs_result:
           type:
           - string
@@ -8047,12 +9658,14 @@ components:
           - boolean
           - 'null'
           description: PIN verification outcome
+          readOnly: true
         is_recurring:
           type: boolean
           description: Recurring / credential on file
         is_international:
           type: boolean
-          description: Cross-border
+          description: Cross-border (merchant country differs from the program country)
+          readOnly: true
         processing_time_ms:
           type:
           - integer
@@ -8066,6 +9679,7 @@ components:
           - 'null'
           format: date-time
           description: Time the hold auto-releases
+          readOnly: true
         cleared_amount:
           type: string
           format: decimal
@@ -8126,12 +9740,222 @@ components:
       - transaction_currency
       - billing_amount
       - billing_currency
+      - reversed_amount
       - status
       - jit_used
       - stand_in
       - is_recurring
       - is_international
       - cleared_amount
+    CardAuthorizationCreate:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        message_type:
+          type: string
+          enum:
+          - AUTHORIZATION
+          - FINANCIAL
+          - INCREMENTAL
+          - REVERSAL
+          - PARTIAL_REVERSAL
+          - ADVICE
+          - BALANCE_INQUIRY
+          - ACCOUNT_VERIFICATION
+          - REFUND_AUTH
+          description: Message type
+        mti:
+          type: string
+          maxLength: 4
+          description: ISO 8583 message type indicator
+        processing_code:
+          type: string
+          maxLength: 6
+          description: ISO 8583 DE3 (00 purchase, 01 cash, 20 refund, 30 balance inquiry)
+        stan:
+          type: string
+          maxLength: 12
+          description: System trace audit number (DE11)
+        rrn:
+          type: string
+          maxLength: 12
+          description: Retrieval reference number (DE37)
+        network_transaction_id:
+          type: string
+          maxLength: 64
+          description: Scheme transaction id (trace id / banknet ref)
+        parent_authorization_id:
+          type: string
+          format: uuid
+          description: Original auth for incremental, reversal or advice
+        pos_entry_mode:
+          type: string
+          enum:
+          - CHIP
+          - CONTACTLESS
+          - MAGSTRIPE
+          - MANUAL
+          - ECOMMERCE
+          - CREDENTIAL_ON_FILE
+          - TOKEN
+          - FALLBACK
+          - UNKNOWN
+          description: POS entry mode
+        channel:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          description: Channel
+        card_present:
+          type: boolean
+          description: Card present
+        cardholder_present:
+          type: boolean
+          description: Cardholder present
+        merchant_id:
+          type: string
+          maxLength: 32
+          description: Card acceptor id (DE42)
+        merchant_name:
+          type: string
+          maxLength: 64
+          description: Card acceptor name
+        merchant_city:
+          type: string
+          maxLength: 64
+          description: Merchant city
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
+        mcc:
+          type: string
+          maxLength: 4
+          description: Merchant category code
+        acquirer_id:
+          type: string
+          maxLength: 16
+          description: Acquiring institution id (DE32)
+        terminal_id:
+          type: string
+          maxLength: 16
+          description: Terminal id (DE41)
+        transaction_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount in transaction currency (DE4)
+        transaction_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Transaction currency (ISO 4217)
+        settlement_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Settlement amount (DE5)
+        settlement_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Settlement currency (ISO 4217)
+        conversion_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Billing conversion rate (DE10); reference rate used when absent
+        fraud_alert_id:
+          type: string
+          format: uuid
+          description: Fraud alert raised
+        card_token_id:
+          type: string
+          format: uuid
+          description: Network token used, if any
+        threeds_authentication_id:
+          type: string
+          format: uuid
+          description: 3DS authentication
+        eci:
+          type: string
+          maxLength: 2
+          description: Electronic commerce indicator
+        avs_result:
+          type: string
+          maxLength: 1
+          description: Address verification result
+        is_recurring:
+          type: boolean
+          description: Recurring / credential on file
+        raw_message:
+          type: object
+          additionalProperties: true
+          description: Parsed ISO 8583 fields (sensitive fields removed)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        cvv:
+          type: string
+          maxLength: 4
+          description: CVV2 (DE48 / DE126.10), verified in the vault, never stored (write-only; not stored as a column)
+          writeOnly: true
+        expiry_month:
+          type: integer
+          format: int32
+          description: Card expiry month from DE14, verified in the vault (write-only; not stored as a column)
+          writeOnly: true
+        expiry_year:
+          type: integer
+          format: int32
+          description: Card expiry year from DE14 (write-only; not stored as a column)
+          writeOnly: true
+        encrypted_pin_block:
+          type: string
+          maxLength: 128
+          description: PIN block (DE52) wrapped under pin_key_id, verified in the vault (write-only; not stored as a column)
+          writeOnly: true
+        pin_key_id:
+          type: string
+          maxLength: 64
+          description: Zone key of the PIN block (write-only; not stored as a column)
+          writeOnly: true
+        partial_approval_capable:
+          type: boolean
+          description: Terminal supports partial approval (DE48 / DE110) (write-only; not stored as a column)
+          writeOnly: true
+      required:
+      - card_id
+      - channel
+      - transaction_amount
+      - transaction_currency
     CardAuthorizationRule:
       type: object
       description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
@@ -8186,7 +10010,9 @@ components:
           description: Lower evaluates first
         condition_expression:
           type: string
-          description: CEL expression over the authorisation context
+          description: 'Expression over the authorisation context (CEL subset: == != < <= > >= in [..] && || ! and parentheses
+            over amount, currency, mcc, merchant_id, merchant_country, channel, pos_entry_mode, is_international, card_present,
+            hour, fraud_score), e.g. mcc in [''7995''] && amount > 500'
         action:
           type: string
           enum:
@@ -8220,6 +10046,15 @@ components:
           - THREEDS_FAILED
           - SYSTEM_ERROR
           - OTHER
+          - CARD_LOST
+          - CARD_STOLEN
+          - CARD_BLOCKED
+          - PROGRAM_SUSPENDED
+          - RULE_DECLINED
+          - CONTROL_AMOUNT
+          - CONTROL_TIME
+          - CONTROL_CURRENCY
+          - ORIGINAL_NOT_FOUND
           description: Decline reason when action is DECLINE
         is_active:
           type: boolean
@@ -8293,7 +10128,9 @@ components:
           description: Lower evaluates first
         condition_expression:
           type: string
-          description: CEL expression over the authorisation context
+          description: 'Expression over the authorisation context (CEL subset: == != < <= > >= in [..] && || ! and parentheses
+            over amount, currency, mcc, merchant_id, merchant_country, channel, pos_entry_mode, is_international, card_present,
+            hour, fraud_score), e.g. mcc in [''7995''] && amount > 500'
         action:
           type: string
           enum:
@@ -8325,6 +10162,15 @@ components:
           - THREEDS_FAILED
           - SYSTEM_ERROR
           - OTHER
+          - CARD_LOST
+          - CARD_STOLEN
+          - CARD_BLOCKED
+          - PROGRAM_SUSPENDED
+          - RULE_DECLINED
+          - CONTROL_AMOUNT
+          - CONTROL_TIME
+          - CONTROL_CURRENCY
+          - ORIGINAL_NOT_FOUND
           description: Decline reason when action is DECLINE
         is_active:
           type: boolean
@@ -8378,7 +10224,9 @@ components:
           description: Lower evaluates first
         condition_expression:
           type: string
-          description: CEL expression over the authorisation context
+          description: 'Expression over the authorisation context (CEL subset: == != < <= > >= in [..] && || ! and parentheses
+            over amount, currency, mcc, merchant_id, merchant_country, channel, pos_entry_mode, is_international, card_present,
+            hour, fraud_score), e.g. mcc in [''7995''] && amount > 500'
         action:
           type: string
           enum:
@@ -8410,6 +10258,15 @@ components:
           - THREEDS_FAILED
           - SYSTEM_ERROR
           - OTHER
+          - CARD_LOST
+          - CARD_STOLEN
+          - CARD_BLOCKED
+          - PROGRAM_SUSPENDED
+          - RULE_DECLINED
+          - CONTROL_AMOUNT
+          - CONTROL_TIME
+          - CONTROL_CURRENCY
+          - ORIGINAL_NOT_FOUND
           description: Decline reason when action is DECLINE
         is_active:
           type: boolean
@@ -8504,10 +10361,13 @@ components:
           description: Personalisation file format
         supported_countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Countries it ships to
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Countries it ships to (empty = all)
         cutoff_time:
           type:
           - string
@@ -8577,9 +10437,12 @@ components:
           maxLength: 32
           description: Personalisation file format
         supported_countries:
-          type: object
-          additionalProperties: true
-          description: Countries it ships to
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Countries it ships to (empty = all)
         cutoff_time:
           type: string
           maxLength: 5
@@ -8632,9 +10495,12 @@ components:
           maxLength: 32
           description: Personalisation file format
         supported_countries:
-          type: object
-          additionalProperties: true
-          description: Countries it ships to
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Countries it ships to (empty = all)
         cutoff_time:
           type: string
           maxLength: 5
@@ -8740,9 +10606,11 @@ components:
           description: Channel the control applies to
         values:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 64
           description: MCCs, merchant ids, countries, currencies or channels
         max_amount:
           type:
@@ -8763,7 +10631,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Allowed days and hours for TIME_WINDOW
+          description: 'Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM}'
         timezone:
           type:
           - string
@@ -8861,8 +10729,10 @@ components:
           - ANY
           description: Channel the control applies to
         values:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 64
           description: MCCs, merchant ids, countries, currencies or channels
         max_amount:
           type: string
@@ -8877,7 +10747,7 @@ components:
         time_window:
           type: object
           additionalProperties: true
-          description: Allowed days and hours for TIME_WINDOW
+          description: 'Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM}'
         timezone:
           type: string
           maxLength: 64
@@ -8953,8 +10823,10 @@ components:
           - ANY
           description: Channel the control applies to
         values:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 64
           description: MCCs, merchant ids, countries, currencies or channels
         max_amount:
           type: string
@@ -8969,7 +10841,7 @@ components:
         time_window:
           type: object
           additionalProperties: true
-          description: Allowed days and hours for TIME_WINDOW
+          description: 'Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM}'
         timezone:
           type: string
           maxLength: 64
@@ -9046,21 +10918,51 @@ components:
         pan_token:
           type: string
           maxLength: 64
-          description: Token of the PAN
+          description: Random token of the PAN (not derived from it)
+          readOnly: true
         pan_fingerprint:
           type: string
           maxLength: 64
-          description: Keyed HMAC of the PAN for lookup
+          description: Keyed HMAC-SHA256 of the PAN for de-duplication and lookup
+          readOnly: true
         dek_key_id:
           type: string
           format: uuid
           description: Data encryption key used
+          readOnly: true
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card
+        bin:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: BIN (first 6-8 digits; not sensitive)
+          readOnly: true
+        last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Last four digits
+          readOnly: true
+        pin_set:
+          type: boolean
+          description: A PIN is stored
+          readOnly: true
+        pin_try_count:
+          type: integer
+          format: int32
+          description: Consecutive wrong PIN attempts
+          readOnly: true
+        is_active:
+          type: boolean
+          description: False once superseded by a reissue
+          readOnly: true
         last_detokenized_at:
           type:
           - string
@@ -9098,6 +11000,31 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pan:
+          type: string
+          maxLength: 19
+          description: PAN (reveal only) (returned once; never stored)
+          readOnly: true
+        cvv:
+          type: string
+          maxLength: 4
+          description: CVV2 (reveal only) (returned once; never stored)
+          readOnly: true
+        expiry_month:
+          type: integer
+          format: int32
+          description: Expiry month (reveal only) (returned once; never stored)
+          readOnly: true
+        expiry_year:
+          type: integer
+          format: int32
+          description: Expiry year (reveal only) (returned once; never stored)
+          readOnly: true
+        encrypted_payload:
+          type: string
+          description: 'Reveal with a public key: {pan, cvv, expiry_month, expiry_year} RSA-OAEP-256 encrypted, base64 (returned
+            once; never stored)'
+          readOnly: true
       required:
       - id
       - created_at
@@ -9106,6 +11033,60 @@ components:
       - pan_token
       - pan_fingerprint
       - dek_key_id
+      - pin_set
+      - pin_try_count
+      - is_active
+    CardDataVaultCreate:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: Card
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pan:
+          type: string
+          maxLength: 19
+          description: Primary account number (13-19 digits, Luhn-valid) (write-only; not stored as a column)
+          writeOnly: true
+        cvv:
+          type: string
+          maxLength: 4
+          description: CVV2; generated under the CVK when omitted (write-only; not stored as a column)
+          writeOnly: true
+        expiry_month:
+          type: integer
+          format: int32
+          description: Expiry month 1-12 (write-only; not stored as a column)
+          writeOnly: true
+        expiry_year:
+          type: integer
+          format: int32
+          description: Expiry year (4 digits) (write-only; not stored as a column)
+          writeOnly: true
+      required:
+      - pan
+      - expiry_month
+      - expiry_year
     CardDispute:
       type: object
       description: A cardholder dispute and its scheme chargeback lifecycle
@@ -9149,9 +11130,19 @@ components:
           format: uuid
           description: Card
         customer_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Cardholder
+          description: Cardholder (from the card)
+          readOnly: true
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account (from the card)
+          readOnly: true
         card_authorization_id:
           type:
           - string
@@ -9197,6 +11188,12 @@ components:
           - 'null'
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
+        transaction_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         stage:
           type: string
           enum:
@@ -9208,6 +11205,7 @@ components:
           - ARBITRATION
           - CLOSED
           description: Scheme stage
+          readOnly: true
         status:
           type: string
           enum:
@@ -9220,6 +11218,7 @@ components:
           - WITHDRAWN
           - EXPIRED
           description: Status
+          readOnly: true
         disputed_amount:
           type: string
           format: decimal
@@ -9230,6 +11229,24 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        chargeback_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount charged back to the acquirer
+          readOnly: true
+        representment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount the merchant re-presented
+          readOnly: true
         provisional_credit_amount:
           type: string
           format: decimal
@@ -9243,6 +11260,11 @@ components:
           - 'null'
           format: uuid
           description: Provisional credit posting
+          readOnly: true
+        provisional_credit_reversed:
+          type: boolean
+          description: Provisional credit was reversed
+          readOnly: true
         scheme_case_id:
           type:
           - string
@@ -9259,25 +11281,40 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Analyst
+          description: Analyst (changed by assign)
+          readOnly: true
         stage_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Deadline for the current stage
+          readOnly: true
         regulatory_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Regulation E / Z or local deadline
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Chargeback submission time
+          readOnly: true
         outcome:
           type:
           - string
           - 'null'
-          maxLength: 32
-          description: WON, LOST, SPLIT, WITHDRAWN
+          enum:
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - EXPIRED
+          description: WON, LOST, SPLIT, WITHDRAWN, EXPIRED
           readOnly: true
         recovered_amount:
           type: string
@@ -9293,12 +11330,26 @@ components:
           - '125.50'
           description: Amount written off
           readOnly: true
+        outcome_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Final outcome posting
+          readOnly: true
         closed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Closure time
+          readOnly: true
+        suggested_reason_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Reason code suggested by the copilot
           readOnly: true
         ai_summary:
           type:
@@ -9342,7 +11393,6 @@ components:
       - updated_at
       - row_version
       - card_id
-      - customer_id
       - category
       - scheme
       - stage
@@ -9350,6 +11400,7 @@ components:
       - disputed_amount
       - currency
       - provisional_credit_amount
+      - provisional_credit_reversed
       - recovered_amount
       - written_off_amount
     CardDisputeCreate:
@@ -9359,10 +11410,6 @@ components:
           type: string
           format: uuid
           description: Card
-        customer_id:
-          type: string
-          format: uuid
-          description: Cardholder
         card_authorization_id:
           type: string
           format: uuid
@@ -9402,29 +11449,10 @@ components:
           type: string
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
-        stage:
+        transaction_date:
           type: string
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          description: Scheme stage
-        status:
-          type: string
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          description: Status
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         disputed_amount:
           type: string
           format: decimal
@@ -9435,10 +11463,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        provisional_credit_entry_id:
-          type: string
-          format: uuid
-          description: Provisional credit posting
         scheme_case_id:
           type: string
           maxLength: 64
@@ -9446,18 +11470,6 @@ components:
         customer_description:
           type: string
           description: Cardholder statement
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Analyst
-        stage_deadline:
-          type: string
-          format: date
-          description: Deadline for the current stage
-        regulatory_deadline:
-          type: string
-          format: date
-          description: Regulation E / Z or local deadline
         custom_field_1:
           type: string
           maxLength: 500
@@ -9480,7 +11492,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - card_id
-      - customer_id
       - category
       - scheme
       - disputed_amount
@@ -9492,10 +11503,6 @@ components:
           type: string
           format: uuid
           description: Card
-        customer_id:
-          type: string
-          format: uuid
-          description: Cardholder
         card_authorization_id:
           type: string
           format: uuid
@@ -9535,29 +11542,10 @@ components:
           type: string
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
-        stage:
+        transaction_date:
           type: string
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          description: Scheme stage
-        status:
-          type: string
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          description: Status
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         disputed_amount:
           type: string
           format: decimal
@@ -9568,10 +11556,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        provisional_credit_entry_id:
-          type: string
-          format: uuid
-          description: Provisional credit posting
         scheme_case_id:
           type: string
           maxLength: 64
@@ -9579,18 +11563,6 @@ components:
         customer_description:
           type: string
           description: Cardholder statement
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Analyst
-        stage_deadline:
-          type: string
-          format: date
-          description: Deadline for the current stage
-        regulatory_deadline:
-          type: string
-          format: date
-          description: Regulation E / Z or local deadline
         custom_field_1:
           type: string
           maxLength: 500
@@ -9638,9 +11610,27 @@ components:
           description: Dispute
         event_type:
           type: string
-          maxLength: 40
-          description: CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST,
-            NOTE
+          enum:
+          - CREATED
+          - ASSIGNED
+          - EVIDENCE_ADDED
+          - PROVISIONAL_CREDIT
+          - PROVISIONAL_CREDIT_REVERSED
+          - RETRIEVAL_REQUESTED
+          - CHARGEBACK_SENT
+          - REPRESENTMENT_RECEIVED
+          - REPRESENTMENT_ACCEPTED
+          - PRE_ARBITRATION_FILED
+          - ARBITRATION_FILED
+          - DEADLINE_APPROACHING
+          - EXPIRED
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - AI_SUMMARY
+          - NOTE
+          description: Event
         from_stage:
           type:
           - string
@@ -9794,6 +11784,7 @@ components:
         submitted_to_scheme:
           type: boolean
           description: Submitted to the scheme
+          readOnly: true
         submitted_at:
           type:
           - string
@@ -9867,9 +11858,6 @@ components:
           type: string
           maxLength: 500
           description: Description
-        submitted_to_scheme:
-          type: boolean
-          description: Submitted to the scheme
         custom_field_1:
           type: string
           maxLength: 500
@@ -9919,6 +11907,12 @@ components:
           type: string
           format: uuid
           description: Card
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account charged (resolved from the card when empty)
         fee_type:
           type: string
           enum:
@@ -9970,9 +11964,18 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+          readOnly: true
         waived:
           type: boolean
-          description: Waived
+          description: This row is a waiver (compensating entry)
+          readOnly: true
+        waives_fee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fee this row waives
+          readOnly: true
         description:
           type:
           - string
@@ -10025,6 +12028,10 @@ components:
           type: string
           format: uuid
           description: Card
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Cardholder account charged (resolved from the card when empty)
         fee_type:
           type: string
           enum:
@@ -10066,13 +12073,6 @@ components:
           type: string
           format: uuid
           description: Related clearing record
-        journal_entry_id:
-          type: string
-          format: uuid
-          description: Ledger posting
-        waived:
-          type: boolean
-          description: Waived
         description:
           type: string
           maxLength: 255
@@ -10269,7 +12269,8 @@ components:
           - RETURNED
           - FAILED
           - CANCELLED
-          description: Order status
+          description: Order status (changed by actions and bureau callbacks)
+          readOnly: true
         shipping_method:
           type: string
           enum:
@@ -10339,6 +12340,13 @@ components:
           maxLength: 64
           description: Courier
           readOnly: true
+        reship_of_order_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Returned order this one reships
+          readOnly: true
         sent_to_bureau_at:
           type:
           - string
@@ -10365,7 +12373,7 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Failure reason
+          description: Failure or cancellation reason
           readOnly: true
         custom_field_1:
           type:
@@ -10421,18 +12429,6 @@ components:
           type: string
           format: uuid
           description: Bureau
-        status:
-          type: string
-          enum:
-          - PENDING
-          - SENT_TO_BUREAU
-          - IN_PRODUCTION
-          - SHIPPED
-          - DELIVERED
-          - RETURNED
-          - FAILED
-          - CANCELLED
-          description: Order status
         shipping_method:
           type: string
           enum:
@@ -10642,8 +12638,12 @@ components:
           maxLength: 120
           description: Display name
         form_factors:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            enum:
+            - VIRTUAL
+            - PHYSICAL
           description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
         card_design_id:
           type:
@@ -10666,7 +12666,7 @@ components:
         expiry_years:
           type: integer
           format: int32
-          description: Validity in years
+          description: Validity in years (1-10)
         pin_policy:
           type: string
           enum:
@@ -10696,7 +12696,8 @@ components:
           - DRAFT
           - ACTIVE
           - RETIRED
-          description: Status
+          description: Status (changed by activate / retire)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -10764,8 +12765,12 @@ components:
           maxLength: 120
           description: Display name
         form_factors:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            enum:
+            - VIRTUAL
+            - PHYSICAL
           description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
         card_design_id:
           type: string
@@ -10782,7 +12787,7 @@ components:
         expiry_years:
           type: integer
           format: int32
-          description: Validity in years
+          description: Validity in years (1-10)
         pin_policy:
           type: string
           enum:
@@ -10806,13 +12811,6 @@ components:
           type: integer
           format: int32
           description: Active card cap per customer
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -10858,8 +12856,12 @@ components:
           maxLength: 120
           description: Display name
         form_factors:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            enum:
+            - VIRTUAL
+            - PHYSICAL
           description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
         card_design_id:
           type: string
@@ -10876,7 +12878,7 @@ components:
         expiry_years:
           type: integer
           format: int32
-          description: Validity in years
+          description: Validity in years (1-10)
         pin_policy:
           type: string
           enum:
@@ -10900,13 +12902,6 @@ components:
           type: integer
           format: int32
           description: Active card cap per customer
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -11016,19 +13011,25 @@ components:
         bin_range_start:
           type: string
           maxLength: 19
-          description: First PAN prefix in the range
+          description: First PAN prefix in the account range (starts with the BIN)
         bin_range_end:
           type: string
           maxLength: 19
-          description: Last PAN prefix in the range
+          description: Last PAN prefix in the account range (same length as the start)
         pan_length:
           type: integer
           format: int32
-          description: PAN length
+          description: PAN length (13-19, including the Luhn check digit)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Billing currency (ISO 4217)
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Issuing country; a merchant in another country makes the transaction international (ISO 3166-1 alpha-2)
         sponsor_bank:
           type:
           - string
@@ -11046,7 +13047,7 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Program settlement / funding account
+          description: Program settlement / funding account (JIT holds are placed here)
         jit_webhook_url:
           type:
           - string
@@ -11068,12 +13069,41 @@ components:
           examples:
           - '125.50'
           description: Maximum amount approved in stand-in
+        fraud_policy:
+          type: string
+          enum:
+          - FAIL_OPEN
+          - FAIL_CLOSED
+          description: Decision when fraud scoring times out or fails
+        fraud_timeout_ms:
+          type: integer
+          format: int32
+          description: Fraud scoring budget in milliseconds
+        fraud_decline_score:
+          type: integer
+          format: int32
+          description: Decline when the fraud score is at or above this value (0-1000)
+        fx_markup_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2%
+        auth_hold_days:
+          type: integer
+          format: int32
+          description: Days before an uncleared authorisation hold expires
+        renewal_window_days:
+          type: integer
+          format: int32
+          description: Days before expiry a card is reported as expiring
         default_controls:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Controls applied to every new card
+          items: {}
+          description: Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window,
+            timezone}
         status:
           type: string
           enum:
@@ -11082,13 +13112,35 @@ components:
           - ACTIVE
           - SUSPENDED
           - RETIRED
-          description: Lifecycle status
+          description: Lifecycle status (changed by certify / activate / suspend)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        certified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time certification started
+          readOnly: true
         launched_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Go-live time
+          readOnly: true
+        activated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that approved go-live (must differ from the creator)
           readOnly: true
         metadata:
           type:
@@ -11144,6 +13196,12 @@ components:
       - currency
       - jit_timeout_ms
       - stand_in_enabled
+      - fraud_policy
+      - fraud_timeout_ms
+      - fraud_decline_score
+      - fx_markup_rate
+      - auth_hold_days
+      - renewal_window_days
       - status
     CardProgramCreate:
       type: object
@@ -11199,19 +13257,23 @@ components:
         bin_range_start:
           type: string
           maxLength: 19
-          description: First PAN prefix in the range
+          description: First PAN prefix in the account range (starts with the BIN)
         bin_range_end:
           type: string
           maxLength: 19
-          description: Last PAN prefix in the range
+          description: Last PAN prefix in the account range (same length as the start)
         pan_length:
           type: integer
           format: int32
-          description: PAN length
+          description: PAN length (13-19, including the Luhn check digit)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Billing currency (ISO 4217)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Issuing country; a merchant in another country makes the transaction international (ISO 3166-1 alpha-2)
         sponsor_bank:
           type: string
           maxLength: 120
@@ -11223,7 +13285,7 @@ components:
         ledger_account_id:
           type: string
           format: uuid
-          description: Program settlement / funding account
+          description: Program settlement / funding account (JIT holds are placed here)
         jit_webhook_url:
           type: string
           maxLength: 500
@@ -11241,19 +13303,39 @@ components:
           examples:
           - '125.50'
           description: Maximum amount approved in stand-in
-        default_controls:
-          type: object
-          additionalProperties: true
-          description: Controls applied to every new card
-        status:
+        fraud_policy:
           type: string
           enum:
-          - DRAFT
-          - CERTIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - RETIRED
-          description: Lifecycle status
+          - FAIL_OPEN
+          - FAIL_CLOSED
+          description: Decision when fraud scoring times out or fails
+        fraud_timeout_ms:
+          type: integer
+          format: int32
+          description: Fraud scoring budget in milliseconds
+        fraud_decline_score:
+          type: integer
+          format: int32
+          description: Decline when the fraud score is at or above this value (0-1000)
+        fx_markup_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2%
+        auth_hold_days:
+          type: integer
+          format: int32
+          description: Days before an uncleared authorisation hold expires
+        renewal_window_days:
+          type: integer
+          format: int32
+          description: Days before expiry a card is reported as expiring
+        default_controls:
+          type: array
+          items: {}
+          description: Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window,
+            timezone}
         metadata:
           type: object
           additionalProperties: true
@@ -11342,19 +13424,23 @@ components:
         bin_range_start:
           type: string
           maxLength: 19
-          description: First PAN prefix in the range
+          description: First PAN prefix in the account range (starts with the BIN)
         bin_range_end:
           type: string
           maxLength: 19
-          description: Last PAN prefix in the range
+          description: Last PAN prefix in the account range (same length as the start)
         pan_length:
           type: integer
           format: int32
-          description: PAN length
+          description: PAN length (13-19, including the Luhn check digit)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Billing currency (ISO 4217)
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Issuing country; a merchant in another country makes the transaction international (ISO 3166-1 alpha-2)
         sponsor_bank:
           type: string
           maxLength: 120
@@ -11366,7 +13452,7 @@ components:
         ledger_account_id:
           type: string
           format: uuid
-          description: Program settlement / funding account
+          description: Program settlement / funding account (JIT holds are placed here)
         jit_webhook_url:
           type: string
           maxLength: 500
@@ -11384,19 +13470,39 @@ components:
           examples:
           - '125.50'
           description: Maximum amount approved in stand-in
-        default_controls:
-          type: object
-          additionalProperties: true
-          description: Controls applied to every new card
-        status:
+        fraud_policy:
           type: string
           enum:
-          - DRAFT
-          - CERTIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - RETIRED
-          description: Lifecycle status
+          - FAIL_OPEN
+          - FAIL_CLOSED
+          description: Decision when fraud scoring times out or fails
+        fraud_timeout_ms:
+          type: integer
+          format: int32
+          description: Fraud scoring budget in milliseconds
+        fraud_decline_score:
+          type: integer
+          format: int32
+          description: Decline when the fraud score is at or above this value (0-1000)
+        fx_markup_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2%
+        auth_hold_days:
+          type: integer
+          format: int32
+          description: Days before an uncleared authorisation hold expires
+        renewal_window_days:
+          type: integer
+          format: int32
+          description: Days before expiry a card is reported as expiring
+        default_controls:
+          type: array
+          items: {}
+          description: Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window,
+            timezone}
         metadata:
           type: object
           additionalProperties: true
@@ -11469,6 +13575,7 @@ components:
           - 'null'
           format: uuid
           description: Replacement card
+          readOnly: true
         reason:
           type: string
           enum:
@@ -11486,12 +13593,21 @@ components:
         fee_charged:
           type: boolean
           description: Whether a replacement fee was charged
+          readOnly: true
+        fee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Replacement fee charged in card-clearing-service
+          readOnly: true
         requested_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Requester
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -11596,42 +13712,53 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        transaction_count:
+          type: integer
+          format: int32
+          description: Records included
+          readOnly: true
         gross_purchases:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Purchases
+          readOnly: true
         gross_refunds:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Refunds
+          readOnly: true
         chargebacks:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Chargebacks
+          readOnly: true
         interchange:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net interchange
+          readOnly: true
         scheme_fees:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Scheme fees
+          readOnly: true
         net_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net position (positive = issuer pays scheme)
+          readOnly: true
         status:
           type: string
           enum:
@@ -11640,18 +13767,35 @@ components:
           - PAID
           - DISPUTED
           description: Status
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Settlement posting
+          readOnly: true
         recon_reference:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Bank statement reference
+          readOnly: true
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmation time
+          readOnly: true
+        confirmed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that confirmed
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -11690,6 +13834,7 @@ components:
       - scheme
       - settlement_date
       - currency
+      - transaction_count
       - gross_purchases
       - gross_refunds
       - chargebacks
@@ -11791,7 +13936,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount used in the current period
+          description: Amount used in the current period (from card-authorization-service counters)
           readOnly: true
         used_count:
           type: integer
@@ -12032,6 +14177,18 @@ components:
           type: string
           format: uuid
           description: Authorisation
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account the hold is replayed on
         amount:
           type: string
           format: decimal
@@ -12042,6 +14199,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        stand_in_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: LEDGER_UNAVAILABLE, JIT_TIMEOUT, JIT_ERROR
         replayed:
           type: boolean
           description: Replayed to the ledger
@@ -12057,8 +14220,18 @@ components:
           type:
           - string
           - 'null'
-          maxLength: 32
-          description: POSTED, OVERDRAWN, FAILED
+          enum:
+          - POSTED
+          - OVERDRAWN
+          - FAILED
+          description: Outcome of the replay
+          readOnly: true
+        replay_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Error of the last replay attempt
           readOnly: true
         hold_id:
           type:
@@ -12066,6 +14239,7 @@ components:
           - 'null'
           format: uuid
           description: Hold created on replay
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -12231,6 +14405,14 @@ components:
           - PAID
           - OVERDUE
           description: Status
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the cycle was closed
+          readOnly: true
         statement_document_id:
           type:
           - string
@@ -12435,6 +14617,13 @@ components:
           type: string
           format: uuid
           description: Card
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder (from the card)
+          readOnly: true
         token_requestor:
           type: string
           enum:
@@ -12455,6 +14644,7 @@ components:
           type: string
           maxLength: 64
           description: Scheme token reference (TUR / token id)
+          readOnly: true
         dpan_last4:
           type:
           - string
@@ -12486,6 +14676,14 @@ components:
           - DEACTIVATED
           - DECLINED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         device_type:
           type:
           - string
@@ -12509,19 +14707,22 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Wallet provider risk score
+          description: Wallet provider risk score 1-5 (5 = most trusted)
         device_score:
           type:
           - integer
           - 'null'
           format: int32
-          description: Device risk score
+          description: Device risk score 1-5 (5 = most trusted)
         provisioning_decision:
           type:
           - string
           - 'null'
-          maxLength: 16
-          description: GREEN, YELLOW, RED
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+          description: GREEN, YELLOW or RED
           readOnly: true
         step_up_method:
           type:
@@ -12529,6 +14730,12 @@ components:
           - 'null'
           maxLength: 32
           description: OTP_SMS, OTP_EMAIL, APP, CALL_CENTER
+          readOnly: true
+        step_up_attempts:
+          type: integer
+          format: int32
+          description: Failed step-up attempts
+          readOnly: true
         merchant_name:
           type:
           - string
@@ -12541,6 +14748,13 @@ components:
           - 'null'
           format: date-time
           description: Activation time
+          readOnly: true
+        suspended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last suspension time
           readOnly: true
         deactivated_at:
           type:
@@ -12579,6 +14793,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        provisioning_payload:
+          type: string
+          description: 'Push provisioning: encrypted opaque card data for the wallet (returned once) (returned once; never
+            stored)'
+          readOnly: true
       required:
       - id
       - created_at
@@ -12588,6 +14807,7 @@ components:
       - token_requestor
       - network_token_ref
       - status
+      - step_up_attempts
     CardTokenEvent:
       type: object
       description: Immutable lifecycle events received from or sent to the token service
@@ -12620,6 +14840,8 @@ components:
           - PROVISIONING_APPROVED
           - PROVISIONING_DECLINED
           - STEP_UP_SENT
+          - STEP_UP_VERIFIED
+          - STEP_UP_FAILED
           - ACTIVATED
           - SUSPENDED
           - RESUMED
@@ -12641,7 +14863,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Message received or sent
+          description: Message received or sent (no PAN)
         custom_field_1:
           type:
           - string
@@ -12700,13 +14922,31 @@ components:
           description: Principal that created the row
           readOnly: true
         pan_token:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Token accessed
+          description: Token accessed (empty when the lookup found nothing)
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card accessed
         purpose:
           type: string
-          maxLength: 32
-          description: AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+          description: Purpose of the access
         caller_service:
           type: string
           maxLength: 64
@@ -12720,6 +14960,12 @@ components:
         success:
           type: boolean
           description: Outcome
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the access failed
         ip_address:
           type:
           - string
@@ -12758,7 +15004,6 @@ components:
       required:
       - id
       - created_at
-      - pan_token
       - purpose
       - caller_service
       - success
@@ -12817,15 +15062,17 @@ components:
         kcv:
           type: string
           maxLength: 6
-          description: Key check value
+          description: Key check value (computed by the HSM)
+          readOnly: true
         algorithm:
           type: string
           maxLength: 32
-          description: AES-256, TDES, etc.
+          description: AES-256-GCM, TDES, etc.
         version:
           type: integer
           format: int32
-          description: Key version
+          description: Key version (incremented on rotation)
+          readOnly: true
         active_from:
           type: string
           format: date-time
@@ -12838,7 +15085,8 @@ components:
           description: Scheduled rotation
         is_active:
           type: boolean
-          description: Active
+          description: Active (one active key per type)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -12898,18 +15146,10 @@ components:
           type: string
           maxLength: 128
           description: Label of the key inside the HSM
-        kcv:
-          type: string
-          maxLength: 6
-          description: Key check value
         algorithm:
           type: string
           maxLength: 32
-          description: AES-256, TDES, etc.
-        version:
-          type: integer
-          format: int32
-          description: Key version
+          description: AES-256-GCM, TDES, etc.
         active_from:
           type: string
           format: date-time
@@ -12918,9 +15158,6 @@ components:
           type: string
           format: date-time
           description: Scheduled rotation
-        is_active:
-          type: boolean
-          description: Active
         custom_field_1:
           type: string
           maxLength: 500
@@ -12944,9 +15181,6 @@ components:
       required:
       - key_type
       - hsm_key_label
-      - kcv
-      - algorithm
-      - active_from
     ClearingFile:
       type: object
       description: An incoming or outgoing scheme clearing file
@@ -13000,8 +15234,16 @@ components:
           description: Scheme
         direction:
           type: string
-          maxLength: 8
-          description: INCOMING or OUTGOING
+          enum:
+          - INCOMING
+          - OUTGOING
+          description: Direction
+        file_format:
+          type: string
+          enum:
+          - CSV
+          - JSON
+          description: Layout of content
         file_name:
           type: string
           maxLength: 255
@@ -13014,18 +15256,45 @@ components:
         checksum:
           type: string
           maxLength: 64
-          description: SHA-256, rejects duplicates
+          description: SHA-256 of the content, rejects duplicates
           readOnly: true
         processing_date:
           type: string
           format: date
-          description: Scheme processing date
+          description: Scheme processing date (settlement date)
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program the file belongs to (empty = several)
         record_count:
           type:
           - integer
           - 'null'
           format: int32
           description: Records parsed
+          readOnly: true
+        matched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched to authorisations
+          readOnly: true
+        unmatched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records not matched
+          readOnly: true
+        exception_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched with an amount outside tolerance or failed to post
           readOnly: true
         total_amount:
           type:
@@ -13095,6 +15364,7 @@ components:
       - row_version
       - scheme
       - direction
+      - file_format
       - file_name
       - file_uri
       - checksum
@@ -13118,8 +15388,16 @@ components:
           description: Scheme
         direction:
           type: string
-          maxLength: 8
-          description: INCOMING or OUTGOING
+          enum:
+          - INCOMING
+          - OUTGOING
+          description: Direction
+        file_format:
+          type: string
+          enum:
+          - CSV
+          - JSON
+          description: Layout of content
         file_name:
           type: string
           maxLength: 255
@@ -13127,7 +15405,11 @@ components:
         processing_date:
           type: string
           format: date
-          description: Scheme processing date
+          description: Scheme processing date (settlement date)
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program the file belongs to (empty = several)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13152,9 +15434,18 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        content:
+          type: string
+          description: 'Raw file content: CSV with a header row or a JSON array (record fields as in ClearingRecord) (write-only;
+            not stored as a column)'
+          writeOnly: true
+        records:
+          type: array
+          items: {}
+          description: Pre-parsed records instead of content (write-only; not stored as a column)
+          writeOnly: true
       required:
       - scheme
-      - direction
       - file_name
       - processing_date
     ClearingRecord:
@@ -13193,18 +15484,45 @@ components:
           - FEE_COLLECTION
           - FUNDS_DISBURSEMENT
           description: Record type
+        scheme:
+          type:
+          - string
+          - 'null'
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program
         card_authorization_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Matched authorisation
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger hold captured
         match_status:
           type: string
           enum:
@@ -13213,6 +15531,18 @@ components:
           - UNMATCHED
           - EXCEPTION
           description: Match result
+        match_rule:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: NETWORK_TRANSACTION_ID, AUTH_CODE, RRN, FORCE
+        force_matched_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Unmatched record this one resolves (force match)
         network_transaction_id:
           type:
           - string
@@ -13225,6 +15555,12 @@ components:
           - 'null'
           maxLength: 23
           description: Acquirer reference number
+        rrn:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+          description: Retrieval reference number
         auth_code:
           type:
           - string
@@ -13249,6 +15585,12 @@ components:
           - 'null'
           maxLength: 4
           description: MCC
+        merchant_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
         transaction_date:
           type: string
           format: date
@@ -13283,6 +15625,22 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        authorized_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Billing amount of the matched authorisation
+        adjustment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cleared minus authorised amount, posted as an adjustment
         interchange_amount:
           type:
           - string
@@ -13311,6 +15669,12 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+        exception_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the record is unmatched or an exception
         raw:
           type:
           - object
@@ -13402,6 +15766,18 @@ components:
           type: string
           format: uuid
           description: Card
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder
+        card_last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Last four digits of the card
         acs_transaction_id:
           type: string
           maxLength: 64
@@ -13459,7 +15835,16 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Issuer risk score
+          description: Issuer risk score 0-1000
+          readOnly: true
+        risk_reasons:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            maxLength: 64
+          description: Factors that raised the risk score
           readOnly: true
         challenge_type:
           type:
@@ -13492,10 +15877,24 @@ components:
           maxLength: 2
           description: ECI returned
           readOnly: true
+        challenge_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Challenge expiry
+          readOnly: true
         attempts:
           type: integer
           format: int32
           description: Challenge attempts
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the authentication failed or was rejected
           readOnly: true
         completed_at:
           type:
@@ -13540,6 +15939,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        cavv:
+          type: string
+          maxLength: 64
+          description: CAVV / AAV for the directory server (ARes and results request only) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at

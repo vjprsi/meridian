@@ -596,7 +596,8 @@ class CardFlowIT {
             assertThat(all).doesNotContain(pan);
         }
         // generic scan: no Luhn-valid 13-19 digit run anywhere in card_db (rows, outbox payloads, idempotency store)
-        Matcher m = Pattern.compile("(?<!\\d)\\d{13,19}(?!\\d)").matcher(all);
+        // digit runs inside hex digests (request hashes, checksums) are not PANs: require non-hex neighbours
+        Matcher m = Pattern.compile("(?<![0-9a-fA-F])\\d{13,19}(?![0-9a-fA-F])").matcher(all);
         List<String> suspicious = new ArrayList<>();
         while (m.find()) {
             if (Luhn.isValid(m.group())) {

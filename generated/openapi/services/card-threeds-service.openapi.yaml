@@ -40,6 +40,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: result
         in: query
         schema:
@@ -62,6 +67,11 @@ paths:
           - APP_PUSH
           - BIOMETRIC
           - DECOUPLED
+      - name: ds_transaction_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -147,6 +157,99 @@ paths:
       x-table: threeds_authentication
       x-crud: true
       x-crud-get: true
+  /v1/threeds-authentications/authenticate:
+    post:
+      operationId: threedsAuthenticationsAuthenticate
+      summary: 'Authentication request (AReq) from the directory server: the card is resolved by PAN through the vault, the
+        issuer scores the risk and answers frictionless (ECI + CAVV), challenge or reject; HMAC-SHA256 over the raw body in
+        X-Signature'
+      tags:
+      - Threeds Authentications
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreedsAuthenticationsAuthenticateRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: threeds_authentication
+  /v1/threeds-authentications/{id}/result:
+    get:
+      operationId: threedsAuthenticationsResult
+      summary: 'Results request for the directory server: final result, ECI and CAVV; HMAC-SHA256 of the ds_transaction_id
+        in X-Signature'
+      tags:
+      - Threeds Authentications
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: ds_transaction_id
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: threeds_authentication
   /v1/threeds-authentications/{id}/approve:
     post:
       operationId: threedsAuthenticationsApprove
@@ -242,7 +345,7 @@ paths:
   /v1/threeds-authentications/{id}/verify-otp:
     post:
       operationId: threedsAuthenticationsVerifyOtp
-      summary: Verify an OTP challenge
+      summary: Verify an OTP challenge (3 attempts, 5 minutes)
       tags:
       - Threeds Authentications
       security:
@@ -341,6 +444,56 @@ components:
       required:
       - data
       - has_more
+    ThreedsAuthenticationsAuthenticateRequest:
+      type: object
+      properties:
+        pan:
+          type: string
+          maxLength: 19
+        ds_transaction_id:
+          type: string
+          maxLength: 64
+        threeds_server_transaction_id:
+          type: string
+          maxLength: 64
+        protocol_version:
+          type: string
+          maxLength: 8
+        merchant_name:
+          type: string
+          maxLength: 64
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        mcc:
+          type: string
+          maxLength: 4
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        device_channel:
+          type: string
+          maxLength: 16
+        preferred_challenge:
+          type: string
+          enum:
+          - FRICTIONLESS
+          - OTP_SMS
+          - OTP_EMAIL
+          - APP_PUSH
+          - BIOMETRIC
+          - DECOUPLED
+      required:
+      - pan
+      - ds_transaction_id
+      - protocol_version
     ThreedsAuthenticationsApproveRequest:
       type: object
       properties:
@@ -402,6 +555,18 @@ components:
           type: string
           format: uuid
           description: Card
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder
+        card_last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Last four digits of the card
         acs_transaction_id:
           type: string
           maxLength: 64
@@ -459,7 +624,16 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Issuer risk score
+          description: Issuer risk score 0-1000
+          readOnly: true
+        risk_reasons:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            maxLength: 64
+          description: Factors that raised the risk score
           readOnly: true
         challenge_type:
           type:
@@ -492,10 +666,24 @@ components:
           maxLength: 2
           description: ECI returned
           readOnly: true
+        challenge_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Challenge expiry
+          readOnly: true
         attempts:
           type: integer
           format: int32
           description: Challenge attempts
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the authentication failed or was rejected
           readOnly: true
         completed_at:
           type:
@@ -540,6 +728,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        cavv:
+          type: string
+          maxLength: 64
+          description: CAVV / AAV for the directory server (ARes and results request only) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at

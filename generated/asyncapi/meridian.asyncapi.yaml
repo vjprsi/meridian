@@ -75,6 +75,10 @@ channels:
     messages:
       CardsCardProgramActivated:
         $ref: '#/components/messages/CardsCardProgramActivated'
+      CardsCardProgramStatusChanged:
+        $ref: '#/components/messages/CardsCardProgramStatusChanged'
+      CardsCardProductStatusChanged:
+        $ref: '#/components/messages/CardsCardProductStatusChanged'
       CardsCardCreated:
         $ref: '#/components/messages/CardsCardCreated'
       CardsCardActivated:
@@ -83,34 +87,54 @@ channels:
         $ref: '#/components/messages/CardsCardStatusChanged'
       CardsCardReplaced:
         $ref: '#/components/messages/CardsCardReplaced'
+      CardsCardRenewed:
+        $ref: '#/components/messages/CardsCardRenewed'
       CardsCardExpiring:
         $ref: '#/components/messages/CardsCardExpiring'
+      CardsCardOrderCreated:
+        $ref: '#/components/messages/CardsCardOrderCreated'
+      CardsCardOrderStatusChanged:
+        $ref: '#/components/messages/CardsCardOrderStatusChanged'
       CardsCardOrderShipped:
         $ref: '#/components/messages/CardsCardOrderShipped'
       CardsCardOrderDelivered:
         $ref: '#/components/messages/CardsCardOrderDelivered'
       CardsCardControlChanged:
         $ref: '#/components/messages/CardsCardControlChanged'
+      CardsCardSpendLimitChanged:
+        $ref: '#/components/messages/CardsCardSpendLimitChanged'
       CardsCardPinChanged:
         $ref: '#/components/messages/CardsCardPinChanged'
       CardsCardStatementCycleClosed:
         $ref: '#/components/messages/CardsCardStatementCycleClosed'
       CardsCardVaultRevealed:
         $ref: '#/components/messages/CardsCardVaultRevealed'
+      CardsCardVaultKeysRotated:
+        $ref: '#/components/messages/CardsCardVaultKeysRotated'
       CardsCardAuthorizationApproved:
         $ref: '#/components/messages/CardsCardAuthorizationApproved'
       CardsCardAuthorizationDeclined:
         $ref: '#/components/messages/CardsCardAuthorizationDeclined'
+      CardsCardAuthorizationIncremented:
+        $ref: '#/components/messages/CardsCardAuthorizationIncremented'
       CardsCardAuthorizationReversed:
         $ref: '#/components/messages/CardsCardAuthorizationReversed'
       CardsCardAuthorizationExpired:
         $ref: '#/components/messages/CardsCardAuthorizationExpired'
+      CardsCardAuthorizationCleared:
+        $ref: '#/components/messages/CardsCardAuthorizationCleared'
       CardsCardAuthorizationStandInApproved:
         $ref: '#/components/messages/CardsCardAuthorizationStandInApproved'
+      CardsCardStandInRecordReplayed:
+        $ref: '#/components/messages/CardsCardStandInRecordReplayed'
       CardsCardJitFundingRequested:
         $ref: '#/components/messages/CardsCardJitFundingRequested'
       CardsCardTokenProvisioned:
         $ref: '#/components/messages/CardsCardTokenProvisioned'
+      CardsCardTokenStepUpRequired:
+        $ref: '#/components/messages/CardsCardTokenStepUpRequired'
+      CardsCardTokenDeclined:
+        $ref: '#/components/messages/CardsCardTokenDeclined'
       CardsCardTokenStatusChanged:
         $ref: '#/components/messages/CardsCardTokenStatusChanged'
       CardsThreedsAuthenticationChallengeRequired:
@@ -119,18 +143,30 @@ channels:
         $ref: '#/components/messages/CardsThreedsAuthenticationCompleted'
       CardsClearingFileProcessed:
         $ref: '#/components/messages/CardsClearingFileProcessed'
+      CardsClearingFileFailed:
+        $ref: '#/components/messages/CardsClearingFileFailed'
       CardsClearingRecordPosted:
         $ref: '#/components/messages/CardsClearingRecordPosted'
       CardsClearingRecordUnmatched:
         $ref: '#/components/messages/CardsClearingRecordUnmatched'
+      CardsClearingRecordForceMatched:
+        $ref: '#/components/messages/CardsClearingRecordForceMatched'
       CardsCardSettlementCalculated:
         $ref: '#/components/messages/CardsCardSettlementCalculated'
+      CardsCardSettlementConfirmed:
+        $ref: '#/components/messages/CardsCardSettlementConfirmed'
       CardsCardFeeCharged:
         $ref: '#/components/messages/CardsCardFeeCharged'
+      CardsCardFeeWaived:
+        $ref: '#/components/messages/CardsCardFeeWaived'
       CardsCardDisputeOpened:
         $ref: '#/components/messages/CardsCardDisputeOpened'
       CardsCardDisputeStageChanged:
         $ref: '#/components/messages/CardsCardDisputeStageChanged'
+      CardsCardDisputeProvisionalCreditGranted:
+        $ref: '#/components/messages/CardsCardDisputeProvisionalCreditGranted'
+      CardsCardDisputeProvisionalCreditReversed:
+        $ref: '#/components/messages/CardsCardDisputeProvisionalCreditReversed'
       CardsCardDisputeDeadlineApproaching:
         $ref: '#/components/messages/CardsCardDisputeDeadlineApproaching'
       CardsCardDisputeClosed:
@@ -2112,6 +2148,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardProgram'
+    CardsCardProgramStatusChanged:
+      name: cards.card_program.status_changed
+      title: A card program entered certification or was suspended
+      summary: A card program entered certification or was suspended
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_program.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardProgram'
+    CardsCardProductStatusChanged:
+      name: cards.card_product.status_changed
+      title: A card product was activated or retired
+      summary: A card product was activated or retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_product.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardProduct'
     CardsCardCreated:
       name: cards.card.created
       title: A card was issued
@@ -2158,8 +2238,8 @@ components:
         $ref: '#/components/schemas/Card'
     CardsCardStatusChanged:
       name: cards.card.status_changed
-      title: A card was frozen, unfrozen, blocked or closed
-      summary: A card was frozen, unfrozen, blocked or closed
+      title: A card was frozen, unfrozen, blocked, expired or closed
+      summary: A card was frozen, unfrozen, blocked, expired or closed
       headers:
         type: object
         properties:
@@ -2200,6 +2280,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardReplacement'
+    CardsCardRenewed:
+      name: cards.card.renewed
+      title: A card was renewed with a new expiry
+      summary: A card was renewed with a new expiry
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card.renewed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Card'
     CardsCardExpiring:
       name: cards.card.expiring
       title: A card expires within the renewal window
@@ -2222,6 +2324,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Card'
+    CardsCardOrderCreated:
+      name: cards.card_order.created
+      title: A physical card order was created
+      summary: A physical card order was created
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_order.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardOrder'
+    CardsCardOrderStatusChanged:
+      name: cards.card_order.status_changed
+      title: An order was sent to the bureau, went into production, was returned, failed or was cancelled
+      summary: An order was sent to the bureau, went into production, was returned, failed or was cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_order.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardOrder'
     CardsCardOrderShipped:
       name: cards.card_order.shipped
       title: A physical card was shipped
@@ -2288,10 +2434,32 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardControl'
+    CardsCardSpendLimitChanged:
+      name: cards.card_spend_limit.changed
+      title: A spend limit was created, updated or removed
+      summary: A spend limit was created, updated or removed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_spend_limit.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardSpendLimit'
     CardsCardPinChanged:
       name: cards.card_pin.changed
-      title: A PIN was set, changed or reset
-      summary: A PIN was set, changed or reset
+      title: A PIN was set, changed, reset or unblocked
+      summary: A PIN was set, changed, reset or unblocked
       headers:
         type: object
         properties:
@@ -2354,6 +2522,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardVaultAccessLog'
+    CardsCardVaultKeysRotated:
+      name: cards.card_vault.keys_rotated
+      title: A vault key was rotated and records re-encrypted
+      summary: A vault key was rotated and records re-encrypted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_vault.keys_rotated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardVaultKey'
     CardsCardAuthorizationApproved:
       name: cards.card_authorization.approved
       title: An authorisation was approved
@@ -2386,6 +2576,28 @@ components:
           ce_type:
             type: string
             const: cards.card_authorization.declined
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardAuthorization'
+    CardsCardAuthorizationIncremented:
+      name: cards.card_authorization.incremented
+      title: An incremental authorisation increased the hold
+      summary: An incremental authorisation increased the hold
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_authorization.incremented
           ce_source:
             type: string
           ce_id:
@@ -2442,6 +2654,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardAuthorization'
+    CardsCardAuthorizationCleared:
+      name: cards.card_authorization.cleared
+      title: An authorisation was cleared by a presentment
+      summary: An authorisation was cleared by a presentment
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_authorization.cleared
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardAuthorization'
     CardsCardAuthorizationStandInApproved:
       name: cards.card_authorization.stand_in_approved
       title: An authorisation was approved in stand-in
@@ -2452,6 +2686,28 @@ components:
           ce_type:
             type: string
             const: cards.card_authorization.stand_in_approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardStandInRecord'
+    CardsCardStandInRecordReplayed:
+      name: cards.card_stand_in_record.replayed
+      title: A stand-in approval was replayed to the ledger
+      summary: A stand-in approval was replayed to the ledger
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_stand_in_record.replayed
           ce_source:
             type: string
           ce_id:
@@ -2496,6 +2752,50 @@ components:
           ce_type:
             type: string
             const: cards.card_token.provisioned
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardToken'
+    CardsCardTokenStepUpRequired:
+      name: cards.card_token.step_up_required
+      title: A provisioning request needs cardholder step-up
+      summary: A provisioning request needs cardholder step-up
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_token.step_up_required
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardToken'
+    CardsCardTokenDeclined:
+      name: cards.card_token.declined
+      title: A provisioning request was declined
+      summary: A provisioning request was declined
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_token.declined
           ce_source:
             type: string
           ce_id:
@@ -2596,6 +2896,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ClearingFile'
+    CardsClearingFileFailed:
+      name: cards.clearing_file.failed
+      title: A clearing file could not be parsed
+      summary: A clearing file could not be parsed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.clearing_file.failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ClearingFile'
     CardsClearingRecordPosted:
       name: cards.clearing_record.posted
       title: A presentment was posted to the ledger
@@ -2640,6 +2962,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ClearingRecord'
+    CardsClearingRecordForceMatched:
+      name: cards.clearing_record.force_matched
+      title: An unmatched presentment was matched manually
+      summary: An unmatched presentment was matched manually
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.clearing_record.force_matched
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ClearingRecord'
     CardsCardSettlementCalculated:
       name: cards.card_settlement.calculated
       title: A scheme settlement position was calculated
@@ -2662,6 +3006,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardSettlementRecord'
+    CardsCardSettlementConfirmed:
+      name: cards.card_settlement.confirmed
+      title: A scheme settlement was confirmed and posted
+      summary: A scheme settlement was confirmed and posted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_settlement.confirmed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardSettlementRecord'
     CardsCardFeeCharged:
       name: cards.card_fee.charged
       title: A card fee was charged
@@ -2672,6 +3038,28 @@ components:
           ce_type:
             type: string
             const: cards.card_fee.charged
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardFee'
+    CardsCardFeeWaived:
+      name: cards.card_fee.waived
+      title: A card fee was waived
+      summary: A card fee was waived
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_fee.waived
           ce_source:
             type: string
           ce_id:
@@ -2716,6 +3104,50 @@ components:
           ce_type:
             type: string
             const: cards.card_dispute.stage_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardDispute'
+    CardsCardDisputeProvisionalCreditGranted:
+      name: cards.card_dispute.provisional_credit_granted
+      title: Provisional credit was posted to the cardholder
+      summary: Provisional credit was posted to the cardholder
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_dispute.provisional_credit_granted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardDispute'
+    CardsCardDisputeProvisionalCreditReversed:
+      name: cards.card_dispute.provisional_credit_reversed
+      title: Provisional credit was reversed
+      summary: Provisional credit was reversed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_dispute.provisional_credit_reversed
           ce_source:
             type: string
           ce_id:
@@ -18624,19 +19056,25 @@ components:
         bin_range_start:
           type: string
           maxLength: 19
-          description: First PAN prefix in the range
+          description: First PAN prefix in the account range (starts with the BIN)
         bin_range_end:
           type: string
           maxLength: 19
-          description: Last PAN prefix in the range
+          description: Last PAN prefix in the account range (same length as the start)
         pan_length:
           type: integer
           format: int32
-          description: PAN length
+          description: PAN length (13-19, including the Luhn check digit)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Billing currency (ISO 4217)
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Issuing country; a merchant in another country makes the transaction international (ISO 3166-1 alpha-2)
         sponsor_bank:
           type:
           - string
@@ -18654,7 +19092,7 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Program settlement / funding account
+          description: Program settlement / funding account (JIT holds are placed here)
         jit_webhook_url:
           type:
           - string
@@ -18676,12 +19114,41 @@ components:
           examples:
           - '125.50'
           description: Maximum amount approved in stand-in
+        fraud_policy:
+          type: string
+          enum:
+          - FAIL_OPEN
+          - FAIL_CLOSED
+          description: Decision when fraud scoring times out or fails
+        fraud_timeout_ms:
+          type: integer
+          format: int32
+          description: Fraud scoring budget in milliseconds
+        fraud_decline_score:
+          type: integer
+          format: int32
+          description: Decline when the fraud score is at or above this value (0-1000)
+        fx_markup_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2%
+        auth_hold_days:
+          type: integer
+          format: int32
+          description: Days before an uncleared authorisation hold expires
+        renewal_window_days:
+          type: integer
+          format: int32
+          description: Days before expiry a card is reported as expiring
         default_controls:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Controls applied to every new card
+          items: {}
+          description: Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window,
+            timezone}
         status:
           type: string
           enum:
@@ -18690,13 +19157,35 @@ components:
           - ACTIVE
           - SUSPENDED
           - RETIRED
-          description: Lifecycle status
+          description: Lifecycle status (changed by certify / activate / suspend)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        certified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time certification started
+          readOnly: true
         launched_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Go-live time
+          readOnly: true
+        activated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that approved go-live (must differ from the creator)
           readOnly: true
         metadata:
           type:
@@ -18752,6 +19241,176 @@ components:
       - currency
       - jit_timeout_ms
       - stand_in_enabled
+      - fraud_policy
+      - fraud_timeout_ms
+      - fraud_decline_score
+      - fx_markup_rate
+      - auth_hold_days
+      - renewal_window_days
+      - status
+    CardProduct:
+      type: object
+      description: A card product inside a program (design, plastic, validity, PIN and fee settings)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product catalogue entry (pricing, fees)
+        code:
+          type: string
+          maxLength: 32
+          description: Product code
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        form_factors:
+          type: array
+          items:
+            type: string
+            enum:
+            - VIRTUAL
+            - PHYSICAL
+          description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
+        card_design_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Artwork / design reference
+        plastic_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: PVC, RECYCLED_PVC, METAL
+        card_bureau_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Default bureau for physical cards
+        expiry_years:
+          type: integer
+          format: int32
+          description: Validity in years (1-10)
+        pin_policy:
+          type: string
+          enum:
+          - REQUIRED
+          - OPTIONAL
+          - NONE
+          description: PIN requirement
+        contactless_enabled:
+          type: boolean
+          description: Contactless allowed
+        atm_enabled:
+          type: boolean
+          description: ATM withdrawals allowed
+        ecom_enabled:
+          type: boolean
+          description: E-commerce allowed
+        international_enabled:
+          type: boolean
+          description: Cross-border allowed
+        max_cards_per_customer:
+          type: integer
+          format: int32
+          description: Active card cap per customer
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          description: Status (changed by activate / retire)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_program_id
+      - code
+      - name
+      - form_factors
+      - expiry_years
+      - pin_policy
+      - contactless_enabled
+      - atm_enabled
+      - ecom_enabled
+      - international_enabled
+      - max_cards_per_customer
       - status
     Card:
       type: object
@@ -18844,7 +19503,7 @@ components:
         sequence_number:
           type: integer
           format: int32
-          description: PAN sequence number (PSN)
+          description: PAN sequence number (PSN), incremented on renewal
           readOnly: true
         cardholder_name:
           type: string
@@ -18868,13 +19527,15 @@ components:
           - EXPIRED
           - CLOSED
           - REPLACED
-          description: Lifecycle status
+          description: Lifecycle status (changed by actions only)
+          readOnly: true
         status_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason for the current status
+          readOnly: true
         linked_account_type:
           type: string
           enum:
@@ -18912,6 +19573,7 @@ components:
           - 'null'
           format: uuid
           description: Card this one replaced
+          readOnly: true
         pin_set:
           type: boolean
           description: Whether a PIN has been set
@@ -19053,6 +19715,7 @@ components:
           - 'null'
           format: uuid
           description: Replacement card
+          readOnly: true
         reason:
           type: string
           enum:
@@ -19070,12 +19733,21 @@ components:
         fee_charged:
           type: boolean
           description: Whether a replacement fee was charged
+          readOnly: true
+        fee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Replacement fee charged in card-clearing-service
+          readOnly: true
         requested_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Requester
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -19172,7 +19844,8 @@ components:
           - RETURNED
           - FAILED
           - CANCELLED
-          description: Order status
+          description: Order status (changed by actions and bureau callbacks)
+          readOnly: true
         shipping_method:
           type: string
           enum:
@@ -19242,6 +19915,13 @@ components:
           maxLength: 64
           description: Courier
           readOnly: true
+        reship_of_order_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Returned order this one reships
+          readOnly: true
         sent_to_bureau_at:
           type:
           - string
@@ -19268,7 +19948,7 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Failure reason
+          description: Failure or cancellation reason
           readOnly: true
         custom_field_1:
           type:
@@ -19391,9 +20071,11 @@ components:
           description: Channel the control applies to
         values:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 64
           description: MCCs, merchant ids, countries, currencies or channels
         max_amount:
           type:
@@ -19414,7 +20096,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Allowed days and hours for TIME_WINDOW
+          description: 'Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM}'
         timezone:
           type:
           - string
@@ -19473,6 +20155,158 @@ components:
       - row_version
       - control_type
       - channel
+      - is_active
+    CardSpendLimit:
+      type: object
+      description: Amount and velocity limits per period on a card or program
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card (empty = program-wide)
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program for program-wide limits
+        period:
+          type: string
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: Limit period
+        channel:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          description: Channel
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum cumulative amount in the period
+        max_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum number of transactions in the period
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        used_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount used in the current period (from card-authorization-service counters)
+          readOnly: true
+        used_count:
+          type: integer
+          format: int32
+          description: Transactions in the current period
+          readOnly: true
+        period_start:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start of the current period
+          readOnly: true
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - period
+      - channel
+      - currency
+      - used_amount
+      - used_count
       - is_active
     CardPinEvent:
       type: object
@@ -19692,6 +20526,14 @@ components:
           - PAID
           - OVERDUE
           description: Status
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the cycle was closed
+          readOnly: true
         statement_document_id:
           type:
           - string
@@ -19770,13 +20612,31 @@ components:
           description: Principal that created the row
           readOnly: true
         pan_token:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Token accessed
+          description: Token accessed (empty when the lookup found nothing)
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card accessed
         purpose:
           type: string
-          maxLength: 32
-          description: AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE
+          enum:
+          - AUTHORIZATION
+          - TOKENIZATION
+          - REVEAL
+          - BUREAU_FILE
+          - SCHEME_FILE
+          - PIN_MANAGEMENT
+          - LOOKUP
+          - REISSUE
+          - THREEDS
+          - KEY_ROTATION
+          description: Purpose of the access
         caller_service:
           type: string
           maxLength: 64
@@ -19790,6 +20650,12 @@ components:
         success:
           type: boolean
           description: Outcome
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the access failed
         ip_address:
           type:
           - string
@@ -19828,10 +20694,131 @@ components:
       required:
       - id
       - created_at
-      - pan_token
       - purpose
       - caller_service
       - success
+    CardVaultKey:
+      type: object
+      description: Key metadata for HSM-held keys (no key material stored)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        key_type:
+          type: string
+          enum:
+          - PAN_DEK
+          - CVV_KEY
+          - PIN_KEY
+          - ZPK
+          - CVK
+          - MDK
+          description: Key purpose
+        hsm_key_label:
+          type: string
+          maxLength: 128
+          description: Label of the key inside the HSM
+        kcv:
+          type: string
+          maxLength: 6
+          description: Key check value (computed by the HSM)
+          readOnly: true
+        algorithm:
+          type: string
+          maxLength: 32
+          description: AES-256-GCM, TDES, etc.
+        version:
+          type: integer
+          format: int32
+          description: Key version (incremented on rotation)
+          readOnly: true
+        active_from:
+          type: string
+          format: date-time
+          description: Activation
+        retire_after:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Scheduled rotation
+        is_active:
+          type: boolean
+          description: Active (one active key per type)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - key_type
+      - hsm_key_label
+      - kcv
+      - algorithm
+      - version
+      - active_from
+      - is_active
     CardAuthorization:
       type: object
       description: One authorisation message and its decision (auth, incremental, reversal, advice)
@@ -19877,13 +20864,15 @@ components:
         card_program_id:
           type: string
           format: uuid
-          description: Program
+          description: Program (from the card)
+          readOnly: true
         customer_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Cardholder
+          description: Cardholder (from the card)
+          readOnly: true
         message_type:
           type: string
           enum:
@@ -19906,7 +20895,7 @@ components:
           - string
           - 'null'
           maxLength: 6
-          description: ISO 8583 DE3
+          description: ISO 8583 DE3 (00 purchase, 01 cash, 20 refund, 30 balance inquiry)
         stan:
           type:
           - string
@@ -20032,11 +21021,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount in card billing currency (DE6)
+          description: Amount in card billing currency (DE6), incl. issuer FX markup
+          readOnly: true
         billing_currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Billing currency (ISO 4217)
+          description: Billing currency (program currency) (ISO 4217)
+          readOnly: true
         settlement_amount:
           type:
           - string
@@ -20058,7 +21049,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Billing conversion rate
+          description: Billing conversion rate (DE10); reference rate used when absent
         fx_markup:
           type:
           - string
@@ -20066,7 +21057,8 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Issuer FX markup
+          description: Issuer FX markup included in billing_amount
+          readOnly: true
         approved_amount:
           type:
           - string
@@ -20074,7 +21066,14 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Approved amount (partial approvals)
+          description: Approved amount in billing currency (partial approvals)
+          readOnly: true
+        reversed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount reversed so far
           readOnly: true
         decision:
           type:
@@ -20111,7 +21110,23 @@ components:
           - THREEDS_FAILED
           - SYSTEM_ERROR
           - OTHER
+          - CARD_LOST
+          - CARD_STOLEN
+          - CARD_BLOCKED
+          - PROGRAM_SUSPENDED
+          - RULE_DECLINED
+          - CONTROL_AMOUNT
+          - CONTROL_TIME
+          - CONTROL_CURRENCY
+          - ORIGINAL_NOT_FOUND
           description: Internal decline reason
+          readOnly: true
+        decline_detail:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Human-readable explanation of the decline
           readOnly: true
         status:
           type: string
@@ -20126,6 +21141,17 @@ components:
           - PARTIALLY_CLEARED
           description: Lifecycle status
           readOnly: true
+        funding_source:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LEDGER_HOLD
+          - JIT
+          - STAND_IN
+          - NONE
+          description: How the approval was funded
+          readOnly: true
         fraud_score:
           type:
           - integer
@@ -20133,18 +21159,47 @@ components:
           format: int32
           description: Fraud score 0-1000
           readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: ALLOW, REVIEW, BLOCK, STEP_UP, UNAVAILABLE
+          readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud evaluation
+          readOnly: true
         fraud_alert_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Fraud alert raised
+        authorization_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule that decided, if any
+          readOnly: true
         hold_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Ledger hold placed
+          readOnly: true
+        hold_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger account the hold is on
+          readOnly: true
         jit_used:
           type: boolean
           description: JIT funding was called
@@ -20194,7 +21249,8 @@ components:
           - string
           - 'null'
           maxLength: 1
-          description: CVV2 verification result
+          description: CVV2 verification result (M match, N no match, P not processed)
+          readOnly: true
         avs_result:
           type:
           - string
@@ -20206,12 +21262,14 @@ components:
           - boolean
           - 'null'
           description: PIN verification outcome
+          readOnly: true
         is_recurring:
           type: boolean
           description: Recurring / credential on file
         is_international:
           type: boolean
-          description: Cross-border
+          description: Cross-border (merchant country differs from the program country)
+          readOnly: true
         processing_time_ms:
           type:
           - integer
@@ -20225,6 +21283,7 @@ components:
           - 'null'
           format: date-time
           description: Time the hold auto-releases
+          readOnly: true
         cleared_amount:
           type: string
           format: decimal
@@ -20285,6 +21344,7 @@ components:
       - transaction_currency
       - billing_amount
       - billing_currency
+      - reversed_amount
       - status
       - jit_used
       - stand_in
@@ -20333,6 +21393,18 @@ components:
           type: string
           format: uuid
           description: Authorisation
+        card_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Card
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account the hold is replayed on
         amount:
           type: string
           format: decimal
@@ -20343,6 +21415,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        stand_in_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: LEDGER_UNAVAILABLE, JIT_TIMEOUT, JIT_ERROR
         replayed:
           type: boolean
           description: Replayed to the ledger
@@ -20358,8 +21436,18 @@ components:
           type:
           - string
           - 'null'
-          maxLength: 32
-          description: POSTED, OVERDRAWN, FAILED
+          enum:
+          - POSTED
+          - OVERDRAWN
+          - FAILED
+          description: Outcome of the replay
+          readOnly: true
+        replay_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Error of the last replay attempt
           readOnly: true
         hold_id:
           type:
@@ -20367,6 +21455,7 @@ components:
           - 'null'
           format: uuid
           description: Hold created on replay
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -20558,6 +21647,13 @@ components:
           type: string
           format: uuid
           description: Card
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder (from the card)
+          readOnly: true
         token_requestor:
           type: string
           enum:
@@ -20578,6 +21674,7 @@ components:
           type: string
           maxLength: 64
           description: Scheme token reference (TUR / token id)
+          readOnly: true
         dpan_last4:
           type:
           - string
@@ -20609,6 +21706,14 @@ components:
           - DEACTIVATED
           - DECLINED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         device_type:
           type:
           - string
@@ -20632,19 +21737,22 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Wallet provider risk score
+          description: Wallet provider risk score 1-5 (5 = most trusted)
         device_score:
           type:
           - integer
           - 'null'
           format: int32
-          description: Device risk score
+          description: Device risk score 1-5 (5 = most trusted)
         provisioning_decision:
           type:
           - string
           - 'null'
-          maxLength: 16
-          description: GREEN, YELLOW, RED
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+          description: GREEN, YELLOW or RED
           readOnly: true
         step_up_method:
           type:
@@ -20652,6 +21760,12 @@ components:
           - 'null'
           maxLength: 32
           description: OTP_SMS, OTP_EMAIL, APP, CALL_CENTER
+          readOnly: true
+        step_up_attempts:
+          type: integer
+          format: int32
+          description: Failed step-up attempts
+          readOnly: true
         merchant_name:
           type:
           - string
@@ -20664,6 +21778,13 @@ components:
           - 'null'
           format: date-time
           description: Activation time
+          readOnly: true
+        suspended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last suspension time
           readOnly: true
         deactivated_at:
           type:
@@ -20702,6 +21823,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        provisioning_payload:
+          type: string
+          description: 'Push provisioning: encrypted opaque card data for the wallet (returned once) (returned once; never
+            stored)'
+          readOnly: true
       required:
       - id
       - created_at
@@ -20711,6 +21837,7 @@ components:
       - token_requestor
       - network_token_ref
       - status
+      - step_up_attempts
     ThreedsAuthentication:
       type: object
       description: One 3DS authentication request and its outcome
@@ -20753,6 +21880,18 @@ components:
           type: string
           format: uuid
           description: Card
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder
+        card_last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Last four digits of the card
         acs_transaction_id:
           type: string
           maxLength: 64
@@ -20810,7 +21949,16 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Issuer risk score
+          description: Issuer risk score 0-1000
+          readOnly: true
+        risk_reasons:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            maxLength: 64
+          description: Factors that raised the risk score
           readOnly: true
         challenge_type:
           type:
@@ -20843,10 +21991,24 @@ components:
           maxLength: 2
           description: ECI returned
           readOnly: true
+        challenge_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Challenge expiry
+          readOnly: true
         attempts:
           type: integer
           format: int32
           description: Challenge attempts
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the authentication failed or was rejected
           readOnly: true
         completed_at:
           type:
@@ -20891,6 +22053,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        cavv:
+          type: string
+          maxLength: 64
+          description: CAVV / AAV for the directory server (ARes and results request only) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -20954,8 +22121,16 @@ components:
           description: Scheme
         direction:
           type: string
-          maxLength: 8
-          description: INCOMING or OUTGOING
+          enum:
+          - INCOMING
+          - OUTGOING
+          description: Direction
+        file_format:
+          type: string
+          enum:
+          - CSV
+          - JSON
+          description: Layout of content
         file_name:
           type: string
           maxLength: 255
@@ -20968,18 +22143,45 @@ components:
         checksum:
           type: string
           maxLength: 64
-          description: SHA-256, rejects duplicates
+          description: SHA-256 of the content, rejects duplicates
           readOnly: true
         processing_date:
           type: string
           format: date
-          description: Scheme processing date
+          description: Scheme processing date (settlement date)
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program the file belongs to (empty = several)
         record_count:
           type:
           - integer
           - 'null'
           format: int32
           description: Records parsed
+          readOnly: true
+        matched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched to authorisations
+          readOnly: true
+        unmatched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records not matched
+          readOnly: true
+        exception_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched with an amount outside tolerance or failed to post
           readOnly: true
         total_amount:
           type:
@@ -21049,6 +22251,7 @@ components:
       - row_version
       - scheme
       - direction
+      - file_format
       - file_name
       - file_uri
       - checksum
@@ -21090,18 +22293,45 @@ components:
           - FEE_COLLECTION
           - FUNDS_DISBURSEMENT
           description: Record type
+        scheme:
+          type:
+          - string
+          - 'null'
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program
         card_authorization_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Matched authorisation
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger hold captured
         match_status:
           type: string
           enum:
@@ -21110,6 +22340,18 @@ components:
           - UNMATCHED
           - EXCEPTION
           description: Match result
+        match_rule:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: NETWORK_TRANSACTION_ID, AUTH_CODE, RRN, FORCE
+        force_matched_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Unmatched record this one resolves (force match)
         network_transaction_id:
           type:
           - string
@@ -21122,6 +22364,12 @@ components:
           - 'null'
           maxLength: 23
           description: Acquirer reference number
+        rrn:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+          description: Retrieval reference number
         auth_code:
           type:
           - string
@@ -21146,6 +22394,12 @@ components:
           - 'null'
           maxLength: 4
           description: MCC
+        merchant_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
         transaction_date:
           type: string
           format: date
@@ -21180,6 +22434,22 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        authorized_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Billing amount of the matched authorisation
+        adjustment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cleared minus authorised amount, posted as an adjustment
         interchange_amount:
           type:
           - string
@@ -21208,6 +22478,12 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+        exception_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the record is unmatched or an exception
         raw:
           type:
           - object
@@ -21322,42 +22598,53 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        transaction_count:
+          type: integer
+          format: int32
+          description: Records included
+          readOnly: true
         gross_purchases:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Purchases
+          readOnly: true
         gross_refunds:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Refunds
+          readOnly: true
         chargebacks:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Chargebacks
+          readOnly: true
         interchange:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net interchange
+          readOnly: true
         scheme_fees:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Scheme fees
+          readOnly: true
         net_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net position (positive = issuer pays scheme)
+          readOnly: true
         status:
           type: string
           enum:
@@ -21366,18 +22653,35 @@ components:
           - PAID
           - DISPUTED
           description: Status
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Settlement posting
+          readOnly: true
         recon_reference:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Bank statement reference
+          readOnly: true
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmation time
+          readOnly: true
+        confirmed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that confirmed
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -21416,6 +22720,7 @@ components:
       - scheme
       - settlement_date
       - currency
+      - transaction_count
       - gross_purchases
       - gross_refunds
       - chargebacks
@@ -21448,6 +22753,12 @@ components:
           type: string
           format: uuid
           description: Card
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account charged (resolved from the card when empty)
         fee_type:
           type: string
           enum:
@@ -21499,9 +22810,18 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+          readOnly: true
         waived:
           type: boolean
-          description: Waived
+          description: This row is a waiver (compensating entry)
+          readOnly: true
+        waives_fee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fee this row waives
+          readOnly: true
         description:
           type:
           - string
@@ -21590,9 +22910,19 @@ components:
           format: uuid
           description: Card
         customer_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Cardholder
+          description: Cardholder (from the card)
+          readOnly: true
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account (from the card)
+          readOnly: true
         card_authorization_id:
           type:
           - string
@@ -21638,6 +22968,12 @@ components:
           - 'null'
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
+        transaction_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         stage:
           type: string
           enum:
@@ -21649,6 +22985,7 @@ components:
           - ARBITRATION
           - CLOSED
           description: Scheme stage
+          readOnly: true
         status:
           type: string
           enum:
@@ -21661,6 +22998,7 @@ components:
           - WITHDRAWN
           - EXPIRED
           description: Status
+          readOnly: true
         disputed_amount:
           type: string
           format: decimal
@@ -21671,6 +23009,24 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        chargeback_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount charged back to the acquirer
+          readOnly: true
+        representment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount the merchant re-presented
+          readOnly: true
         provisional_credit_amount:
           type: string
           format: decimal
@@ -21684,6 +23040,11 @@ components:
           - 'null'
           format: uuid
           description: Provisional credit posting
+          readOnly: true
+        provisional_credit_reversed:
+          type: boolean
+          description: Provisional credit was reversed
+          readOnly: true
         scheme_case_id:
           type:
           - string
@@ -21700,25 +23061,40 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Analyst
+          description: Analyst (changed by assign)
+          readOnly: true
         stage_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Deadline for the current stage
+          readOnly: true
         regulatory_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Regulation E / Z or local deadline
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Chargeback submission time
+          readOnly: true
         outcome:
           type:
           - string
           - 'null'
-          maxLength: 32
-          description: WON, LOST, SPLIT, WITHDRAWN
+          enum:
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - EXPIRED
+          description: WON, LOST, SPLIT, WITHDRAWN, EXPIRED
           readOnly: true
         recovered_amount:
           type: string
@@ -21734,12 +23110,26 @@ components:
           - '125.50'
           description: Amount written off
           readOnly: true
+        outcome_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Final outcome posting
+          readOnly: true
         closed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Closure time
+          readOnly: true
+        suggested_reason_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Reason code suggested by the copilot
           readOnly: true
         ai_summary:
           type:
@@ -21783,7 +23173,6 @@ components:
       - updated_at
       - row_version
       - card_id
-      - customer_id
       - category
       - scheme
       - stage
@@ -21791,6 +23180,7 @@ components:
       - disputed_amount
       - currency
       - provisional_credit_amount
+      - provisional_credit_reversed
       - recovered_amount
       - written_off_amount
     RewardsProgram:

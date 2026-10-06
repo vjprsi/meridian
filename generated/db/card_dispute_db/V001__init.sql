@@ -28,27 +28,35 @@ CREATE TABLE card_dispute (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   card_id                      uuid NOT NULL,
-  customer_id                  uuid NOT NULL,
+  customer_id                  uuid,
+  ledger_account_id            uuid,
   card_authorization_id        uuid,
   clearing_record_id           uuid,
   category                     varchar(40) NOT NULL CHECK (category IN ('FRAUD', 'AUTHORIZATION', 'PROCESSING_ERROR', 'CONSUMER_DISPUTE', 'NOT_RECEIVED', 'NOT_AS_DESCRIBED', 'DUPLICATE', 'CANCELLED_RECURRING', 'CREDIT_NOT_PROCESSED', 'ATM_DISPUTE')),
   scheme                       varchar(40) NOT NULL CHECK (scheme IN ('VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY', 'JCB', 'DISCOVER', 'RUPAY', 'ELO', 'LOCAL')),
   reason_code                  varchar(8),
+  transaction_date             date,
   stage                        varchar(40) NOT NULL DEFAULT 'INQUIRY' CHECK (stage IN ('INQUIRY', 'RETRIEVAL', 'FIRST_CHARGEBACK', 'REPRESENTMENT', 'PRE_ARBITRATION', 'ARBITRATION', 'CLOSED')),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'AWAITING_CUSTOMER', 'AWAITING_MERCHANT', 'SUBMITTED', 'WON', 'LOST', 'WITHDRAWN', 'EXPIRED')),
   disputed_amount              numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  chargeback_amount            numeric(28,8),
+  representment_amount         numeric(28,8),
   provisional_credit_amount    numeric(28,8) NOT NULL DEFAULT 0,
   provisional_credit_entry_id  uuid,
+  provisional_credit_reversed  boolean NOT NULL DEFAULT false,
   scheme_case_id               varchar(64),
   customer_description         text,
   assigned_to                  varchar(64),
   stage_deadline               date,
   regulatory_deadline          date,
-  outcome                      varchar(32),
+  submitted_at                 timestamptz,
+  outcome                      varchar(40) CHECK (outcome IN ('WON', 'LOST', 'SPLIT', 'WITHDRAWN', 'EXPIRED')),
   recovered_amount             numeric(28,8) NOT NULL DEFAULT 0,
   written_off_amount           numeric(28,8) NOT NULL DEFAULT 0,
+  outcome_entry_id             uuid,
   closed_at                    timestamptz,
+  suggested_reason_code        varchar(8),
   ai_summary                   text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -65,27 +73,35 @@ COMMENT ON COLUMN card_dispute.updated_at IS 'Last update time';
 COMMENT ON COLUMN card_dispute.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN card_dispute.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_dispute.card_id IS 'Card';
-COMMENT ON COLUMN card_dispute.customer_id IS 'Cardholder';
+COMMENT ON COLUMN card_dispute.customer_id IS 'Cardholder (from the card)';
+COMMENT ON COLUMN card_dispute.ledger_account_id IS 'Cardholder account (from the card)';
 COMMENT ON COLUMN card_dispute.card_authorization_id IS 'Disputed authorisation';
 COMMENT ON COLUMN card_dispute.clearing_record_id IS 'Disputed presentment';
 COMMENT ON COLUMN card_dispute.category IS 'Dispute category';
 COMMENT ON COLUMN card_dispute.scheme IS 'Scheme';
 COMMENT ON COLUMN card_dispute.reason_code IS 'Scheme reason code, e.g. 10.4, 4837';
+COMMENT ON COLUMN card_dispute.transaction_date IS 'Date of the disputed transaction (drives scheme time limits)';
 COMMENT ON COLUMN card_dispute.stage IS 'Scheme stage';
 COMMENT ON COLUMN card_dispute.status IS 'Status';
 COMMENT ON COLUMN card_dispute.disputed_amount IS 'Amount disputed';
 COMMENT ON COLUMN card_dispute.currency IS 'Currency';
+COMMENT ON COLUMN card_dispute.chargeback_amount IS 'Amount charged back to the acquirer';
+COMMENT ON COLUMN card_dispute.representment_amount IS 'Amount the merchant re-presented';
 COMMENT ON COLUMN card_dispute.provisional_credit_amount IS 'Provisional credit given';
 COMMENT ON COLUMN card_dispute.provisional_credit_entry_id IS 'Provisional credit posting';
+COMMENT ON COLUMN card_dispute.provisional_credit_reversed IS 'Provisional credit was reversed';
 COMMENT ON COLUMN card_dispute.scheme_case_id IS 'Scheme case number';
 COMMENT ON COLUMN card_dispute.customer_description IS 'Cardholder statement [PII]';
-COMMENT ON COLUMN card_dispute.assigned_to IS 'Analyst';
+COMMENT ON COLUMN card_dispute.assigned_to IS 'Analyst (changed by assign)';
 COMMENT ON COLUMN card_dispute.stage_deadline IS 'Deadline for the current stage';
 COMMENT ON COLUMN card_dispute.regulatory_deadline IS 'Regulation E / Z or local deadline';
-COMMENT ON COLUMN card_dispute.outcome IS 'WON, LOST, SPLIT, WITHDRAWN';
+COMMENT ON COLUMN card_dispute.submitted_at IS 'Chargeback submission time';
+COMMENT ON COLUMN card_dispute.outcome IS 'WON, LOST, SPLIT, WITHDRAWN, EXPIRED';
 COMMENT ON COLUMN card_dispute.recovered_amount IS 'Amount recovered from the merchant';
 COMMENT ON COLUMN card_dispute.written_off_amount IS 'Amount written off';
+COMMENT ON COLUMN card_dispute.outcome_entry_id IS 'Final outcome posting';
 COMMENT ON COLUMN card_dispute.closed_at IS 'Closure time';
+COMMENT ON COLUMN card_dispute.suggested_reason_code IS 'Reason code suggested by the copilot';
 COMMENT ON COLUMN card_dispute.ai_summary IS 'Copilot summary and suggested reason code';
 COMMENT ON COLUMN card_dispute.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_dispute.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -95,11 +111,13 @@ COMMENT ON COLUMN card_dispute.custom_field_5 IS 'Tenant-defined custom field 5;
 CREATE INDEX ix_card_dispute_tenant ON card_dispute (tenant_id, created_at);
 CREATE INDEX ix_card_dispute_card_id ON card_dispute (card_id);
 CREATE INDEX ix_card_dispute_customer_id ON card_dispute (customer_id);
+CREATE INDEX ix_card_dispute_ledger_account_id ON card_dispute (ledger_account_id);
 CREATE INDEX ix_card_dispute_card_authorization_id ON card_dispute (card_authorization_id);
 CREATE INDEX ix_card_dispute_clearing_record_id ON card_dispute (clearing_record_id);
 CREATE INDEX ix_card_dispute_provisional_credit_entry_id ON card_dispute (provisional_credit_entry_id);
 CREATE INDEX ix_card_dispute_scheme_case_id ON card_dispute (scheme_case_id);
 CREATE INDEX ix_card_dispute_assigned_to ON card_dispute (assigned_to);
+CREATE INDEX ix_card_dispute_outcome_entry_id ON card_dispute (outcome_entry_id);
 ALTER TABLE card_dispute ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_dispute USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_dispute_touch BEFORE UPDATE ON card_dispute FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -158,7 +176,7 @@ CREATE TABLE card_dispute_event (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   card_dispute_id              uuid NOT NULL REFERENCES card_dispute(id),
-  event_type                   varchar(40) NOT NULL,
+  event_type                   varchar(40) NOT NULL CHECK (event_type IN ('CREATED', 'ASSIGNED', 'EVIDENCE_ADDED', 'PROVISIONAL_CREDIT', 'PROVISIONAL_CREDIT_REVERSED', 'RETRIEVAL_REQUESTED', 'CHARGEBACK_SENT', 'REPRESENTMENT_RECEIVED', 'REPRESENTMENT_ACCEPTED', 'PRE_ARBITRATION_FILED', 'ARBITRATION_FILED', 'DEADLINE_APPROACHING', 'EXPIRED', 'WON', 'LOST', 'SPLIT', 'WITHDRAWN', 'AI_SUMMARY', 'NOTE')),
   from_stage                   varchar(40) CHECK (from_stage IN ('INQUIRY', 'RETRIEVAL', 'FIRST_CHARGEBACK', 'REPRESENTMENT', 'PRE_ARBITRATION', 'ARBITRATION', 'CLOSED')),
   to_stage                     varchar(40) CHECK (to_stage IN ('INQUIRY', 'RETRIEVAL', 'FIRST_CHARGEBACK', 'REPRESENTMENT', 'PRE_ARBITRATION', 'ARBITRATION', 'CLOSED')),
   amount                       numeric(28,8),
@@ -177,7 +195,7 @@ COMMENT ON COLUMN card_dispute_event.tenant_id IS 'Owning tenant; enforced by ro
 COMMENT ON COLUMN card_dispute_event.created_at IS 'Creation time';
 COMMENT ON COLUMN card_dispute_event.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN card_dispute_event.card_dispute_id IS 'Dispute';
-COMMENT ON COLUMN card_dispute_event.event_type IS 'CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST, NOTE';
+COMMENT ON COLUMN card_dispute_event.event_type IS 'Event';
 COMMENT ON COLUMN card_dispute_event.from_stage IS 'Previous stage';
 COMMENT ON COLUMN card_dispute_event.to_stage IS 'New stage';
 COMMENT ON COLUMN card_dispute_event.amount IS 'Amount involved';

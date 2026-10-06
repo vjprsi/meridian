@@ -28,12 +28,17 @@ CREATE TABLE clearing_file (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   scheme                       varchar(40) NOT NULL CHECK (scheme IN ('VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY', 'JCB', 'DISCOVER', 'RUPAY', 'ELO', 'LOCAL')),
-  direction                    varchar(8) NOT NULL,
+  direction                    varchar(40) NOT NULL DEFAULT 'INCOMING' CHECK (direction IN ('INCOMING', 'OUTGOING')),
+  file_format                  varchar(40) NOT NULL DEFAULT 'CSV' CHECK (file_format IN ('CSV', 'JSON')),
   file_name                    varchar(255) NOT NULL,
   file_uri                     varchar(500) NOT NULL,
   checksum                     varchar(64) NOT NULL,
   processing_date              date NOT NULL,
+  card_program_id              uuid,
   record_count                 integer,
+  matched_count                integer,
+  unmatched_count              integer,
+  exception_count              integer,
   total_amount                 numeric(28,8),
   currency                     char(3),
   status                       varchar(40) NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED', 'PARSING', 'PARSED', 'POSTED', 'FAILED')),
@@ -54,12 +59,17 @@ COMMENT ON COLUMN clearing_file.updated_at IS 'Last update time';
 COMMENT ON COLUMN clearing_file.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN clearing_file.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN clearing_file.scheme IS 'Scheme';
-COMMENT ON COLUMN clearing_file.direction IS 'INCOMING or OUTGOING';
+COMMENT ON COLUMN clearing_file.direction IS 'Direction';
+COMMENT ON COLUMN clearing_file.file_format IS 'Layout of content';
 COMMENT ON COLUMN clearing_file.file_name IS 'File name';
 COMMENT ON COLUMN clearing_file.file_uri IS 'Storage location';
-COMMENT ON COLUMN clearing_file.checksum IS 'SHA-256, rejects duplicates';
-COMMENT ON COLUMN clearing_file.processing_date IS 'Scheme processing date';
+COMMENT ON COLUMN clearing_file.checksum IS 'SHA-256 of the content, rejects duplicates';
+COMMENT ON COLUMN clearing_file.processing_date IS 'Scheme processing date (settlement date)';
+COMMENT ON COLUMN clearing_file.card_program_id IS 'Program the file belongs to (empty = several)';
 COMMENT ON COLUMN clearing_file.record_count IS 'Records parsed';
+COMMENT ON COLUMN clearing_file.matched_count IS 'Records matched to authorisations';
+COMMENT ON COLUMN clearing_file.unmatched_count IS 'Records not matched';
+COMMENT ON COLUMN clearing_file.exception_count IS 'Records matched with an amount outside tolerance or failed to post';
 COMMENT ON COLUMN clearing_file.total_amount IS 'Total amount';
 COMMENT ON COLUMN clearing_file.currency IS 'Currency';
 COMMENT ON COLUMN clearing_file.status IS 'Status';
@@ -70,6 +80,7 @@ COMMENT ON COLUMN clearing_file.custom_field_3 IS 'Tenant-defined custom field 3
 COMMENT ON COLUMN clearing_file.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN clearing_file.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_clearing_file_tenant ON clearing_file (tenant_id, created_at);
+CREATE INDEX ix_clearing_file_card_program_id ON clearing_file (card_program_id);
 ALTER TABLE clearing_file ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON clearing_file USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_clearing_file_touch BEFORE UPDATE ON clearing_file FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -82,15 +93,22 @@ CREATE TABLE clearing_record (
   created_by                   varchar(64),
   clearing_file_id             uuid NOT NULL REFERENCES clearing_file(id),
   record_type                  varchar(40) NOT NULL CHECK (record_type IN ('PRESENTMENT', 'REFUND', 'REVERSAL', 'CHARGEBACK', 'REPRESENTMENT', 'FEE_COLLECTION', 'FUNDS_DISBURSEMENT')),
+  scheme                       varchar(40) CHECK (scheme IN ('VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY', 'JCB', 'DISCOVER', 'RUPAY', 'ELO', 'LOCAL')),
   card_id                      uuid,
+  card_program_id              uuid,
   card_authorization_id        uuid,
+  hold_id                      uuid,
   match_status                 varchar(40) NOT NULL CHECK (match_status IN ('MATCHED', 'FORCE_POST', 'UNMATCHED', 'EXCEPTION')),
+  match_rule                   varchar(32),
+  force_matched_from_id        uuid REFERENCES clearing_record(id),
   network_transaction_id       varchar(64),
   arn                          varchar(23),
+  rrn                          varchar(12),
   auth_code                    varchar(6),
   merchant_id                  varchar(32),
   merchant_name                varchar(64),
   mcc                          varchar(4),
+  merchant_country             char(2),
   transaction_date             date NOT NULL,
   transaction_amount           numeric(28,8) NOT NULL,
   transaction_currency         char(3) NOT NULL,
@@ -98,16 +116,20 @@ CREATE TABLE clearing_record (
   billing_currency             char(3) NOT NULL,
   settlement_amount            numeric(28,8) NOT NULL,
   settlement_currency          char(3) NOT NULL,
+  authorized_amount            numeric(28,8),
+  adjustment_amount            numeric(28,8),
   interchange_amount           numeric(28,8),
   interchange_rate_code        varchar(16),
   scheme_fee_amount            numeric(28,8),
   journal_entry_id             uuid,
+  exception_reason             varchar(255),
   raw                          jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_clearing_record_force_matched_from_id UNIQUE (tenant_id, force_matched_from_id)
 );
 COMMENT ON TABLE clearing_record IS 'One clearing record (presentment, refund, chargeback, fee). Append-only.';
 COMMENT ON COLUMN clearing_record.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -116,15 +138,22 @@ COMMENT ON COLUMN clearing_record.created_at IS 'Creation time';
 COMMENT ON COLUMN clearing_record.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN clearing_record.clearing_file_id IS 'File';
 COMMENT ON COLUMN clearing_record.record_type IS 'Record type';
+COMMENT ON COLUMN clearing_record.scheme IS 'Scheme';
 COMMENT ON COLUMN clearing_record.card_id IS 'Card';
+COMMENT ON COLUMN clearing_record.card_program_id IS 'Program';
 COMMENT ON COLUMN clearing_record.card_authorization_id IS 'Matched authorisation';
+COMMENT ON COLUMN clearing_record.hold_id IS 'Ledger hold captured';
 COMMENT ON COLUMN clearing_record.match_status IS 'Match result';
+COMMENT ON COLUMN clearing_record.match_rule IS 'NETWORK_TRANSACTION_ID, AUTH_CODE, RRN, FORCE';
+COMMENT ON COLUMN clearing_record.force_matched_from_id IS 'Unmatched record this one resolves (force match)';
 COMMENT ON COLUMN clearing_record.network_transaction_id IS 'Scheme transaction id';
 COMMENT ON COLUMN clearing_record.arn IS 'Acquirer reference number';
+COMMENT ON COLUMN clearing_record.rrn IS 'Retrieval reference number';
 COMMENT ON COLUMN clearing_record.auth_code IS 'Approval code';
 COMMENT ON COLUMN clearing_record.merchant_id IS 'Merchant id';
 COMMENT ON COLUMN clearing_record.merchant_name IS 'Merchant name';
 COMMENT ON COLUMN clearing_record.mcc IS 'MCC';
+COMMENT ON COLUMN clearing_record.merchant_country IS 'Merchant country';
 COMMENT ON COLUMN clearing_record.transaction_date IS 'Transaction date';
 COMMENT ON COLUMN clearing_record.transaction_amount IS 'Amount in transaction currency';
 COMMENT ON COLUMN clearing_record.transaction_currency IS 'Transaction currency';
@@ -132,10 +161,13 @@ COMMENT ON COLUMN clearing_record.billing_amount IS 'Amount in billing currency'
 COMMENT ON COLUMN clearing_record.billing_currency IS 'Billing currency';
 COMMENT ON COLUMN clearing_record.settlement_amount IS 'Amount in settlement currency';
 COMMENT ON COLUMN clearing_record.settlement_currency IS 'Settlement currency';
+COMMENT ON COLUMN clearing_record.authorized_amount IS 'Billing amount of the matched authorisation';
+COMMENT ON COLUMN clearing_record.adjustment_amount IS 'Cleared minus authorised amount, posted as an adjustment';
 COMMENT ON COLUMN clearing_record.interchange_amount IS 'Interchange (issuer income or cost)';
 COMMENT ON COLUMN clearing_record.interchange_rate_code IS 'Interchange program / rate designator';
 COMMENT ON COLUMN clearing_record.scheme_fee_amount IS 'Scheme fees';
 COMMENT ON COLUMN clearing_record.journal_entry_id IS 'Ledger posting';
+COMMENT ON COLUMN clearing_record.exception_reason IS 'Why the record is unmatched or an exception';
 COMMENT ON COLUMN clearing_record.raw IS 'Parsed record (sensitive fields removed)';
 COMMENT ON COLUMN clearing_record.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN clearing_record.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -145,9 +177,12 @@ COMMENT ON COLUMN clearing_record.custom_field_5 IS 'Tenant-defined custom field
 CREATE INDEX ix_clearing_record_tenant ON clearing_record (tenant_id, created_at);
 CREATE INDEX ix_clearing_record_clearing_file_id ON clearing_record (clearing_file_id);
 CREATE INDEX ix_clearing_record_card_id ON clearing_record (card_id);
+CREATE INDEX ix_clearing_record_card_program_id ON clearing_record (card_program_id);
 CREATE INDEX ix_clearing_record_card_authorization_id ON clearing_record (card_authorization_id);
+CREATE INDEX ix_clearing_record_hold_id ON clearing_record (hold_id);
 CREATE INDEX ix_clearing_record_network_transaction_id ON clearing_record (network_transaction_id);
 CREATE INDEX ix_clearing_record_arn ON clearing_record (arn);
+CREATE INDEX ix_clearing_record_rrn ON clearing_record (rrn);
 CREATE INDEX ix_clearing_record_journal_entry_id ON clearing_record (journal_entry_id);
 ALTER TABLE clearing_record ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON clearing_record USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -166,6 +201,7 @@ CREATE TABLE card_settlement_record (
   card_program_id              uuid,
   settlement_date              date NOT NULL,
   currency                     char(3) NOT NULL,
+  transaction_count            integer NOT NULL DEFAULT 0,
   gross_purchases              numeric(28,8) NOT NULL DEFAULT 0,
   gross_refunds                numeric(28,8) NOT NULL DEFAULT 0,
   chargebacks                  numeric(28,8) NOT NULL DEFAULT 0,
@@ -175,6 +211,8 @@ CREATE TABLE card_settlement_record (
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'PAID', 'DISPUTED')),
   journal_entry_id             uuid,
   recon_reference              varchar(64),
+  confirmed_at                 timestamptz,
+  confirmed_by                 varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -194,6 +232,7 @@ COMMENT ON COLUMN card_settlement_record.scheme IS 'Scheme';
 COMMENT ON COLUMN card_settlement_record.card_program_id IS 'Program (empty = all)';
 COMMENT ON COLUMN card_settlement_record.settlement_date IS 'Settlement date';
 COMMENT ON COLUMN card_settlement_record.currency IS 'Settlement currency';
+COMMENT ON COLUMN card_settlement_record.transaction_count IS 'Records included';
 COMMENT ON COLUMN card_settlement_record.gross_purchases IS 'Purchases';
 COMMENT ON COLUMN card_settlement_record.gross_refunds IS 'Refunds';
 COMMENT ON COLUMN card_settlement_record.chargebacks IS 'Chargebacks';
@@ -203,6 +242,8 @@ COMMENT ON COLUMN card_settlement_record.net_amount IS 'Net position (positive =
 COMMENT ON COLUMN card_settlement_record.status IS 'Status';
 COMMENT ON COLUMN card_settlement_record.journal_entry_id IS 'Settlement posting';
 COMMENT ON COLUMN card_settlement_record.recon_reference IS 'Bank statement reference';
+COMMENT ON COLUMN card_settlement_record.confirmed_at IS 'Confirmation time';
+COMMENT ON COLUMN card_settlement_record.confirmed_by IS 'Principal that confirmed';
 COMMENT ON COLUMN card_settlement_record.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_settlement_record.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_settlement_record.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -222,6 +263,7 @@ CREATE TABLE card_fee (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   card_id                      uuid NOT NULL,
+  ledger_account_id            uuid,
   fee_type                     varchar(40) NOT NULL CHECK (fee_type IN ('ISSUANCE', 'REPLACEMENT', 'MONTHLY', 'ANNUAL', 'ATM_WITHDRAWAL', 'FX_MARKUP', 'CROSS_BORDER', 'EXPRESS_SHIPPING', 'INACTIVITY', 'LATE_PAYMENT', 'CASH_ADVANCE', 'INTERCHANGE_INCOME', 'SCHEME_FEE')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
@@ -230,12 +272,14 @@ CREATE TABLE card_fee (
   clearing_record_id           uuid REFERENCES clearing_record(id),
   journal_entry_id             uuid,
   waived                       boolean NOT NULL DEFAULT false,
+  waives_fee_id                uuid REFERENCES card_fee(id),
   description                  varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_card_fee_waives_fee_id UNIQUE (tenant_id, waives_fee_id)
 );
 COMMENT ON TABLE card_fee IS 'Fee charged to a cardholder or interchange earned, linked to the posting';
 COMMENT ON COLUMN card_fee.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -243,6 +287,7 @@ COMMENT ON COLUMN card_fee.tenant_id IS 'Owning tenant; enforced by row-level se
 COMMENT ON COLUMN card_fee.created_at IS 'Creation time';
 COMMENT ON COLUMN card_fee.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN card_fee.card_id IS 'Card';
+COMMENT ON COLUMN card_fee.ledger_account_id IS 'Cardholder account charged (resolved from the card when empty)';
 COMMENT ON COLUMN card_fee.fee_type IS 'Fee type';
 COMMENT ON COLUMN card_fee.amount IS 'Amount';
 COMMENT ON COLUMN card_fee.currency IS 'Currency';
@@ -250,7 +295,8 @@ COMMENT ON COLUMN card_fee.tax_amount IS 'Tax on the fee';
 COMMENT ON COLUMN card_fee.card_authorization_id IS 'Related authorisation';
 COMMENT ON COLUMN card_fee.clearing_record_id IS 'Related clearing record';
 COMMENT ON COLUMN card_fee.journal_entry_id IS 'Ledger posting';
-COMMENT ON COLUMN card_fee.waived IS 'Waived';
+COMMENT ON COLUMN card_fee.waived IS 'This row is a waiver (compensating entry)';
+COMMENT ON COLUMN card_fee.waives_fee_id IS 'Fee this row waives';
 COMMENT ON COLUMN card_fee.description IS 'Narrative';
 COMMENT ON COLUMN card_fee.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_fee.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -259,6 +305,7 @@ COMMENT ON COLUMN card_fee.custom_field_4 IS 'Tenant-defined custom field 4; lab
 COMMENT ON COLUMN card_fee.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_card_fee_tenant ON card_fee (tenant_id, created_at);
 CREATE INDEX ix_card_fee_card_id ON card_fee (card_id);
+CREATE INDEX ix_card_fee_ledger_account_id ON card_fee (ledger_account_id);
 CREATE INDEX ix_card_fee_card_authorization_id ON card_fee (card_authorization_id);
 CREATE INDEX ix_card_fee_clearing_record_id ON card_fee (clearing_record_id);
 CREATE INDEX ix_card_fee_journal_entry_id ON card_fee (journal_entry_id);

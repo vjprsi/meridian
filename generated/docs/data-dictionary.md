@@ -960,20 +960,30 @@ API: /v1/card-programs · Requirements: CRD-01
 | program_type | varchar(40) (CardProgramType) | no |  | program_type | Program segment |
 | funding_model | varchar(40) (CardFundingModel) | no |  | funding_model | How authorisations are funded |
 | bin | varchar(11) | no |  | bin | Issuer BIN (6 or 8 digits) |
-| bin_range_start | varchar(19) | no |  | bin_range_start | First PAN prefix in the range |
-| bin_range_end | varchar(19) | no |  | bin_range_end | Last PAN prefix in the range |
-| pan_length | integer | no |  | pan_length | PAN length |
+| bin_range_start | varchar(19) | no |  | bin_range_start | First PAN prefix in the account range (starts with the BIN) |
+| bin_range_end | varchar(19) | no |  | bin_range_end | Last PAN prefix in the account range (same length as the start) |
+| pan_length | integer | no |  | pan_length | PAN length (13-19, including the Luhn check digit) |
 | currency | char(3) | no |  | currency | Billing currency |
+| country | char(2) | yes |  | country | Issuing country; a merchant in another country makes the transaction international |
 | sponsor_bank | varchar(120) | yes |  | sponsor_bank | Sponsor / BIN sponsor bank |
 | processor_member_id | varchar(32) | yes |  | processor_member_id | Scheme member / ICA / BID |
-| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Program settlement / funding account |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Program settlement / funding account (JIT holds are placed here) |
 | jit_webhook_url | varchar(500) | yes |  | jit_webhook_url | JIT funding endpoint of the client |
 | jit_timeout_ms | integer | no |  | jit_timeout_ms | JIT response budget in milliseconds |
 | stand_in_enabled | boolean | no |  | stand_in_enabled | Approve under stand-in rules when the core is unavailable |
 | stand_in_max_amount | numeric(28,8) | yes |  | stand_in_max_amount | Maximum amount approved in stand-in |
-| default_controls | jsonb | yes |  | default_controls | Controls applied to every new card |
-| status | varchar(40) (CardProgramStatus) | no |  | status | Lifecycle status |
+| fraud_policy | varchar(40) (CardFraudPolicy) | no |  | fraud_policy | Decision when fraud scoring times out or fails |
+| fraud_timeout_ms | integer | no |  | fraud_timeout_ms | Fraud scoring budget in milliseconds |
+| fraud_decline_score | integer | no |  | fraud_decline_score | Decline when the fraud score is at or above this value (0-1000) |
+| fx_markup_rate | numeric(18,10) | no |  | fx_markup_rate | Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2% |
+| auth_hold_days | integer | no |  | auth_hold_days | Days before an uncleared authorisation hold expires |
+| renewal_window_days | integer | no |  | renewal_window_days | Days before expiry a card is reported as expiring |
+| default_controls | jsonb | yes |  | default_controls | Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window, timezone} |
+| status | varchar(40) (CardProgramStatus) | no |  | status (read-only) | Lifecycle status (changed by certify / activate / suspend) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the current status |
+| certified_at | timestamptz | yes |  | certified_at (read-only) | Time certification started |
 | launched_at | timestamptz | yes |  | launched_at (read-only) | Go-live time |
+| activated_by | varchar(64) | yes |  | activated_by (read-only) | Principal that approved go-live (must differ from the creator) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1004,14 +1014,14 @@ API: /v1/card-products · Requirements: CRD-01, CRD-02
 | card_design_id | varchar(64) | yes |  | card_design_id | Artwork / design reference |
 | plastic_type | varchar(32) | yes |  | plastic_type | PVC, RECYCLED_PVC, METAL |
 | card_bureau_id | uuid | yes | FK → card_bureau | card_bureau_id | Default bureau for physical cards |
-| expiry_years | integer | no |  | expiry_years | Validity in years |
+| expiry_years | integer | no |  | expiry_years | Validity in years (1-10) |
 | pin_policy | varchar(40) (CardPinPolicy) | no |  | pin_policy | PIN requirement |
 | contactless_enabled | boolean | no |  | contactless_enabled | Contactless allowed |
 | atm_enabled | boolean | no |  | atm_enabled | ATM withdrawals allowed |
 | ecom_enabled | boolean | no |  | ecom_enabled | E-commerce allowed |
 | international_enabled | boolean | no |  | international_enabled | Cross-border allowed |
 | max_cards_per_customer | integer | no |  | max_cards_per_customer | Active card cap per customer |
-| status | varchar(40) (CardProductStatus) | no |  | status | Status |
+| status | varchar(40) (CardProductStatus) | no |  | status (read-only) | Status (changed by activate / retire) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1038,7 +1048,7 @@ API: /v1/card-bureaus · Requirements: CRD-02
 | endpoint | varchar(500) | yes |  | endpoint | SFTP host or API base URL |
 | credentials_ref | varchar(255) | yes |  | — | Vault path for credentials secret |
 | file_format | varchar(32) | yes |  | file_format | Personalisation file format |
-| supported_countries | jsonb | yes |  | supported_countries | Countries it ships to |
+| supported_countries | jsonb | yes |  | supported_countries | Countries it ships to (empty = all) |
 | cutoff_time | varchar(5) | yes |  | cutoff_time | Daily file cut-off HH:MM |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -1072,17 +1082,17 @@ API: /v1/cards · Requirements: CRD-02, CRD-07
 | last4 | varchar(4) | no |  | last4 (read-only) | Last four digits |
 | expiry_month | integer | no |  | expiry_month (read-only) | Expiry month 1-12 |
 | expiry_year | integer | no |  | expiry_year (read-only) | Expiry year (4 digits) |
-| sequence_number | integer | no |  | sequence_number (read-only) | PAN sequence number (PSN) |
+| sequence_number | integer | no |  | sequence_number (read-only) | PAN sequence number (PSN), incremented on renewal |
 | cardholder_name | varchar(26) | no |  | cardholder_name | Name as embossed PII |
 | form_factor | varchar(40) (CardFormFactor) | no |  | form_factor | Virtual or physical |
-| status | varchar(40) (CardStatus) | no |  | status | Lifecycle status |
-| status_reason | varchar(255) | yes |  | status_reason | Reason for the current status |
+| status | varchar(40) (CardStatus) | no |  | status (read-only) | Lifecycle status (changed by actions only) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the current status |
 | linked_account_type | varchar(40) (CardLinkedAccountType) | no |  | linked_account_type | Kind of funding account |
 | ledger_account_id | uuid | no | ref → ledger_account | ledger_account_id | Ledger account authorisations hold and post against |
 | deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Linked deposit account (debit cards) |
 | wallet_id | uuid | yes | ref → wallet | wallet_id | Linked wallet (prepaid / wallet cards) |
 | credit_line_id | uuid | yes | ref → credit_line | credit_line_id | Linked credit line (credit cards) |
-| replaces_card_id | uuid | yes | FK → card | replaces_card_id | Card this one replaced |
+| replaces_card_id | uuid | yes | FK → card | replaces_card_id (read-only) | Card this one replaced |
 | pin_set | boolean | no |  | pin_set (read-only) | Whether a PIN has been set |
 | pin_try_count | integer | no |  | pin_try_count (read-only) | Consecutive wrong PIN attempts |
 | activated_at | timestamptz | yes |  | activated_at (read-only) | Activation time |
@@ -1137,7 +1147,7 @@ API: /v1/card-orders · Requirements: CRD-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_id | uuid | no | FK → card | card_id | Card being produced |
 | card_bureau_id | uuid | no | FK → card_bureau | card_bureau_id | Bureau |
-| status | varchar(40) (CardOrderStatus) | no |  | status | Order status |
+| status | varchar(40) (CardOrderStatus) | no |  | status (read-only) | Order status (changed by actions and bureau callbacks) |
 | shipping_method | varchar(40) (CardShippingMethod) | no |  | shipping_method | Shipping method |
 | recipient_name | varchar(120) | no |  | recipient_name | Recipient PII |
 | address_line1 | varchar(255) | no |  | address_line1 | Address line 1 PII |
@@ -1150,10 +1160,11 @@ API: /v1/card-orders · Requirements: CRD-02
 | bureau_reference | varchar(64) | yes |  | bureau_reference (read-only) | Bureau batch / job reference |
 | tracking_number | varchar(64) | yes |  | tracking_number (read-only) | Courier tracking number |
 | carrier | varchar(64) | yes |  | carrier (read-only) | Courier |
+| reship_of_order_id | uuid | yes | FK → card_order | reship_of_order_id (read-only) | Returned order this one reships |
 | sent_to_bureau_at | timestamptz | yes |  | sent_to_bureau_at (read-only) | File / API submission time |
 | shipped_at | timestamptz | yes |  | shipped_at (read-only) | Shipped time |
 | delivered_at | timestamptz | yes |  | delivered_at (read-only) | Delivered time |
-| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure or cancellation reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1182,7 +1193,7 @@ API: /v1/card-controls · Requirements: CRD-04
 | values | jsonb | yes |  | values | MCCs, merchant ids, countries, currencies or channels |
 | max_amount | numeric(28,8) | yes |  | max_amount | Maximum transaction amount for AMOUNT_MAX |
 | currency | char(3) | yes |  | currency | Currency of max_amount |
-| time_window | jsonb | yes |  | time_window | Allowed days and hours for TIME_WINDOW |
+| time_window | jsonb | yes |  | time_window | Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM} |
 | timezone | varchar(64) | yes |  | timezone | IANA timezone for time windows |
 | is_active | boolean | no |  | is_active | Active |
 | valid_from | timestamptz | yes |  | valid_from | Start |
@@ -1215,7 +1226,7 @@ API: /v1/card-spend-limits · Requirements: CRD-04, LIM-01
 | max_amount | numeric(28,8) | yes |  | max_amount | Maximum cumulative amount in the period |
 | max_count | integer | yes |  | max_count | Maximum number of transactions in the period |
 | currency | char(3) | no |  | currency | Currency |
-| used_amount | numeric(28,8) | no |  | used_amount (read-only) | Amount used in the current period |
+| used_amount | numeric(28,8) | no |  | used_amount (read-only) | Amount used in the current period (from card-authorization-service counters) |
 | used_count | integer | no |  | used_count (read-only) | Transactions in the current period |
 | period_start | timestamptz | yes |  | period_start (read-only) | Start of the current period |
 | is_active | boolean | no |  | is_active | Active |
@@ -1265,11 +1276,12 @@ API: /v1/card-replacements · Requirements: CRD-07
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | old_card_id | uuid | no | FK → card | old_card_id | Card being replaced |
-| new_card_id | uuid | yes | FK → card | new_card_id | Replacement card |
+| new_card_id | uuid | yes | FK → card | new_card_id (read-only) | Replacement card |
 | reason | varchar(40) (CardReplacementReason) | no |  | reason | Reason |
 | keep_pan | boolean | no |  | keep_pan | Reissue with the same PAN (new expiry) |
-| fee_charged | boolean | no |  | fee_charged | Whether a replacement fee was charged |
-| requested_by | varchar(64) | yes |  | requested_by | Requester |
+| fee_charged | boolean | no |  | fee_charged (read-only) | Whether a replacement fee was charged |
+| fee_id | uuid | yes | ref → card_fee | fee_id (read-only) | Replacement fee charged in card-clearing-service |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Requester |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1305,7 +1317,8 @@ API: /v1/card-statement-cycles · Requirements: LND-03, CRD-01
 | closing_balance | numeric(28,8) | no |  | closing_balance (read-only) | Statement balance |
 | minimum_due | numeric(28,8) | no |  | minimum_due (read-only) | Minimum payment due |
 | currency | char(3) | no |  | currency | Currency |
-| status | varchar(40) (CardStatementCycleStatus) | no |  | status | Status |
+| status | varchar(40) (CardStatementCycleStatus) | no |  | status (read-only) | Status |
+| closed_at | timestamptz | yes |  | closed_at (read-only) | Time the cycle was closed |
 | statement_document_id | uuid | yes | ref → document | statement_document_id | Generated statement PDF |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1333,13 +1346,19 @@ API: /v1/card-vault · Requirements: CRD-07
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| pan_token | varchar(64) | no | UQ | pan_token | Token of the PAN |
-| pan_fingerprint | varchar(64) | no |  | pan_fingerprint | Keyed HMAC of the PAN for lookup |
-| pan_encrypted | bytea | no |  | — | PAN encrypted with the data encryption key secret |
+| pan_token | varchar(64) | no | UQ | pan_token (read-only) | Random token of the PAN (not derived from it) |
+| pan_fingerprint | varchar(64) | no |  | pan_fingerprint (read-only) | Keyed HMAC-SHA256 of the PAN for de-duplication and lookup |
+| pan_encrypted | bytea | no |  | — | PAN encrypted (AES-256-GCM) with the data encryption key secret |
 | cvv_encrypted | bytea | yes |  | — | CVV2 encrypted (dynamic CVV cards may leave empty) secret |
 | expiry_encrypted | bytea | no |  | — | Expiry encrypted secret |
-| dek_key_id | uuid | no | FK → card_vault_key | dek_key_id | Data encryption key used |
+| pin_encrypted | bytea | yes |  | — | PIN encrypted with the data encryption key (never returned) secret |
+| dek_key_id | uuid | no | FK → card_vault_key | dek_key_id (read-only) | Data encryption key used |
 | card_id | uuid | yes | ref → card | card_id | Card |
+| bin | varchar(11) | yes |  | bin (read-only) | BIN (first 6-8 digits; not sensitive) |
+| last4 | varchar(4) | yes |  | last4 (read-only) | Last four digits |
+| pin_set | boolean | no |  | pin_set (read-only) | A PIN is stored |
+| pin_try_count | integer | no |  | pin_try_count (read-only) | Consecutive wrong PIN attempts |
+| is_active | boolean | no |  | is_active (read-only) | False once superseded by a reissue |
 | last_detokenized_at | timestamptz | yes |  | last_detokenized_at (read-only) | Last detokenisation time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1364,12 +1383,12 @@ API: /v1/card-vault/keys · Requirements: CRD-07
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | key_type | varchar(40) (CardVaultKeyType) | no |  | key_type | Key purpose |
 | hsm_key_label | varchar(128) | no |  | hsm_key_label | Label of the key inside the HSM |
-| kcv | varchar(6) | no |  | kcv | Key check value |
-| algorithm | varchar(32) | no |  | algorithm | AES-256, TDES, etc. |
-| version | integer | no |  | version | Key version |
+| kcv | varchar(6) | no |  | kcv (read-only) | Key check value (computed by the HSM) |
+| algorithm | varchar(32) | no |  | algorithm | AES-256-GCM, TDES, etc. |
+| version | integer | no |  | version (read-only) | Key version (incremented on rotation) |
 | active_from | timestamptz | no |  | active_from | Activation |
 | retire_after | timestamptz | yes |  | retire_after | Scheduled rotation |
-| is_active | boolean | no |  | is_active | Active |
+| is_active | boolean | no |  | is_active (read-only) | Active (one active key per type) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1388,11 +1407,13 @@ API: /v1/card-vault/access-logs · Requirements: CRD-07, ADM-03
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| pan_token | varchar(64) | no |  | pan_token | Token accessed |
-| purpose | varchar(32) | no |  | purpose | AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE |
+| pan_token | varchar(64) | yes |  | pan_token | Token accessed (empty when the lookup found nothing) |
+| card_id | uuid | yes | ref → card | card_id | Card accessed |
+| purpose | varchar(40) (CardVaultPurpose) | no |  | purpose | Purpose of the access |
 | caller_service | varchar(64) | no |  | caller_service | Calling workload identity |
 | actor_id | varchar(64) | yes |  | actor_id | User or customer for reveal requests |
 | success | boolean | no |  | success | Outcome |
+| failure_reason | varchar(255) | yes |  | failure_reason | Why the access failed |
 | ip_address | inet | yes |  | ip_address | Caller IP |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1421,11 +1442,11 @@ API: /v1/card-authorizations · Requirements: CRD-03, CRD-09, LED-04, FRM-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_id | uuid | no | ref → card | card_id | Card |
-| card_program_id | uuid | no | ref → card_program | card_program_id | Program |
-| customer_id | uuid | yes | ref → customer | customer_id | Cardholder |
+| card_program_id | uuid | no | ref → card_program | card_program_id (read-only) | Program (from the card) |
+| customer_id | uuid | yes | ref → customer | customer_id (read-only) | Cardholder (from the card) |
 | message_type | varchar(40) (CardAuthMessageType) | no |  | message_type | Message type |
 | mti | varchar(4) | no |  | mti | ISO 8583 message type indicator |
-| processing_code | varchar(6) | yes |  | processing_code | ISO 8583 DE3 |
+| processing_code | varchar(6) | yes |  | processing_code | ISO 8583 DE3 (00 purchase, 01 cash, 20 refund, 30 balance inquiry) |
 | stan | varchar(12) | yes |  | stan | System trace audit number (DE11) |
 | rrn | varchar(12) | yes |  | rrn | Retrieval reference number (DE37) |
 | auth_code | varchar(6) | yes |  | auth_code (read-only) | Approval code (DE38) |
@@ -1445,19 +1466,26 @@ API: /v1/card-authorizations · Requirements: CRD-03, CRD-09, LED-04, FRM-01
 | terminal_id | varchar(16) | yes |  | terminal_id | Terminal id (DE41) |
 | transaction_amount | numeric(28,8) | no |  | transaction_amount | Amount in transaction currency (DE4) |
 | transaction_currency | char(3) | no |  | transaction_currency | Transaction currency |
-| billing_amount | numeric(28,8) | no |  | billing_amount | Amount in card billing currency (DE6) |
-| billing_currency | char(3) | no |  | billing_currency | Billing currency |
+| billing_amount | numeric(28,8) | no |  | billing_amount (read-only) | Amount in card billing currency (DE6), incl. issuer FX markup |
+| billing_currency | char(3) | no |  | billing_currency (read-only) | Billing currency (program currency) |
 | settlement_amount | numeric(28,8) | yes |  | settlement_amount | Settlement amount (DE5) |
 | settlement_currency | char(3) | yes |  | settlement_currency | Settlement currency |
-| conversion_rate | numeric(18,10) | yes |  | conversion_rate | Billing conversion rate |
-| fx_markup | numeric(28,8) | yes |  | fx_markup | Issuer FX markup |
-| approved_amount | numeric(28,8) | yes |  | approved_amount (read-only) | Approved amount (partial approvals) |
+| conversion_rate | numeric(18,10) | yes |  | conversion_rate | Billing conversion rate (DE10); reference rate used when absent |
+| fx_markup | numeric(28,8) | yes |  | fx_markup (read-only) | Issuer FX markup included in billing_amount |
+| approved_amount | numeric(28,8) | yes |  | approved_amount (read-only) | Approved amount in billing currency (partial approvals) |
+| reversed_amount | numeric(28,8) | no |  | reversed_amount (read-only) | Amount reversed so far |
 | decision | varchar(40) (CardAuthDecision) | yes |  | decision (read-only) | Decision |
 | decline_reason | varchar(40) (CardDeclineReason) | yes |  | decline_reason (read-only) | Internal decline reason |
+| decline_detail | varchar(255) | yes |  | decline_detail (read-only) | Human-readable explanation of the decline |
 | status | varchar(40) (CardAuthStatus) | no |  | status (read-only) | Lifecycle status |
+| funding_source | varchar(40) (CardAuthFundingSource) | yes |  | funding_source (read-only) | How the approval was funded |
 | fraud_score | integer | yes |  | fraud_score (read-only) | Fraud score 0-1000 |
+| fraud_decision | varchar(16) | yes |  | fraud_decision (read-only) | ALLOW, REVIEW, BLOCK, STEP_UP, UNAVAILABLE |
+| fraud_score_id | uuid | yes | ref → fraud_score | fraud_score_id (read-only) | Fraud evaluation |
 | fraud_alert_id | uuid | yes | ref → fraud_alert | fraud_alert_id | Fraud alert raised |
-| hold_id | uuid | yes | ref → hold | hold_id | Ledger hold placed |
+| authorization_rule_id | uuid | yes | ref → card_authorization_rule | authorization_rule_id (read-only) | Rule that decided, if any |
+| hold_id | uuid | yes | ref → hold | hold_id (read-only) | Ledger hold placed |
+| hold_account_id | uuid | yes | ref → ledger_account | hold_account_id (read-only) | Ledger account the hold is on |
 | jit_used | boolean | no |  | jit_used (read-only) | JIT funding was called |
 | jit_result | varchar(40) (CardJitResult) | yes |  | jit_result (read-only) | JIT outcome |
 | jit_latency_ms | integer | yes |  | jit_latency_ms (read-only) | JIT round-trip latency |
@@ -1465,13 +1493,13 @@ API: /v1/card-authorizations · Requirements: CRD-03, CRD-09, LED-04, FRM-01
 | card_token_id | uuid | yes | ref → card_token | card_token_id | Network token used, if any |
 | threeds_authentication_id | uuid | yes | ref → threeds_authentication | threeds_authentication_id | 3DS authentication |
 | eci | varchar(2) | yes |  | eci | Electronic commerce indicator |
-| cvv_result | varchar(1) | yes |  | cvv_result | CVV2 verification result |
+| cvv_result | varchar(1) | yes |  | cvv_result (read-only) | CVV2 verification result (M match, N no match, P not processed) |
 | avs_result | varchar(1) | yes |  | avs_result | Address verification result |
-| pin_verified | boolean | yes |  | pin_verified | PIN verification outcome |
+| pin_verified | boolean | yes |  | pin_verified (read-only) | PIN verification outcome |
 | is_recurring | boolean | no |  | is_recurring | Recurring / credential on file |
-| is_international | boolean | no |  | is_international | Cross-border |
+| is_international | boolean | no |  | is_international (read-only) | Cross-border (merchant country differs from the program country) |
 | processing_time_ms | integer | yes |  | processing_time_ms (read-only) | End-to-end decision time inside Meridian |
-| expires_at | timestamptz | yes |  | expires_at | Time the hold auto-releases |
+| expires_at | timestamptz | yes |  | expires_at (read-only) | Time the hold auto-releases |
 | cleared_amount | numeric(28,8) | no |  | cleared_amount (read-only) | Amount cleared so far |
 | raw_message | jsonb | yes |  | raw_message | Parsed ISO 8583 fields (sensitive fields removed) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -1523,12 +1551,45 @@ API: /v1/card-stand-in-records · Requirements: CRD-09
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_authorization_id | uuid | no | FK → card_authorization | card_authorization_id | Authorisation |
+| card_id | uuid | yes | ref → card | card_id | Card |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Account the hold is replayed on |
 | amount | numeric(28,8) | no |  | amount | Amount approved in stand-in |
 | currency | char(3) | no |  | currency | Currency |
+| stand_in_reason | varchar(64) | yes |  | stand_in_reason | LEDGER_UNAVAILABLE, JIT_TIMEOUT, JIT_ERROR |
 | replayed | boolean | no |  | replayed (read-only) | Replayed to the ledger |
 | replayed_at | timestamptz | yes |  | replayed_at (read-only) | Replay time |
-| replay_result | varchar(32) | yes |  | replay_result (read-only) | POSTED, OVERDRAWN, FAILED |
-| hold_id | uuid | yes | ref → hold | hold_id | Hold created on replay |
+| replay_result | varchar(40) (CardStandInReplayResult) | yes |  | replay_result (read-only) | Outcome of the replay |
+| replay_error | varchar(255) | yes |  | replay_error (read-only) | Error of the last replay attempt |
+| hold_id | uuid | yes | ref → hold | hold_id (read-only) | Hold created on replay |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `card_velocity_counter`
+
+Spend-limit and velocity usage of a card per limit and period (updated in the authorisation transaction)
+
+API: internal only · Requirements: CRD-04, LIM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| card_id | uuid | no | ref → card | card_id | Card |
+| limit_ref | varchar(64) | no |  | limit_ref | card_spend_limit id the counter belongs to |
+| period | varchar(40) (CardLimitPeriod) | no |  | period | Limit period |
+| channel | varchar(40) (CardChannel) | no |  | channel | Channel |
+| period_start | timestamptz | no |  | period_start | Start of the period |
+| currency | char(3) | no |  | currency | Currency |
+| used_amount | numeric(28,8) | no |  | used_amount | Approved amount in the period (net of reversals) |
+| used_count | integer | no |  | used_count | Approved transactions in the period |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1553,7 +1614,7 @@ API: /v1/card-authorization-rules · Requirements: CRD-03, CRD-04, FRM-01
 | card_program_id | uuid | yes | ref → card_program | card_program_id | Program (empty = all programs) |
 | name | varchar(120) | no |  | name | Rule name |
 | priority | integer | no |  | priority | Lower evaluates first |
-| condition_expression | text | no |  | condition_expression | CEL expression over the authorisation context |
+| condition_expression | text | no |  | condition_expression | Expression over the authorisation context (CEL subset: == != < <= > >= in [..] && || ! and parentheses over amount, currency, mcc, merchant_id, merchant_country, channel, pos_entry_mode, is_international, card_present, hour, fraud_score), e.g. mcc in ['7995'] && amount > 500 |
 | action | varchar(40) (CardAuthRuleAction) | no |  | action | Action when the condition is true |
 | decline_reason | varchar(40) (CardDeclineReason) | yes |  | decline_reason | Decline reason when action is DECLINE |
 | is_active | boolean | no |  | is_active | Active |
@@ -1586,22 +1647,28 @@ API: /v1/card-tokens · Requirements: CRD-05
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_id | uuid | no | ref → card | card_id | Card |
+| customer_id | uuid | yes | ref → customer | customer_id (read-only) | Cardholder (from the card) |
 | token_requestor | varchar(40) (CardTokenRequestor) | no |  | token_requestor | Wallet or token requestor |
 | token_requestor_id | varchar(16) | yes |  | token_requestor_id | Scheme token requestor id |
-| network_token_ref | varchar(64) | no | UQ | network_token_ref | Scheme token reference (TUR / token id) |
+| network_token_ref | varchar(64) | no | UQ | network_token_ref (read-only) | Scheme token reference (TUR / token id) |
 | dpan_last4 | varchar(4) | yes |  | dpan_last4 (read-only) | Last four of the device PAN |
 | dpan_expiry_month | integer | yes |  | dpan_expiry_month (read-only) | Token expiry month |
 | dpan_expiry_year | integer | yes |  | dpan_expiry_year (read-only) | Token expiry year |
-| status | varchar(40) (CardTokenStatus) | no |  | status | Status |
+| status | varchar(40) (CardTokenStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the current status |
 | device_type | varchar(32) | yes |  | device_type | PHONE, WATCH, TABLET, BROWSER |
 | device_name | varchar(120) | yes |  | device_name | Device name |
 | device_id_hash | varchar(64) | yes |  | device_id_hash | Hash of the device id |
-| wallet_account_score | integer | yes |  | wallet_account_score | Wallet provider risk score |
-| device_score | integer | yes |  | device_score | Device risk score |
-| provisioning_decision | varchar(16) | yes |  | provisioning_decision (read-only) | GREEN, YELLOW, RED |
-| step_up_method | varchar(32) | yes |  | step_up_method | OTP_SMS, OTP_EMAIL, APP, CALL_CENTER |
+| wallet_account_score | integer | yes |  | wallet_account_score | Wallet provider risk score 1-5 (5 = most trusted) |
+| device_score | integer | yes |  | device_score | Device risk score 1-5 (5 = most trusted) |
+| provisioning_decision | varchar(40) (CardTokenProvisioningDecision) | yes |  | provisioning_decision (read-only) | GREEN, YELLOW or RED |
+| step_up_method | varchar(32) | yes |  | step_up_method (read-only) | OTP_SMS, OTP_EMAIL, APP, CALL_CENTER |
+| step_up_attempts | integer | no |  | step_up_attempts (read-only) | Failed step-up attempts |
+| otp_hash | varchar(128) | yes |  | — | Hash of the step-up OTP |
+| otp_expires_at | timestamptz | yes |  | — | Step-up OTP expiry |
 | merchant_name | varchar(120) | yes |  | merchant_name | Merchant for card-on-file tokens |
 | activated_at | timestamptz | yes |  | activated_at (read-only) | Activation time |
+| suspended_at | timestamptz | yes |  | suspended_at (read-only) | Last suspension time |
 | deactivated_at | timestamptz | yes |  | deactivated_at (read-only) | Deactivation time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1625,7 +1692,7 @@ API: internal only · Requirements: CRD-05
 | event_type | varchar(40) (CardTokenEventType) | no |  | event_type | Event |
 | source | varchar(16) | no |  | source | SCHEME or ISSUER |
 | reason | varchar(255) | yes |  | reason | Reason |
-| payload | jsonb | yes |  | payload | Message received or sent |
+| payload | jsonb | yes |  | payload | Message received or sent (no PAN) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1653,6 +1720,8 @@ API: /v1/threeds-authentications · Requirements: CRD-05
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_id | uuid | no | ref → card | card_id | Card |
+| customer_id | uuid | yes | ref → customer | customer_id | Cardholder |
+| card_last4 | varchar(4) | yes |  | card_last4 | Last four digits of the card |
 | acs_transaction_id | varchar(64) | no | UQ | acs_transaction_id | ACS transaction id |
 | ds_transaction_id | varchar(64) | yes |  | ds_transaction_id | Directory server transaction id |
 | threeds_server_transaction_id | varchar(64) | yes |  | threeds_server_transaction_id | 3DS server transaction id |
@@ -1662,12 +1731,16 @@ API: /v1/threeds-authentications · Requirements: CRD-05
 | mcc | varchar(4) | yes |  | mcc | MCC |
 | amount | numeric(28,8) | yes |  | amount | Purchase amount |
 | currency | char(3) | yes |  | currency | Currency |
-| risk_score | integer | yes |  | risk_score (read-only) | Issuer risk score |
+| risk_score | integer | yes |  | risk_score (read-only) | Issuer risk score 0-1000 |
+| risk_reasons | jsonb | yes |  | risk_reasons (read-only) | Factors that raised the risk score |
 | challenge_type | varchar(40) (ThreeDsChallengeType) | yes |  | challenge_type (read-only) | Challenge method used |
 | result | varchar(40) (ThreeDsResult) | no |  | result (read-only) | Outcome |
 | eci | varchar(2) | yes |  | eci (read-only) | ECI returned |
 | authentication_value | varchar(64) | yes |  | — | CAVV / AAV secret |
+| otp_hash | varchar(128) | yes |  | — | Hash of the challenge OTP |
+| challenge_expires_at | timestamptz | yes |  | challenge_expires_at (read-only) | Challenge expiry |
 | attempts | integer | no |  | attempts (read-only) | Challenge attempts |
+| decline_reason | varchar(255) | yes |  | decline_reason (read-only) | Why the authentication failed or was rejected |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | device_channel | varchar(16) | yes |  | device_channel | APP, BROWSER, 3RI |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -1697,12 +1770,17 @@ API: /v1/card-clearing/files · Requirements: CRD-06
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | scheme | varchar(40) (CardScheme) | no |  | scheme | Scheme |
-| direction | varchar(8) | no |  | direction | INCOMING or OUTGOING |
+| direction | varchar(40) (ClearingDirection) | no |  | direction | Direction |
+| file_format | varchar(40) (ClearingFileFormat) | no |  | file_format | Layout of content |
 | file_name | varchar(255) | no |  | file_name | File name |
 | file_uri | varchar(500) | no |  | file_uri (read-only) | Storage location |
-| checksum | varchar(64) | no |  | checksum (read-only) | SHA-256, rejects duplicates |
-| processing_date | date | no |  | processing_date | Scheme processing date |
+| checksum | varchar(64) | no |  | checksum (read-only) | SHA-256 of the content, rejects duplicates |
+| processing_date | date | no |  | processing_date | Scheme processing date (settlement date) |
+| card_program_id | uuid | yes | ref → card_program | card_program_id | Program the file belongs to (empty = several) |
 | record_count | integer | yes |  | record_count (read-only) | Records parsed |
+| matched_count | integer | yes |  | matched_count (read-only) | Records matched to authorisations |
+| unmatched_count | integer | yes |  | unmatched_count (read-only) | Records not matched |
+| exception_count | integer | yes |  | exception_count (read-only) | Records matched with an amount outside tolerance or failed to post |
 | total_amount | numeric(28,8) | yes |  | total_amount (read-only) | Total amount |
 | currency | char(3) | yes |  | currency | Currency |
 | status | varchar(40) (ClearingFileStatus) | no |  | status (read-only) | Status |
@@ -1727,15 +1805,22 @@ API: /v1/card-clearing/records · Requirements: CRD-06
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | clearing_file_id | uuid | no | FK → clearing_file | clearing_file_id | File |
 | record_type | varchar(40) (ClearingRecordType) | no |  | record_type | Record type |
+| scheme | varchar(40) (CardScheme) | yes |  | scheme | Scheme |
 | card_id | uuid | yes | ref → card | card_id | Card |
+| card_program_id | uuid | yes | ref → card_program | card_program_id | Program |
 | card_authorization_id | uuid | yes | ref → card_authorization | card_authorization_id | Matched authorisation |
+| hold_id | uuid | yes | ref → hold | hold_id | Ledger hold captured |
 | match_status | varchar(40) (ClearingMatchStatus) | no |  | match_status | Match result |
+| match_rule | varchar(32) | yes |  | match_rule | NETWORK_TRANSACTION_ID, AUTH_CODE, RRN, FORCE |
+| force_matched_from_id | uuid | yes | FK → clearing_record | force_matched_from_id | Unmatched record this one resolves (force match) |
 | network_transaction_id | varchar(64) | yes |  | network_transaction_id | Scheme transaction id |
 | arn | varchar(23) | yes |  | arn | Acquirer reference number |
+| rrn | varchar(12) | yes |  | rrn | Retrieval reference number |
 | auth_code | varchar(6) | yes |  | auth_code | Approval code |
 | merchant_id | varchar(32) | yes |  | merchant_id | Merchant id |
 | merchant_name | varchar(64) | yes |  | merchant_name | Merchant name |
 | mcc | varchar(4) | yes |  | mcc | MCC |
+| merchant_country | char(2) | yes |  | merchant_country | Merchant country |
 | transaction_date | date | no |  | transaction_date | Transaction date |
 | transaction_amount | numeric(28,8) | no |  | transaction_amount | Amount in transaction currency |
 | transaction_currency | char(3) | no |  | transaction_currency | Transaction currency |
@@ -1743,10 +1828,13 @@ API: /v1/card-clearing/records · Requirements: CRD-06
 | billing_currency | char(3) | no |  | billing_currency | Billing currency |
 | settlement_amount | numeric(28,8) | no |  | settlement_amount | Amount in settlement currency |
 | settlement_currency | char(3) | no |  | settlement_currency | Settlement currency |
+| authorized_amount | numeric(28,8) | yes |  | authorized_amount | Billing amount of the matched authorisation |
+| adjustment_amount | numeric(28,8) | yes |  | adjustment_amount | Cleared minus authorised amount, posted as an adjustment |
 | interchange_amount | numeric(28,8) | yes |  | interchange_amount | Interchange (issuer income or cost) |
 | interchange_rate_code | varchar(16) | yes |  | interchange_rate_code | Interchange program / rate designator |
 | scheme_fee_amount | numeric(28,8) | yes |  | scheme_fee_amount | Scheme fees |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
+| exception_reason | varchar(255) | yes |  | exception_reason | Why the record is unmatched or an exception |
 | raw | jsonb | yes |  | raw | Parsed record (sensitive fields removed) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1773,15 +1861,18 @@ API: /v1/card-clearing/settlements · Requirements: CRD-06
 | card_program_id | uuid | yes | ref → card_program | card_program_id | Program (empty = all) |
 | settlement_date | date | no |  | settlement_date | Settlement date |
 | currency | char(3) | no |  | currency | Settlement currency |
-| gross_purchases | numeric(28,8) | no |  | gross_purchases | Purchases |
-| gross_refunds | numeric(28,8) | no |  | gross_refunds | Refunds |
-| chargebacks | numeric(28,8) | no |  | chargebacks | Chargebacks |
-| interchange | numeric(28,8) | no |  | interchange | Net interchange |
-| scheme_fees | numeric(28,8) | no |  | scheme_fees | Scheme fees |
-| net_amount | numeric(28,8) | no |  | net_amount | Net position (positive = issuer pays scheme) |
-| status | varchar(40) (CardSettlementStatus) | no |  | status | Status |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Settlement posting |
-| recon_reference | varchar(64) | yes |  | recon_reference | Bank statement reference |
+| transaction_count | integer | no |  | transaction_count (read-only) | Records included |
+| gross_purchases | numeric(28,8) | no |  | gross_purchases (read-only) | Purchases |
+| gross_refunds | numeric(28,8) | no |  | gross_refunds (read-only) | Refunds |
+| chargebacks | numeric(28,8) | no |  | chargebacks (read-only) | Chargebacks |
+| interchange | numeric(28,8) | no |  | interchange (read-only) | Net interchange |
+| scheme_fees | numeric(28,8) | no |  | scheme_fees (read-only) | Scheme fees |
+| net_amount | numeric(28,8) | no |  | net_amount (read-only) | Net position (positive = issuer pays scheme) |
+| status | varchar(40) (CardSettlementStatus) | no |  | status (read-only) | Status |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Settlement posting |
+| recon_reference | varchar(64) | yes |  | recon_reference (read-only) | Bank statement reference |
+| confirmed_at | timestamptz | yes |  | confirmed_at (read-only) | Confirmation time |
+| confirmed_by | varchar(64) | yes |  | confirmed_by (read-only) | Principal that confirmed |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1801,14 +1892,16 @@ API: /v1/card-fees · Requirements: CRD-06, PRC-02
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | card_id | uuid | no | ref → card | card_id | Card |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Cardholder account charged (resolved from the card when empty) |
 | fee_type | varchar(40) (CardFeeType) | no |  | fee_type | Fee type |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
 | tax_amount | numeric(28,8) | no |  | tax_amount | Tax on the fee |
 | card_authorization_id | uuid | yes | ref → card_authorization | card_authorization_id | Related authorisation |
 | clearing_record_id | uuid | yes | FK → clearing_record | clearing_record_id | Related clearing record |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
-| waived | boolean | no |  | waived | Waived |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
+| waived | boolean | no |  | waived (read-only) | This row is a waiver (compensating entry) |
+| waives_fee_id | uuid | yes | FK → card_fee | waives_fee_id (read-only) | Fee this row waives |
 | description | varchar(255) | yes |  | description | Narrative |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1837,27 +1930,35 @@ API: /v1/card-disputes · Requirements: CRD-08
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | card_id | uuid | no | ref → card | card_id | Card |
-| customer_id | uuid | no | ref → customer | customer_id | Cardholder |
+| customer_id | uuid | yes | ref → customer | customer_id (read-only) | Cardholder (from the card) |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id (read-only) | Cardholder account (from the card) |
 | card_authorization_id | uuid | yes | ref → card_authorization | card_authorization_id | Disputed authorisation |
 | clearing_record_id | uuid | yes | ref → clearing_record | clearing_record_id | Disputed presentment |
 | category | varchar(40) (CardDisputeCategory) | no |  | category | Dispute category |
 | scheme | varchar(40) (CardScheme) | no |  | scheme | Scheme |
 | reason_code | varchar(8) | yes |  | reason_code | Scheme reason code, e.g. 10.4, 4837 |
-| stage | varchar(40) (CardDisputeStage) | no |  | stage | Scheme stage |
-| status | varchar(40) (CardDisputeStatus) | no |  | status | Status |
+| transaction_date | date | yes |  | transaction_date | Date of the disputed transaction (drives scheme time limits) |
+| stage | varchar(40) (CardDisputeStage) | no |  | stage (read-only) | Scheme stage |
+| status | varchar(40) (CardDisputeStatus) | no |  | status (read-only) | Status |
 | disputed_amount | numeric(28,8) | no |  | disputed_amount | Amount disputed |
 | currency | char(3) | no |  | currency | Currency |
+| chargeback_amount | numeric(28,8) | yes |  | chargeback_amount (read-only) | Amount charged back to the acquirer |
+| representment_amount | numeric(28,8) | yes |  | representment_amount (read-only) | Amount the merchant re-presented |
 | provisional_credit_amount | numeric(28,8) | no |  | provisional_credit_amount (read-only) | Provisional credit given |
-| provisional_credit_entry_id | uuid | yes | ref → journal_entry | provisional_credit_entry_id | Provisional credit posting |
+| provisional_credit_entry_id | uuid | yes | ref → journal_entry | provisional_credit_entry_id (read-only) | Provisional credit posting |
+| provisional_credit_reversed | boolean | no |  | provisional_credit_reversed (read-only) | Provisional credit was reversed |
 | scheme_case_id | varchar(64) | yes |  | scheme_case_id | Scheme case number |
 | customer_description | text | yes |  | customer_description | Cardholder statement PII |
-| assigned_to | varchar(64) | yes |  | assigned_to | Analyst |
-| stage_deadline | date | yes |  | stage_deadline | Deadline for the current stage |
-| regulatory_deadline | date | yes |  | regulatory_deadline | Regulation E / Z or local deadline |
-| outcome | varchar(32) | yes |  | outcome (read-only) | WON, LOST, SPLIT, WITHDRAWN |
+| assigned_to | varchar(64) | yes |  | assigned_to (read-only) | Analyst (changed by assign) |
+| stage_deadline | date | yes |  | stage_deadline (read-only) | Deadline for the current stage |
+| regulatory_deadline | date | yes |  | regulatory_deadline (read-only) | Regulation E / Z or local deadline |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Chargeback submission time |
+| outcome | varchar(40) (CardDisputeOutcome) | yes |  | outcome (read-only) | WON, LOST, SPLIT, WITHDRAWN, EXPIRED |
 | recovered_amount | numeric(28,8) | no |  | recovered_amount (read-only) | Amount recovered from the merchant |
 | written_off_amount | numeric(28,8) | no |  | written_off_amount (read-only) | Amount written off |
+| outcome_entry_id | uuid | yes | ref → journal_entry | outcome_entry_id (read-only) | Final outcome posting |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closure time |
+| suggested_reason_code | varchar(8) | yes |  | suggested_reason_code (read-only) | Reason code suggested by the copilot |
 | ai_summary | text | yes |  | ai_summary (read-only) | Copilot summary and suggested reason code |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1884,7 +1985,7 @@ API: /v1/card-dispute-evidence · Requirements: CRD-08
 | evidence_type | varchar(40) (CardDisputeEvidenceType) | no |  | evidence_type | Evidence type |
 | document_id | uuid | no | ref → document | document_id | Stored file |
 | description | varchar(500) | yes |  | description | Description |
-| submitted_to_scheme | boolean | no |  | submitted_to_scheme | Submitted to the scheme |
+| submitted_to_scheme | boolean | no |  | submitted_to_scheme (read-only) | Submitted to the scheme |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -1905,7 +2006,7 @@ API: internal only · Requirements: CRD-08
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | card_dispute_id | uuid | no | FK → card_dispute | card_dispute_id | Dispute |
-| event_type | varchar(40) | no |  | event_type | CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST, NOTE |
+| event_type | varchar(40) (CardDisputeEventType) | no |  | event_type | Event |
 | from_stage | varchar(40) (CardDisputeStage) | yes |  | from_stage | Previous stage |
 | to_stage | varchar(40) (CardDisputeStage) | yes |  | to_stage | New stage |
 | amount | numeric(28,8) | yes |  | amount | Amount involved |

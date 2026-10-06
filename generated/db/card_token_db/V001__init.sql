@@ -28,6 +28,7 @@ CREATE TABLE card_token (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   card_id                      uuid NOT NULL,
+  customer_id                  uuid,
   token_requestor              varchar(40) NOT NULL CHECK (token_requestor IN ('APPLE_PAY', 'GOOGLE_PAY', 'SAMSUNG_PAY', 'MERCHANT_COF', 'CLICK_TO_PAY', 'OTHER')),
   token_requestor_id           varchar(16),
   network_token_ref            varchar(64) NOT NULL,
@@ -35,15 +36,20 @@ CREATE TABLE card_token (
   dpan_expiry_month            integer,
   dpan_expiry_year             integer,
   status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'DECLINED')),
+  status_reason                varchar(255),
   device_type                  varchar(32),
   device_name                  varchar(120),
   device_id_hash               varchar(64),
   wallet_account_score         integer,
   device_score                 integer,
-  provisioning_decision        varchar(16),
+  provisioning_decision        varchar(40) CHECK (provisioning_decision IN ('GREEN', 'YELLOW', 'RED')),
   step_up_method               varchar(32),
+  step_up_attempts             integer NOT NULL DEFAULT 0,
+  otp_hash                     varchar(128),
+  otp_expires_at               timestamptz,
   merchant_name                varchar(120),
   activated_at                 timestamptz,
+  suspended_at                 timestamptz,
   deactivated_at               timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -61,6 +67,7 @@ COMMENT ON COLUMN card_token.updated_at IS 'Last update time';
 COMMENT ON COLUMN card_token.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN card_token.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_token.card_id IS 'Card';
+COMMENT ON COLUMN card_token.customer_id IS 'Cardholder (from the card)';
 COMMENT ON COLUMN card_token.token_requestor IS 'Wallet or token requestor';
 COMMENT ON COLUMN card_token.token_requestor_id IS 'Scheme token requestor id';
 COMMENT ON COLUMN card_token.network_token_ref IS 'Scheme token reference (TUR / token id)';
@@ -68,15 +75,20 @@ COMMENT ON COLUMN card_token.dpan_last4 IS 'Last four of the device PAN';
 COMMENT ON COLUMN card_token.dpan_expiry_month IS 'Token expiry month';
 COMMENT ON COLUMN card_token.dpan_expiry_year IS 'Token expiry year';
 COMMENT ON COLUMN card_token.status IS 'Status';
+COMMENT ON COLUMN card_token.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN card_token.device_type IS 'PHONE, WATCH, TABLET, BROWSER';
 COMMENT ON COLUMN card_token.device_name IS 'Device name';
 COMMENT ON COLUMN card_token.device_id_hash IS 'Hash of the device id';
-COMMENT ON COLUMN card_token.wallet_account_score IS 'Wallet provider risk score';
-COMMENT ON COLUMN card_token.device_score IS 'Device risk score';
-COMMENT ON COLUMN card_token.provisioning_decision IS 'GREEN, YELLOW, RED';
+COMMENT ON COLUMN card_token.wallet_account_score IS 'Wallet provider risk score 1-5 (5 = most trusted)';
+COMMENT ON COLUMN card_token.device_score IS 'Device risk score 1-5 (5 = most trusted)';
+COMMENT ON COLUMN card_token.provisioning_decision IS 'GREEN, YELLOW or RED';
 COMMENT ON COLUMN card_token.step_up_method IS 'OTP_SMS, OTP_EMAIL, APP, CALL_CENTER';
+COMMENT ON COLUMN card_token.step_up_attempts IS 'Failed step-up attempts';
+COMMENT ON COLUMN card_token.otp_hash IS 'Hash of the step-up OTP';
+COMMENT ON COLUMN card_token.otp_expires_at IS 'Step-up OTP expiry';
 COMMENT ON COLUMN card_token.merchant_name IS 'Merchant for card-on-file tokens';
 COMMENT ON COLUMN card_token.activated_at IS 'Activation time';
+COMMENT ON COLUMN card_token.suspended_at IS 'Last suspension time';
 COMMENT ON COLUMN card_token.deactivated_at IS 'Deactivation time';
 COMMENT ON COLUMN card_token.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_token.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -85,6 +97,7 @@ COMMENT ON COLUMN card_token.custom_field_4 IS 'Tenant-defined custom field 4; l
 COMMENT ON COLUMN card_token.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_card_token_tenant ON card_token (tenant_id, created_at);
 CREATE INDEX ix_card_token_card_id ON card_token (card_id);
+CREATE INDEX ix_card_token_customer_id ON card_token (customer_id);
 ALTER TABLE card_token ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_token USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_token_touch BEFORE UPDATE ON card_token FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -96,7 +109,7 @@ CREATE TABLE card_token_event (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   card_token_id                uuid NOT NULL REFERENCES card_token(id),
-  event_type                   varchar(40) NOT NULL CHECK (event_type IN ('PROVISIONING_REQUESTED', 'PROVISIONING_APPROVED', 'PROVISIONING_DECLINED', 'STEP_UP_SENT', 'ACTIVATED', 'SUSPENDED', 'RESUMED', 'DEACTIVATED', 'PAN_UPDATED')),
+  event_type                   varchar(40) NOT NULL CHECK (event_type IN ('PROVISIONING_REQUESTED', 'PROVISIONING_APPROVED', 'PROVISIONING_DECLINED', 'STEP_UP_SENT', 'STEP_UP_VERIFIED', 'STEP_UP_FAILED', 'ACTIVATED', 'SUSPENDED', 'RESUMED', 'DEACTIVATED', 'PAN_UPDATED')),
   source                       varchar(16) NOT NULL,
   reason                       varchar(255),
   payload                      jsonb,
@@ -115,7 +128,7 @@ COMMENT ON COLUMN card_token_event.card_token_id IS 'Token';
 COMMENT ON COLUMN card_token_event.event_type IS 'Event';
 COMMENT ON COLUMN card_token_event.source IS 'SCHEME or ISSUER';
 COMMENT ON COLUMN card_token_event.reason IS 'Reason';
-COMMENT ON COLUMN card_token_event.payload IS 'Message received or sent';
+COMMENT ON COLUMN card_token_event.payload IS 'Message received or sent (no PAN)';
 COMMENT ON COLUMN card_token_event.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_token_event.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_token_event.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

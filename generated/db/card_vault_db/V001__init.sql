@@ -30,9 +30,9 @@ CREATE TABLE card_vault_key (
   key_type                     varchar(40) NOT NULL CHECK (key_type IN ('PAN_DEK', 'CVV_KEY', 'PIN_KEY', 'ZPK', 'CVK', 'MDK')),
   hsm_key_label                varchar(128) NOT NULL,
   kcv                          varchar(6) NOT NULL,
-  algorithm                    varchar(32) NOT NULL,
+  algorithm                    varchar(32) NOT NULL DEFAULT 'AES-256-GCM',
   version                      integer NOT NULL DEFAULT 1,
-  active_from                  timestamptz NOT NULL,
+  active_from                  timestamptz NOT NULL DEFAULT now(),
   retire_after                 timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
@@ -51,12 +51,12 @@ COMMENT ON COLUMN card_vault_key.updated_by IS 'Principal that last updated the 
 COMMENT ON COLUMN card_vault_key.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_vault_key.key_type IS 'Key purpose';
 COMMENT ON COLUMN card_vault_key.hsm_key_label IS 'Label of the key inside the HSM';
-COMMENT ON COLUMN card_vault_key.kcv IS 'Key check value';
-COMMENT ON COLUMN card_vault_key.algorithm IS 'AES-256, TDES, etc.';
-COMMENT ON COLUMN card_vault_key.version IS 'Key version';
+COMMENT ON COLUMN card_vault_key.kcv IS 'Key check value (computed by the HSM)';
+COMMENT ON COLUMN card_vault_key.algorithm IS 'AES-256-GCM, TDES, etc.';
+COMMENT ON COLUMN card_vault_key.version IS 'Key version (incremented on rotation)';
 COMMENT ON COLUMN card_vault_key.active_from IS 'Activation';
 COMMENT ON COLUMN card_vault_key.retire_after IS 'Scheduled rotation';
-COMMENT ON COLUMN card_vault_key.is_active IS 'Active';
+COMMENT ON COLUMN card_vault_key.is_active IS 'Active (one active key per type)';
 COMMENT ON COLUMN card_vault_key.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_vault_key.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_vault_key.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -73,11 +73,13 @@ CREATE TABLE card_vault_access_log (
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
-  pan_token                    varchar(64) NOT NULL,
-  purpose                      varchar(32) NOT NULL,
+  pan_token                    varchar(64),
+  card_id                      uuid,
+  purpose                      varchar(40) NOT NULL CHECK (purpose IN ('AUTHORIZATION', 'TOKENIZATION', 'REVEAL', 'BUREAU_FILE', 'SCHEME_FILE', 'PIN_MANAGEMENT', 'LOOKUP', 'REISSUE', 'THREEDS', 'KEY_ROTATION')),
   caller_service               varchar(64) NOT NULL,
   actor_id                     varchar(64),
   success                      boolean NOT NULL,
+  failure_reason               varchar(255),
   ip_address                   inet,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -90,11 +92,13 @@ COMMENT ON COLUMN card_vault_access_log.id IS 'Unique id (UUIDv7, time-ordered)'
 COMMENT ON COLUMN card_vault_access_log.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN card_vault_access_log.created_at IS 'Creation time';
 COMMENT ON COLUMN card_vault_access_log.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN card_vault_access_log.pan_token IS 'Token accessed';
-COMMENT ON COLUMN card_vault_access_log.purpose IS 'AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE';
+COMMENT ON COLUMN card_vault_access_log.pan_token IS 'Token accessed (empty when the lookup found nothing)';
+COMMENT ON COLUMN card_vault_access_log.card_id IS 'Card accessed';
+COMMENT ON COLUMN card_vault_access_log.purpose IS 'Purpose of the access';
 COMMENT ON COLUMN card_vault_access_log.caller_service IS 'Calling workload identity';
 COMMENT ON COLUMN card_vault_access_log.actor_id IS 'User or customer for reveal requests';
 COMMENT ON COLUMN card_vault_access_log.success IS 'Outcome';
+COMMENT ON COLUMN card_vault_access_log.failure_reason IS 'Why the access failed';
 COMMENT ON COLUMN card_vault_access_log.ip_address IS 'Caller IP';
 COMMENT ON COLUMN card_vault_access_log.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_vault_access_log.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -103,6 +107,7 @@ COMMENT ON COLUMN card_vault_access_log.custom_field_4 IS 'Tenant-defined custom
 COMMENT ON COLUMN card_vault_access_log.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_card_vault_access_log_tenant ON card_vault_access_log (tenant_id, created_at);
 CREATE INDEX ix_card_vault_access_log_pan_token ON card_vault_access_log (pan_token);
+CREATE INDEX ix_card_vault_access_log_card_id ON card_vault_access_log (card_id);
 ALTER TABLE card_vault_access_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_vault_access_log USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_vault_access_log_append_only BEFORE UPDATE OR DELETE ON card_vault_access_log FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -121,8 +126,14 @@ CREATE TABLE card_data_vault (
   pan_encrypted                bytea NOT NULL,
   cvv_encrypted                bytea,
   expiry_encrypted             bytea NOT NULL,
+  pin_encrypted                bytea,
   dek_key_id                   uuid NOT NULL REFERENCES card_vault_key(id),
   card_id                      uuid,
+  bin                          varchar(11),
+  last4                        varchar(4),
+  pin_set                      boolean NOT NULL DEFAULT false,
+  pin_try_count                integer NOT NULL DEFAULT 0,
+  is_active                    boolean NOT NULL DEFAULT true,
   last_detokenized_at          timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -139,13 +150,19 @@ COMMENT ON COLUMN card_data_vault.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN card_data_vault.updated_at IS 'Last update time';
 COMMENT ON COLUMN card_data_vault.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN card_data_vault.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN card_data_vault.pan_token IS 'Token of the PAN';
-COMMENT ON COLUMN card_data_vault.pan_fingerprint IS 'Keyed HMAC of the PAN for lookup';
-COMMENT ON COLUMN card_data_vault.pan_encrypted IS 'PAN encrypted with the data encryption key [SECRET]';
+COMMENT ON COLUMN card_data_vault.pan_token IS 'Random token of the PAN (not derived from it)';
+COMMENT ON COLUMN card_data_vault.pan_fingerprint IS 'Keyed HMAC-SHA256 of the PAN for de-duplication and lookup';
+COMMENT ON COLUMN card_data_vault.pan_encrypted IS 'PAN encrypted (AES-256-GCM) with the data encryption key [SECRET]';
 COMMENT ON COLUMN card_data_vault.cvv_encrypted IS 'CVV2 encrypted (dynamic CVV cards may leave empty) [SECRET]';
 COMMENT ON COLUMN card_data_vault.expiry_encrypted IS 'Expiry encrypted [SECRET]';
+COMMENT ON COLUMN card_data_vault.pin_encrypted IS 'PIN encrypted with the data encryption key (never returned) [SECRET]';
 COMMENT ON COLUMN card_data_vault.dek_key_id IS 'Data encryption key used';
 COMMENT ON COLUMN card_data_vault.card_id IS 'Card';
+COMMENT ON COLUMN card_data_vault.bin IS 'BIN (first 6-8 digits; not sensitive)';
+COMMENT ON COLUMN card_data_vault.last4 IS 'Last four digits';
+COMMENT ON COLUMN card_data_vault.pin_set IS 'A PIN is stored';
+COMMENT ON COLUMN card_data_vault.pin_try_count IS 'Consecutive wrong PIN attempts';
+COMMENT ON COLUMN card_data_vault.is_active IS 'False once superseded by a reissue';
 COMMENT ON COLUMN card_data_vault.last_detokenized_at IS 'Last detokenisation time';
 COMMENT ON COLUMN card_data_vault.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_data_vault.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

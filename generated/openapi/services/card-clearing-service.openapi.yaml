@@ -19,7 +19,8 @@ security:
 - oauth2: []
 tags:
 - name: Clearing Files
-  description: An incoming or outgoing scheme clearing file
+  description: Upload (create) parses the file synchronously, matches presentments to authorisations, captures holds into
+    ledger postings and updates settlement positions.
 - name: Clearing Records
   description: One clearing record (presentment, refund, chargeback, fee). Append-only.
 - name: Card Settlements
@@ -59,7 +60,9 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 8
+          enum:
+          - INCOMING
+          - OUTGOING
       - name: status
         in: query
         schema:
@@ -75,6 +78,11 @@ paths:
         schema:
           type: string
           format: date
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -202,7 +210,7 @@ paths:
   /v1/card-clearing/files/{id}/reprocess:
     post:
       operationId: clearingFilesReprocess
-      summary: Re-parse and re-post a failed file
+      summary: Re-run matching and posting for the records of a failed file (records already posted are skipped)
       tags:
       - Clearing Files
       security:
@@ -336,6 +344,11 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: rrn
+        in: query
+        schema:
+          type: string
+          maxLength: 12
       - name: custom_field_1
         in: query
         schema:
@@ -420,7 +433,7 @@ paths:
   /v1/card-clearing/records/{id}/force-match:
     post:
       operationId: clearingRecordsForceMatch
-      summary: Manually match an unmatched record to an authorisation
+      summary: Manually match an unmatched record to an authorisation (appends a MATCHED record and posts it)
       tags:
       - Clearing Records
       security:
@@ -599,7 +612,7 @@ paths:
   /v1/card-clearing/settlements/{id}/confirm:
     post:
       operationId: cardSettlementsConfirm
-      summary: Confirm settlement after bank statement match
+      summary: Confirm settlement after bank statement match and post the settlement journal
       tags:
       - Card Settlements
       security:
@@ -683,6 +696,16 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: card_authorization_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: clearing_record_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -809,7 +832,7 @@ paths:
   /v1/card-fees/{id}/waive:
     post:
       operationId: cardFeesWaive
-      summary: Waive a fee with a compensating posting
+      summary: 'Waive a fee with a compensating posting (four-eyes: not by the principal that charged it)'
       tags:
       - Card Fees
       security:
@@ -1016,6 +1039,12 @@ components:
           type: string
           format: uuid
           description: Card
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account charged (resolved from the card when empty)
         fee_type:
           type: string
           enum:
@@ -1067,9 +1096,18 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+          readOnly: true
         waived:
           type: boolean
-          description: Waived
+          description: This row is a waiver (compensating entry)
+          readOnly: true
+        waives_fee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fee this row waives
+          readOnly: true
         description:
           type:
           - string
@@ -1122,6 +1160,10 @@ components:
           type: string
           format: uuid
           description: Card
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Cardholder account charged (resolved from the card when empty)
         fee_type:
           type: string
           enum:
@@ -1163,13 +1205,6 @@ components:
           type: string
           format: uuid
           description: Related clearing record
-        journal_entry_id:
-          type: string
-          format: uuid
-          description: Ledger posting
-        waived:
-          type: boolean
-          description: Waived
         description:
           type: string
           maxLength: 255
@@ -1264,42 +1299,53 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        transaction_count:
+          type: integer
+          format: int32
+          description: Records included
+          readOnly: true
         gross_purchases:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Purchases
+          readOnly: true
         gross_refunds:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Refunds
+          readOnly: true
         chargebacks:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Chargebacks
+          readOnly: true
         interchange:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net interchange
+          readOnly: true
         scheme_fees:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Scheme fees
+          readOnly: true
         net_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net position (positive = issuer pays scheme)
+          readOnly: true
         status:
           type: string
           enum:
@@ -1308,18 +1354,35 @@ components:
           - PAID
           - DISPUTED
           description: Status
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Settlement posting
+          readOnly: true
         recon_reference:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Bank statement reference
+          readOnly: true
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmation time
+          readOnly: true
+        confirmed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that confirmed
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -1358,6 +1421,7 @@ components:
       - scheme
       - settlement_date
       - currency
+      - transaction_count
       - gross_purchases
       - gross_refunds
       - chargebacks
@@ -1418,8 +1482,16 @@ components:
           description: Scheme
         direction:
           type: string
-          maxLength: 8
-          description: INCOMING or OUTGOING
+          enum:
+          - INCOMING
+          - OUTGOING
+          description: Direction
+        file_format:
+          type: string
+          enum:
+          - CSV
+          - JSON
+          description: Layout of content
         file_name:
           type: string
           maxLength: 255
@@ -1432,18 +1504,45 @@ components:
         checksum:
           type: string
           maxLength: 64
-          description: SHA-256, rejects duplicates
+          description: SHA-256 of the content, rejects duplicates
           readOnly: true
         processing_date:
           type: string
           format: date
-          description: Scheme processing date
+          description: Scheme processing date (settlement date)
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program the file belongs to (empty = several)
         record_count:
           type:
           - integer
           - 'null'
           format: int32
           description: Records parsed
+          readOnly: true
+        matched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched to authorisations
+          readOnly: true
+        unmatched_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records not matched
+          readOnly: true
+        exception_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Records matched with an amount outside tolerance or failed to post
           readOnly: true
         total_amount:
           type:
@@ -1513,6 +1612,7 @@ components:
       - row_version
       - scheme
       - direction
+      - file_format
       - file_name
       - file_uri
       - checksum
@@ -1536,8 +1636,16 @@ components:
           description: Scheme
         direction:
           type: string
-          maxLength: 8
-          description: INCOMING or OUTGOING
+          enum:
+          - INCOMING
+          - OUTGOING
+          description: Direction
+        file_format:
+          type: string
+          enum:
+          - CSV
+          - JSON
+          description: Layout of content
         file_name:
           type: string
           maxLength: 255
@@ -1545,7 +1653,11 @@ components:
         processing_date:
           type: string
           format: date
-          description: Scheme processing date
+          description: Scheme processing date (settlement date)
+        card_program_id:
+          type: string
+          format: uuid
+          description: Program the file belongs to (empty = several)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -1570,9 +1682,18 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        content:
+          type: string
+          description: 'Raw file content: CSV with a header row or a JSON array (record fields as in ClearingRecord) (write-only;
+            not stored as a column)'
+          writeOnly: true
+        records:
+          type: array
+          items: {}
+          description: Pre-parsed records instead of content (write-only; not stored as a column)
+          writeOnly: true
       required:
       - scheme
-      - direction
       - file_name
       - processing_date
     ClearingRecord:
@@ -1611,18 +1732,45 @@ components:
           - FEE_COLLECTION
           - FUNDS_DISBURSEMENT
           description: Record type
+        scheme:
+          type:
+          - string
+          - 'null'
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          description: Scheme
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card
+        card_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program
         card_authorization_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Matched authorisation
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger hold captured
         match_status:
           type: string
           enum:
@@ -1631,6 +1779,18 @@ components:
           - UNMATCHED
           - EXCEPTION
           description: Match result
+        match_rule:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: NETWORK_TRANSACTION_ID, AUTH_CODE, RRN, FORCE
+        force_matched_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Unmatched record this one resolves (force match)
         network_transaction_id:
           type:
           - string
@@ -1643,6 +1803,12 @@ components:
           - 'null'
           maxLength: 23
           description: Acquirer reference number
+        rrn:
+          type:
+          - string
+          - 'null'
+          maxLength: 12
+          description: Retrieval reference number
         auth_code:
           type:
           - string
@@ -1667,6 +1833,12 @@ components:
           - 'null'
           maxLength: 4
           description: MCC
+        merchant_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
         transaction_date:
           type: string
           format: date
@@ -1701,6 +1873,22 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Settlement currency (ISO 4217)
+        authorized_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Billing amount of the matched authorisation
+        adjustment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cleared minus authorised amount, posted as an adjustment
         interchange_amount:
           type:
           - string
@@ -1729,6 +1917,12 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting
+        exception_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the record is unmatched or an exception
         raw:
           type:
           - object

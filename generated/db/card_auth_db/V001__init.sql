@@ -30,8 +30,8 @@ CREATE TABLE card_authorization (
   card_id                      uuid NOT NULL,
   card_program_id              uuid NOT NULL,
   customer_id                  uuid,
-  message_type                 varchar(40) NOT NULL CHECK (message_type IN ('AUTHORIZATION', 'FINANCIAL', 'INCREMENTAL', 'REVERSAL', 'PARTIAL_REVERSAL', 'ADVICE', 'BALANCE_INQUIRY', 'ACCOUNT_VERIFICATION', 'REFUND_AUTH')),
-  mti                          varchar(4) NOT NULL,
+  message_type                 varchar(40) NOT NULL DEFAULT 'AUTHORIZATION' CHECK (message_type IN ('AUTHORIZATION', 'FINANCIAL', 'INCREMENTAL', 'REVERSAL', 'PARTIAL_REVERSAL', 'ADVICE', 'BALANCE_INQUIRY', 'ACCOUNT_VERIFICATION', 'REFUND_AUTH')),
+  mti                          varchar(4) NOT NULL DEFAULT '0100',
   processing_code              varchar(6),
   stan                         varchar(12),
   rrn                          varchar(12),
@@ -59,12 +59,19 @@ CREATE TABLE card_authorization (
   conversion_rate              numeric(18,10),
   fx_markup                    numeric(28,8),
   approved_amount              numeric(28,8),
+  reversed_amount              numeric(28,8) NOT NULL DEFAULT 0,
   decision                     varchar(40) CHECK (decision IN ('APPROVED', 'DECLINED', 'PARTIAL')),
-  decline_reason               varchar(40) CHECK (decline_reason IN ('INSUFFICIENT_FUNDS', 'CARD_INACTIVE', 'CARD_FROZEN', 'CARD_EXPIRED', 'INVALID_PIN', 'PIN_TRIES_EXCEEDED', 'CONTROL_MCC', 'CONTROL_MERCHANT', 'CONTROL_COUNTRY', 'CONTROL_CHANNEL', 'LIMIT_EXCEEDED', 'VELOCITY_EXCEEDED', 'FRAUD_SUSPECTED', 'JIT_DECLINED', 'JIT_TIMEOUT', 'INVALID_CVV', 'INVALID_EXPIRY', 'THREEDS_FAILED', 'SYSTEM_ERROR', 'OTHER')),
+  decline_reason               varchar(40) CHECK (decline_reason IN ('INSUFFICIENT_FUNDS', 'CARD_INACTIVE', 'CARD_FROZEN', 'CARD_EXPIRED', 'INVALID_PIN', 'PIN_TRIES_EXCEEDED', 'CONTROL_MCC', 'CONTROL_MERCHANT', 'CONTROL_COUNTRY', 'CONTROL_CHANNEL', 'LIMIT_EXCEEDED', 'VELOCITY_EXCEEDED', 'FRAUD_SUSPECTED', 'JIT_DECLINED', 'JIT_TIMEOUT', 'INVALID_CVV', 'INVALID_EXPIRY', 'THREEDS_FAILED', 'SYSTEM_ERROR', 'OTHER', 'CARD_LOST', 'CARD_STOLEN', 'CARD_BLOCKED', 'PROGRAM_SUSPENDED', 'RULE_DECLINED', 'CONTROL_AMOUNT', 'CONTROL_TIME', 'CONTROL_CURRENCY', 'ORIGINAL_NOT_FOUND')),
+  decline_detail               varchar(255),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'DECLINED', 'REVERSED', 'PARTIALLY_REVERSED', 'EXPIRED', 'CLEARED', 'PARTIALLY_CLEARED')),
+  funding_source               varchar(40) CHECK (funding_source IN ('LEDGER_HOLD', 'JIT', 'STAND_IN', 'NONE')),
   fraud_score                  integer,
+  fraud_decision               varchar(16),
+  fraud_score_id               uuid,
   fraud_alert_id               uuid,
+  authorization_rule_id        uuid,
   hold_id                      uuid,
+  hold_account_id              uuid,
   jit_used                     boolean NOT NULL DEFAULT false,
   jit_result                   varchar(40) CHECK (jit_result IN ('APPROVED', 'DECLINED', 'TIMEOUT', 'ERROR')),
   jit_latency_ms               integer,
@@ -96,11 +103,11 @@ COMMENT ON COLUMN card_authorization.updated_at IS 'Last update time';
 COMMENT ON COLUMN card_authorization.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN card_authorization.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_authorization.card_id IS 'Card';
-COMMENT ON COLUMN card_authorization.card_program_id IS 'Program';
-COMMENT ON COLUMN card_authorization.customer_id IS 'Cardholder';
+COMMENT ON COLUMN card_authorization.card_program_id IS 'Program (from the card)';
+COMMENT ON COLUMN card_authorization.customer_id IS 'Cardholder (from the card)';
 COMMENT ON COLUMN card_authorization.message_type IS 'Message type';
 COMMENT ON COLUMN card_authorization.mti IS 'ISO 8583 message type indicator';
-COMMENT ON COLUMN card_authorization.processing_code IS 'ISO 8583 DE3';
+COMMENT ON COLUMN card_authorization.processing_code IS 'ISO 8583 DE3 (00 purchase, 01 cash, 20 refund, 30 balance inquiry)';
 COMMENT ON COLUMN card_authorization.stan IS 'System trace audit number (DE11)';
 COMMENT ON COLUMN card_authorization.rrn IS 'Retrieval reference number (DE37)';
 COMMENT ON COLUMN card_authorization.auth_code IS 'Approval code (DE38)';
@@ -120,19 +127,26 @@ COMMENT ON COLUMN card_authorization.acquirer_id IS 'Acquiring institution id (D
 COMMENT ON COLUMN card_authorization.terminal_id IS 'Terminal id (DE41)';
 COMMENT ON COLUMN card_authorization.transaction_amount IS 'Amount in transaction currency (DE4)';
 COMMENT ON COLUMN card_authorization.transaction_currency IS 'Transaction currency';
-COMMENT ON COLUMN card_authorization.billing_amount IS 'Amount in card billing currency (DE6)';
-COMMENT ON COLUMN card_authorization.billing_currency IS 'Billing currency';
+COMMENT ON COLUMN card_authorization.billing_amount IS 'Amount in card billing currency (DE6), incl. issuer FX markup';
+COMMENT ON COLUMN card_authorization.billing_currency IS 'Billing currency (program currency)';
 COMMENT ON COLUMN card_authorization.settlement_amount IS 'Settlement amount (DE5)';
 COMMENT ON COLUMN card_authorization.settlement_currency IS 'Settlement currency';
-COMMENT ON COLUMN card_authorization.conversion_rate IS 'Billing conversion rate';
-COMMENT ON COLUMN card_authorization.fx_markup IS 'Issuer FX markup';
-COMMENT ON COLUMN card_authorization.approved_amount IS 'Approved amount (partial approvals)';
+COMMENT ON COLUMN card_authorization.conversion_rate IS 'Billing conversion rate (DE10); reference rate used when absent';
+COMMENT ON COLUMN card_authorization.fx_markup IS 'Issuer FX markup included in billing_amount';
+COMMENT ON COLUMN card_authorization.approved_amount IS 'Approved amount in billing currency (partial approvals)';
+COMMENT ON COLUMN card_authorization.reversed_amount IS 'Amount reversed so far';
 COMMENT ON COLUMN card_authorization.decision IS 'Decision';
 COMMENT ON COLUMN card_authorization.decline_reason IS 'Internal decline reason';
+COMMENT ON COLUMN card_authorization.decline_detail IS 'Human-readable explanation of the decline';
 COMMENT ON COLUMN card_authorization.status IS 'Lifecycle status';
+COMMENT ON COLUMN card_authorization.funding_source IS 'How the approval was funded';
 COMMENT ON COLUMN card_authorization.fraud_score IS 'Fraud score 0-1000';
+COMMENT ON COLUMN card_authorization.fraud_decision IS 'ALLOW, REVIEW, BLOCK, STEP_UP, UNAVAILABLE';
+COMMENT ON COLUMN card_authorization.fraud_score_id IS 'Fraud evaluation';
 COMMENT ON COLUMN card_authorization.fraud_alert_id IS 'Fraud alert raised';
+COMMENT ON COLUMN card_authorization.authorization_rule_id IS 'Rule that decided, if any';
 COMMENT ON COLUMN card_authorization.hold_id IS 'Ledger hold placed';
+COMMENT ON COLUMN card_authorization.hold_account_id IS 'Ledger account the hold is on';
 COMMENT ON COLUMN card_authorization.jit_used IS 'JIT funding was called';
 COMMENT ON COLUMN card_authorization.jit_result IS 'JIT outcome';
 COMMENT ON COLUMN card_authorization.jit_latency_ms IS 'JIT round-trip latency';
@@ -140,11 +154,11 @@ COMMENT ON COLUMN card_authorization.stand_in IS 'Decided in stand-in';
 COMMENT ON COLUMN card_authorization.card_token_id IS 'Network token used, if any';
 COMMENT ON COLUMN card_authorization.threeds_authentication_id IS '3DS authentication';
 COMMENT ON COLUMN card_authorization.eci IS 'Electronic commerce indicator';
-COMMENT ON COLUMN card_authorization.cvv_result IS 'CVV2 verification result';
+COMMENT ON COLUMN card_authorization.cvv_result IS 'CVV2 verification result (M match, N no match, P not processed)';
 COMMENT ON COLUMN card_authorization.avs_result IS 'Address verification result';
 COMMENT ON COLUMN card_authorization.pin_verified IS 'PIN verification outcome';
 COMMENT ON COLUMN card_authorization.is_recurring IS 'Recurring / credential on file';
-COMMENT ON COLUMN card_authorization.is_international IS 'Cross-border';
+COMMENT ON COLUMN card_authorization.is_international IS 'Cross-border (merchant country differs from the program country)';
 COMMENT ON COLUMN card_authorization.processing_time_ms IS 'End-to-end decision time inside Meridian';
 COMMENT ON COLUMN card_authorization.expires_at IS 'Time the hold auto-releases';
 COMMENT ON COLUMN card_authorization.cleared_amount IS 'Amount cleared so far';
@@ -159,12 +173,16 @@ CREATE INDEX ix_card_authorization_card_id ON card_authorization (card_id);
 CREATE INDEX ix_card_authorization_card_program_id ON card_authorization (card_program_id);
 CREATE INDEX ix_card_authorization_customer_id ON card_authorization (customer_id);
 CREATE INDEX ix_card_authorization_rrn ON card_authorization (rrn);
+CREATE INDEX ix_card_authorization_auth_code ON card_authorization (auth_code);
 CREATE INDEX ix_card_authorization_network_transaction_id ON card_authorization (network_transaction_id);
 CREATE INDEX ix_card_authorization_parent_authorization_id ON card_authorization (parent_authorization_id);
 CREATE INDEX ix_card_authorization_merchant_id ON card_authorization (merchant_id);
 CREATE INDEX ix_card_authorization_mcc ON card_authorization (mcc);
+CREATE INDEX ix_card_authorization_fraud_score_id ON card_authorization (fraud_score_id);
 CREATE INDEX ix_card_authorization_fraud_alert_id ON card_authorization (fraud_alert_id);
+CREATE INDEX ix_card_authorization_authorization_rule_id ON card_authorization (authorization_rule_id);
 CREATE INDEX ix_card_authorization_hold_id ON card_authorization (hold_id);
+CREATE INDEX ix_card_authorization_hold_account_id ON card_authorization (hold_account_id);
 CREATE INDEX ix_card_authorization_card_token_id ON card_authorization (card_token_id);
 CREATE INDEX ix_card_authorization_threeds_authentication_id ON card_authorization (threeds_authentication_id);
 CREATE INDEX ix_card_authorization_c1 ON card_authorization (card_id, created_at);
@@ -229,11 +247,15 @@ CREATE TABLE card_stand_in_record (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   card_authorization_id        uuid NOT NULL REFERENCES card_authorization(id),
+  card_id                      uuid,
+  ledger_account_id            uuid,
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  stand_in_reason              varchar(64),
   replayed                     boolean NOT NULL DEFAULT false,
   replayed_at                  timestamptz,
-  replay_result                varchar(32),
+  replay_result                varchar(40) CHECK (replay_result IN ('POSTED', 'OVERDRAWN', 'FAILED')),
+  replay_error                 varchar(255),
   hold_id                      uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -251,11 +273,15 @@ COMMENT ON COLUMN card_stand_in_record.updated_at IS 'Last update time';
 COMMENT ON COLUMN card_stand_in_record.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN card_stand_in_record.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_stand_in_record.card_authorization_id IS 'Authorisation';
+COMMENT ON COLUMN card_stand_in_record.card_id IS 'Card';
+COMMENT ON COLUMN card_stand_in_record.ledger_account_id IS 'Account the hold is replayed on';
 COMMENT ON COLUMN card_stand_in_record.amount IS 'Amount approved in stand-in';
 COMMENT ON COLUMN card_stand_in_record.currency IS 'Currency';
+COMMENT ON COLUMN card_stand_in_record.stand_in_reason IS 'LEDGER_UNAVAILABLE, JIT_TIMEOUT, JIT_ERROR';
 COMMENT ON COLUMN card_stand_in_record.replayed IS 'Replayed to the ledger';
 COMMENT ON COLUMN card_stand_in_record.replayed_at IS 'Replay time';
-COMMENT ON COLUMN card_stand_in_record.replay_result IS 'POSTED, OVERDRAWN, FAILED';
+COMMENT ON COLUMN card_stand_in_record.replay_result IS 'Outcome of the replay';
+COMMENT ON COLUMN card_stand_in_record.replay_error IS 'Error of the last replay attempt';
 COMMENT ON COLUMN card_stand_in_record.hold_id IS 'Hold created on replay';
 COMMENT ON COLUMN card_stand_in_record.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_stand_in_record.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -263,10 +289,63 @@ COMMENT ON COLUMN card_stand_in_record.custom_field_3 IS 'Tenant-defined custom 
 COMMENT ON COLUMN card_stand_in_record.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_stand_in_record.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_card_stand_in_record_tenant ON card_stand_in_record (tenant_id, created_at);
+CREATE INDEX ix_card_stand_in_record_card_id ON card_stand_in_record (card_id);
+CREATE INDEX ix_card_stand_in_record_ledger_account_id ON card_stand_in_record (ledger_account_id);
 CREATE INDEX ix_card_stand_in_record_hold_id ON card_stand_in_record (hold_id);
 ALTER TABLE card_stand_in_record ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_stand_in_record USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_stand_in_record_touch BEFORE UPDATE ON card_stand_in_record FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- card_velocity_counter: Spend-limit and velocity usage of a card per limit and period (updated in the authorisation transaction)
+CREATE TABLE card_velocity_counter (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  card_id                      uuid NOT NULL,
+  limit_ref                    varchar(64) NOT NULL,
+  period                       varchar(40) NOT NULL CHECK (period IN ('PER_TRANSACTION', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'LIFETIME')),
+  channel                      varchar(40) NOT NULL DEFAULT 'ANY' CHECK (channel IN ('ECOM', 'POS', 'ATM', 'CONTACTLESS', 'MOTO', 'RECURRING', 'ANY')),
+  period_start                 timestamptz NOT NULL,
+  currency                     char(3) NOT NULL,
+  used_amount                  numeric(28,8) NOT NULL DEFAULT 0,
+  used_count                   integer NOT NULL DEFAULT 0,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_card_velocity_counter_1 UNIQUE (tenant_id, card_id, limit_ref, period_start)
+);
+COMMENT ON TABLE card_velocity_counter IS 'Spend-limit and velocity usage of a card per limit and period (updated in the authorisation transaction)';
+COMMENT ON COLUMN card_velocity_counter.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN card_velocity_counter.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN card_velocity_counter.created_at IS 'Creation time';
+COMMENT ON COLUMN card_velocity_counter.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN card_velocity_counter.updated_at IS 'Last update time';
+COMMENT ON COLUMN card_velocity_counter.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN card_velocity_counter.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN card_velocity_counter.card_id IS 'Card';
+COMMENT ON COLUMN card_velocity_counter.limit_ref IS 'card_spend_limit id the counter belongs to';
+COMMENT ON COLUMN card_velocity_counter.period IS 'Limit period';
+COMMENT ON COLUMN card_velocity_counter.channel IS 'Channel';
+COMMENT ON COLUMN card_velocity_counter.period_start IS 'Start of the period';
+COMMENT ON COLUMN card_velocity_counter.currency IS 'Currency';
+COMMENT ON COLUMN card_velocity_counter.used_amount IS 'Approved amount in the period (net of reversals)';
+COMMENT ON COLUMN card_velocity_counter.used_count IS 'Approved transactions in the period';
+COMMENT ON COLUMN card_velocity_counter.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN card_velocity_counter.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN card_velocity_counter.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN card_velocity_counter.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN card_velocity_counter.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_card_velocity_counter_tenant ON card_velocity_counter (tenant_id, created_at);
+CREATE INDEX ix_card_velocity_counter_card_id ON card_velocity_counter (card_id);
+ALTER TABLE card_velocity_counter ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON card_velocity_counter USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_card_velocity_counter_touch BEFORE UPDATE ON card_velocity_counter FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- card_authorization_rule: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
 CREATE TABLE card_authorization_rule (
@@ -282,7 +361,7 @@ CREATE TABLE card_authorization_rule (
   priority                     integer NOT NULL DEFAULT 100,
   condition_expression         text NOT NULL,
   action                       varchar(40) NOT NULL CHECK (action IN ('APPROVE', 'DECLINE', 'REVIEW', 'STEP_UP')),
-  decline_reason               varchar(40) CHECK (decline_reason IN ('INSUFFICIENT_FUNDS', 'CARD_INACTIVE', 'CARD_FROZEN', 'CARD_EXPIRED', 'INVALID_PIN', 'PIN_TRIES_EXCEEDED', 'CONTROL_MCC', 'CONTROL_MERCHANT', 'CONTROL_COUNTRY', 'CONTROL_CHANNEL', 'LIMIT_EXCEEDED', 'VELOCITY_EXCEEDED', 'FRAUD_SUSPECTED', 'JIT_DECLINED', 'JIT_TIMEOUT', 'INVALID_CVV', 'INVALID_EXPIRY', 'THREEDS_FAILED', 'SYSTEM_ERROR', 'OTHER')),
+  decline_reason               varchar(40) CHECK (decline_reason IN ('INSUFFICIENT_FUNDS', 'CARD_INACTIVE', 'CARD_FROZEN', 'CARD_EXPIRED', 'INVALID_PIN', 'PIN_TRIES_EXCEEDED', 'CONTROL_MCC', 'CONTROL_MERCHANT', 'CONTROL_COUNTRY', 'CONTROL_CHANNEL', 'LIMIT_EXCEEDED', 'VELOCITY_EXCEEDED', 'FRAUD_SUSPECTED', 'JIT_DECLINED', 'JIT_TIMEOUT', 'INVALID_CVV', 'INVALID_EXPIRY', 'THREEDS_FAILED', 'SYSTEM_ERROR', 'OTHER', 'CARD_LOST', 'CARD_STOLEN', 'CARD_BLOCKED', 'PROGRAM_SUSPENDED', 'RULE_DECLINED', 'CONTROL_AMOUNT', 'CONTROL_TIME', 'CONTROL_CURRENCY', 'ORIGINAL_NOT_FOUND')),
   is_active                    boolean NOT NULL DEFAULT true,
   valid_from                   timestamptz,
   valid_to                     timestamptz,
@@ -303,7 +382,7 @@ COMMENT ON COLUMN card_authorization_rule.row_version IS 'Optimistic lock versio
 COMMENT ON COLUMN card_authorization_rule.card_program_id IS 'Program (empty = all programs)';
 COMMENT ON COLUMN card_authorization_rule.name IS 'Rule name';
 COMMENT ON COLUMN card_authorization_rule.priority IS 'Lower evaluates first';
-COMMENT ON COLUMN card_authorization_rule.condition_expression IS 'CEL expression over the authorisation context';
+COMMENT ON COLUMN card_authorization_rule.condition_expression IS 'Expression over the authorisation context (CEL subset: == != < <= > >= in [..] && || ! and parentheses over amount, currency, mcc, merchant_id, merchant_country, channel, pos_entry_mode, is_international, card_present, hour, fraud_score), e.g. mcc in [''7995''] && amount > 500';
 COMMENT ON COLUMN card_authorization_rule.action IS 'Action when the condition is true';
 COMMENT ON COLUMN card_authorization_rule.decline_reason IS 'Decline reason when action is DECLINE';
 COMMENT ON COLUMN card_authorization_rule.is_active IS 'Active';

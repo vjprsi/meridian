@@ -111,6 +111,11 @@ paths:
         schema:
           type: string
           maxLength: 64
+      - name: clearing_record_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -370,10 +375,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_dispute
+  /v1/card-disputes/{id}/request-retrieval:
+    post:
+      operationId: cardDisputesRequestRetrieval
+      summary: Request a copy of the transaction receipt from the acquirer
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesRequestRetrievalRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
   /v1/card-disputes/{id}/submit-chargeback:
     post:
       operationId: cardDisputesSubmitChargeback
-      summary: Submit the chargeback to the scheme
+      summary: Submit the chargeback to the scheme (evidence is marked submitted)
       tags:
       - Card Disputes
       security:
@@ -416,10 +467,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
       x-required-scope: cards:write
       x-table: card_dispute
+  /v1/card-disputes/{id}/record-representment:
+    post:
+      operationId: cardDisputesRecordRepresentment
+      summary: Record the merchant's representment received through the scheme
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesRecordRepresentmentRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
   /v1/card-disputes/{id}/accept-representment:
     post:
       operationId: cardDisputesAcceptRepresentment
-      summary: Accept the merchant's representment
+      summary: Accept the merchant's representment (case lost; provisional credit reversed unless the issuer absorbs the loss)
       tags:
       - Card Disputes
       security:
@@ -511,7 +608,7 @@ paths:
   /v1/card-disputes/{id}/close:
     post:
       operationId: cardDisputesClose
-      summary: Close with an outcome
+      summary: 'Close with an outcome and post it (four-eyes for an issuer write-off: not by the dispute creator)'
       tags:
       - Card Disputes
       security:
@@ -640,7 +737,7 @@ paths:
   /v1/card-disputes/{id}/ai-summary:
     post:
       operationId: cardDisputesAiSummary
-      summary: Generate a copilot summary and suggested reason code
+      summary: Generate a copilot summary and suggested reason code (deterministic template)
       tags:
       - Card Disputes
       security:
@@ -661,6 +758,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("cards:write")'
+      x-required-scope: cards:write
+      x-table: card_dispute
+  /v1/card-disputes/deadline-scan:
+    post:
+      operationId: cardDisputesDeadlineScan
+      summary: Publish deadline_approaching for disputes whose stage deadline is within 3 days and expire disputes past it;
+        returns {approaching, expired}
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -933,6 +1073,11 @@ components:
           maxLength: 255
       required:
       - reason
+    CardDisputesRequestRetrievalRequest:
+      type: object
+      properties:
+        note:
+          type: string
     CardDisputesSubmitChargebackRequest:
       type: object
       properties:
@@ -947,11 +1092,28 @@ components:
       required:
       - reason_code
       - amount
+    CardDisputesRecordRepresentmentRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        note:
+          type: string
+        scheme_case_id:
+          type: string
+          maxLength: 64
+      required:
+      - amount
     CardDisputesAcceptRepresentmentRequest:
       type: object
       properties:
         note:
           type: string
+        customer_liable:
+          type: boolean
     CardDisputesEscalateRequest:
       type: object
       properties:
@@ -974,7 +1136,19 @@ components:
       properties:
         outcome:
           type: string
-          maxLength: 32
+          enum:
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - EXPIRED
+        recovered_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        customer_liable:
+          type: boolean
         note:
           type: string
       required:
@@ -1066,9 +1240,19 @@ components:
           format: uuid
           description: Card
         customer_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Cardholder
+          description: Cardholder (from the card)
+          readOnly: true
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Cardholder account (from the card)
+          readOnly: true
         card_authorization_id:
           type:
           - string
@@ -1114,6 +1298,12 @@ components:
           - 'null'
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
+        transaction_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         stage:
           type: string
           enum:
@@ -1125,6 +1315,7 @@ components:
           - ARBITRATION
           - CLOSED
           description: Scheme stage
+          readOnly: true
         status:
           type: string
           enum:
@@ -1137,6 +1328,7 @@ components:
           - WITHDRAWN
           - EXPIRED
           description: Status
+          readOnly: true
         disputed_amount:
           type: string
           format: decimal
@@ -1147,6 +1339,24 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        chargeback_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount charged back to the acquirer
+          readOnly: true
+        representment_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount the merchant re-presented
+          readOnly: true
         provisional_credit_amount:
           type: string
           format: decimal
@@ -1160,6 +1370,11 @@ components:
           - 'null'
           format: uuid
           description: Provisional credit posting
+          readOnly: true
+        provisional_credit_reversed:
+          type: boolean
+          description: Provisional credit was reversed
+          readOnly: true
         scheme_case_id:
           type:
           - string
@@ -1176,25 +1391,40 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Analyst
+          description: Analyst (changed by assign)
+          readOnly: true
         stage_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Deadline for the current stage
+          readOnly: true
         regulatory_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Regulation E / Z or local deadline
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Chargeback submission time
+          readOnly: true
         outcome:
           type:
           - string
           - 'null'
-          maxLength: 32
-          description: WON, LOST, SPLIT, WITHDRAWN
+          enum:
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - EXPIRED
+          description: WON, LOST, SPLIT, WITHDRAWN, EXPIRED
           readOnly: true
         recovered_amount:
           type: string
@@ -1210,12 +1440,26 @@ components:
           - '125.50'
           description: Amount written off
           readOnly: true
+        outcome_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Final outcome posting
+          readOnly: true
         closed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Closure time
+          readOnly: true
+        suggested_reason_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 8
+          description: Reason code suggested by the copilot
           readOnly: true
         ai_summary:
           type:
@@ -1259,7 +1503,6 @@ components:
       - updated_at
       - row_version
       - card_id
-      - customer_id
       - category
       - scheme
       - stage
@@ -1267,6 +1510,7 @@ components:
       - disputed_amount
       - currency
       - provisional_credit_amount
+      - provisional_credit_reversed
       - recovered_amount
       - written_off_amount
     CardDisputeCreate:
@@ -1276,10 +1520,6 @@ components:
           type: string
           format: uuid
           description: Card
-        customer_id:
-          type: string
-          format: uuid
-          description: Cardholder
         card_authorization_id:
           type: string
           format: uuid
@@ -1319,29 +1559,10 @@ components:
           type: string
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
-        stage:
+        transaction_date:
           type: string
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          description: Scheme stage
-        status:
-          type: string
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          description: Status
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         disputed_amount:
           type: string
           format: decimal
@@ -1352,10 +1573,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        provisional_credit_entry_id:
-          type: string
-          format: uuid
-          description: Provisional credit posting
         scheme_case_id:
           type: string
           maxLength: 64
@@ -1363,18 +1580,6 @@ components:
         customer_description:
           type: string
           description: Cardholder statement
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Analyst
-        stage_deadline:
-          type: string
-          format: date
-          description: Deadline for the current stage
-        regulatory_deadline:
-          type: string
-          format: date
-          description: Regulation E / Z or local deadline
         custom_field_1:
           type: string
           maxLength: 500
@@ -1397,7 +1602,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - card_id
-      - customer_id
       - category
       - scheme
       - disputed_amount
@@ -1409,10 +1613,6 @@ components:
           type: string
           format: uuid
           description: Card
-        customer_id:
-          type: string
-          format: uuid
-          description: Cardholder
         card_authorization_id:
           type: string
           format: uuid
@@ -1452,29 +1652,10 @@ components:
           type: string
           maxLength: 8
           description: Scheme reason code, e.g. 10.4, 4837
-        stage:
+        transaction_date:
           type: string
-          enum:
-          - INQUIRY
-          - RETRIEVAL
-          - FIRST_CHARGEBACK
-          - REPRESENTMENT
-          - PRE_ARBITRATION
-          - ARBITRATION
-          - CLOSED
-          description: Scheme stage
-        status:
-          type: string
-          enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_MERCHANT
-          - SUBMITTED
-          - WON
-          - LOST
-          - WITHDRAWN
-          - EXPIRED
-          description: Status
+          format: date
+          description: Date of the disputed transaction (drives scheme time limits)
         disputed_amount:
           type: string
           format: decimal
@@ -1485,10 +1666,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        provisional_credit_entry_id:
-          type: string
-          format: uuid
-          description: Provisional credit posting
         scheme_case_id:
           type: string
           maxLength: 64
@@ -1496,18 +1673,6 @@ components:
         customer_description:
           type: string
           description: Cardholder statement
-        assigned_to:
-          type: string
-          maxLength: 64
-          description: Analyst
-        stage_deadline:
-          type: string
-          format: date
-          description: Deadline for the current stage
-        regulatory_deadline:
-          type: string
-          format: date
-          description: Regulation E / Z or local deadline
         custom_field_1:
           type: string
           maxLength: 500
@@ -1555,9 +1720,27 @@ components:
           description: Dispute
         event_type:
           type: string
-          maxLength: 40
-          description: CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST,
-            NOTE
+          enum:
+          - CREATED
+          - ASSIGNED
+          - EVIDENCE_ADDED
+          - PROVISIONAL_CREDIT
+          - PROVISIONAL_CREDIT_REVERSED
+          - RETRIEVAL_REQUESTED
+          - CHARGEBACK_SENT
+          - REPRESENTMENT_RECEIVED
+          - REPRESENTMENT_ACCEPTED
+          - PRE_ARBITRATION_FILED
+          - ARBITRATION_FILED
+          - DEADLINE_APPROACHING
+          - EXPIRED
+          - WON
+          - LOST
+          - SPLIT
+          - WITHDRAWN
+          - AI_SUMMARY
+          - NOTE
+          description: Event
         from_stage:
           type:
           - string
@@ -1711,6 +1894,7 @@ components:
         submitted_to_scheme:
           type: boolean
           description: Submitted to the scheme
+          readOnly: true
         submitted_at:
           type:
           - string
@@ -1784,9 +1968,6 @@ components:
           type: string
           maxLength: 500
           description: Description
-        submitted_to_scheme:
-          type: boolean
-          description: Submitted to the scheme
         custom_field_1:
           type: string
           maxLength: 500

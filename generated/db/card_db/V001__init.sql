@@ -38,6 +38,7 @@ CREATE TABLE card_program (
   bin_range_end                varchar(19) NOT NULL,
   pan_length                   integer NOT NULL DEFAULT 16,
   currency                     char(3) NOT NULL,
+  country                      char(2),
   sponsor_bank                 varchar(120),
   processor_member_id          varchar(32),
   ledger_account_id            uuid,
@@ -45,9 +46,18 @@ CREATE TABLE card_program (
   jit_timeout_ms               integer NOT NULL DEFAULT 1500,
   stand_in_enabled             boolean NOT NULL DEFAULT true,
   stand_in_max_amount          numeric(28,8),
+  fraud_policy                 varchar(40) NOT NULL DEFAULT 'FAIL_OPEN' CHECK (fraud_policy IN ('FAIL_OPEN', 'FAIL_CLOSED')),
+  fraud_timeout_ms             integer NOT NULL DEFAULT 80,
+  fraud_decline_score          integer NOT NULL DEFAULT 800,
+  fx_markup_rate               numeric(18,10) NOT NULL DEFAULT 0,
+  auth_hold_days               integer NOT NULL DEFAULT 7,
+  renewal_window_days          integer NOT NULL DEFAULT 60,
   default_controls             jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'CERTIFICATION', 'ACTIVE', 'SUSPENDED', 'RETIRED')),
+  status_reason                varchar(255),
+  certified_at                 timestamptz,
   launched_at                  timestamptz,
+  activated_by                 varchar(64),
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -71,20 +81,30 @@ COMMENT ON COLUMN card_program.scheme IS 'Card scheme';
 COMMENT ON COLUMN card_program.program_type IS 'Program segment';
 COMMENT ON COLUMN card_program.funding_model IS 'How authorisations are funded';
 COMMENT ON COLUMN card_program.bin IS 'Issuer BIN (6 or 8 digits)';
-COMMENT ON COLUMN card_program.bin_range_start IS 'First PAN prefix in the range';
-COMMENT ON COLUMN card_program.bin_range_end IS 'Last PAN prefix in the range';
-COMMENT ON COLUMN card_program.pan_length IS 'PAN length';
+COMMENT ON COLUMN card_program.bin_range_start IS 'First PAN prefix in the account range (starts with the BIN)';
+COMMENT ON COLUMN card_program.bin_range_end IS 'Last PAN prefix in the account range (same length as the start)';
+COMMENT ON COLUMN card_program.pan_length IS 'PAN length (13-19, including the Luhn check digit)';
 COMMENT ON COLUMN card_program.currency IS 'Billing currency';
+COMMENT ON COLUMN card_program.country IS 'Issuing country; a merchant in another country makes the transaction international';
 COMMENT ON COLUMN card_program.sponsor_bank IS 'Sponsor / BIN sponsor bank';
 COMMENT ON COLUMN card_program.processor_member_id IS 'Scheme member / ICA / BID';
-COMMENT ON COLUMN card_program.ledger_account_id IS 'Program settlement / funding account';
+COMMENT ON COLUMN card_program.ledger_account_id IS 'Program settlement / funding account (JIT holds are placed here)';
 COMMENT ON COLUMN card_program.jit_webhook_url IS 'JIT funding endpoint of the client';
 COMMENT ON COLUMN card_program.jit_timeout_ms IS 'JIT response budget in milliseconds';
 COMMENT ON COLUMN card_program.stand_in_enabled IS 'Approve under stand-in rules when the core is unavailable';
 COMMENT ON COLUMN card_program.stand_in_max_amount IS 'Maximum amount approved in stand-in';
-COMMENT ON COLUMN card_program.default_controls IS 'Controls applied to every new card';
-COMMENT ON COLUMN card_program.status IS 'Lifecycle status';
+COMMENT ON COLUMN card_program.fraud_policy IS 'Decision when fraud scoring times out or fails';
+COMMENT ON COLUMN card_program.fraud_timeout_ms IS 'Fraud scoring budget in milliseconds';
+COMMENT ON COLUMN card_program.fraud_decline_score IS 'Decline when the fraud score is at or above this value (0-1000)';
+COMMENT ON COLUMN card_program.fx_markup_rate IS 'Issuer FX markup on cross-currency transactions, e.g. 0.02 = 2%';
+COMMENT ON COLUMN card_program.auth_hold_days IS 'Days before an uncleared authorisation hold expires';
+COMMENT ON COLUMN card_program.renewal_window_days IS 'Days before expiry a card is reported as expiring';
+COMMENT ON COLUMN card_program.default_controls IS 'Controls applied to every new card, each {control_type, channel, values, max_amount, currency, time_window, timezone}';
+COMMENT ON COLUMN card_program.status IS 'Lifecycle status (changed by certify / activate / suspend)';
+COMMENT ON COLUMN card_program.status_reason IS 'Reason for the current status';
+COMMENT ON COLUMN card_program.certified_at IS 'Time certification started';
 COMMENT ON COLUMN card_program.launched_at IS 'Go-live time';
+COMMENT ON COLUMN card_program.activated_by IS 'Principal that approved go-live (must differ from the creator)';
 COMMENT ON COLUMN card_program.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN card_program.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_program.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -134,7 +154,7 @@ COMMENT ON COLUMN card_bureau.protocol IS 'Integration method';
 COMMENT ON COLUMN card_bureau.endpoint IS 'SFTP host or API base URL';
 COMMENT ON COLUMN card_bureau.credentials_ref IS 'Vault path for credentials [SECRET]';
 COMMENT ON COLUMN card_bureau.file_format IS 'Personalisation file format';
-COMMENT ON COLUMN card_bureau.supported_countries IS 'Countries it ships to';
+COMMENT ON COLUMN card_bureau.supported_countries IS 'Countries it ships to (empty = all)';
 COMMENT ON COLUMN card_bureau.cutoff_time IS 'Daily file cut-off HH:MM';
 COMMENT ON COLUMN card_bureau.is_active IS 'Active';
 COMMENT ON COLUMN card_bureau.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -195,14 +215,14 @@ COMMENT ON COLUMN card_product.form_factors IS 'Allowed form factors, e.g. [VIRT
 COMMENT ON COLUMN card_product.card_design_id IS 'Artwork / design reference';
 COMMENT ON COLUMN card_product.plastic_type IS 'PVC, RECYCLED_PVC, METAL';
 COMMENT ON COLUMN card_product.card_bureau_id IS 'Default bureau for physical cards';
-COMMENT ON COLUMN card_product.expiry_years IS 'Validity in years';
+COMMENT ON COLUMN card_product.expiry_years IS 'Validity in years (1-10)';
 COMMENT ON COLUMN card_product.pin_policy IS 'PIN requirement';
 COMMENT ON COLUMN card_product.contactless_enabled IS 'Contactless allowed';
 COMMENT ON COLUMN card_product.atm_enabled IS 'ATM withdrawals allowed';
 COMMENT ON COLUMN card_product.ecom_enabled IS 'E-commerce allowed';
 COMMENT ON COLUMN card_product.international_enabled IS 'Cross-border allowed';
 COMMENT ON COLUMN card_product.max_cards_per_customer IS 'Active card cap per customer';
-COMMENT ON COLUMN card_product.status IS 'Status';
+COMMENT ON COLUMN card_product.status IS 'Status (changed by activate / retire)';
 COMMENT ON COLUMN card_product.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_product.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_product.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -278,10 +298,10 @@ COMMENT ON COLUMN card.bin IS 'BIN';
 COMMENT ON COLUMN card.last4 IS 'Last four digits';
 COMMENT ON COLUMN card.expiry_month IS 'Expiry month 1-12';
 COMMENT ON COLUMN card.expiry_year IS 'Expiry year (4 digits)';
-COMMENT ON COLUMN card.sequence_number IS 'PAN sequence number (PSN)';
+COMMENT ON COLUMN card.sequence_number IS 'PAN sequence number (PSN), incremented on renewal';
 COMMENT ON COLUMN card.cardholder_name IS 'Name as embossed [PII]';
 COMMENT ON COLUMN card.form_factor IS 'Virtual or physical';
-COMMENT ON COLUMN card.status IS 'Lifecycle status';
+COMMENT ON COLUMN card.status IS 'Lifecycle status (changed by actions only)';
 COMMENT ON COLUMN card.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN card.linked_account_type IS 'Kind of funding account';
 COMMENT ON COLUMN card.ledger_account_id IS 'Ledger account authorisations hold and post against';
@@ -381,6 +401,7 @@ CREATE TABLE card_order (
   bureau_reference             varchar(64),
   tracking_number              varchar(64),
   carrier                      varchar(64),
+  reship_of_order_id           uuid REFERENCES card_order(id),
   sent_to_bureau_at            timestamptz,
   shipped_at                   timestamptz,
   delivered_at                 timestamptz,
@@ -401,7 +422,7 @@ COMMENT ON COLUMN card_order.updated_by IS 'Principal that last updated the row'
 COMMENT ON COLUMN card_order.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN card_order.card_id IS 'Card being produced';
 COMMENT ON COLUMN card_order.card_bureau_id IS 'Bureau';
-COMMENT ON COLUMN card_order.status IS 'Order status';
+COMMENT ON COLUMN card_order.status IS 'Order status (changed by actions and bureau callbacks)';
 COMMENT ON COLUMN card_order.shipping_method IS 'Shipping method';
 COMMENT ON COLUMN card_order.recipient_name IS 'Recipient [PII]';
 COMMENT ON COLUMN card_order.address_line1 IS 'Address line 1 [PII]';
@@ -414,10 +435,11 @@ COMMENT ON COLUMN card_order.phone IS 'Contact phone for courier [PII]';
 COMMENT ON COLUMN card_order.bureau_reference IS 'Bureau batch / job reference';
 COMMENT ON COLUMN card_order.tracking_number IS 'Courier tracking number';
 COMMENT ON COLUMN card_order.carrier IS 'Courier';
+COMMENT ON COLUMN card_order.reship_of_order_id IS 'Returned order this one reships';
 COMMENT ON COLUMN card_order.sent_to_bureau_at IS 'File / API submission time';
 COMMENT ON COLUMN card_order.shipped_at IS 'Shipped time';
 COMMENT ON COLUMN card_order.delivered_at IS 'Delivered time';
-COMMENT ON COLUMN card_order.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN card_order.failure_reason IS 'Failure or cancellation reason';
 COMMENT ON COLUMN card_order.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_order.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_order.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -426,6 +448,8 @@ COMMENT ON COLUMN card_order.custom_field_5 IS 'Tenant-defined custom field 5; l
 CREATE INDEX ix_card_order_tenant ON card_order (tenant_id, created_at);
 CREATE INDEX ix_card_order_card_id ON card_order (card_id);
 CREATE INDEX ix_card_order_card_bureau_id ON card_order (card_bureau_id);
+CREATE INDEX ix_card_order_bureau_reference ON card_order (bureau_reference);
+CREATE INDEX ix_card_order_reship_of_order_id ON card_order (reship_of_order_id);
 ALTER TABLE card_order ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_order USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_order_touch BEFORE UPDATE ON card_order FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -472,7 +496,7 @@ COMMENT ON COLUMN card_control.channel IS 'Channel the control applies to';
 COMMENT ON COLUMN card_control.values IS 'MCCs, merchant ids, countries, currencies or channels';
 COMMENT ON COLUMN card_control.max_amount IS 'Maximum transaction amount for AMOUNT_MAX';
 COMMENT ON COLUMN card_control.currency IS 'Currency of max_amount';
-COMMENT ON COLUMN card_control.time_window IS 'Allowed days and hours for TIME_WINDOW';
+COMMENT ON COLUMN card_control.time_window IS 'Allowed days and hours for TIME_WINDOW {days: [MON..SUN], start: HH:MM, end: HH:MM}';
 COMMENT ON COLUMN card_control.timezone IS 'IANA timezone for time windows';
 COMMENT ON COLUMN card_control.is_active IS 'Active';
 COMMENT ON COLUMN card_control.valid_from IS 'Start';
@@ -530,7 +554,7 @@ COMMENT ON COLUMN card_spend_limit.channel IS 'Channel';
 COMMENT ON COLUMN card_spend_limit.max_amount IS 'Maximum cumulative amount in the period';
 COMMENT ON COLUMN card_spend_limit.max_count IS 'Maximum number of transactions in the period';
 COMMENT ON COLUMN card_spend_limit.currency IS 'Currency';
-COMMENT ON COLUMN card_spend_limit.used_amount IS 'Amount used in the current period';
+COMMENT ON COLUMN card_spend_limit.used_amount IS 'Amount used in the current period (from card-authorization-service counters)';
 COMMENT ON COLUMN card_spend_limit.used_count IS 'Transactions in the current period';
 COMMENT ON COLUMN card_spend_limit.period_start IS 'Start of the current period';
 COMMENT ON COLUMN card_spend_limit.is_active IS 'Active';
@@ -601,6 +625,7 @@ CREATE TABLE card_replacement (
   reason                       varchar(40) NOT NULL CHECK (reason IN ('LOST', 'STOLEN', 'DAMAGED', 'EXPIRING', 'FRAUD', 'NAME_CHANGE', 'OTHER')),
   keep_pan                     boolean NOT NULL DEFAULT false,
   fee_charged                  boolean NOT NULL DEFAULT false,
+  fee_id                       uuid,
   requested_by                 varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -621,6 +646,7 @@ COMMENT ON COLUMN card_replacement.new_card_id IS 'Replacement card';
 COMMENT ON COLUMN card_replacement.reason IS 'Reason';
 COMMENT ON COLUMN card_replacement.keep_pan IS 'Reissue with the same PAN (new expiry)';
 COMMENT ON COLUMN card_replacement.fee_charged IS 'Whether a replacement fee was charged';
+COMMENT ON COLUMN card_replacement.fee_id IS 'Replacement fee charged in card-clearing-service';
 COMMENT ON COLUMN card_replacement.requested_by IS 'Requester';
 COMMENT ON COLUMN card_replacement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_replacement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -630,6 +656,7 @@ COMMENT ON COLUMN card_replacement.custom_field_5 IS 'Tenant-defined custom fiel
 CREATE INDEX ix_card_replacement_tenant ON card_replacement (tenant_id, created_at);
 CREATE INDEX ix_card_replacement_old_card_id ON card_replacement (old_card_id);
 CREATE INDEX ix_card_replacement_new_card_id ON card_replacement (new_card_id);
+CREATE INDEX ix_card_replacement_fee_id ON card_replacement (fee_id);
 ALTER TABLE card_replacement ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_replacement USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_card_replacement_touch BEFORE UPDATE ON card_replacement FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -658,6 +685,7 @@ CREATE TABLE card_statement_cycle (
   minimum_due                  numeric(28,8) NOT NULL DEFAULT 0,
   currency                     char(3) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED', 'BILLED', 'PAID', 'OVERDUE')),
+  closed_at                    timestamptz,
   statement_document_id        uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -689,6 +717,7 @@ COMMENT ON COLUMN card_statement_cycle.closing_balance IS 'Statement balance';
 COMMENT ON COLUMN card_statement_cycle.minimum_due IS 'Minimum payment due';
 COMMENT ON COLUMN card_statement_cycle.currency IS 'Currency';
 COMMENT ON COLUMN card_statement_cycle.status IS 'Status';
+COMMENT ON COLUMN card_statement_cycle.closed_at IS 'Time the cycle was closed';
 COMMENT ON COLUMN card_statement_cycle.statement_document_id IS 'Generated statement PDF';
 COMMENT ON COLUMN card_statement_cycle.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_statement_cycle.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
