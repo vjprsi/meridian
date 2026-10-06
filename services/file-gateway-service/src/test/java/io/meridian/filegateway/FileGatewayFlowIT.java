@@ -96,22 +96,34 @@ class FileGatewayFlowIT {
                  "host":"%s","username":"meridian","host_key_fingerprint":"%s","remote_inbound_path":"/out",
                  "remote_outbound_path":"/in"%s}""";
         assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP,
-                ",\"credential_secret_ref\":\"vault://kv/bank\",\"password\":\"hunter2\""), 422).get("code").asString())
-                .isEqualTo("literal_credential_rejected");
-        assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP,
                 ",\"credential_secret_ref\":\"hunter2\""), 422).get("code").asString()).isEqualTo("invalid_secret_ref");
-        assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP, ""), 422).get("code").asString())
-                .isEqualTo("credential_secret_ref_required");
+        // the credential reference is required by the contract
+        assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP, ""), 400).get("code").asString())
+                .isEqualTo("validation_failed");
+        // list fields are JSON arrays; each entry must be an IP or CIDR block
+        assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP,
+                ",\"credential_secret_ref\":\"vault://kv/bank\",\"ip_allowlist\":{\"ips\":[\"10.0.0.1\"]}"), 400)
+                .get("code").asString()).isEqualTo("malformed_request");
+        assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", FP,
+                ",\"credential_secret_ref\":\"vault://kv/bank\",\"ip_allowlist\":[\"not-an-ip\"]"), 422)
+                .get("code").asString()).isNotBlank();
         assertThat(post("/v1/files/channels", base.formatted("C1", "sftp.bank.example", "abc",
                 ",\"credential_secret_ref\":\"vault://kv/bank\""), 422).get("code").asString())
                 .isEqualTo("invalid_host_key_fingerprint");
 
         JsonNode ch = post("/v1/files/channels", base.formatted("BANKX", "sftp.bank.example", FP,
-                ",\"credential_secret_ref\":\"vault://kv/files/bankx/sftp\",\"pgp_encrypt_key_ref\":\"vault://kv/files/bankx/pgp-pub\""), 201);
+                ",\"credential_secret_ref\":\"vault://kv/files/bankx/sftp\",\"pgp_encrypt_key_ref\":\"vault://kv/files/bankx/pgp-pub\","
+                        + "\"ip_allowlist\":[\"203.0.113.10\",\"198.51.100.0/24\"]"), 201);
         bank = ch.get("id").asString();
         assertThat(ch.get("port").asInt()).isEqualTo(22);
-        assertThat(ch.has("credential_secret_ref")).isFalse();
-        assertThat(ch.has("pgp_encrypt_key_ref")).isFalse();
+        // references (vault paths) are part of the contract; the secrets themselves never are
+        assertThat(ch.get("credential_secret_ref").asString()).isEqualTo("vault://kv/files/bankx/sftp");
+        assertThat(ch.get("pgp_encrypt_key_ref").asString()).isEqualTo("vault://kv/files/bankx/pgp-pub");
+        assertThat(ch.get("ip_allowlist").toString()).isEqualTo("[\"203.0.113.10\",\"198.51.100.0/24\"]");
+        HttpResponse<String> patch = send("PATCH", "/v1/files/channels/" + bank,
+                "{\"credential_secret_ref\":\"vault://kv/files/bankx/other\"}", null, TENANT, "dev-user", "1");
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(422);
+        assertThat(json.readTree(patch.body()).get("code").asString()).isEqualTo("use_rotate_credentials");
 
         downChannel = post("/v1/files/channels", """
                 {"code":"DOWN","name":"Down partner","counterparty_type":"PARTNER","protocol":"S3","direction":"OUTBOUND",
@@ -145,6 +157,8 @@ class FileGatewayFlowIT {
                 "{\"document_id\":\"" + UUID.randomUUID() + "\",\"content\":\"id,name,amount,value_date\\nx,y,z,2026\\n\"}", 200);
         assertThat(badSample.get("valid").asBoolean()).isFalse();
         assertThat(badSample.get("error_count").asInt()).isEqualTo(3);
+        assertThat(post("/v1/files/formats/" + csvFormat + "/validate-sample", "{}", 422).get("code").asString())
+                .isEqualTo("sample_required");
 
         assertThat(post("/v1/files/routes", route("Bad", "STMT_.*\\\\.csv", "no-such-service"), 422).get("code").asString())
                 .isEqualTo("unknown_service");
@@ -162,8 +176,8 @@ class FileGatewayFlowIT {
     void inboundFileIsScannedValidatedRoutedAndAcknowledged() throws Exception {
         String key = UUID.randomUUID().toString();
         String body = inbound("STMT_001.csv", CSV_OK);
-        HttpResponse<String> r = send("POST", "/v1/files/inbound", body, key, TENANT, "receiver");
-        assertThat(r.statusCode()).as(r.body()).isEqualTo(201);
+        HttpResponse<String> r = send("POST", "/v1/files/inbound/upload", body, key, TENANT, "receiver");
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
         JsonNode file = json.readTree(r.body());
         processedFile = file.get("id").asString();
         assertThat(file.get("status").asString()).isEqualTo("PROCESSED");
@@ -173,9 +187,9 @@ class FileGatewayFlowIT {
         assertThat(file.get("consumer_reference").asString()).startsWith("imp-");
         assertThat(file.get("file_format_definition_id").asString()).isEqualTo(csvFormat);
 
-        HttpResponse<String> replay = send("POST", "/v1/files/inbound", body, key, TENANT, "receiver");
+        HttpResponse<String> replay = send("POST", "/v1/files/inbound/upload", body, key, TENANT, "receiver");
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
-        JsonNode dup = post("/v1/files/inbound", inbound("STMT_001_copy.csv", CSV_OK), 409);
+        JsonNode dup = post("/v1/files/inbound/upload", inbound("STMT_001_copy.csv", CSV_OK), 409);
         assertThat(dup.get("code").asString()).isEqualTo("duplicate_file");
 
         List<String> actions = new ArrayList<>();
@@ -196,9 +210,9 @@ class FileGatewayFlowIT {
     @Test
     @Order(4)
     void eicarIsQuarantinedAndReleaseNeedsFourEyes() throws Exception {
-        HttpResponse<String> r = send("POST", "/v1/files/inbound", inbound("STMT_002.csv", VirusScanner.EICAR),
+        HttpResponse<String> r = send("POST", "/v1/files/inbound/upload", inbound("STMT_002.csv", VirusScanner.EICAR),
                 UUID.randomUUID().toString(), TENANT, "receiver");
-        assertThat(r.statusCode()).as(r.body()).isEqualTo(201);
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
         JsonNode file = json.readTree(r.body());
         String id = file.get("id").asString();
         assertThat(file.get("status").asString()).isEqualTo("QUARANTINED");
@@ -224,12 +238,12 @@ class FileGatewayFlowIT {
     @Test
     @Order(5)
     void layoutErrorsRejectAndConsumerFailuresCanBeReprocessed() throws Exception {
-        JsonNode bad = post("/v1/files/inbound", inbound("STMT_003.csv", "id,name,amount,value_date\n1,A,ten,2026-01-30\n"), 201);
+        JsonNode bad = post("/v1/files/inbound/upload", inbound("STMT_003.csv", "id,name,amount,value_date\n1,A,ten,2026-01-30\n"), 200);
         assertThat(bad.get("status").asString()).isEqualTo("REJECTED");
         assertThat(bad.get("error").asString()).contains("invalid_decimal");
 
         consumerFailure.set(new ApiException(502, "upstream_error", "reconciliation-service unavailable"));
-        JsonNode failed = post("/v1/files/inbound", inbound("STMT_004.csv", CSV_OK.replace("Bob", "Carol")), 201);
+        JsonNode failed = post("/v1/files/inbound/upload", inbound("STMT_004.csv", CSV_OK.replace("Bob", "Carol")), 200);
         assertThat(failed.get("status").asString()).isEqualTo("FAILED");
         consumerFailure.set(null);
         JsonNode again = post("/v1/files/inbound/" + failed.get("id").asString() + "/reprocess", null, 200);
@@ -237,7 +251,7 @@ class FileGatewayFlowIT {
         assertThat(post("/v1/files/inbound/" + again.get("id").asString() + "/reprocess", null, 409).get("code").asString())
                 .isEqualTo("invalid_transition");
 
-        JsonNode unrouted = post("/v1/files/inbound", inbound("misc.txt", "hello"), 201);
+        JsonNode unrouted = post("/v1/files/inbound/upload", inbound("misc.txt", "hello"), 200);
         assertThat(unrouted.get("status").asString()).isEqualTo("REJECTED");
     }
 
@@ -246,9 +260,9 @@ class FileGatewayFlowIT {
     void outboundFilesAreGeneratedDeliveredAndAcknowledged() throws Exception {
         String records = "[{\"id\":\"1\",\"name\":\"Alice\",\"amount\":\"10.50\",\"value_date\":\"2026-01-30\"},"
                 + "{\"id\":\"2\",\"name\":\"Bob\",\"amount\":\"4.25\",\"value_date\":\"2026-01-30\"}]";
-        JsonNode file = post("/v1/files/outbound", """
+        JsonNode file = post("/v1/files/outbound/generate", """
                 {"file_channel_id":"%s","file_format_definition_id":"%s","requested_by_service":"payment-service",
-                 "source_reference":"batch-1","file_name":"PAY_001.csv","records":%s}""".formatted(bank, csvFormat, records), 201);
+                 "source_reference":"batch-1","file_name":"PAY_001.csv","records":%s}""".formatted(bank, csvFormat, records), 200);
         String id = file.get("id").asString();
         assertThat(file.get("status").asString()).isEqualTo("DELIVERED");
         assertThat(file.get("record_count").asInt()).isEqualTo(2);
@@ -266,12 +280,12 @@ class FileGatewayFlowIT {
                 get("/v1/files/outbound/" + id + "/download").get("url").asString())).build(), HttpResponse.BodyHandlers.ofString());
         assertThat(blob.body()).startsWith("id,name,amount,value_date\n1,Alice,10.50,2026-01-30\n");
 
-        assertThat(post("/v1/files/outbound", """
+        assertThat(post("/v1/files/outbound/generate", """
                 {"file_channel_id":"%s","requested_by_service":"payment-service","file_name":"X.txt","content":"x"}"""
                 .formatted(downChannel), 422).get("code").asString()).isEqualTo("encryption_key_missing");
-        JsonNode failing = post("/v1/files/outbound", """
+        JsonNode failing = post("/v1/files/outbound/generate", """
                 {"file_channel_id":"%s","requested_by_service":"payment-service","file_name":"X.txt","content":"x","encrypt":false}"""
-                .formatted(downChannel), 201);
+                .formatted(downChannel), 200);
         assertThat(failing.get("status").asString()).isEqualTo("FAILED");
         assertThat(failing.get("delivery_attempts").asInt()).isEqualTo(3);
         JsonNode retried = post("/v1/files/outbound/" + failing.get("id").asString() + "/redeliver", "{\"reason\":\"retry\"}", 200);
@@ -280,7 +294,7 @@ class FileGatewayFlowIT {
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
         assertThat(post("/v1/files/outbound/" + failing.get("id").asString() + "/redeliver", "{}", 409).get("code").asString())
                 .isEqualTo("invalid_transition");
-        assertThat(post("/v1/files/outbound", """
+        assertThat(post("/v1/files/outbound/generate", """
                 {"file_channel_id":"%s","requested_by_service":"payment-service","file_name":"Y.txt","encrypt":false}"""
                 .formatted(downChannel), 422).get("code").asString()).isEqualTo("content_required");
     }
@@ -321,7 +335,7 @@ class FileGatewayFlowIT {
                 .isEqualTo("invalid_transition");
         assertThat(post("/v1/files/channels/" + bank + "/test-connection", null, 409).get("code").asString())
                 .isEqualTo("channel_disabled");
-        assertThat(post("/v1/files/inbound", inbound("STMT_020.csv", CSV_OK + "3,C,1,2026-01-30\n"), 409).get("code").asString())
+        assertThat(post("/v1/files/inbound/upload", inbound("STMT_020.csv", CSV_OK + "3,C,1,2026-01-30\n"), 409).get("code").asString())
                 .isEqualTo("channel_disabled");
     }
 
@@ -332,10 +346,7 @@ class FileGatewayFlowIT {
         assertThat(types).contains("operations.inbound_file.received", "operations.inbound_file.quarantined",
                 "operations.inbound_file.routed", "operations.inbound_file.processed", "operations.outbound_file.generated",
                 "operations.outbound_file.delivered", "operations.outbound_file.failed",
-                "operations.file_channel.health_changed");
-        String payload = jdbc.sql("select payload::text from outbox where event_type = 'operations.file_channel.health_changed' limit 1")
-                .query(String.class).single();
-        assertThat(payload).doesNotContain("vault://");
+                "operations.file_channel.health_changed", "operations.file_channel.credentials_rotated");
         assertThat(get("/v1/files/transfer-logs?limit=200").get("data").size()).isGreaterThan(10);
         assertThat(send("GET", "/v1/files/inbound/" + processedFile, null, null, OTHER_TENANT, "x").statusCode()).isEqualTo(404);
         assertThat(json.readTree(send("GET", "/v1/files/channels", null, null, OTHER_TENANT, "x").body()).get("data")).isEmpty();
@@ -368,10 +379,18 @@ class FileGatewayFlowIT {
 
     private HttpResponse<String> send(String method, String path, String body, String idemKey, String tenant, String user)
             throws Exception {
+        return send(method, path, body, idemKey, tenant, user, null);
+    }
+
+    private HttpResponse<String> send(String method, String path, String body, String idemKey, String tenant, String user,
+                                      String ifMatch) throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", tenant).header("X-User", user).header("Content-Type", "application/json");
         if (idemKey != null) {
             b.header("Idempotency-Key", idemKey);
+        }
+        if (ifMatch != null) {
+            b.header("If-Match", ifMatch);
         }
         b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         return http.send(b.build(), HttpResponse.BodyHandlers.ofString());

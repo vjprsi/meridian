@@ -79,7 +79,7 @@ public class PurgeService {
                 }
             }
         }
-        v.remove("blocked_by_hold_id");
+        LegalHoldService.selectorIds(selector); // id lists in the selector must be JSON arrays
         v.put("status", "DRAFT");
         return v;
     }
@@ -116,30 +116,37 @@ public class PurgeService {
                 throw ApiException.unprocessable("four_eyes_violation", "A purge must be approved by a different user than the requester");
             }
             String row = rows.updateReturning("""
-                    update purge_request set status = 'APPROVED', updated_by = ? where id = ?
-                    returning row_to_json(purge_request)::text""", TenantContext.principal(), id);
+                    update purge_request set status = 'APPROVED', approved_by = ?, decided_at = now(), updated_by = ?
+                    where id = ? returning row_to_json(purge_request)::text""", TenantContext.principal(),
+                    TenantContext.principal(), id);
             outbox.publish("operations.purge_request.approved", "purge_request", id, json.readTree(row));
             return row;
         });
     }
 
+    /** The checker rejects a pending purge; the reason is kept on the request. */
     public String reject(UUID id, String reason) {
         return tx.execute(s -> {
             JsonNode p = rows.require("purge_request", id, true);
             ArchiveRules.requireDecision(p.get("status").asString());
-            return rows.updateReturning("""
-                    update purge_request set status = 'REJECTED', updated_by = ? where id = ?
-                    returning row_to_json(purge_request)::text""", TenantContext.principal(), id);
+            String row = rows.updateReturning("""
+                    update purge_request set status = 'REJECTED', decision_reason = ?, decided_at = now(), updated_by = ?
+                    where id = ? returning row_to_json(purge_request)::text""", reason, TenantContext.principal(), id);
+            outbox.publish("operations.purge_request.rejected", "purge_request", id, json.readTree(row));
+            return row;
         });
     }
 
-    /** The contract has no CANCELLED status: a cancelled request ends REJECTED. */
+    /** Cancels a request that has not executed; the reason is kept on the request. */
     public String cancel(UUID id, String reason) {
         return tx.execute(s -> {
             JsonNode p = rows.require("purge_request", id, true);
             ArchiveRules.requireCancel(p.get("status").asString());
-            return rows.updateReturning("""
-                    update purge_request set status = 'REJECTED' where id = ? returning row_to_json(purge_request)::text""", id);
+            String row = rows.updateReturning("""
+                    update purge_request set status = 'CANCELLED', decision_reason = ?, decided_at = now(), updated_by = ?
+                    where id = ? returning row_to_json(purge_request)::text""", reason, TenantContext.principal(), id);
+            outbox.publish("operations.purge_request.cancelled", "purge_request", id, json.readTree(row));
+            return row;
         });
     }
 
@@ -197,7 +204,7 @@ public class PurgeService {
         cert.put("estimated_records", p.path("estimated_records").isNumber() ? p.get("estimated_records").asLong() : null);
         cert.set("legal_hold_exclusions", exclusions(d.exclusions()));
         cert.put("requested_by", p.path("created_by").asString(null));
-        cert.put("approved_by", p.path("updated_by").asString(null));
+        cert.put("approved_by", p.path("approved_by").asString(null));
         cert.put("executed_by", TenantContext.principal());
         cert.put("executed_at", executedAt.toString());
         if (p.hasNonNull("retention_policy_id")) {

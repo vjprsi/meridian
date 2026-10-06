@@ -62,7 +62,7 @@ public class OutboundService {
     }
 
     /** Creates, generates and (unless scheduled for later) delivers the file. */
-    public JsonNode create(ObjectNode values, JsonNode raw) {
+    public JsonNode create(ObjectNode values, JsonNode req) {
         UUID channelId = UUID.fromString(values.get("file_channel_id").asString());
         JsonNode channel = rows.require("file_channel", channelId, false);
         ChannelService.requireActive(channel);
@@ -81,15 +81,15 @@ public class OutboundService {
         JsonNode format = values.hasNonNull("file_format_definition_id")
                 ? rows.require("file_format_definition", UUID.fromString(values.get("file_format_definition_id").asString()), false)
                 : null;
-        byte[] content = FormatService.inlineContent(raw);
+        byte[] content = FormatService.inlineContent(req);
         int recordCount;
         BigDecimal controlSum = null;
-        if (content == null && raw.has("records")) {
+        if (content == null && req.has("records")) {
             FileRenderer.Rendered r = format == null
-                    ? FileRenderer.render("JSON", null, null, null, false, raw.get("records"))
+                    ? FileRenderer.render("JSON", null, null, null, false, req.get("records"))
                     : FileRenderer.render(format.get("format_kind").asString(), format.get("schema_definition"),
                             format.hasNonNull("record_length") ? format.get("record_length").asInt() : null,
-                            JsonValues.text(format, "delimiter"), format.path("has_header").asBoolean(false), raw.get("records"));
+                            JsonValues.text(format, "delimiter"), format.path("has_header").asBoolean(false), req.get("records"));
             content = r.content().getBytes(StandardCharsets.UTF_8);
             recordCount = r.recordCount();
             controlSum = r.controlSum();

@@ -8,6 +8,7 @@ import io.meridian.archive.application.CatalogService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,9 +55,9 @@ public class RetentionPoliciesController implements RetentionPoliciesApi {
     }
 
     @Override
-    public ResponseEntity<Void> retentionPoliciesPreview(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> retentionPoliciesPreview(UUID id, String idempotencyKey) {
         TenantContext.require();
-        return Http.json(idempotency.execute(idempotencyKey, json.createObjectNode().put("preview", id.toString()),
+        return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("preview", id.toString()),
                 JsonNode.class, () -> ResponseEntity.ok(catalog.preview(id))));
     }
 }

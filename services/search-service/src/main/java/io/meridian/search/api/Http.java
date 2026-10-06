@@ -1,68 +1,26 @@
 package io.meridian.search.api;
 
 import io.meridian.common.error.ApiException;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.util.ContentCachingRequestWrapper;
-import org.springframework.web.util.WebUtils;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Controller helpers shared by this service's API classes. */
 final class Http {
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {};
+
     private Http() {}
 
-    /** JSON body for operations the contract declares without a response schema ({@code ResponseEntity<Void>}). */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> json(HttpStatusCode status, JsonNode body) {
-        return (ResponseEntity) ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(body.toString());
+    /** A computed JSON result for operations the contract declares with an {@code object} response. */
+    static Map<String, Object> object(JsonMapper json, JsonNode body) {
+        return body == null ? null : json.convertValue(body, OBJECT);
     }
 
-    static ResponseEntity<Void> ok(JsonNode body) {
-        return json(HttpStatus.OK, body);
-    }
-
-    /** Re-wraps an idempotent (possibly replayed) JSON response as JSON text, keeping status and headers. */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> json(ResponseEntity<JsonNode> r) {
-        return (ResponseEntity) ResponseEntity.status(r.getStatusCode()).headers(h -> {
-            h.addAll(r.getHeaders());
-            h.setContentType(MediaType.APPLICATION_JSON);
-        }).body(r.getBody() == null ? null : r.getBody().toString());
-    }
-
-    /** The full JSON request body as sent (when the request was wrapped in a ContentCachingRequestWrapper); an empty object when there is none. */
-    static JsonNode rawBody(JsonMapper json) {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
-            HttpServletRequest req = a.getRequest();
-            ContentCachingRequestWrapper w = WebUtils.getNativeRequest(req, ContentCachingRequestWrapper.class);
-            if (w != null && w.getContentAsByteArray().length > 0) {
-                return json.readTree(w.getContentAsByteArray());
-            }
-        }
-        return json.createObjectNode();
-    }
-
-    static String query(String name) {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
-            String v = a.getRequest().getParameter(name);
-            return v == null || v.isBlank() ? null : v.trim();
-        }
-        return null;
-    }
-
-    /** Absolute URL for a path on this service (used for pre-signed download links). */
-    static String absolute(String path) {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
-            HttpServletRequest r = a.getRequest();
-            return r.getScheme() + "://" + r.getServerName() + ":" + r.getServerPort() + r.getContextPath() + path;
-        }
-        return path;
+    /** Converts an idempotent (possibly replayed) JSON result, keeping status and headers. */
+    static ResponseEntity<Map<String, Object>> object(JsonMapper json, ResponseEntity<JsonNode> r) {
+        return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders()).body(object(json, r.getBody()));
     }
 
     static int ifMatch(String ifMatch) {

@@ -255,7 +255,8 @@ public class EodOrchestrator {
             ObjectNode payload = payload(run, day, def, p, partitionCount, attempt);
             boolean retryable;
             try {
-                JsonNode res = callWithTimeout(def, payload, "eod-" + p.id());
+                JsonNode res = callWithTimeout(def, payload,
+                        JobTemplates.eodKey(UUID.fromString(run.get("id").asString()), def.code(), p.partitionNo()));
                 rows.update("""
                         update eod_job_run set status = 'SUCCEEDED', finished_at = now(), duration_ms = ?,
                                records_processed = ?, records_failed = ?, checkpoint = coalesce(?::jsonb, checkpoint),
@@ -295,11 +296,19 @@ public class EodOrchestrator {
         });
     }
 
+    /**
+     * Calls the job target per the cross-service EOD contract: {@code <http_method> <owning_service><http_path>}
+     * with placeholders filled from the job context, the rendered body template (or the context itself), the
+     * tenant as {@code X-Tenant-Id} and {@code Idempotency-Key = eod:<run>:<job>:<partition>}.
+     */
     private JsonNode callWithTimeout(JobDefinitions.Definition def, ObjectNode payload, String key) throws TimeoutException {
         UUID tenant = TenantContext.require();
         String principal = TenantContext.principal();
+        String path = JobTemplates.renderPath(def.httpPath(), payload);
+        JsonNode body = def.bodyTemplate() == null || def.bodyTemplate().isNull() ? payload
+                : JobTemplates.renderBody(def.bodyTemplate(), payload);
         Future<JsonNode> f = executor.submit(() -> TenantContext.callAs(tenant, principal,
-                () -> dispatcher.dispatch(def.owningService(), def.endpoint(), payload, key)));
+                () -> dispatcher.dispatch(def.owningService(), def.httpMethod(), path, body, key)));
         try {
             return f.get(def.timeoutMinutes(), TimeUnit.MINUTES);
         } catch (InterruptedException e) {

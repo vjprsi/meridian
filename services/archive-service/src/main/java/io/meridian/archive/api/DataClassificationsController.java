@@ -8,6 +8,7 @@ import io.meridian.archive.application.CatalogService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,10 +55,10 @@ public class DataClassificationsController implements DataClassificationsApi {
     }
 
     @Override
-    public ResponseEntity<Void> dataClassificationsScan(String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> dataClassificationsScan(String idempotencyKey, Boolean applyParam) {
         TenantContext.require();
-        boolean apply = "true".equalsIgnoreCase(Http.query("apply"));
-        return Http.json(idempotency.execute(idempotencyKey, json.createObjectNode().put("scan", apply), JsonNode.class,
+        boolean apply = Boolean.TRUE.equals(applyParam);
+        return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("scan", apply), JsonNode.class,
                 () -> ResponseEntity.ok(catalog.scan(apply))));
     }
 }

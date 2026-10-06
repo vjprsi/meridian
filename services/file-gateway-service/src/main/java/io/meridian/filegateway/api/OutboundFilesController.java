@@ -3,22 +3,22 @@ package io.meridian.filegateway.api;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.filegateway.api.generated.OutboundFilesApi;
 import io.meridian.filegateway.api.generated.model.OutboundFile;
-import io.meridian.filegateway.api.generated.model.OutboundFileCreate;
 import io.meridian.filegateway.api.generated.model.OutboundFilesAcknowledgeRequest;
 import io.meridian.filegateway.api.generated.model.OutboundFilesCancelRequest;
+import io.meridian.filegateway.api.generated.model.OutboundFilesGenerateRequest;
 import io.meridian.filegateway.api.generated.model.OutboundFilesRedeliverRequest;
 import io.meridian.filegateway.application.OutboundService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Outbound files. Besides the contract fields the create body carries the file: {@code records} (rendered with
+ * Outbound files. {@code POST /generate} carries the file: {@code records} (rendered with
  * the format layout), {@code content} or {@code content_base64}.
  */
 @RestController
@@ -36,11 +36,11 @@ public class OutboundFilesController implements OutboundFilesApi {
     }
 
     @Override
-    public ResponseEntity<OutboundFile> outboundFilesCreate(String idempotencyKey, OutboundFileCreate body) {
+    public ResponseEntity<OutboundFile> outboundFilesGenerate(String idempotencyKey, OutboundFilesGenerateRequest body) {
         TenantContext.require();
-        JsonNode raw = Http.rawBody(json);
-        return idempotency.execute(idempotencyKey, raw, OutboundFile.class, () -> ResponseEntity.status(HttpStatus.CREATED)
-                .body(crud.read(outbound.create(crud.toColumns("outbound_file", body), raw).toString(), OutboundFile.class)));
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, req, OutboundFile.class, () -> ResponseEntity.ok(
+                crud.read(outbound.create(crud.toColumns("outbound_file", body), req).toString(), OutboundFile.class)));
     }
 
     @Override
@@ -71,8 +71,8 @@ public class OutboundFilesController implements OutboundFilesApi {
     }
 
     @Override
-    public ResponseEntity<Void> outboundFilesDownload(UUID id) {
+    public ResponseEntity<Map<String, Object>> outboundFilesDownload(UUID id) {
         TenantContext.require();
-        return Http.ok(outbound.downloadLink(id, Http::absolute));
+        return ResponseEntity.ok(Http.object(json, outbound.downloadLink(id, Http::absolute)));
     }
 }

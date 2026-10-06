@@ -9,8 +9,10 @@ import io.meridian.filegateway.api.generated.model.FileChannelsDisableRequest;
 import io.meridian.filegateway.api.generated.model.FileChannelsRotateCredentialsRequest;
 import io.meridian.filegateway.application.ChannelService;
 import io.meridian.filegateway.application.InboundService;
+import io.meridian.filegateway.infrastructure.Rows;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +22,9 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * File channels. Secret references ({@code credential_secret_ref}, {@code pgp_encrypt_key_ref},
- * {@code pgp_decrypt_key_ref}) are write-only and accepted from the request body although the generated
- * models omit them (they are {@code secret} columns).
+ * File channels. Credentials are only ever secret-store references ({@code credential_secret_ref},
+ * {@code pgp_encrypt_key_ref}, {@code pgp_decrypt_key_ref}); the credential reference changes only through
+ * {@code rotate-credentials}.
  */
 @RestController
 public class FileChannelsController implements FileChannelsApi {
@@ -30,15 +32,17 @@ public class FileChannelsController implements FileChannelsApi {
 
     private final ChannelService channels;
     private final InboundService inbound;
+    private final Rows rows;
     private final CrudEngine crud;
     private final Updates updates;
     private final Idempotency idempotency;
     private final JsonMapper json;
 
-    public FileChannelsController(ChannelService channels, InboundService inbound, CrudEngine crud, Updates updates,
-                                  Idempotency idempotency, JsonMapper json) {
+    public FileChannelsController(ChannelService channels, InboundService inbound, Rows rows, CrudEngine crud,
+                                  Updates updates, Idempotency idempotency, JsonMapper json) {
         this.channels = channels;
         this.inbound = inbound;
+        this.rows = rows;
         this.crud = crud;
         this.updates = updates;
         this.idempotency = idempotency;
@@ -48,10 +52,9 @@ public class FileChannelsController implements FileChannelsApi {
     @Override
     public ResponseEntity<FileChannel> fileChannelsCreate(String idempotencyKey, FileChannelCreate body) {
         TenantContext.require();
-        JsonNode raw = Http.rawBody(json);
-        return idempotency.execute(idempotencyKey, raw, FileChannel.class, () -> {
+        return idempotency.execute(idempotencyKey, body, FileChannel.class, () -> {
             ObjectNode values = crud.toColumns(TABLE, body);
-            channels.applySecrets(values, raw, true);
+            channels.checkSecretRefs(values, null);
             channels.validate(values);
             return ResponseEntity.status(HttpStatus.CREATED).body(crud.read(crud.insert(TABLE, values), FileChannel.class));
         });
@@ -60,10 +63,9 @@ public class FileChannelsController implements FileChannelsApi {
     @Override
     public ResponseEntity<FileChannel> fileChannelsUpdate(UUID id, String ifMatch, FileChannelUpdate body) {
         TenantContext.require();
-        JsonNode raw = Http.rawBody(json);
         ObjectNode changes = crud.toColumns(TABLE, body);
-        channels.applySecrets(changes, raw, false);
         return updates.apply(TABLE, id, ifMatch, changes, FileChannel.class, (merged, ch) -> {
+            channels.checkSecretRefs(ch, rows.require(TABLE, id, false));
             channels.validate(merged);
             if (merged.hasNonNull("port") && !ch.has("port")) {
                 ch.set("port", merged.get("port"));
@@ -72,16 +74,16 @@ public class FileChannelsController implements FileChannelsApi {
     }
 
     @Override
-    public ResponseEntity<Void> fileChannelsTestConnection(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> fileChannelsTestConnection(UUID id, String idempotencyKey) {
         TenantContext.require();
-        return Http.json(idempotency.execute(idempotencyKey, json.createObjectNode().put("test", id.toString()),
+        return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("test", id.toString()),
                 JsonNode.class, () -> ResponseEntity.ok(channels.testConnection(id))));
     }
 
     @Override
-    public ResponseEntity<Void> fileChannelsPollNow(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> fileChannelsPollNow(UUID id, String idempotencyKey) {
         TenantContext.require();
-        return Http.json(idempotency.execute(idempotencyKey, json.createObjectNode().put("poll", id.toString()),
+        return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("poll", id.toString()),
                 JsonNode.class, () -> ResponseEntity.ok(channels.pollNow(id, inbound))));
     }
 

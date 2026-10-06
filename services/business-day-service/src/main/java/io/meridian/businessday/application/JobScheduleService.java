@@ -74,9 +74,9 @@ public class JobScheduleService {
         if (service != null && !catalog.exists(service)) {
             throw ApiException.unprocessable("unknown_service", "owning_service " + service + " is not a Meridian service");
         }
-        String endpoint = JsonValues.text(values, "endpoint");
-        if (endpoint != null && (!endpoint.startsWith("/") || endpoint.contains("://"))) {
-            throw ApiException.unprocessable("invalid_endpoint", "endpoint must be a service-relative path starting with /");
+        String path = JsonValues.text(values, "http_path");
+        if (path != null) {
+            JobTemplates.requireServicePath(path);
         }
         String status = values.hasNonNull("status") ? values.get("status").asString() : "ACTIVE";
         if ("ACTIVE".equals(status)) {
@@ -175,8 +175,9 @@ public class JobScheduleService {
             String error = null;
             Long records = null;
             try {
-                JsonNode res = dispatcher.dispatch(sch.get("owning_service").asString(), sch.get("endpoint").asString(),
-                        payload, "jsr-" + id + "-" + idempotencyKey);
+                JsonNode res = dispatcher.dispatch(sch.get("owning_service").asString(),
+                        sch.path("http_method").asString("POST"), sch.get("http_path").asString(), payload,
+                        JobTemplates.scheduleKey(id, idempotencyKey));
                 status = "SUCCEEDED";
                 if (res != null && res.hasNonNull("records_processed") && res.get("records_processed").isNumber()) {
                     records = res.get("records_processed").asLong();
@@ -223,14 +224,20 @@ public class JobScheduleService {
         }
     }
 
-    /** Force-releases a lock (operator action for a stale lease left by a crashed instance). */
-    public void forceRelease(UUID lockId, String reason) {
-        tx.executeWithoutResult(s -> {
+    /**
+     * Force-releases a lock (operator action for a stale lease left by a crashed instance): the lease expires now
+     * and the fencing token is bumped so the old holder can no longer renew; who and why are recorded on the row.
+     */
+    public String forceRelease(UUID lockId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.unprocessable("reason_required", "A reason is required to force-release a lock");
+        }
+        return tx.execute(s -> {
             rows.require("batch_job_lock", lockId, true);
-            if (reason == null || reason.isBlank()) {
-                throw ApiException.unprocessable("reason_required", "A reason is required to force-release a lock");
-            }
-            locks.delete(lockId);
+            String row = locks.forceRelease(lockId, TenantContext.principal(), reason);
+            JsonNode n = json.readTree(row);
+            outbox.publish("operations.batch_job_lock.force_released", "batch_job_lock", lockId, n);
+            return row;
         });
     }
 

@@ -9,6 +9,7 @@ import io.meridian.filegateway.api.generated.model.FileFormatsValidateSampleRequ
 import io.meridian.filegateway.application.FormatService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,12 +55,13 @@ public class FileFormatsController implements FileFormatsApi {
                 (merged, changes) -> formats.validateDefinition(merged));
     }
 
-    /** Body: {@code document_id} (contract) or inline {@code content} / {@code content_base64}. */
+    /** The sample is a {@code document_id} or inline {@code content} / {@code content_base64}. */
     @Override
-    public ResponseEntity<Void> fileFormatsValidateSample(UUID id, String idempotencyKey, FileFormatsValidateSampleRequest body) {
+    public ResponseEntity<Map<String, Object>> fileFormatsValidateSample(UUID id, String idempotencyKey,
+                                                                         FileFormatsValidateSampleRequest body) {
         TenantContext.require();
-        JsonNode raw = Http.rawBody(json);
-        return Http.json(idempotency.execute(idempotencyKey, raw, JsonNode.class,
-                () -> ResponseEntity.ok(formats.validateSample(id, raw))));
+        JsonNode req = json.valueToTree(body);
+        return Http.object(json, idempotency.execute(idempotencyKey, req, JsonNode.class,
+                () -> ResponseEntity.ok(formats.validateSample(id, req))));
     }
 }

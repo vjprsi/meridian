@@ -106,21 +106,19 @@ public class EodJobDefinitionsController implements EodJobDefinitionsApi {
         });
     }
 
-    /** Dependency graph for a cycle ({@code ?cycle_type=}, optional {@code ?legal_entity_id=}); all active jobs without. */
+    /** Dependency graph of the active jobs of a cycle (all active jobs without {@code cycle_type}). */
     @Override
-    public ResponseEntity<Void> eodJobDefinitionsGraph() {
+    public ResponseEntity<Map<String, Object>> eodJobDefinitionsGraph(String cycleType, UUID legalEntityId) {
         TenantContext.require();
-        String cycle = Http.query("cycle_type");
-        String entity = Http.query("legal_entity_id");
-        return Http.ok(definitions.graphView(cycle == null ? null : CycleType.parse(cycle),
-                entity == null ? null : UUID.fromString(entity)));
+        return ResponseEntity.ok(Http.object(json, definitions.graphView(
+                cycleType == null || cycleType.isBlank() ? null : CycleType.parse(cycleType), legalEntityId)));
     }
 
     @Override
-    public ResponseEntity<Void> eodJobDefinitionsValidate(String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> eodJobDefinitionsValidate(String idempotencyKey) {
         TenantContext.require();
-        return Http.json(idempotency.execute(idempotencyKey, json.createObjectNode().put("op", "validate"), JsonNode.class,
-                () -> ResponseEntity.ok(definitions.validationReport())));
+        return Http.object(json, idempotency.execute(idempotencyKey, json.createObjectNode().put("op", "validate"),
+                JsonNode.class, () -> ResponseEntity.ok(definitions.validationReport())));
     }
 
     /** Serialises graph changes within the tenant so two concurrent edits cannot together create a cycle. */

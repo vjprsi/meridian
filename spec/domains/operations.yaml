@@ -13,6 +13,7 @@ enums:
                BALANCE_SNAPSHOT, STANDING_ORDERS, TERM_DEPOSIT_MATURITY, CARD_STATEMENT_CYCLE, ARCHIVAL, CUSTOM]
   EodFailurePolicy: [STOP_CYCLE, CONTINUE, RETRY_THEN_STOP, RETRY_THEN_CONTINUE]
   JobScheduleStatus: [ACTIVE, PAUSED, DISABLED]
+  JobHttpMethod: [POST, PUT, PATCH, GET]
   FileChannelProtocol: [SFTP, FTPS, S3, AZURE_BLOB, GCS, HTTPS_API, AS2, CONNECT_DIRECT, EMAIL]
   FileChannelDirection: [INBOUND, OUTBOUND, BOTH]
   FileChannelCounterpartyType: [BANK, CARD_SCHEME, PAYMENT_RAIL, CREDIT_BUREAU, CARD_BUREAU, REGULATOR, PARTNER,
@@ -33,7 +34,9 @@ enums:
   RetentionAction: [ARCHIVE, ANONYMISE, PURGE, ARCHIVE_THEN_PURGE]
   LegalHoldStatus: [ACTIVE, RELEASED]
   LegalHoldScope: [CUSTOMER, ACCOUNT, CASE, TABLE, DOCUMENT, TENANT]
-  PurgeRequestStatus: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, COMPLETED, FAILED, BLOCKED_BY_HOLD]
+  PurgeRequestStatus: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, COMPLETED, FAILED, BLOCKED_BY_HOLD,
+                       CANCELLED]
+  SearchIngestOperation: [UPSERT, DELETE]
 
 services:
   # ------------------------------------------------------------------ business-day-service
@@ -51,9 +54,9 @@ services:
         columns:
           - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
           - "business_date date nn | Business date"
-          - "state enum:BusinessDayState nn default=OPEN | Processing state"
+          - "state enum:BusinessDayState nn default=OPEN ro | Processing state (changed by actions only)"
           - "holiday_calendar_id uuid ref=holiday_calendar | Calendar used to compute the next business date"
-          - "is_current bool nn default=false | True for the open business date of the entity"
+          - "is_current bool nn default=false ro | True for the open business date of the entity"
           - "opened_at ts nn default=now ro | When the date was opened"
           - "cut_off_at ts ro | When transaction cut-off was applied"
           - "closed_at ts ro | When the date was closed"
@@ -66,17 +69,32 @@ services:
 
       - name: eod_job_definition
         prefix: ejd
-        description: A step in an end-of-period job graph, executed by an owning service
+        description: >
+          A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract:
+          for every tenant, EOD run, job and partition the orchestrator calls
+          <http_method> <owning_service><http_path> with headers X-Tenant-Id (the tenant whose EOD runs) and
+          Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry of the
+          partition, so a lost response is executed once downstream). Placeholders {business_date},
+          {legal_entity_id}, {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no},
+          {partition_count} and {attempt} are substituted (URL-encoded) in http_path and in the string values of
+          body_template. Without body_template the body is the job context (eod_run_id, eod_job_run_id, job_code,
+          job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end,
+          partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service
+          POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional
+          records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure
+          policy, other 4xx fail the job.
         fr: [OPS-01, GL-03, DEP-06]
         columns:
           - "legal_entity_id uuid ref=legal_entity idx | Legal entity (empty = all entities)"
           - "code string(64) nn uq | Job code, e.g. DEP_INTEREST_ACCRUAL"
           - "name string(160) nn | Display name"
           - "job_type enum:EodJobType nn | Kind of job"
-          - "cycle_types json nn | Cycles the job runs in, e.g. [EOD, EOM]"
+          - "cycle_types json[] nn | Cycles the job runs in, e.g. [EOD, EOM]"
           - "owning_service string(64) nn | Service that executes the job, e.g. deposit-service"
-          - "endpoint string(255) nn | Internal command/topic the orchestrator invokes"
-          - "depends_on json | Codes of jobs that must finish first"
+          - "http_method enum:JobHttpMethod nn default=POST | HTTP method of the job endpoint"
+          - "http_path string(500) nn | Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}"
+          - "body_template json | JSON body template (placeholders in string values); empty = the standard job context"
+          - "depends_on json[] | Codes of jobs that must finish first"
           - "sequence int nn default=100 | Ordering hint within the same dependency level"
           - "parallelism int nn default=1 | Number of partitions run in parallel"
           - "partition_key string(64) | Partitioning key, e.g. ACCOUNT_ID_HASH"
@@ -150,7 +168,8 @@ services:
           - "code string(64) nn uq | Schedule code"
           - "name string(160) nn | Display name"
           - "owning_service string(64) nn | Service that runs the job"
-          - "endpoint string(255) nn | Command/topic invoked"
+          - "http_method enum:JobHttpMethod nn default=POST | HTTP method of the job endpoint"
+          - "http_path string(500) nn | Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>"
           - "cron_expression string(64) nn | Cron expression"
           - "time_zone string(64) nn default=UTC | IANA time zone"
           - "business_days_only bool nn default=false | Skip non-business days"
@@ -186,15 +205,18 @@ services:
           - "acquired_at ts nn default=now | Acquired"
           - "expires_at ts nn | Lease expiry"
           - "fencing_token bigint nn default=0 | Monotonic token to reject stale holders"
+          - "force_released_at ts ro | When an operator last force-released the lock"
+          - "force_released_by string(64) ro | Operator who force-released the lock"
+          - "force_release_reason string(500) ro | Why the lock was force-released"
 
     apis:
       - resource: business-days
         path: /v1/operations/business-days
         table: business_day
-        ops: [list, get]
+        ops: [list, get, create]
         filters: [legal_entity_id, business_date, state, is_current]
         actions:
-          - "GET /current | Current business date per legal entity (?legal_entity_id=) | | business_day"
+          - "GET /current?legal_entity_id:uuid | Current business date of a legal entity (required when several entities have an open date) | | business_day"
           - "POST /{id}/cut-off | Apply transaction cut-off for the business date | reason string(255)"
           - "POST /{id}/start-eod | Start the end-of-day cycle | cycle_type enum:EodCycleType | eod_run"
           - "POST /{id}/roll | Roll to the next business date after EOD | forced bool, reason string(500) | date_roll"
@@ -205,8 +227,8 @@ services:
         ops: [list, get, create, update, delete]
         filters: [legal_entity_id, job_type, owning_service, is_active]
         actions:
-          - "GET /graph | Dependency graph of jobs for a cycle (?cycle_type=) | | none"
-          - "POST /validate | Validate the graph for cycles and missing dependencies | | none"
+          - "GET /graph?cycle_type:enum:EodCycleType&legal_entity_id:uuid | Dependency graph (nodes, edges, execution levels) of the jobs of a cycle | | object"
+          - "POST /validate | Validate the graph for cycles and missing dependencies and plan every cycle | | object"
       - resource: eod-runs
         path: /v1/operations/eod-runs
         table: eod_run
@@ -245,7 +267,7 @@ services:
         ops: [list, get]
         filters: [lock_key, holder]
         actions:
-          - "POST /{id}/force-release | Force-release a stale lock | reason string(255) nn | none"
+          - "POST /{id}/force-release | Force-release a stale lock (expires the lease and bumps the fencing token) | reason string(500) nn | batch_job_lock"
 
     events:
       - "operations.business_day.opened | business_day | A business date was opened"
@@ -258,6 +280,7 @@ services:
       - "operations.eod_job_run.failed | eod_job_run | A job failed after retries"
       - "operations.date_roll.completed | date_roll | The business date rolled forward"
       - "operations.job_schedule_run.completed | job_schedule_run | A scheduled batch job finished"
+      - "operations.batch_job_lock.force_released | batch_job_lock | An operator force-released a batch job lock"
 
   # ------------------------------------------------------------------ file-gateway-service
   - name: file-gateway-service
@@ -284,15 +307,15 @@ services:
           - "remote_inbound_path string(500) | Remote folder to pull from"
           - "remote_outbound_path string(500) | Remote folder to push to"
           - "username string(128) | Login user"
-          - "credential_secret_ref string(255) nn secret | Vault path of password or private key"
+          - "credential_secret_ref string(255) nn | Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)"
           - "host_key_fingerprint string(128) | Expected SFTP host key fingerprint"
-          - "pgp_encrypt_key_ref string(255) secret | Vault ref of counterparty public key for outbound encryption"
-          - "pgp_decrypt_key_ref string(255) secret | Vault ref of our private key for inbound decryption"
+          - "pgp_encrypt_key_ref string(255) | Vault ref of counterparty public key for outbound encryption"
+          - "pgp_decrypt_key_ref string(255) | Vault ref of our private key for inbound decryption"
           - "pgp_sign bool nn default=false | Sign outbound files"
           - "poll_cron string(64) | Polling schedule for inbound files"
           - "file_name_pattern string(255) | Regex of inbound file names to pick up"
           - "delete_after_download bool nn default=false | Remove remote file after successful download"
-          - "ip_allowlist json | Allowed source IPs for push channels"
+          - "ip_allowlist json[] | Allowed source IPs / CIDR blocks for push channels"
           - "is_active bool nn default=true | Active"
           - "last_connected_at ts ro | Last successful connection"
           - "health_status string(32) ro | UP, DEGRADED or DOWN"
@@ -404,8 +427,8 @@ services:
         ops: [list, get, create, update]
         filters: [counterparty_type, protocol, direction, is_active]
         actions:
-          - "POST /{id}/test-connection | Test connectivity and credentials | | none"
-          - "POST /{id}/poll-now | Poll the remote inbound folder now | | none"
+          - "POST /{id}/test-connection | Test connectivity and credentials | | object"
+          - "POST /{id}/poll-now | Poll the remote inbound folder now and receive new files | | object"
           - "POST /{id}/rotate-credentials | Rotate stored credentials | credential_secret_ref string(255) nn"
           - "POST /{id}/disable | Disable the channel | reason string(255) nn"
       - resource: file-formats
@@ -414,7 +437,7 @@ services:
         ops: [list, get, create, update]
         filters: [format_kind, is_active]
         actions:
-          - "POST /{id}/validate-sample | Parse an uploaded sample against the layout | document_id uuid nn | none"
+          - "POST /{id}/validate-sample | Parse a sample (document_id, or inline content / content_base64) against the layout | document_id uuid, content text, content_base64 text | object"
       - resource: file-routes
         path: /v1/files/routes
         table: file_route
@@ -425,28 +448,37 @@ services:
       - resource: inbound-files
         path: /v1/files/inbound
         table: inbound_file
-        ops: [list, get, create]
+        ops: [list, get]
         filters: [file_channel_id, status, virus_scan_status, file_format_definition_id]
         actions:
+          - "POST /upload | Receive a file pushed by a counterparty (inline content, content_base64, or content_url fetched by the gateway) and run the pipeline | file_channel_id uuid nn, original_file_name string(255) nn, remote_path string(500), file_route_id uuid, file_format_definition_id uuid, document_id uuid, content text, content_base64 text, content_url string(1000) | inbound_file"
           - "POST /{id}/reprocess | Route and process the file again | "
           - "POST /{id}/release-quarantine | Release a quarantined file after review (maker-checker) | reason string(500) nn"
-          - "GET /{id}/download | Signed URL for the raw file | | none"
+          - "GET /{id}/download | Pre-signed URL for the raw file (url, expires_at, checksum) | | object"
           - "GET /{id}/logs | Transfer audit for the file | | file_transfer_log[]"
       - resource: outbound-files
         path: /v1/files/outbound
         table: outbound_file
-        ops: [list, get, create]
+        ops: [list, get]
         filters: [file_channel_id, status, requested_by_service, source_reference]
         actions:
+          - "POST /generate | Generate a file from records (rendered with the format layout) or inline content and deliver it | file_channel_id uuid nn, file_format_definition_id uuid, requested_by_service string(64) nn, source_reference string(128), file_name string(255) nn, encrypt bool, scheduled_for ts, records json[], content text, content_base64 text | outbound_file"
           - "POST /{id}/redeliver | Deliver the file again | reason string(255)"
           - "POST /{id}/cancel | Cancel before delivery | reason string(255) nn"
           - "POST /{id}/acknowledge | Record a counterparty acknowledgement | ack_reference string(128) nn"
-          - "GET /{id}/download | Signed URL for the generated file | | none"
+          - "GET /{id}/download | Pre-signed URL for the generated file (url, expires_at, checksum) | | object"
       - resource: file-transfer-logs
         path: /v1/files/transfer-logs
         table: file_transfer_log
         ops: [list, get]
         filters: [file_channel_id, inbound_file_id, outbound_file_id, action, success]
+      - resource: files
+        path: /v1/files
+        table: inbound_file
+        description: Object-store access through pre-signed links
+        ops: []
+        actions:
+          - "GET /blobs?key:string(1000)!&expires:bigint!&signature:string(128)! | [public] Download a file through a pre-signed link issued by a download operation (the HMAC signature and expiry authorise the request) | | application/octet-stream"
 
     events:
       - "operations.inbound_file.received | inbound_file | A file was received from a counterparty"
@@ -457,6 +489,7 @@ services:
       - "operations.outbound_file.delivered | outbound_file | An outbound file was delivered"
       - "operations.outbound_file.failed | outbound_file | Delivery failed after retries"
       - "operations.file_channel.health_changed | file_channel | A channel's connectivity health changed"
+      - "operations.file_channel.credentials_rotated | file_channel | A channel's credential reference was rotated"
 
   # ------------------------------------------------------------------ search-service
   - name: search-service
@@ -476,9 +509,9 @@ services:
           - "physical_index string(160) nn ro | Current physical index behind the alias"
           - "mapping_version int nn default=1 | Version of the field mapping"
           - "mapping json nn | OpenSearch mapping and analysers"
-          - "source_topics json nn | Event topics feeding the index"
-          - "searchable_fields json nn | Fields matched by free-text search with boosts"
-          - "masked_fields json | Fields masked unless the caller holds a PII permission"
+          - "source_topics json[] nn | Event topics feeding the index, e.g. [meridian.party.v1]"
+          - "searchable_fields json[] nn | Fields matched by free-text search with boosts, e.g. [full_name^3, email]"
+          - "masked_fields json[] | Fields masked unless the caller holds a PII permission"
           - "status enum:SearchIndexStatus nn default=BUILDING ro | Status"
           - "document_count bigint ro | Documents indexed"
           - "lag_seconds int ro | Event-to-index lag"
@@ -507,7 +540,7 @@ services:
         columns:
           - "search_index_id uuid fk=search_index idx | Index (empty = all)"
           - "language_code string(8) | Language"
-          - "terms json nn | Equivalent terms, e.g. [mohammed, muhammad, mohamed]"
+          - "terms json[] nn | Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]"
           - "is_active bool nn default=true | Active"
 
       - name: saved_search
@@ -517,13 +550,54 @@ services:
         columns:
           - "app_user_id uuid nn ref=app_user idx | Owner"
           - "name string(160) nn | Name"
-          - "entity_types json nn | Entity types searched"
+          - "entity_types json[] nn | Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]"
           - "query_text string(500) | Free text"
-          - "filters json | Structured filters"
-          - "sort json | Sort order"
+          - "filters json | Structured filters (JSON containment on the document)"
+          - "sort json[] | Sort order, e.g. [-score, title]"
           - "shared_with_role_id uuid ref=role | Role it is shared with"
           - "is_pinned bool nn default=false | Pinned in the console"
           - "last_used_at ts ro | Last use"
+
+      - name: search_document
+        prefix: sdc
+        description: >
+          One indexed entity document per physical index (the PostgreSQL full-text engine; aliases swap between
+          physical indexes on reindex). Weighted text A/B/C feeds the ranked tsvector computed at query time.
+        fr: [OPS-03]
+        ext: false
+        columns:
+          - "physical_index string(160) nn | Physical index holding the document"
+          - "entity_type enum:SearchEntityType nn | Entity type"
+          - "entity_id string(128) nn | Id of the entity in its owning service"
+          - "title text | Display title (used by type-ahead)"
+          - "body json nn | Indexed document (masked on output by role)"
+          - "search_text text nn | All searchable text"
+          - "text_a text | Weight A text (boost >= 3)"
+          - "text_b text | Weight B text (boost >= 2)"
+          - "text_c text | Weight C text"
+          - "source_event_id string(128) | Event that produced the version"
+          - "source_version bigint | Source version (out-of-order events are ignored)"
+          - "occurred_at ts | When the change happened in the owning service"
+          - "indexed_at ts nn default=now | When the document was indexed"
+        unique: [[tenant_id, physical_index, entity_id]]
+        indexes: [[physical_index, entity_type]]
+
+      - name: search_ingest_log
+        prefix: sil
+        description: Append-only journal of ingested changes, the source for full reindex and catch-up replays
+        fr: [OPS-03]
+        immutable: true
+        ext: false
+        columns:
+          - "entity_type enum:SearchEntityType nn | Entity type"
+          - "entity_id string(128) nn | Entity id"
+          - "operation enum:SearchIngestOperation nn | Upsert or delete"
+          - "document json | Document (upserts)"
+          - "source_event_id string(128) | Source event id"
+          - "source_version bigint | Source version"
+          - "occurred_at ts nn default=now | When the change happened"
+          - "ingested_at ts nn default=now | When it was ingested"
+        indexes: [[entity_type, entity_id], [entity_type, occurred_at]]
 
     apis:
       - resource: search
@@ -532,8 +606,10 @@ services:
         description: Federated search across entity types with masking by caller permissions
         ops: []
         actions:
-          - "POST /query | Search across entity types (free text + filters, paged) | query_text string(500), entity_types json, filters json, limit int, cursor string(255) | none"
-          - "GET /suggest | Type-ahead suggestions (?q=&entity_type=) | | none"
+          - "POST /query | Search across entity types (free text + filters, paged; read-only, never replayed) | query_text string(500), entity_types json[], filters json, limit int, cursor string(255) | object"
+          - "GET /suggest?q:string!&entity_type:enum:SearchEntityType&limit:int | Type-ahead suggestions on titles (q: 2+ characters, limit max 25) | | object"
+          - "POST /documents | Index entity documents pushed by owning services or the CDC consumer (1..500 per call; each entity_type, entity_id, document or deleted, event_id, version, occurred_at) | documents json[] nn | object"
+          - "DELETE /documents/{entity_type}/{entity_ref} | Remove an entity (entity_ref = its id in the owning service) from its search index | | object"
       - resource: search-indexes
         path: /v1/search/indexes
         table: search_index
@@ -561,7 +637,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [app_user_id, shared_with_role_id, is_pinned]
         actions:
-          - "POST /{id}/run | Execute a saved search | limit int, cursor string(255) | none"
+          - "POST /{id}/run | Execute a saved search (read-only, never replayed) | limit int, cursor string(255) | object"
 
     events:
       - "operations.search_index.reindexed | search_index | An index finished a full reindex and swapped its alias"
@@ -585,7 +661,7 @@ services:
           - "database_name string(64) nn | Database"
           - "table_name string(64) nn | Table"
           - "sensitivity enum:DataSensitivity nn | Sensitivity"
-          - "pii_columns json | Columns holding personal data"
+          - "pii_columns json[] | Columns holding personal data"
           - "owner string(120) | Data owner (business)"
           - "steward string(120) | Data steward"
           - "description string(500) | Notes"
@@ -652,7 +728,7 @@ services:
         columns:
           - "name string(160) nn | Hold name / matter"
           - "scope_type enum:LegalHoldScope nn | What the hold covers"
-          - "scope_ids json nn | Ids covered (customers, accounts, cases, tables...)"
+          - "scope_ids json[] nn | Ids covered (customers, accounts, cases, tables...)"
           - "customer_id uuid ref=customer idx | Customer, when scope is a customer"
           - "reason text nn | Legal basis"
           - "requested_by string(120) nn | Legal / compliance requester"
@@ -677,7 +753,10 @@ services:
           - "estimated_records bigint ro | Records selected"
           - "status enum:PurgeRequestStatus nn default=DRAFT ro | Status"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
-          - "blocked_by_hold_id uuid fk=legal_hold | Hold blocking execution"
+          - "approved_by string(64) ro | Checker who approved the purge (differs from the requester)"
+          - "decided_at ts ro | When the request was approved, rejected or cancelled"
+          - "decision_reason string(500) ro | Reason given on rejection or cancellation"
+          - "blocked_by_hold_id uuid fk=legal_hold ro | Hold blocking execution"
           - "executed_at ts ro | Execution time"
           - "records_purged bigint ro | Records purged"
           - "certificate_document_id uuid ref=document ro | Certificate of destruction"
@@ -690,14 +769,14 @@ services:
         ops: [list, get, create, update]
         filters: [data_class, service_name, database_name, sensitivity]
         actions:
-          - "POST /scan | Discover tables and suggest classifications from the spec catalogue | | none"
+          - "POST /scan?apply:bool | Discover tables and suggest classifications from the spec catalogue (apply=true stores new suggestions) | | object"
       - resource: retention-policies
         path: /v1/archive/retention-policies
         table: retention_policy
         ops: [list, get, create, update]
         filters: [data_class, country_code, legal_entity_id, is_active]
         actions:
-          - "POST /{id}/preview | Count records that would be archived or purged now | | none"
+          - "POST /{id}/preview | Count records that would be archived or purged now | | object"
       - resource: archive-jobs
         path: /v1/archive/jobs
         table: archive_job
@@ -712,8 +791,8 @@ services:
         ops: [list, get]
         filters: [archive_job_id, database_name, table_name]
         actions:
-          - "POST /{id}/restore | Restore an archived batch to a query area | reason string(500) nn | none"
-          - "POST /{id}/verify | Verify checksum and object-lock of an archive | | none"
+          - "POST /{id}/restore | Restore an archived batch to a query area | reason string(500) nn | object"
+          - "POST /{id}/verify | Verify checksum and object-lock of an archive (re-run on every call) | | object"
       - resource: legal-holds
         path: /v1/archive/legal-holds
         table: legal_hold
@@ -721,7 +800,7 @@ services:
         filters: [scope_type, customer_id, status]
         actions:
           - "POST /{id}/release | Release a hold (maker-checker) | reason string(500) nn"
-          - "GET /check | Check whether an entity is under hold (?scope_type=&id=) | | none"
+          - "GET /check?scope_type:enum:LegalHoldScope!&id:string! | Check whether an entity is under hold | | object"
       - resource: purge-requests
         path: /v1/archive/purge-requests
         table: purge_request
@@ -729,13 +808,17 @@ services:
         filters: [retention_policy_id, status, data_classification_id]
         actions:
           - "POST /{id}/submit | Submit for approval | "
+          - "POST /{id}/approve | Approve a pending purge (four-eyes: the approver differs from the requester) | "
+          - "POST /{id}/reject | Reject a pending purge | reason string(500) nn"
           - "POST /{id}/execute | Execute an approved purge | | purge_request"
-          - "POST /{id}/cancel | Cancel the request | reason string(255) nn"
-          - "GET /{id}/certificate | Signed URL of the certificate of destruction | | none"
+          - "POST /{id}/cancel | Cancel the request before execution | reason string(500) nn"
+          - "GET /{id}/certificate | Certificate of destruction with its hash verification | | object"
 
     events:
       - "operations.archive_job.completed | archive_job | An archival run finished"
       - "operations.legal_hold.placed | legal_hold | A legal hold was placed"
       - "operations.legal_hold.released | legal_hold | A legal hold was released"
       - "operations.purge_request.approved | purge_request | A purge was approved"
+      - "operations.purge_request.rejected | purge_request | A purge was rejected by the checker"
+      - "operations.purge_request.cancelled | purge_request | A purge request was cancelled"
       - "operations.purge_request.completed | purge_request | Data was purged and a certificate issued"

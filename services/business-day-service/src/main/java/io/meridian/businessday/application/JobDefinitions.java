@@ -38,7 +38,8 @@ public class JobDefinitions {
 
     /** A parsed definition row. */
     public record Definition(UUID id, String code, String name, String jobType, Set<CycleType> cycles,
-                             String owningService, String endpoint, List<String> dependsOn, int sequence,
+                             String owningService, String httpMethod, String httpPath, JsonNode bodyTemplate,
+                             List<String> dependsOn, int sequence,
                              int parallelism, String partitionKey, int timeoutMinutes, int maxRetries,
                              EodPolicy.FailurePolicy failurePolicy, boolean critical, boolean active,
                              UUID legalEntityId, JsonNode parameters) {
@@ -53,7 +54,8 @@ public class JobDefinitions {
         return new Definition(
                 r.hasNonNull("id") ? UUID.fromString(r.get("id").asString()) : null,
                 r.path("code").asString(), r.path("name").asString(), r.path("job_type").asString(), cycles,
-                r.path("owning_service").asString(), r.path("endpoint").asString(),
+                r.path("owning_service").asString(), r.path("http_method").asString("POST"),
+                r.path("http_path").asString(), r.hasNonNull("body_template") ? r.get("body_template") : null,
                 JsonValues.strings(r.get("depends_on")), r.path("sequence").asInt(100),
                 r.path("parallelism").asInt(1), JsonValues.text(r, "partition_key"),
                 r.path("timeout_minutes").asInt(60), r.path("max_retries").asInt(3),
@@ -78,17 +80,14 @@ public class JobDefinitions {
     public void validateFields(JsonNode values) {
         List<String> cycles = JsonValues.strings(values.get("cycle_types"));
         if (cycles.isEmpty()) {
-            throw ApiException.unprocessable("cycle_types_required", "cycle_types must list at least one cycle, e.g. {\"codes\":[\"EOD\"]}");
+            throw ApiException.unprocessable("cycle_types_required", "cycle_types must list at least one cycle, e.g. [\"EOD\"]");
         }
         cycles.forEach(CycleType::parse);
         String service = JsonValues.text(values, "owning_service");
         if (service == null || !catalog.exists(service)) {
             throw ApiException.unprocessable("unknown_service", "owning_service " + service + " is not a Meridian service");
         }
-        String endpoint = JsonValues.text(values, "endpoint");
-        if (endpoint == null || !endpoint.startsWith("/") || endpoint.contains("..") || endpoint.contains("://")) {
-            throw ApiException.unprocessable("invalid_endpoint", "endpoint must be a service-relative path starting with /");
-        }
+        JobTemplates.validate(JsonValues.text(values, "http_path"), values.get("body_template"));
         range(values, "parallelism", 1, 64);
         range(values, "timeout_minutes", 1, 1440);
         range(values, "max_retries", 0, 10);
@@ -166,7 +165,8 @@ public class JobDefinitions {
             n.put("name", d.name());
             n.put("job_type", d.jobType());
             n.put("owning_service", d.owningService());
-            n.put("endpoint", d.endpoint());
+            n.put("http_method", d.httpMethod());
+            n.put("http_path", d.httpPath());
             n.put("sequence", d.sequence());
             n.put("parallelism", d.parallelism());
             n.put("is_critical", d.critical());

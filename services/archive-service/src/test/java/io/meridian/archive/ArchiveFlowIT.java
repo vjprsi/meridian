@@ -100,11 +100,11 @@ class ArchiveFlowIT {
         assertThat(post("/v1/archive/classifications", classification("TRANSACTION", "no-such-service", "ledger_db", "journal_entry",
                 "CONFIDENTIAL", ""), 422).get("code").asString()).isEqualTo("unknown_service");
         assertThat(post("/v1/archive/classifications", classification("CUSTOMER", "customer-service", "customer_db", "customer",
-                "INTERNAL", ",\"pii_columns\":{\"columns\":[\"email\"]}"), 422).get("code").asString()).isEqualTo("sensitivity_too_low");
+                "INTERNAL", ",\"pii_columns\":[\"email\"]"), 422).get("code").asString()).isEqualTo("sensitivity_too_low");
         txnClass = post("/v1/archive/classifications", classification("TRANSACTION", "ledger-service", "ledger_db", "journal_entry",
                 "CONFIDENTIAL", ""), 201).get("id").asString();
         customerClass = post("/v1/archive/classifications", classification("CUSTOMER", "customer-service", "customer_db", "customer",
-                "PII", ",\"pii_columns\":{\"columns\":[\"email\",\"full_name\"]}"), 201).get("id").asString();
+                "PII", ",\"pii_columns\":[\"email\",\"full_name\"]"), 201).get("id").asString();
         post("/v1/archive/classifications", classification("TRANSACTION", "ledger-service", "ledger_db", "journal_entry",
                 "CONFIDENTIAL", ""), 409);
 
@@ -183,15 +183,14 @@ class ArchiveFlowIT {
     @Order(4)
     void legalHoldsAreChecked() throws Exception {
         JsonNode hold = send("POST", "/v1/archive/legal-holds", """
-                {"name":"Matter 2026-17","scope_type":"CUSTOMER","scope_ids":{"ids":["%s"]},"reason":"Litigation",
+                {"name":"Matter 2026-17","scope_type":"CUSTOMER","scope_ids":["%s"],"reason":"Litigation",
                  "requested_by":"Legal","case_reference":"HC-2026-17","starts_on":"%s"}""".formatted(C1, LocalDate.now().minusDays(1)),
                 "legal", 201);
         holdId = hold.get("id").asString();
         assertThat(hold.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(hold.get("customer_id").asString()).isEqualTo(C1);
         assertThat(get("/v1/archive/legal-holds/check?scope_type=CUSTOMER&id=" + C1, TENANT).get("on_hold").asBoolean()).isTrue();
-        assertThat(get("/v1/archive/legal-holds/check?scope_type=CUSTOMER&id=" + C2, TENANT).get("on_hold").asBoolean()).isFalse();
-        HttpResponse<String> shrink = raw("PATCH", "/v1/archive/legal-holds/" + holdId, "{\"scope_ids\":{\"ids\":[]}}", null, TENANT,
+        assertThat(get("/v1/archive/legal-holds/check?scope_type=CUSTOMER&id=" + C2, TENANT).get("on_hold").asBoolean()).isFalse();        HttpResponse<String> shrink = raw("PATCH", "/v1/archive/legal-holds/" + holdId, "{\"scope_ids\":[]}", null, TENANT,
                 "legal", hold.get("row_version").asString());
         assertThat(shrink.statusCode()).isEqualTo(422);
         assertThat(json.readTree(shrink.body()).get("code").asString()).isEqualTo("hold_scope_reduction");
@@ -223,8 +222,10 @@ class ArchiveFlowIT {
         assertThat(submitted.get("estimated_records").asLong()).isEqualTo(42);
         assertThat(send("POST", "/v1/archive/purge-requests/" + id + "/approve", null, "ops", 422).get("code").asString())
                 .isEqualTo("four_eyes_violation");
-        assertThat(send("POST", "/v1/archive/purge-requests/" + id + "/approve", null, "dpo", 200).get("status").asString())
-                .isEqualTo("APPROVED");
+        JsonNode approved = send("POST", "/v1/archive/purge-requests/" + id + "/approve", null, "dpo", 200);
+        assertThat(approved.get("status").asString()).isEqualTo("APPROVED");
+        assertThat(approved.get("approved_by").asString()).isEqualTo("dpo");
+        assertThat(approved.has("decided_at")).isTrue();
 
         JsonNode executed = send("POST", "/v1/archive/purge-requests/" + id + "/execute", null, "ops", 200);
         assertThat(executed.get("status").asString()).isEqualTo("COMPLETED");
@@ -261,10 +262,26 @@ class ArchiveFlowIT {
         String third = send("POST", "/v1/archive/purge-requests", purge("{\"customer_ids\":[\"" + C2 + "\"]}", "PURGE"), "ops", 201)
                 .get("id").asString();
         send("POST", "/v1/archive/purge-requests/" + third + "/submit", null, "ops", 200);
-        assertThat(send("POST", "/v1/archive/purge-requests/" + third + "/reject", "{\"reason\":\"not needed\"}", "dpo", 200)
-                .get("status").asString()).isEqualTo("REJECTED");
+        JsonNode rejected = send("POST", "/v1/archive/purge-requests/" + third + "/reject", "{\"reason\":\"not needed\"}", "dpo", 200);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("decision_reason").asString()).isEqualTo("not needed");
+        assertThat(send("POST", "/v1/archive/purge-requests/" + third + "/reject", "{}", "dpo", 400).get("code").asString())
+                .isEqualTo("validation_failed");
         assertThat(send("POST", "/v1/archive/purge-requests/" + third + "/cancel", "{\"reason\":\"x\"}", "ops", 409)
                 .get("code").asString()).isEqualTo("invalid_transition");
+
+        // cancellation is its own terminal status with a recorded reason
+        String fourth = send("POST", "/v1/archive/purge-requests", purge("{\"customer_ids\":[\"" + C2 + "\"]}", "PURGE"), "ops", 201)
+                .get("id").asString();
+        JsonNode cancelled = send("POST", "/v1/archive/purge-requests/" + fourth + "/cancel", "{\"reason\":\"raised in error\"}",
+                "ops", 200);
+        assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(cancelled.get("decision_reason").asString()).isEqualTo("raised in error");
+        assertThat(send("POST", "/v1/archive/purge-requests/" + fourth + "/submit", null, "ops", 409).get("code").asString())
+                .isEqualTo("invalid_transition");
+        // id lists inside the selector are JSON arrays
+        assertThat(post("/v1/archive/purge-requests", purge("{\"customer_ids\":{\"ids\":[\"" + C2 + "\"]}}", "PURGE"), 422)
+                .get("code").asString()).isEqualTo("invalid_list");
     }
 
     @Test
@@ -272,7 +289,8 @@ class ArchiveFlowIT {
     void eventsAndTenantIsolation() throws Exception {
         List<String> types = jdbc.sql("select distinct event_type from outbox").query(String.class).list();
         assertThat(types).contains("operations.archive_job.completed", "operations.legal_hold.placed",
-                "operations.legal_hold.released", "operations.purge_request.approved", "operations.purge_request.completed");
+                "operations.legal_hold.released", "operations.purge_request.approved", "operations.purge_request.completed",
+                "operations.purge_request.rejected", "operations.purge_request.cancelled");
         assertThat(raw("GET", "/v1/archive/objects/" + objectId, null, null, OTHER_TENANT, "x", null).statusCode()).isEqualTo(404);
         assertThat(raw("POST", "/v1/archive/purge-requests/" + heldPurge + "/execute", null, UUID.randomUUID().toString(),
                 OTHER_TENANT, "x", null).statusCode()).isEqualTo(404);

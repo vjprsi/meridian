@@ -24,33 +24,14 @@ public final class SearchText {
     /** A searchable field: dotted JSON path and boost (1 = normal). */
     public record Field(String path, double boost) {}
 
-    /**
-     * Parses {@code searchable_fields}: an array (or object holding one) of {@code "name^3"} / {@code "name"}
-     * strings, or an object mapping field -> boost ({@code {"full_name": 3, "email": 1}}).
-     */
+    /** Parses {@code searchable_fields}: a JSON array of {@code "name^3"} / {@code "name"} strings. */
     public static List<Field> fields(JsonNode node) {
         List<Field> out = new ArrayList<>();
-        if (node == null || node.isNull()) {
+        if (node == null || node.isNull() || !node.isArray()) {
             return out;
         }
         List<String> specs = new ArrayList<>();
-        if (node.isArray()) {
-            node.forEach(n -> specs.add(n.asString()));
-        } else if (node.isObject()) {
-            boolean arrays = false;
-            for (String k : node.propertyNames()) {
-                if (node.get(k).isArray()) {
-                    arrays = true;
-                    node.get(k).forEach(n -> specs.add(n.asString()));
-                }
-            }
-            if (!arrays) {
-                for (String k : node.propertyNames()) {
-                    JsonNode v = node.get(k);
-                    out.add(new Field(k, v.isNumber() ? v.asDouble() : 1.0));
-                }
-            }
-        }
+        node.forEach(n -> specs.add(n.asString()));
         for (String s : specs) {
             int caret = s.indexOf('^');
             if (caret > 0) {

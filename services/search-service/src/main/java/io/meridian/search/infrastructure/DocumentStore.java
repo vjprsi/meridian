@@ -11,11 +11,18 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * PostgreSQL full-text storage: documents per physical index (weighted tsvector, JSONB body), the append-only
- * ingest journal, and ranked queries. All statements are parameterised; RLS scopes them to the tenant.
+ * PostgreSQL full-text storage on the spec-owned tables {@code search_document} (documents per physical index:
+ * weighted text A/B/C, JSONB body) and {@code search_ingest_log} (append-only journal), with ranked queries. The
+ * weighted tsvector is computed from the A/B/C text at query time. All statements are parameterised; RLS scopes
+ * them to the tenant.
  */
 @Repository
 public class DocumentStore {
+    /** Weighted tsvector of a document row (A = boost >= 3, B = boost >= 2, C = the rest). */
+    private static final String TSV = "(setweight(to_tsvector('simple', coalesce(text_a, '')), 'A')"
+            + " || setweight(to_tsvector('simple', coalesce(text_b, '')), 'B')"
+            + " || setweight(to_tsvector('simple', coalesce(text_c, '')), 'C'))";
+
     private final JdbcClient jdbc;
     private final JsonMapper json;
 
@@ -31,10 +38,10 @@ public class DocumentStore {
                         OffsetDateTime occurredAt) {
         return jdbc.sql("""
                 insert into search_ingest_log (tenant_id, entity_type, entity_id, operation, document, source_event_id,
-                                               source_version, occurred_at)
-                values (?, ?, ?, ?, ?::jsonb, ?, ?, coalesce(?, now())) returning id""")
+                                               source_version, occurred_at, created_by)
+                values (?, ?, ?, ?, ?::jsonb, ?, ?, coalesce(?, now()), ?) returning id""")
                 .params(TenantContext.require(), entityType, entityId, op, doc == null ? null : json.writeValueAsString(doc),
-                        eventId, version, occurredAt)
+                        eventId, version, occurredAt, TenantContext.principal())
                 .query(UUID.class).single();
     }
 
@@ -44,18 +51,18 @@ public class DocumentStore {
         String all = String.join(" ", weighted).trim();
         jdbc.sql("""
                 insert into search_document as d (tenant_id, physical_index, entity_type, entity_id, title, body, search_text,
-                       tsv, source_event_id, source_version, occurred_at, indexed_at)
-                values (?, ?, ?, ?, ?, ?::jsonb, ?,
-                        setweight(to_tsvector('simple', ?), 'A') || setweight(to_tsvector('simple', ?), 'B')
-                          || setweight(to_tsvector('simple', ?), 'C'), ?, ?, ?, now())
+                       text_a, text_b, text_c, source_event_id, source_version, occurred_at, indexed_at, created_by, updated_by)
+                values (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, now(), ?, ?)
                 on conflict (tenant_id, physical_index, entity_id) do update
-                   set title = excluded.title, body = excluded.body, search_text = excluded.search_text, tsv = excluded.tsv,
+                   set title = excluded.title, body = excluded.body, search_text = excluded.search_text,
+                       text_a = excluded.text_a, text_b = excluded.text_b, text_c = excluded.text_c,
                        source_event_id = excluded.source_event_id, source_version = excluded.source_version,
-                       occurred_at = excluded.occurred_at, indexed_at = now()
+                       occurred_at = excluded.occurred_at, indexed_at = now(), updated_by = excluded.updated_by
                  where d.source_version is null or excluded.source_version is null
                        or excluded.source_version >= d.source_version""")
                 .params(TenantContext.require(), physicalIndex, entityType, entityId, title, json.writeValueAsString(body),
-                        all, weighted[0], weighted[1], weighted[2], eventId, version, occurredAt)
+                        all, weighted[0], weighted[1], weighted[2], eventId, version, occurredAt,
+                        TenantContext.principal(), TenantContext.principal())
                 .update();
     }
 
@@ -106,7 +113,7 @@ public class DocumentStore {
         List<Object> args = new ArrayList<>();
         StringBuilder sql = new StringBuilder("select entity_type, entity_id, title, body::text, ");
         if (tsquery != null) {
-            sql.append("ts_rank_cd(tsv, to_tsquery('simple', ?), 32)");
+            sql.append("ts_rank_cd(").append(TSV).append(", to_tsquery('simple', ?), 32)");
             args.add(tsquery);
         } else {
             sql.append("0");
@@ -114,7 +121,7 @@ public class DocumentStore {
         sql.append(" as score from search_document where physical_index = any(?)");
         args.add(physicalIndexes.toArray(String[]::new));
         if (tsquery != null) {
-            sql.append(" and tsv @@ to_tsquery('simple', ?)");
+            sql.append(" and ").append(TSV).append(" @@ to_tsquery('simple', ?)");
             args.add(tsquery);
         }
         if (filters != null && filters.isObject() && !filters.isEmpty()) {
