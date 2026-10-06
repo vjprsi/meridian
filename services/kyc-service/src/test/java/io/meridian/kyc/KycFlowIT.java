@@ -91,29 +91,47 @@ class KycFlowIT {
     @Test
     @Order(1)
     void providersAreValidatedAndConnectionTested() throws Exception {
+        // KYC profiles are opened explicitly (one per customer) before evidence is recorded.
+        JsonNode ap = post("/v1/kyc/profiles", "{\"customer_id\":\"" + alice + "\",\"notes\":\"retail\"}", 201, MAKER);
+        aliceProfile = ap.get("id").asString();
+        assertThat(ap.get("status").asString()).isEqualTo("NOT_STARTED");
+        bobProfile = post("/v1/kyc/profiles", "{\"customer_id\":\"" + bob + "\"}", 201, MAKER).get("id").asString();
+        assertThat(post("/v1/kyc/profiles", "{\"customer_id\":\"" + alice + "\"}", 409, MAKER).get("code").asString())
+                .isEqualTo("profile_exists");
+        assertThat(outbox("party.kyc_profile.created", aliceProfile)).isEqualTo(1);
         JsonNode p = post("/v1/kyc/providers", """
-                {"code":"sandbox_kyc","name":"Sandbox","capabilities":{"values":["DOCUMENT","DATABASE","LIVENESS",
-                 "FACE_MATCH","ADDRESS","SCREENING"]},"countries":{"values":["ke","GB"]},"priority":10}""", 201, MAKER);
+                {"code":"sandbox_kyc","name":"Sandbox","capabilities":["DOCUMENT","DATABASE","LIVENESS",
+                 "FACE_MATCH","ADDRESS","SCREENING"],"countries":["ke","GB"],"priority":10,
+                 "credentials_ref":"vault://kyc/providers/sandbox"}""", 201, MAKER);
         provider = p.get("id").asString();
         assertThat(p.get("code").asString()).isEqualTo("SANDBOX_KYC");
-        assertThat(p.has("credentials_ref")).isFalse();
-        assertThat(p.get("countries").get("values").get(0).asString()).isEqualTo("KE");
+        assertThat(p.get("credentials_ref").asString()).isEqualTo("vault://kyc/providers/sandbox");
+        assertThat(p.get("countries").get(0).asString()).isEqualTo("KE");
+        assertThat(p.get("capabilities")).hasSize(6);
+        JsonNode rawSecret = post("/v1/kyc/providers", """
+                {"code":"LEAKY","name":"Leaky","capabilities":["DOCUMENT"],"credentials_ref":"sk_live_123"}""", 422, MAKER);
+        assertThat(rawSecret.get("code").asString()).isEqualTo("invalid_secret_ref");
+        assertThat(send("POST", "/v1/kyc/providers", """
+                {"code":"OLDSTYLE","name":"Wrapped","capabilities":{"values":["DOCUMENT"]},
+                 "credentials_ref":"vault://x"}""", UUID.randomUUID().toString(), TENANT, MAKER).statusCode()).isEqualTo(400);
 
         post("/v1/kyc/providers", """
-                {"code":"SANDBOX_FB","name":"Fallback","capabilities":{"DATABASE":true},"is_fallback":true,"priority":50}""",
+                {"code":"SANDBOX_FB","name":"Fallback","capabilities":["DATABASE"],"is_fallback":true,"priority":50,
+                 "credentials_ref":"vault://kyc/providers/fb"}""",
                 201, MAKER);
         JsonNode bad = post("/v1/kyc/providers", """
-                {"code":"BAD","name":"Bad","capabilities":{"values":["TELEPATHY"]}}""", 422, MAKER);
+                {"code":"BAD","name":"Bad","capabilities":["TELEPATHY"],"credentials_ref":"vault://b"}""", 422, MAKER);
         assertThat(bad.get("code").asString()).isEqualTo("invalid_capabilities");
         JsonNode dup = post("/v1/kyc/providers", """
-                {"code":"SANDBOX_KYC","name":"Again","capabilities":{"values":["DOCUMENT"]}}""", 409, MAKER);
+                {"code":"SANDBOX_KYC","name":"Again","capabilities":["DOCUMENT"],"credentials_ref":"vault://a"}""", 409, MAKER);
         assertThat(dup.get("code").asString()).isEqualTo("duplicate");
 
         JsonNode test = post("/v1/kyc/providers/" + provider + "/test-connection", null, 200, MAKER);
         assertThat(test.get("ok").asBoolean()).isTrue();
 
         String inactive = post("/v1/kyc/providers", """
-                {"code":"SANDBOX_OFF","name":"Off","capabilities":{"values":["DOCUMENT"]},"is_active":false}""", 201, MAKER)
+                {"code":"SANDBOX_OFF","name":"Off","capabilities":["DOCUMENT"],"is_active":false,
+                 "credentials_ref":"vault://kyc/providers/off"}""", 201, MAKER)
                 .get("id").asString();
         assertThat(post("/v1/kyc/providers/" + inactive + "/test-connection", null, 409, MAKER).get("code").asString())
                 .isEqualTo("provider_inactive");
@@ -153,8 +171,13 @@ class KycFlowIT {
 
         JsonNode mismatch = post("/v1/kyc/documents", """
                 {"kyc_profile_id":"%s","customer_id":"%s","document_type":"PASSPORT","document_id":"%s"}"""
-                .formatted(UUID.randomUUID(), alice, UUID.randomUUID()), 409, MAKER);
-        assertThat(mismatch.get("code").asString()).isEqualTo("profile_mismatch");
+                .formatted(UUID.randomUUID(), alice, UUID.randomUUID()), 422, MAKER);
+        assertThat(mismatch.get("code").asString()).isEqualTo("profile_not_found"); // no implicit profile creation
+        JsonNode foreign = post("/v1/kyc/documents", """
+                {"kyc_profile_id":"%s","customer_id":"%s","document_type":"PASSPORT","document_id":"%s"}"""
+                .formatted(bobProfile, alice, UUID.randomUUID()), 422, MAKER);
+        assertThat(foreign.get("code").asString()).isEqualTo("profile_customer_mismatch");
+        assertThat(outbox("party.kyc_document.rejected", expiring)).isEqualTo(1);
 
         JsonNode missing = post("/v1/kyc/documents", """
                 {"kyc_profile_id":"%s","document_type":"PASSPORT"}""".formatted(aliceProfile), 400, MAKER);
@@ -177,7 +200,7 @@ class KycFlowIT {
         customerNames.put(bob, "Bob REJECT Smith");
         JsonNode failed = check(bobProfile, "DATABASE_VERIFICATION", null, 201);
         assertThat(failed.get("status").asString()).isEqualTo("FAILED");
-        assertThat(failed.get("reason_codes").get("values").get(0).asString()).isEqualTo("DATA_MISMATCH");
+        assertThat(failed.get("reason_codes").get(0).asString()).isEqualTo("DATA_MISMATCH");
 
         customerNames.put(bob, "Bob Smith");
         JsonNode retried = post("/v1/kyc/checks/" + failed.get("id").asString() + "/retry",
@@ -218,7 +241,7 @@ class KycFlowIT {
         JsonNode s = post("/v1/kyc/screenings", """
                 {"kyc_profile_id":"%s","customer_id":"%s","screening_type":"PEP","trigger":"onboarding",
                  "screened_name":"Alice Good","status":"POTENTIAL_MATCH",
-                 "matches":{"values":[{"list":"PEP-GLOBAL","score":0.71}]}}""".formatted(aliceProfile, alice), 201, MAKER);
+                 "matches":[{"list":"PEP-GLOBAL","score":0.71}]}""".formatted(aliceProfile, alice), 201, MAKER);
         String id = s.get("id").asString();
         assertThat(s.get("match_count").asInt()).isEqualTo(1);
         assertThat(outbox("party.kyc_screening.match_found", id)).isEqualTo(1);

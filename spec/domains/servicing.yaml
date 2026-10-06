@@ -32,6 +32,10 @@ enums:
   CopilotTask: [SUMMARISE_CUSTOMER, SUMMARISE_CASE, DRAFT_REPLY, CLASSIFY_CASE, SUGGEST_NEXT_ACTION, ANSWER_QUESTION,
                 DRAFT_COMPLAINT_RESPONSE, TRANSLATE]
   CopilotFeedback: [ACCEPTED, EDITED, REJECTED, NONE]
+  SlaAppliesTo: [CASE, COMPLAINT]
+  RedressStatus: [PROPOSED, APPROVED, PAID, REJECTED, FAILED]
+  KnowledgeAudience: [STAFF, CUSTOMER, AGENT]
+  CaseCommentAuthorType: [STAFF, CUSTOMER, SYSTEM, COPILOT]
 
 services:
   # ------------------------------------------------------------------ crm-service
@@ -48,7 +52,7 @@ services:
         fr: [SRV-01]
         columns:
           - "name string(120) nn | Policy name"
-          - "applies_to string(20) nn | CASE or COMPLAINT"
+          - "applies_to enum:SlaAppliesTo nn | CASE or COMPLAINT"
           - "case_type enum:ServiceCaseType | Case type (empty = any)"
           - "complaint_category enum:ComplaintCategory | Complaint category (empty = any)"
           - "priority enum:ServiceCasePriority | Priority (empty = any)"
@@ -56,8 +60,14 @@ services:
           - "first_response_minutes int nn | Target time to first response"
           - "resolution_minutes int nn | Target time to resolution"
           - "business_hours_only bool nn default=true | Count only business hours"
+          - "business_day_start string(5) nn default=09:00 | Start of the business day (HH:mm, policy time zone)"
+          - "business_day_end string(5) nn default=17:00 | End of the business day (HH:mm, policy time zone)"
+          - "working_days json[] | ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday"
+          - "time_zone string(40) nn default=UTC | IANA time zone of the business hours"
+          - "pause_on_pending_customer bool nn default=true | Stop the resolution clock while waiting for the customer"
+          - "at_risk_percent int nn default=80 | Elapsed share of the target after which an item is at risk"
           - "holiday_calendar_id uuid ref=holiday_calendar | Calendar for business hours"
-          - "escalation_rules json | Escalation steps when targets are at risk or breached"
+          - "escalation_rules json[] | Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority})"
           - "is_regulatory bool nn default=false | Deadline set by a regulator"
           - "regulation_reference string(120) | Rule reference, e.g. FCA DISP 1.6"
           - "is_active bool nn default=true | Active"
@@ -73,7 +83,7 @@ services:
           - "team_role_id uuid ref=role | Role whose members work this queue"
           - "branch_id uuid ref=branch | Branch-specific queue"
           - "routing enum:WorkQueueRouting nn default=ROUND_ROBIN | Assignment strategy"
-          - "required_skills json | Skills required for skills-based routing"
+          - "required_skills json[] | Skills required for skills-based routing"
           - "max_items_per_agent int nn default=20 | Concurrent item cap per agent"
           - "is_active bool nn default=true | Active"
 
@@ -87,44 +97,55 @@ services:
           - "subject_id uuid nn idx | Subject id"
           - "title string(255) nn | Title shown in the queue"
           - "priority enum:ServiceCasePriority nn default=MEDIUM | Priority"
-          - "status enum:WorkItemStatus nn default=QUEUED | Status"
-          - "assigned_to uuid ref=app_user idx | Assignee"
+          - "status enum:WorkItemStatus nn default=QUEUED ro | Status (changes through next / assign / release / complete)"
+          - "assigned_to uuid ref=app_user idx ro | Assignee (set through next / assign)"
           - "assigned_at ts ro | Assignment time"
           - "due_at ts idx | SLA due time"
+          - "required_skills json[] | Skills needed for this item (skills-based routing; adds to the queue's)"
+          - "started_at ts ro | Time work started (IN_PROGRESS)"
           - "completed_at ts ro | Completion time"
-        indexes: [[subject_type, subject_id]]
+          - "release_count int nn default=0 ro | Times returned to the queue"
+          - "last_release_reason string(255) ro | Reason given on the last release"
+          - "status_reason string(255) ro | Reason of the last cancellation"
+        indexes: [[subject_type, subject_id], [work_queue_id, status, priority]]
 
       - name: service_case
         prefix: cas
         description: A customer service request or issue handled by servicing staff
         fr: [SRV-01, CIF-02]
         columns:
-          - "case_number string(32) nn uq | Human-readable case number"
+          - "case_number string(32) nn uq ro | Human-readable case number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Customer"
           - "case_type enum:ServiceCaseType nn | Case type"
           - "subtype string(64) | Finer classification"
           - "subject string(255) nn | Short subject"
           - "description text pii | Customer's description"
-          - "status enum:ServiceCaseStatus nn default=NEW | Status"
+          - "status enum:ServiceCaseStatus nn default=NEW ro | Status (changes through the case actions)"
           - "priority enum:ServiceCasePriority nn default=MEDIUM | Priority"
           - "channel enum:ServiceChannel nn | Channel where it was raised"
           - "work_queue_id uuid fk=work_queue idx | Queue"
-          - "assigned_to uuid ref=app_user idx | Assignee"
-          - "sla_policy_id uuid fk=sla_policy | SLA policy applied"
+          - "assigned_to uuid ref=app_user idx ro | Assignee (set through assign)"
+          - "sla_policy_id uuid fk=sla_policy ro | SLA policy applied (matched on create)"
           - "first_response_due_at ts ro | First response deadline"
           - "resolution_due_at ts ro | Resolution deadline"
           - "first_responded_at ts ro | First response time"
           - "sla_breached bool nn default=false ro | SLA breached"
+          - "sla_paused_at ts ro | Time the resolution clock was paused (pending customer)"
+          - "sla_paused_minutes int nn default=0 ro | Business minutes the clock has been paused in total"
+          - "escalation_level int nn default=0 ro | Times escalated"
+          - "escalated_at ts ro | Last escalation time"
+          - "status_reason string(1000) ro | Reason or message of the last status change"
+          - "complaint_id uuid ro | Complaint raised from this case"
           - "related_object_type string(40) | ACCOUNT, CARD, PAYMENT, LOAN, WALLET, TRANSACTION"
           - "related_object_id uuid idx | Related object id"
           - "parent_case_id uuid fk=service_case | Parent case for linked cases"
-          - "resolution_code string(64) | Resolution code"
-          - "resolution_summary text | How it was resolved"
+          - "resolution_code string(64) ro | Resolution code (set through resolve)"
+          - "resolution_summary text ro | How it was resolved (set through resolve)"
           - "resolved_at ts ro | Resolution time"
           - "closed_at ts ro | Closure time"
           - "reopened_count int nn default=0 ro | Times reopened"
-          - "csat_score int | Customer satisfaction 1..5"
-          - "tags json | Free tags"
+          - "csat_score int ro | Customer satisfaction 1..5 (set through close)"
+          - "tags json[] | Free tags"
         indexes: [[related_object_type, related_object_id]]
 
       - name: case_comment
@@ -134,10 +155,11 @@ services:
         columns:
           - "service_case_id uuid nn fk=service_case idx | Case"
           - "visibility enum:CaseCommentVisibility nn default=INTERNAL | Who can see it"
-          - "author_type string(20) nn | STAFF, CUSTOMER, SYSTEM, COPILOT"
+          - "author_type enum:CaseCommentAuthorType nn default=STAFF | STAFF, CUSTOMER, SYSTEM, COPILOT"
           - "author_id uuid | Staff user or customer id"
+          - "author_name string(64) ro | Principal that wrote the comment"
           - "body text nn pii | Comment text"
-          - "attachments json | Document ids"
+          - "attachments json[] | Document ids"
           - "copilot_session_id uuid fk=copilot_session | Copilot draft this comment came from"
 
       - name: complaint
@@ -145,7 +167,7 @@ services:
         description: A formal complaint handled under regulatory rules with deadlines, root cause and redress
         fr: [SRV-01]
         columns:
-          - "complaint_number string(32) nn uq | Human-readable complaint reference"
+          - "complaint_number string(32) nn uq ro | Human-readable complaint reference (server-generated)"
           - "customer_id uuid nn ref=customer idx | Complainant"
           - "service_case_id uuid fk=service_case | Originating case"
           - "category enum:ComplaintCategory nn | Category"
@@ -153,27 +175,34 @@ services:
           - "related_object_type string(40) | ACCOUNT, CARD, PAYMENT, LOAN, WALLET"
           - "related_object_id uuid | Related object id"
           - "channel enum:ServiceChannel nn | Channel"
+          - "country country | Jurisdiction whose complaint rules apply (default: service configuration)"
           - "summary string(500) nn | Summary"
           - "details text pii | Full complaint"
-          - "status enum:ComplaintStatus nn default=RECEIVED | Status"
+          - "status enum:ComplaintStatus nn default=RECEIVED ro | Status (changes through the complaint actions)"
           - "received_at ts nn default=now | Time received"
           - "acknowledged_at ts ro | Acknowledgement time"
           - "acknowledgement_due_at ts ro | Acknowledgement deadline"
           - "final_response_due_at ts ro | Final response deadline (regulatory)"
           - "final_response_at ts ro | Final response time"
-          - "sla_policy_id uuid fk=sla_policy | SLA policy"
-          - "assigned_to uuid ref=app_user idx | Handler"
+          - "deadline_at_risk_at ts ro | Time the deadline-at-risk alert was raised"
+          - "deadline_breached_at ts ro | Time the regulatory deadline breach was recorded"
+          - "sla_policy_id uuid fk=sla_policy ro | SLA policy (matched on create)"
+          - "assigned_to uuid ref=app_user idx ro | Handler (set through assign)"
           - "work_queue_id uuid fk=work_queue | Queue"
           - "is_vulnerable_customer bool nn default=false | Customer flagged as vulnerable"
-          - "root_cause string(255) | Root cause"
-          - "root_cause_category string(64) | Root cause category for trend analysis"
-          - "outcome enum:ComplaintOutcome | Outcome"
-          - "redress_amount amount | Total redress paid"
-          - "redress_currency currency | Currency of redress"
-          - "final_response_document_id uuid ref=document | Final response letter"
-          - "escalated_to string(120) | Ombudsman / regulator escalated to"
-          - "escalated_at ts | Escalation time"
+          - "root_cause string(255) ro | Root cause (set through propose-resolution)"
+          - "root_cause_category string(64) ro | Root cause category for trend analysis"
+          - "outcome enum:ComplaintOutcome ro | Outcome (set through propose-resolution or withdraw)"
+          - "resolution_summary text ro | Proposed resolution shown in the final response"
+          - "resolution_proposed_at ts ro | Time the resolution was proposed"
+          - "redress_amount amount ro | Total redress paid (sum of paid redress)"
+          - "redress_currency currency ro | Currency of redress"
+          - "final_response_document_id uuid ref=document ro | Final response letter (set through final-response)"
+          - "escalated_to string(120) ro | Ombudsman / regulator escalated to"
+          - "ombudsman_reference string(64) ro | Case reference at the ombudsman"
+          - "escalated_at ts ro | Escalation time"
           - "reportable bool nn default=true | Included in regulatory complaint returns"
+          - "status_reason string(1000) ro | Reason or message of the last status change"
           - "closed_at ts ro | Closure time"
 
       - name: complaint_redress
@@ -185,11 +214,18 @@ services:
           - "redress_type enum:RedressType nn | Redress type"
           - "amount amount | Amount (monetary redress)"
           - "currency currency | Currency"
-          - "target_account_id uuid ref=ledger_account | Account credited"
-          - "journal_entry_id uuid ref=journal_entry | Posting created"
-          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
-          - "status string(20) nn default=PROPOSED | PROPOSED, APPROVED, PAID, REJECTED"
+          - "target_account_id uuid ref=ledger_account | Customer account credited"
+          - "ledger_id uuid ref=ledger | Ledger book of the posting (default: service configuration)"
+          - "funding_account_id uuid ref=ledger_account | Bank redress expense / suspense account debited (default: service configuration)"
+          - "journal_entry_id uuid ref=journal_entry ro | Posting created on payment"
+          - "approval_request_id uuid ref=approval_request ro | Maker-checker approval, when routed through workflow-service"
+          - "status enum:RedressStatus nn default=PROPOSED ro | Status (changes through approve / reject / pay)"
           - "description string(500) | Description"
+          - "approved_by string(64) ro | Checker who approved"
+          - "approved_at ts ro | Approval time"
+          - "approval_comment string(500) ro | Checker comment"
+          - "rejection_reason string(255) ro | Reason when rejected"
+          - "failure_reason string(500) ro | Ledger error when the payment failed"
           - "paid_at ts ro | Payment time"
 
       - name: interaction
@@ -224,7 +260,7 @@ services:
           - "body text nn pii | Note text"
           - "category string(40) | GENERAL, ALERT, VULNERABILITY, PREFERENCE, COMPLIANCE"
           - "is_pinned bool nn default=false | Shown as a banner on the customer 360"
-          - "visible_to_roles json | Restrict visibility to roles"
+          - "visible_to_roles json[] | Restrict visibility to roles"
           - "expires_at ts | When the note stops being shown"
 
       - name: customer_timeline_event
@@ -253,16 +289,19 @@ services:
           - "title string(255) nn | Title"
           - "body text nn | Article body (Markdown)"
           - "language string(10) nn default=en | Language"
-          - "audience string(20) nn default=STAFF | STAFF, CUSTOMER, AGENT"
-          - "status enum:KnowledgeArticleStatus nn default=DRAFT | Status"
-          - "tags json | Tags"
-          - "case_types json | Case types it helps with"
+          - "audience enum:KnowledgeAudience nn default=STAFF | STAFF, CUSTOMER, AGENT"
+          - "status enum:KnowledgeArticleStatus nn default=DRAFT ro | Status (changes through submit-review / publish / archive)"
+          - "tags json[] | Tags"
+          - "case_types json[] | Case types it helps with (ServiceCaseType values)"
           - "version int nn default=1 ro | Version"
           - "published_at ts ro | Publication time"
-          - "reviewed_by uuid ref=app_user | Reviewer"
+          - "submitted_by string(64) ro | Author who submitted the article for review"
+          - "reviewed_by string(64) ro | Reviewer who published it (four-eyes)"
           - "review_due date | Next content review"
           - "view_count int nn default=0 ro | Views"
           - "helpful_count int nn default=0 ro | Helpful votes"
+          - "not_helpful_count int nn default=0 ro | Not-helpful votes"
+          - "archived_at ts ro | Archive time"
 
       - name: canned_response
         prefix: cnr
@@ -290,16 +329,19 @@ services:
           - "service_case_id uuid fk=service_case | Case in context"
           - "complaint_id uuid fk=complaint | Complaint in context"
           - "prompt text pii | Staff prompt or question"
-          - "context_refs json nn | Records and articles retrieved as grounding"
-          - "output text nn pii | Generated summary, draft or answer"
-          - "citations json | Sources cited in the output"
-          - "model string(64) nn | Model id used"
-          - "model_gateway_request_id string(128) | Request id at the model gateway"
-          - "input_tokens int | Input tokens"
-          - "output_tokens int | Output tokens"
-          - "latency_ms int | Latency"
-          - "pii_redacted bool nn default=true | PII redacted before sending to the model"
-          - "guardrail_flags json | Guardrail triggers, if any"
+          - "language string(10) | Target language (TRANSLATE) or reply language"
+          - "prompt_hash string(64) ro | SHA-256 of the prompt as sent to the model (audit)"
+          - "context_refs json[] nn ro | Records and articles retrieved as grounding"
+          - "output text nn pii ro | Generated summary, draft or answer"
+          - "output_hash string(64) nn ro | SHA-256 of the output (audit)"
+          - "citations json[] ro | Sources cited in the output"
+          - "model string(64) nn ro | Model id used"
+          - "model_gateway_request_id string(128) ro | Request id at the model gateway"
+          - "input_tokens int ro | Input tokens"
+          - "output_tokens int ro | Output tokens"
+          - "latency_ms int ro | Latency"
+          - "pii_redacted bool nn default=true ro | PII redacted before sending to the model"
+          - "guardrail_flags json[] ro | Guardrail triggers, if any"
 
       - name: copilot_feedback
         prefix: cfb
@@ -310,6 +352,8 @@ services:
           - "copilot_session_id uuid nn fk=copilot_session idx | Session"
           - "feedback enum:CopilotFeedback nn | Feedback"
           - "edited_output text pii | Final text after staff edits"
+          - "edited_output_hash string(64) ro | SHA-256 of the edited text (audit)"
+          - "staff_user string(64) ro | Principal that gave the feedback"
           - "comment string(1000) | Comment"
 
     apis:
@@ -325,17 +369,19 @@ services:
         filters: [routing, branch_id, is_active]
         actions:
           - "GET /{id}/items | Items in the queue | | work_item[]"
-          - "GET /{id}/stats | Queue size, ageing and SLA risk | | none"
+          - "GET /{id}/stats | Queue size, ageing, per-assignee load and SLA risk | | object"
       - resource: work-items
         path: /v1/servicing/work-items
         table: work_item
         ops: [list, get, create, update]
         filters: [work_queue_id, subject_type, subject_id, status, assigned_to, priority]
         actions:
-          - "POST /next | Pull the next item for the current user | work_queue_id uuid | work_item"
+          - "POST /next | Pull the next item for the current user (priority, due time and skills routing) | work_queue_id uuid, assignee_id uuid nn, skills json[] | work_item"
           - "POST /{id}/assign | Assign to a user | assigned_to uuid nn | work_item"
+          - "POST /{id}/start | Start working on an assigned item | | work_item"
           - "POST /{id}/release | Return to the queue | reason string(255) | work_item"
           - "POST /{id}/complete | Mark done | | work_item"
+          - "POST /{id}/cancel | Cancel an item that no longer needs work | reason string(255) nn | work_item"
       - resource: service-cases
         path: /v1/servicing/cases
         table: service_case
@@ -344,13 +390,17 @@ services:
         actions:
           - "POST /{id}/assign | Assign the case | assigned_to uuid nn | service_case"
           - "POST /{id}/escalate | Escalate to a higher tier or another queue | work_queue_id uuid nn, reason string(255) nn | service_case"
+          - "POST /{id}/start | Start work on the case | | service_case"
           - "POST /{id}/pending-customer | Wait for customer input (pauses SLA if policy allows) | message string(1000) | service_case"
+          - "POST /{id}/customer-responded | Customer input received: resume work and the SLA clock | message string(1000) | service_case"
+          - "POST /{id}/cancel | Cancel the case (raised in error or withdrawn) | reason string(255) nn | service_case"
           - "POST /{id}/resolve | Resolve the case | resolution_code string(64) nn, resolution_summary text nn | service_case"
           - "POST /{id}/close | Close a resolved case | csat_score int | service_case"
           - "POST /{id}/reopen | Reopen a resolved or closed case | reason string(255) nn | service_case"
           - "POST /{id}/convert-to-complaint | Raise a formal complaint from this case | category enum:ComplaintCategory nn | complaint"
           - "GET /{id}/comments | Comments | | case_comment[]"
-          - "POST /{id}/comments | Add a comment | body text nn, visibility enum:CaseCommentVisibility nn, attachments json | case_comment"
+          - "POST /{id}/comments | Add a comment | body text nn, visibility enum:CaseCommentVisibility nn, author_type enum:CaseCommentAuthorType, author_id uuid, attachments json[], copilot_session_id uuid | case_comment"
+          - "POST /sla-check | Evaluate SLA breaches and at-risk deadlines (called by the scheduler) | | object"
       - resource: complaints
         path: /v1/servicing/complaints
         table: complaint
@@ -359,12 +409,15 @@ services:
         actions:
           - "POST /{id}/acknowledge | Send the acknowledgement | message string(1000) | complaint"
           - "POST /{id}/assign | Assign a handler | assigned_to uuid nn | complaint"
-          - "POST /{id}/propose-resolution | Propose outcome and redress | outcome enum:ComplaintOutcome nn, root_cause string(255) nn, root_cause_category string(64) | complaint"
+          - "POST /{id}/investigate | Start the investigation | | complaint"
+          - "POST /{id}/propose-resolution | Propose outcome and redress | outcome enum:ComplaintOutcome nn, root_cause string(255) nn, root_cause_category string(64), resolution_summary text | complaint"
           - "POST /{id}/final-response | Issue the final response | final_response_document_id uuid nn | complaint"
-          - "POST /{id}/escalate | Record escalation to ombudsman or regulator | escalated_to string(120) nn | complaint"
+          - "POST /{id}/escalate | Record escalation to ombudsman or regulator | escalated_to string(120) nn, ombudsman_reference string(64) | complaint"
+          - "POST /{id}/withdraw | The complainant withdrew the complaint | reason string(255) nn | complaint"
           - "POST /{id}/close | Close the complaint | | complaint"
           - "GET /{id}/redress | Redress actions | | complaint_redress[]"
-          - "GET /reports/regulatory | Complaint statistics for regulatory returns (?from=&to=&country=) | | none"
+          - "GET /reports/regulatory?from:date!&to:date!&country:country | Complaint statistics for regulatory returns | | object"
+          - "POST /deadline-check | Flag complaints close to or past their regulatory deadlines (called by the scheduler) | | object"
       - resource: complaint-redress
         path: /v1/servicing/complaint-redress
         table: complaint_redress
@@ -389,24 +442,27 @@ services:
         table: customer_timeline_event
         ops: [list]
         filters: [event_type, source_domain, object_type, object_id]
+        actions:
+          - "GET /summary?from:ts&to:ts | Aggregated timeline: counts per domain and type, open items, latest highlights | | object"
       - resource: knowledge-articles
         path: /v1/servicing/knowledge-articles
         table: knowledge_article
         ops: [list, get, create, update]
         filters: [status, language, audience, slug]
         actions:
-          - "GET /search | Semantic search over published articles (?q=) | | knowledge_article[]"
+          - "GET /search?q:string!&language:string&audience:string&case_type:string | Ranked search over published articles | | knowledge_article[]"
           - "POST /{id}/submit-review | Submit for review | | knowledge_article"
-          - "POST /{id}/publish | Publish | | knowledge_article"
+          - "POST /{id}/publish | Publish (reviewer must differ from the submitter) | | knowledge_article"
           - "POST /{id}/archive | Archive | | knowledge_article"
-          - "POST /{id}/feedback | Record a helpful / not helpful vote | helpful bool nn | none"
+          - "POST /{id}/new-version | Return a published or archived article to DRAFT as the next version | | knowledge_article"
+          - "POST /{id}/feedback | Record a helpful / not helpful vote | helpful bool nn | knowledge_article"
       - resource: canned-responses
         path: /v1/servicing/canned-responses
         table: canned_response
         ops: [list, get, create, update, delete]
         filters: [case_type, complaint_category, channel, language, is_active]
         actions:
-          - "POST /{id}/render | Render with placeholders filled for a case or customer | service_case_id uuid, customer_id uuid | none"
+          - "POST /{id}/render | Render with placeholders filled for a case, complaint or customer | service_case_id uuid, complaint_id uuid, customer_id uuid, values json | object"
       - resource: copilot-sessions
         path: /v1/servicing/copilot
         table: copilot_session
@@ -418,6 +474,9 @@ services:
 
     events:
       - "servicing.service_case.created | service_case | A case was opened"
+      - "servicing.service_case.status_changed | service_case | A case started, went pending customer, resumed or was cancelled"
+      - "servicing.service_case.reopened | service_case | A case was reopened"
+      - "servicing.case_comment.added | case_comment | A comment was added to a case"
       - "servicing.service_case.assigned | service_case | A case was assigned"
       - "servicing.service_case.escalated | service_case | A case was escalated"
       - "servicing.service_case.sla_breached | service_case | A case breached its SLA"
@@ -425,10 +484,25 @@ services:
       - "servicing.service_case.closed | service_case | A case was closed"
       - "servicing.complaint.received | complaint | A complaint was received"
       - "servicing.complaint.acknowledged | complaint | A complaint was acknowledged"
+      - "servicing.complaint.assigned | complaint | A complaint handler was assigned"
+      - "servicing.complaint.resolution_proposed | complaint | An outcome and redress were proposed"
+      - "servicing.complaint.withdrawn | complaint | The complainant withdrew the complaint"
+      - "servicing.complaint.closed | complaint | A complaint was closed"
+      - "servicing.complaint.deadline_breached | complaint | A complaint passed its regulatory deadline"
       - "servicing.complaint.deadline_at_risk | complaint | A complaint is close to its regulatory deadline"
       - "servicing.complaint.resolved | complaint | A final response was issued"
       - "servicing.complaint.escalated | complaint | A complaint was escalated to an ombudsman"
+      - "servicing.complaint_redress.proposed | complaint_redress | Redress was proposed"
+      - "servicing.complaint_redress.approved | complaint_redress | Redress was approved by a checker"
+      - "servicing.complaint_redress.rejected | complaint_redress | Redress was rejected"
       - "servicing.complaint_redress.paid | complaint_redress | Redress was paid"
+      - "servicing.complaint_redress.failed | complaint_redress | The redress posting failed"
       - "servicing.interaction.logged | interaction | An interaction was logged"
+      - "servicing.work_item.created | work_item | A work item was queued"
       - "servicing.work_item.assigned | work_item | A work item was assigned"
+      - "servicing.work_item.released | work_item | A work item was returned to its queue"
+      - "servicing.work_item.completed | work_item | A work item was completed or cancelled"
+      - "servicing.knowledge_article.published | knowledge_article | An article was published"
+      - "servicing.knowledge_article.archived | knowledge_article | An article was archived"
       - "servicing.copilot_session.created | copilot_session | A copilot output was generated"
+      - "servicing.copilot_feedback.recorded | copilot_feedback | Staff gave feedback on a copilot output"

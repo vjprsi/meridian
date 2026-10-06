@@ -37,6 +37,14 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.servicing.v1
+  crm:
+    default-country: GB          # jurisdiction for complaint timelines and SLA policy matching when none is given
+    redress:
+      ledger-id: ${MERIDIAN_CRM_REDRESS_LEDGER_ID:}                 # default ledger book for redress postings
+      funding-account-id: ${MERIDIAN_CRM_REDRESS_FUNDING_ACCOUNT_ID:} # bank redress expense / suspense account
+    timeline:
+      consumer-enabled: true     # project other domains' events into the customer timeline
+      topics: meridian.party.v1,meridian.accounts.v1,meridian.payments.v1,meridian.cards.v1,meridian.lending.v1,meridian.wallets.v1
 
 management:
   endpoints:

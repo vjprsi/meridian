@@ -87,24 +87,32 @@ public class JourneyService {
         Events.fourEyes(row.path("created_by").asString(null));
         normaliseAndValidate(row.deepCopy());
         rows.jdbc().sql("""
-                update onboarding_journey set status = 'RETIRED', updated_by = ?
+                update onboarding_journey set status = 'RETIRED', updated_by = ?, retired_at = now(),
+                    retirement_reason = 'Superseded by version ' || ?::text
                 where code = ? and status = 'PUBLISHED' and id <> ?""")
-                .params(TenantContext.principal(), row.get("code").asString(), id).update();
+                .params(TenantContext.principal(), row.get("version").asInt(), row.get("code").asString(), id).update();
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("status", "PUBLISHED");
         v.put("published_at", Events.now());
+        v.put("published_by", TenantContext.principal());
         ObjectNode updated = rows.update(T, id, v);
         events.publish("party.onboarding_journey.published", T, updated, OnboardingJourney.class);
         return updated;
     }
 
     @Transactional
-    public ObjectNode retire(UUID id) {
+    public ObjectNode retire(UUID id, String reason) {
         ObjectNode row = rows.lock(T, id);
         Lifecycles.journey(row.get("status").asString(), "retire");
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("status", "RETIRED");
-        return rows.update(T, id, v);
+        v.put("retired_at", Events.now());
+        if (reason != null && !reason.isBlank()) {
+            v.put("retirement_reason", reason.length() > 255 ? reason.substring(0, 255) : reason);
+        }
+        ObjectNode updated = rows.update(T, id, v);
+        events.publish("party.onboarding_journey.retired", T, updated, OnboardingJourney.class);
+        return updated;
     }
 
     @Transactional

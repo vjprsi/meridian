@@ -4,7 +4,8 @@ import static io.meridian.customer.application.Json.now;
 import static io.meridian.customer.application.Json.text;
 
 import io.meridian.common.error.ApiException;
-import io.meridian.customer.api.generated.model.CustomerCredential;
+import io.meridian.customer.api.generated.model.ContactVerification;
+import io.meridian.customer.api.generated.model.CustomerContact;
 import io.meridian.customer.domain.Normalizer;
 import io.meridian.customer.infrastructure.Crypto;
 import io.meridian.customer.infrastructure.ExternalServices;
@@ -20,13 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Contact points and their verification by one-time password. A code is 6 random digits, stored only as a
- * salted hash with a 10 minute expiry in a customer_credential row of type SMS_OTP linked to the contact; five
- * wrong attempts lock it; a resend is possible after 30 seconds and supersedes the previous code.
+ * Contact points and their verification by one-time password. Each code is a contact_verification challenge: 6
+ * random digits, stored only as a salted hash, valid for 10 minutes; five wrong attempts lock the challenge for 30
+ * minutes; a new code can be requested after 30 seconds and supersedes the pending one.
  */
 @Service
 public class ContactService {
     static final String T = "customer_contact";
+    static final String V = "contact_verification";
+    private static final Duration LOCKOUT = Duration.ofMinutes(30);
     private static final Set<String> PHONE_TYPES = Set.of("MOBILE", "LANDLINE", "WHATSAPP", "FAX");
     private static final Duration OTP_TTL = Duration.ofMinutes(10);
     private static final Duration RESEND_COOLDOWN = Duration.ofSeconds(30);
@@ -80,8 +83,8 @@ public class ContactService {
             v.put("is_verified", false);
             v.putNull("verified_at");
             rows.execute("""
-                    update customer_credential set status = 'EXPIRED' where webauthn_credential_id = ? and status in ('ACTIVE', 'LOCKED')""",
-                    otpLink(id));
+                    update contact_verification set status = 'SUPERSEDED' where customer_contact_id = ? and status in ('PENDING', 'LOCKED')""",
+                    id);
         }
         if (v.path("is_primary").asBoolean()) {
             clearPrimary(customerId, text(merged, "contact_type"), id);
@@ -121,10 +124,19 @@ public class ContactService {
                 customerId, type, except == null ? new UUID(0, 0) : except);
     }
 
+    /** Removes a contact point together with its verification history. */
+    @Transactional
+    public void delete(UUID customerId, UUID id) {
+        guards.child(T, customerId, id, true);
+        rows.execute("delete from contact_verification where customer_contact_id = ?", id);
+        rows.execute("delete from customer_contact where id = ?", id);
+    }
+
     // ------------------------------------------------------------------ OTP verification
 
+    /** Issues a new challenge (superseding a pending one) and sends the code; returns the challenge. */
     @Transactional
-    public void sendVerification(UUID customerId, UUID contactId) {
+    public ObjectNode sendVerification(UUID customerId, UUID contactId) {
         ObjectNode customer = guards.openCustomer(customerId);
         ObjectNode contact = guards.child(T, customerId, contactId, true);
         if (contact.path("is_verified").asBoolean()) {
@@ -138,40 +150,42 @@ public class ContactService {
             throw ApiException.unprocessable("otp_not_supported", type + " contacts cannot receive one-time passwords");
         }
         OffsetDateTime now = now();
-        Optional<ObjectNode> previous = activeOtp(contactId);
+        Optional<ObjectNode> previous = openChallenge(contactId);
         if (previous.isPresent()) {
-            OffsetDateTime sentAt = OffsetDateTime.parse(previous.get().get("created_at").asString());
-            if (sentAt.plus(RESEND_COOLDOWN).isAfter(now)) {
+            ObjectNode p = previous.get();
+            if (Json.timestamp(p, "resend_available_at").isAfter(now)) {
                 throw new ApiException(429, "otp_cooldown", "Wait " + RESEND_COOLDOWN.toSeconds() + "s before requesting a new code");
             }
-            if ("LOCKED".equals(text(previous.get(), "status"))) {
-                OffsetDateTime until = Json.timestamp(previous.get(), "locked_until");
-                if (until != null && until.isAfter(now)) {
-                    throw ApiException.conflict("verification_locked", "Too many wrong codes; try again later");
-                }
+            OffsetDateTime until = Json.timestamp(p, "locked_until");
+            if ("LOCKED".equals(text(p, "status")) && until != null && until.isAfter(now)) {
+                throw ApiException.conflict("verification_locked", "Too many wrong codes; try again later");
             }
-            ObjectNode expire = rows.object();
-            expire.put("status", "EXPIRED");
-            rows.update("customer_credential", UUID.fromString(previous.get().get("id").asString()), expire);
+            ObjectNode supersede = rows.object();
+            supersede.put("status", "LOCKED".equals(text(p, "status")) ? "EXPIRED" : "SUPERSEDED");
+            rows.update(V, UUID.fromString(p.get("id").asString()), supersede);
         }
-        String code = crypto.numericCode(6);
-        OffsetDateTime expiresAt = now.plus(OTP_TTL);
-        ObjectNode otp = rows.object();
-        otp.put("customer_id", customerId.toString());
-        otp.put("credential_type", "SMS_OTP");
-        otp.put("status", "ACTIVE");
-        otp.put("webauthn_credential_id", otpLink(contactId));
-        otp.put("secret_hash", crypto.hashOtp(code));
-        otp.put("expires_at", expiresAt.toString());
-        ObjectNode row = rows.insert("customer_credential", otp);
         String channel = switch (type) {
             case "EMAIL" -> "EMAIL";
             case "WHATSAPP" -> "WHATSAPP";
             default -> "SMS";
         };
         String destination = "EMAIL".equals(type) ? text(contact, "email") : text(contact, "phone");
+        String code = crypto.numericCode(6);
+        OffsetDateTime expiresAt = now.plus(OTP_TTL);
+        ObjectNode challenge = rows.object();
+        challenge.put("customer_id", customerId.toString());
+        challenge.put("customer_contact_id", contactId.toString());
+        challenge.put("channel", channel);
+        challenge.put("destination_masked", mask(destination));
+        challenge.put("code_hash", crypto.hashOtp(code));
+        challenge.put("status", "PENDING");
+        challenge.put("max_attempts", OTP_MAX_ATTEMPTS);
+        challenge.put("expires_at", expiresAt.toString());
+        challenge.put("resend_available_at", now.plus(RESEND_COOLDOWN).toString());
+        ObjectNode row = rows.insert(V, challenge);
         external.sendOtp(customerId, UUID.fromString(row.get("id").asString()), channel, destination, code, expiresAt,
                 text(customer, "preferred_language"));
+        return row;
     }
 
     /** Wrong codes are counted (and committed) even though the request fails. */
@@ -182,52 +196,75 @@ public class ContactService {
         if (contact.path("is_verified").asBoolean()) {
             throw ApiException.conflict("already_verified", "Contact is already verified");
         }
-        ObjectNode otp = activeOtp(contactId)
+        ObjectNode challenge = openChallenge(contactId)
                 .orElseThrow(() -> ApiException.conflict("no_active_verification", "Request a verification code first"));
-        UUID otpId = UUID.fromString(otp.get("id").asString());
-        if ("LOCKED".equals(text(otp, "status"))) {
+        UUID challengeId = UUID.fromString(challenge.get("id").asString());
+        if ("LOCKED".equals(text(challenge, "status"))) {
             throw ApiException.conflict("verification_locked", "Too many wrong codes; request a new code later");
         }
         OffsetDateTime now = now();
-        if (Json.timestamp(otp, "expires_at").isBefore(now)) {
+        if (Json.timestamp(challenge, "expires_at").isBefore(now)) {
             ObjectNode expire = rows.object();
             expire.put("status", "EXPIRED");
-            rows.update("customer_credential", otpId, expire);
+            rows.update(V, challengeId, expire);
             throw ApiException.unprocessable("otp_expired", "The code has expired; request a new one");
         }
-        if (code == null || !code.matches("\\d{6}") || !crypto.verifyOtp(code, text(otp, "secret_hash"))) {
-            int attempts = otp.path("failed_attempts").asInt() + 1;
+        if (code == null || !code.matches("\\d{6}") || !crypto.verifyOtp(code, text(challenge, "code_hash"))) {
+            int attempts = challenge.path("attempts").asInt() + 1;
+            int max = challenge.path("max_attempts").asInt(OTP_MAX_ATTEMPTS);
             ObjectNode fail = rows.object();
-            fail.put("failed_attempts", attempts);
-            if (attempts >= OTP_MAX_ATTEMPTS) {
+            fail.put("attempts", attempts);
+            if (attempts >= max) {
                 fail.put("status", "LOCKED");
-                fail.put("locked_until", now.plusMinutes(30).toString());
-                ObjectNode locked = rows.update("customer_credential", otpId, fail);
-                events.publish("party.customer_credential.locked", "customer_credential", locked, CustomerCredential.class);
+                fail.put("locked_until", now.plus(LOCKOUT).toString());
+                ObjectNode locked = rows.update(V, challengeId, fail);
+                events.publish("party.contact_verification.locked", V, locked, ContactVerification.class);
                 throw ApiException.conflict("verification_locked", "Too many wrong codes; request a new code later");
             }
-            rows.update("customer_credential", otpId, fail);
-            throw ApiException.unprocessable("invalid_otp", "The code is not correct; "
-                    + (OTP_MAX_ATTEMPTS - attempts) + " attempts left");
+            rows.update(V, challengeId, fail);
+            throw ApiException.unprocessable("invalid_otp", "The code is not correct; " + (max - attempts) + " attempts left");
         }
-        ObjectNode consumed = rows.object();
-        consumed.put("status", "EXPIRED");
-        consumed.put("last_used_at", now.toString());
-        rows.update("customer_credential", otpId, consumed);
+        ObjectNode done = rows.object();
+        done.put("status", "VERIFIED");
+        done.put("verified_at", now.toString());
+        rows.update(V, challengeId, done);
         ObjectNode v = rows.object();
         v.put("is_verified", true);
         v.put("verified_at", now.toString());
-        return rows.update(T, contactId, v);
+        ObjectNode verified = rows.update(T, contactId, v);
+        events.publish("party.customer_contact.verified", T, verified, CustomerContact.class);
+        return verified;
     }
 
-    private Optional<ObjectNode> activeOtp(UUID contactId) {
+    /** Challenges of a contact, newest first (keyset paging). */
+    @Transactional(readOnly = true)
+    public tools.jackson.databind.JsonNode verifications(UUID customerId, UUID contactId, Integer limit, String cursor) {
+        guards.child(T, customerId, contactId, false);
+        return rows.page("select row_to_json(t)::text from contact_verification t where t.customer_contact_id = ?",
+                java.util.List.of(contactId), limit, cursor);
+    }
+
+    /** The challenge that can still be answered (or is locked) for the contact; locked for the transaction. */
+    private Optional<ObjectNode> openChallenge(UUID contactId) {
         return rows.query("""
-                select row_to_json(t)::text from customer_credential t where t.webauthn_credential_id = ?
-                and t.credential_type = 'SMS_OTP' and t.status in ('ACTIVE', 'LOCKED') order by t.id desc limit 1 for update""",
-                otpLink(contactId)).stream().findFirst();
+                select row_to_json(t)::text from contact_verification t where t.customer_contact_id = ?
+                and t.status in ('PENDING', 'LOCKED') order by t.id desc limit 1 for update""", contactId).stream().findFirst();
     }
 
-    static String otpLink(UUID contactId) {
-        return "otp:contact:" + contactId;
+    /** +447700900123 -> +44*******123; alice@example.com -> a***e@example.com. */
+    static String mask(String destination) {
+        if (destination == null) {
+            return "***";
+        }
+        int at = destination.indexOf('@');
+        if (at > 0) {
+            String local = destination.substring(0, at);
+            String shown = local.length() <= 2 ? local.substring(0, 1) + "*" : local.charAt(0) + "***" + local.charAt(local.length() - 1);
+            return shown + destination.substring(at);
+        }
+        if (destination.length() <= 6) {
+            return "***";
+        }
+        return destination.substring(0, 3) + "*".repeat(destination.length() - 6) + destination.substring(destination.length() - 3);
     }
 }

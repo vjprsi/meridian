@@ -41,6 +41,7 @@ public class HttpProviderAdapter implements ProviderAdapter {
     public CheckResult runCheck(Provider p, CheckRequest r) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("client_reference", r.checkId().toString());
+        body.put("tenant_id", io.meridian.common.tenancy.TenantContext.require().toString()); // echoed back in callbacks
         body.put("check_type", r.checkType());
         body.put("subject_name", r.subjectName());
         body.put("document_type", r.documentType());

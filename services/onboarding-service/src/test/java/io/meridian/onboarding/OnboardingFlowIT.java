@@ -72,6 +72,8 @@ class OnboardingFlowIT {
     @MockitoBean
     ServiceClient client;
 
+    final List<JsonNode> customerRequests = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     final HttpClient http = HttpClient.newHttpClient();
     String journeyId;
     String journeyV1;
@@ -89,8 +91,10 @@ class OnboardingFlowIT {
             String status = PASS_PROFILE.equals(profile) ? "PASSED" : REVIEW_PROFILE.equals(profile) ? "INCONCLUSIVE" : "FAILED";
             return json.readTree("{\"id\":\"" + UUID.randomUUID() + "\",\"status\":\"" + status + "\"}");
         });
-        when(client.post(eq("customer-service"), eq("/v1/customers"), any(), anyString()))
-                .thenAnswer(inv -> json.readTree("{\"id\":\"" + CUSTOMER + "\"}"));
+        when(client.post(eq("customer-service"), eq("/v1/customers"), any(), anyString())).thenAnswer(inv -> {
+            customerRequests.add(json.valueToTree(inv.getArgument(2)));
+            return json.readTree("{\"id\":\"" + CUSTOMER + "\"}");
+        });
         when(client.post(eq("notification-service"), eq("/v1/notifications"), any(), anyString()))
                 .thenAnswer(inv -> json.readTree("{\"id\":\"" + UUID.randomUUID() + "\"}"));
     }
@@ -156,8 +160,11 @@ class OnboardingFlowIT {
         assertThat(sim.get("decision").asString()).isEqualTo("REFER");
 
         String other = createJourney("OLD_JOURNEY", "maker", 201).get("id").asString();
-        assertThat(post("/v1/onboarding/journeys/" + other + "/retire", "{\"reason\":\"superseded\"}", "maker", 200)
-                .get("status").asString()).isEqualTo("RETIRED");
+        JsonNode retired = post("/v1/onboarding/journeys/" + other + "/retire", "{\"reason\":\"superseded\"}", "maker", 200);
+        assertThat(retired.get("status").asString()).isEqualTo("RETIRED");
+        assertThat(retired.get("retirement_reason").asString()).isEqualTo("superseded");
+        assertThat(retired.hasNonNull("retired_at")).isTrue();
+        assertThat(outboxEvents(other)).contains("party.onboarding_journey.retired");
         assertThat(post("/v1/onboarding/journeys/" + other + "/retire", "{}", "maker", 409)
                 .get("code").asString()).isEqualTo("invalid_transition");
         JsonNode notPublished = post("/v1/onboarding/applications", appBody(other, "MOBILE_APP", "+254700000099"), "maker", 422);
@@ -202,6 +209,14 @@ class OnboardingFlowIT {
         assertThat(submitted.get("risk_level").asString()).isEqualTo("LOW");
         assertThat(submitted.get("customer_id").asString()).isEqualTo(CUSTOMER);
         verify(client, atLeastOnce()).post(eq("customer-service"), eq("/v1/customers"), any(), eq("onb-cust:" + app));
+        JsonNode customerBody = customerRequests.getLast();
+        assertThat(customerBody.has("customer_number")).isFalse(); // assigned by customer-service
+        assertThat(customerBody.get("legal_entity_id").asString()).isEqualTo(LEGAL_ENTITY);
+        assertThat(customerBody.get("first_name").asString()).isEqualTo("Amina");
+        assertThat(submitted.get("decision_reasons").isArray()).isTrue();
+        assertThat(submitted.get("submitted_by").asString()).isEqualTo("maker");
+        assertThat(submitted.get("risk_factors").isObject()).isTrue();
+        assertThat(submitted.get("legal_entity_id").asString()).isEqualTo(LEGAL_ENTITY);
 
         JsonNode steps = get("/v1/onboarding/applications/" + app + "/steps", TENANT).get("data");
         assertThat(steps).hasSize(6);
@@ -238,11 +253,15 @@ class OnboardingFlowIT {
         assertThat(post("/v1/onboarding/applications/" + app + "/approve", "{\"comment\":\"ok\"}", "maker", 422)
                 .get("code").asString()).isEqualTo("four_eyes_violation");
         assertThat(post("/v1/onboarding/applications/" + app + "/request-info",
-                "{\"message\":\"Please re-accept\",\"step_codes\":{\"values\":[\"nope\"]}}", "checker", 422)
+                "{\"message\":\"Please re-accept\",\"step_codes\":[\"nope\"]}", "checker", 422)
                 .get("code").asString()).isEqualTo("unknown_step");
         JsonNode info = post("/v1/onboarding/applications/" + app + "/request-info",
-                "{\"message\":\"Please re-accept the terms\",\"step_codes\":{\"values\":[\"terms\"]}}", "checker", 200);
+                "{\"message\":\"Please re-accept the terms\",\"step_codes\":[\"terms\"]}", "checker", 200);
         assertThat(info.get("status").asString()).isEqualTo("IN_PROGRESS");
+        assertThat(info.get("info_requests")).hasSize(1);
+        assertThat(info.get("info_requests").get(0).get("step_codes").get(0).asString()).isEqualTo("terms");
+        assertThat(info.get("info_requests").get(0).get("requested_by").asString()).isEqualTo("checker");
+        assertThat(outboxEvents(app)).contains("party.onboarding_application.info_requested");
         assertThat(get("/v1/onboarding/applications/" + app + "/next-step", TENANT).get("step_code").asString()).isEqualTo("terms");
         step(app, "terms", "{\"accepted\":true}", 200);
         assertThat(post("/v1/onboarding/applications/" + app + "/submit", null, "maker", 200).get("status").asString())
@@ -250,6 +269,8 @@ class OnboardingFlowIT {
         JsonNode approved = post("/v1/onboarding/applications/" + app + "/approve", "{\"comment\":\"docs fine\"}", "checker", 200);
         assertThat(approved.get("status").asString()).isEqualTo("APPROVED");
         assertThat(approved.hasNonNull("reviewed_at")).isTrue();
+        assertThat(approved.get("reviewed_by").asString()).isEqualTo("checker");
+        assertThat(approved.get("review_comment").asString()).isEqualTo("docs fine");
         assertThat(post("/v1/onboarding/applications/" + app + "/abandon", null, "maker", 409).get("code").asString())
                 .isEqualTo("invalid_transition");
         assertThat(outboxEvents(app)).contains("party.onboarding_application.referred", "party.onboarding_application.approved");
@@ -411,7 +432,7 @@ class OnboardingFlowIT {
     private JsonNode createJourneyWith(String code, String definition, int expected, String user) throws Exception {
         return post("/v1/onboarding/journeys", """
                 {"code":"%s","name":"Retail wallet Kenya","customer_type":"INDIVIDUAL","country":"KE",
-                 "channels":{"values":["MOBILE_APP","WEB","AGENT"]},"target_tier":"TIER_1","expiry_days":30,
+                 "channels":["MOBILE_APP","WEB","AGENT"],"target_tier":"TIER_1","expiry_days":30,
                  "definition":%s,
                  "decision_rules":{"refer_if":[{"field":"annual_income","op":"gt","value":1000000,"reason":"HIGH_INCOME"}]}}"""
                 .formatted(code, definition), user, expected);
@@ -420,13 +441,13 @@ class OnboardingFlowIT {
     private static String appBody(String journey, String channel, String phone) {
         return """
                 {"application_number":"APP-%s","onboarding_journey_id":"%s","channel":"%s","phone":"%s",
-                 "email":"applicant@example.com"}""".formatted(UUID.randomUUID().toString().substring(0, 12), journey, channel, phone);
+                 "email":"applicant@example.com","legal_entity_id":"%s"}"""
+                .formatted(UUID.randomUUID().toString().substring(0, 12), journey, channel, phone, LEGAL_ENTITY);
     }
 
     private static String personal(boolean resident) {
         return """
-                {"first_name":"Amina","last_name":"Otieno","date_of_birth":"1991-04-12","resident":%s,
-                 "legal_entity_id":"%s"}""".formatted(resident, LEGAL_ENTITY);
+                {"first_name":"Amina","last_name":"Otieno","date_of_birth":"1991-04-12","resident":%s}""".formatted(resident);
     }
 
     private JsonNode step(String app, String code, String input, int expected) throws Exception {

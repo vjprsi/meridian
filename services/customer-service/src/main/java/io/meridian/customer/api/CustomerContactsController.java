@@ -2,6 +2,8 @@ package io.meridian.customer.api;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.customer.api.generated.CustomerContactsApi;
+import io.meridian.customer.api.generated.model.ContactVerification;
+import io.meridian.customer.api.generated.model.ContactVerificationPage;
 import io.meridian.customer.api.generated.model.CustomerContact;
 import io.meridian.customer.api.generated.model.CustomerContactCreate;
 import io.meridian.customer.api.generated.model.CustomerContactUpdate;
@@ -12,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Contact points (normalised and validated per type) and their OTP verification. */
+/** Contact points (normalised and validated per type) and their OTP verification challenges. */
 @RestController
 public class CustomerContactsController implements CustomerContactsApi {
     private final ContactService contacts;
@@ -37,16 +39,30 @@ public class CustomerContactsController implements CustomerContactsApi {
     }
 
     @Override
-    public ResponseEntity<Void> customerContactsSendVerification(UUID customerId, UUID id, String idempotencyKey) {
-        return http.noContent(idempotencyKey, "contacts.send-verification", id, null,
+    public ResponseEntity<Void> customerContactsDelete(UUID customerId, UUID id) {
+        TenantContext.require();
+        contacts.delete(customerId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<ContactVerification> customerContactsSendVerification(UUID customerId, UUID id, String idempotencyKey) {
+        return http.ok(idempotencyKey, "contacts.send-verification", id, null, ContactVerification.class,
                 () -> contacts.sendVerification(customerId, id));
     }
 
     @Override
     public ResponseEntity<CustomerContact> customerContactsVerify(UUID customerId, UUID id, String idempotencyKey,
                                                                   CustomerContactsVerifyRequest body) {
-        String code = http.tree(body).get("code").asString();
         return http.ok(idempotencyKey, "contacts.verify", id, body, CustomerContact.class,
-                () -> contacts.verify(customerId, id, code));
+                () -> contacts.verify(customerId, id, body.getCode()));
+    }
+
+    @Override
+    public ResponseEntity<ContactVerificationPage> customerContactsVerifications(UUID customerId, UUID id, Integer limit,
+                                                                                String cursor) {
+        TenantContext.require();
+        return ResponseEntity.ok(http.read((ObjectNode) contacts.verifications(customerId, id, limit, cursor),
+                ContactVerificationPage.class));
     }
 }

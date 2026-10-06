@@ -15,6 +15,7 @@ import io.meridian.onboarding.api.generated.model.OnboardingStepPage;
 import io.meridian.onboarding.application.ApplicationService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -122,12 +123,11 @@ public class OnboardingApplicationsController implements OnboardingApplicationsA
         });
     }
 
-    /** Contract declares no body (defect); 202 with the new expiry and the delivery channel. */
+    /** 202: the resume link is being delivered; the body carries the new expiry and the delivery channel. */
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public ResponseEntity onboardingApplicationsResume(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> onboardingApplicationsResume(UUID id, String idempotencyKey) {
         TenantContext.require();
-        return actions.run(idempotencyKey, "resume", id, null, ObjectNode.class, HttpStatus.ACCEPTED, () -> {
+        return actions.document(idempotencyKey, "resume", id, null, HttpStatus.ACCEPTED, () -> {
             expire(id);
             return apps.resume(id, idempotencyKey);
         });

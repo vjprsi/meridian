@@ -66,7 +66,7 @@ public class ScreeningService {
         for (String f : new String[] {"reviewed_by", "reviewed_at", "review_comment"}) {
             v.remove(f);
         }
-        profiles.provision(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
+        profiles.forCustomer(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
         ObjectNode row = rows.insert(TABLE, v);
         if (KycRules.OPEN_MATCH.contains(status)) {
             kyc.publish("party.kyc_screening.match_found", TABLE, row, KycScreening.class);
@@ -75,19 +75,7 @@ public class ScreeningService {
     }
 
     private static int matchCount(JsonNode matches) {
-        if (matches == null || matches.isNull()) {
-            return 0;
-        }
-        if (matches.isArray()) {
-            return matches.size();
-        }
-        if (matches.has("values") && matches.get("values").isArray()) {
-            return matches.get("values").size();
-        }
-        if (matches.has("matches") && matches.get("matches").isArray()) {
-            return matches.get("matches").size();
-        }
-        return matches.size();
+        return matches != null && matches.isArray() ? matches.size() : 0;
     }
 
     @Transactional

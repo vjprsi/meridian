@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.when;
 
+import io.meridian.customer.application.CustomerService;
+import io.meridian.customer.infrastructure.ApprovalEventsListener;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
 import java.net.URI;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -41,19 +44,22 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * customer-service end to end over HTTP against PostgreSQL 18 with row-level security. Other services
  * (notification-service for OTP delivery, document-service for privacy exports) are stubbed via ServiceClient.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})
+        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
+                "meridian.approvals.listener-enabled=false"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CustomerFlowIT {
     static final String TENANT = "0199a000-0000-7000-8000-0000000000c1";
     static final String OTHER_TENANT = "0199a000-0000-7000-8000-0000000000c2";
+    static final String THIRD_TENANT = "0199a000-0000-7000-8000-0000000000c3";
     static final String LEGAL_ENTITY = "0199a000-0000-7000-8000-0000000000e1";
     static final String ORIGIN = "https://app.meridian.example";
 
@@ -70,7 +76,11 @@ class CustomerFlowIT {
     ServiceClient serviceClient;
 
     final HttpClient http = HttpClient.newHttpClient();
+    @Autowired
+    CustomerService customerService;
+
     final List<String> sentMessages = new ArrayList<>();
+    final List<JsonNode> approvalRequests = new ArrayList<>();
     String alice;
     String aliceMobile;
     String deviceId;
@@ -86,6 +96,27 @@ class CustomerFlowIT {
                 .thenAnswer(inv -> json.readTree("{\"id\":\"" + UUID.randomUUID() + "\"}"));
         when(serviceClient.post(eq("document-service"), matches("/v1/documents/.*/upload-url"), any(), anyString()))
                 .thenAnswer(inv -> json.createObjectNode());
+        when(serviceClient.post(eq("workflow-service"), eq("/v1/approval-requests"), any(), anyString())).thenAnswer(inv -> {
+            ObjectNode approval = (ObjectNode) json.valueToTree(inv.getArgument(2));
+            approval.put("id", UUID.randomUUID().toString());
+            approval.put("status", "PENDING");
+            approval.put("maker", "maker");
+            approval.put("required_approvals", 1);
+            approval.put("approvals_received", 0);
+            approvalRequests.add(approval);
+            return approval;
+        });
+    }
+
+    /** Delivers a workflow-service decision the way Kafka would (binary CloudEvent on meridian.platform.v1). */
+    private void deliverApproval(JsonNode approval, String outcome) throws Exception {
+        ObjectNode decided = (ObjectNode) approval.deepCopy();
+        decided.put("status", outcome.toUpperCase(java.util.Locale.ROOT));
+        ConsumerRecord<String, String> record = new ConsumerRecord<>("meridian.platform.v1", 0, 0L,
+                decided.get("id").asString(), json.writeValueAsString(decided));
+        record.headers().add("ce_type", ("platform.approval_request." + outcome).getBytes(StandardCharsets.UTF_8));
+        record.headers().add("ce_tenantid", TENANT.getBytes(StandardCharsets.UTF_8));
+        new ApprovalEventsListener(customerService, json).onEvent(record);
     }
 
     // ------------------------------------------------------------------ lifecycle, OTP and tier maker-checker
@@ -101,6 +132,37 @@ class CustomerFlowIT {
         assertThat(c.get("status").asString()).isEqualTo("PROSPECT");
         assertThat(c.get("kyc_tier").asString()).isEqualTo("TIER_0");
         assertThat(c.get("is_minor").asBoolean()).isFalse();
+        // Server-generated customer number (C + 9-digit tenant sequence + Luhn digit) and derived display name.
+        String aliceNumber = c.get("customer_number").asString();
+        assertThat(aliceNumber).matches("C\\d{10}");
+        assertThat(luhnValid(aliceNumber.substring(1))).isTrue();
+        assertThat(c.get("display_name").asString()).isEqualTo("Alice Smith");
+
+        // Minimal create: only type, names, date of birth, nationality and legal entity (what the console sends).
+        JsonNode minimal = post("/v1/customers", """
+                {"customer_type":"INDIVIDUAL","first_name":"Mina","last_name":"Okafor","date_of_birth":"1992-03-04",
+                 "nationality":"NG","legal_entity_id":"%s"}""".formatted(LEGAL_ENTITY), 201);
+        assertThat(minimal.get("display_name").asString()).isEqualTo("Mina Okafor");
+        assertThat(minimal.get("customer_number").asString()).matches("C\\d{10}").isNotEqualTo(aliceNumber);
+        assertThat(Long.parseLong(minimal.get("customer_number").asString().substring(1, 10)))
+                .isEqualTo(Long.parseLong(aliceNumber.substring(1, 10)) + 1);
+        JsonNode business = post("/v1/customers", """
+                {"customer_type":"COMPANY","legal_name":"Okafor Trading Ltd","trading_name":"Okafor Foods",
+                 "legal_entity_id":"%s"}""".formatted(LEGAL_ENTITY), 201);
+        assertThat(business.get("display_name").asString()).isEqualTo("Okafor Foods");
+        assertThat(business.get("legal_name").asString()).isEqualTo("Okafor Trading Ltd");
+        assertThat(code(post("/v1/customers", """
+                {"customer_type":"COMPANY","legal_entity_id":"%s"}""".formatted(LEGAL_ENTITY), 422))).isEqualTo("invalid_customer");
+        // A client-sent customer number is not part of the contract and is ignored.
+        JsonNode ignored = post("/v1/customers", """
+                {"customer_number":"MY-OWN","customer_type":"INDIVIDUAL","first_name":"Ian","last_name":"Gnored",
+                 "legal_entity_id":"%s"}""".formatted(LEGAL_ENTITY), 201);
+        assertThat(ignored.get("customer_number").asString()).matches("C\\d{10}");
+        // Customer numbers are sequenced per tenant.
+        HttpResponse<String> otherTenant = send("POST", "/v1/customers", individual("OT-1", "Oscar", "Other", "1980-01-01"),
+                key(), THIRD_TENANT, "maker");
+        assertThat(otherTenant.statusCode()).as(otherTenant.body()).isEqualTo(201);
+        assertThat(json.readTree(otherTenant.body()).get("customer_number").asString()).isEqualTo("C0000000018");
 
         // Idempotent replay, and key reuse with a different body.
         HttpResponse<String> replay = send("POST", "/v1/customers", body, "create-alice", TENANT, "maker");
@@ -118,8 +180,6 @@ class CustomerFlowIT {
         assertThat(code(post("/v1/customers", """
                 {"customer_number":"CUS-0003","customer_type":"INDIVIDUAL","legal_entity_id":"%s","display_name":"Z",
                  "status":"ACTIVE"}""".formatted(LEGAL_ENTITY), 422))).isEqualTo("invalid_initial_status");
-        assertThat(send("POST", "/v1/customers", individual("CUS-0001", "Dup", "Number", "1980-01-01"), key(), TENANT, "maker")
-                .statusCode()).isEqualTo(409);
 
         // Cannot activate at TIER_0.
         assertThat(code(post("/v1/customers/" + alice + "/activate", null, 422))).isEqualTo("kyc_requirements_not_met");
@@ -135,9 +195,14 @@ class CustomerFlowIT {
         assertThat(code(post("/v1/customers/" + alice + "/contacts/" + aliceMobile + "/verify", "{\"code\":\"123456\"}", 409)))
                 .isEqualTo("no_active_verification");
         sentMessages.clear();
-        assertThat(send("POST", "/v1/customers/" + alice + "/contacts/" + aliceMobile + "/send-verification", null, key(), TENANT, "maker")
-                .statusCode()).isEqualTo(204);
+        JsonNode challenge = post("/v1/customers/" + alice + "/contacts/" + aliceMobile + "/send-verification", null, 200);
+        assertThat(challenge.get("status").asString()).isEqualTo("PENDING");
+        assertThat(challenge.get("channel").asString()).isEqualTo("SMS");
+        assertThat(challenge.get("destination_masked").asString()).isEqualTo("+44*******123");
+        assertThat(challenge.get("max_attempts").asInt()).isEqualTo(5);
+        assertThat(challenge.has("code_hash")).isFalse();
         String otp = otpFromLastMessage();
+        assertThat(challenge.toString()).doesNotContain(otp);
         assertThat(code(send("POST", "/v1/customers/" + alice + "/contacts/" + aliceMobile + "/send-verification", null, key(), TENANT, "maker")))
                 .isEqualTo("otp_cooldown");
         String wrong = otp.equals("000000") ? "111111" : "000000";
@@ -146,20 +211,43 @@ class CustomerFlowIT {
         JsonNode verified = post("/v1/customers/" + alice + "/contacts/" + aliceMobile + "/verify", "{\"code\":\"" + otp + "\"}", 200);
         assertThat(verified.get("is_verified").asBoolean()).isTrue();
         assertThat(verified.get("phone").asString()).isEqualTo("+447700900123");
+        JsonNode challenges = get("/v1/customers/" + alice + "/contacts/" + aliceMobile + "/verifications", TENANT).get("data");
+        assertThat(challenges).hasSize(1);
+        assertThat(challenges.get(0).get("status").asString()).isEqualTo("VERIFIED");
+        assertThat(challenges.get(0).get("attempts").asInt()).isEqualTo(1);
+        assertThat(outbox("party.customer_contact.verified", aliceMobile)).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from customer_credential where credential_type = 'SMS_OTP'")
+                .query(Integer.class).single()).isZero();
 
-        // Tier upgrade: maker requests, the same user cannot approve, a checker approves.
+        // Tier upgrade (maker-checker): the request opens a workflow-service approval and parks the target tier.
+        assertThat(code(send("POST", "/v1/customers/" + alice + "/change-tier",
+                "{\"to_tier\":\"TIER_2\",\"reason\":\"more\"}", key(), TENANT, "maker"))).isEqualTo("tier_requirements_not_met");
         HttpResponse<String> requested = send("POST", "/v1/customers/" + alice + "/change-tier",
                 "{\"to_tier\":\"TIER_1\",\"reason\":\"phone verified\"}", key(), TENANT, "maker");
         assertThat(requested.statusCode()).as(requested.body()).isEqualTo(202);
-        assertThat(json.readTree(requested.body()).get("kyc_tier").asString()).isEqualTo("TIER_0");
+        JsonNode pending = json.readTree(requested.body());
+        assertThat(pending.get("kyc_tier").asString()).isEqualTo("TIER_0");
+        assertThat(pending.get("pending_tier").asString()).isEqualTo("TIER_1");
+        assertThat(approvalRequests).hasSize(1);
+        JsonNode approval = approvalRequests.getFirst();
+        assertThat(pending.get("tier_approval_request_id").asString()).isEqualTo(approval.get("id").asString());
+        assertThat(approval.get("resource_type").asString()).isEqualTo("customer_kyc_tier");
+        assertThat(approval.get("resource_id").asString()).isEqualTo(alice);
+        assertThat(approval.get("payload").get("to_tier").asString()).isEqualTo("TIER_1");
         assertThat(code(send("POST", "/v1/customers/" + alice + "/change-tier",
-                "{\"to_tier\":\"TIER_1\",\"reason\":\"self approval\"}", key(), TENANT, "maker"))).isEqualTo("four_eyes_violation");
-        assertThat(code(send("POST", "/v1/customers/" + alice + "/change-tier",
-                "{\"to_tier\":\"TIER_2\",\"reason\":\"more\"}", key(), TENANT, "checker"))).isEqualTo("tier_requirements_not_met");
-        HttpResponse<String> approved = send("POST", "/v1/customers/" + alice + "/change-tier",
-                "{\"to_tier\":\"TIER_1\",\"reason\":\"checked\"}", key(), TENANT, "checker");
-        assertThat(approved.statusCode()).as(approved.body()).isEqualTo(200);
-        assertThat(json.readTree(approved.body()).get("kyc_tier").asString()).isEqualTo("TIER_1");
+                "{\"to_tier\":\"TIER_1\",\"reason\":\"again\"}", key(), TENANT, "checker"))).isEqualTo("tier_change_pending");
+        assertThat(outbox("party.customer.tier_change_requested", alice)).isEqualTo(1);
+        // An unrelated approval has no effect; the linked approval applies the tier (redelivery is a no-op).
+        ObjectNode stranger = (ObjectNode) approval.deepCopy();
+        stranger.put("id", UUID.randomUUID().toString());
+        deliverApproval(stranger, "approved");
+        assertThat(get("/v1/customers/" + alice, TENANT).get("kyc_tier").asString()).isEqualTo("TIER_0");
+        deliverApproval(approval, "approved");
+        deliverApproval(approval, "approved");
+        JsonNode upgraded = get("/v1/customers/" + alice, TENANT);
+        assertThat(upgraded.get("kyc_tier").asString()).isEqualTo("TIER_1");
+        assertThat(upgraded.path("pending_tier").isMissingNode() || upgraded.get("pending_tier").isNull()).isTrue();
+        assertThat(upgraded.hasNonNull("tier_approval_request_id")).isFalse();
         JsonNode history = get("/v1/customers/" + alice + "/tier-history", TENANT).get("data");
         assertThat(history).hasSize(1);
         assertThat(history.get(0).get("from_tier").asString()).isEqualTo("TIER_0");
@@ -176,7 +264,9 @@ class CustomerFlowIT {
         assertThat(send("POST", "/v1/customers/" + alice + "/suspend", "{}", key(), TENANT, "maker").statusCode()).isEqualTo(400);
         JsonNode reactivated = post("/v1/customers/" + alice + "/reactivate", "{\"reason\":\"cleared\"}", 200);
         assertThat(reactivated.get("status").asString()).isEqualTo("ACTIVE");
-        assertThat(reactivated.get("metadata").get("_lifecycle").get("reason").asString()).isEqualTo("cleared");
+        assertThat(reactivated.get("status_reason").asString()).isEqualTo("cleared");
+        assertThat(reactivated.get("status_changed_by").asString()).isEqualTo("maker");
+        assertThat(reactivated.has("metadata") && reactivated.get("metadata").has("_lifecycle")).isFalse();
 
         // Status is not patchable; details are, with optimistic locking.
         int version = get("/v1/customers/" + alice, TENANT).get("row_version").asInt();
@@ -214,7 +304,10 @@ class CustomerFlowIT {
         assertThat(ids(get("/v1/customers/search?q=durand", TENANT))).contains(amelie);
         assertThat(ids(get("/v1/customers/search?q=AMELIE@EXAMPLE.FR", TENANT))).containsExactly(amelie);
         assertThat(ids(get("/v1/customers/search?q=FR12345678", TENANT))).containsExactly(amelie);
-        assertThat(ids(get("/v1/customers/search?q=cus-0100", TENANT))).containsExactly(amelie);
+        String amelieNumber = get("/v1/customers/" + amelie, TENANT).get("customer_number").asString();
+        assertThat(ids(get("/v1/customers/search?q=" + amelieNumber.toLowerCase(java.util.Locale.ROOT), TENANT)))
+                .containsExactly(amelie);
+        assertThat(ids(get("/v1/customers/search?q=CUS-0100", TENANT))).containsExactly(amelie); // external_ref
         assertThat(ids(get("/v1/customers/search?q=%25%25", TENANT))).isEmpty();
         assertThat(send("GET", "/v1/customers/search?q=a", null, null, TENANT, "maker").statusCode()).isEqualTo(400);
 
@@ -291,10 +384,11 @@ class CustomerFlowIT {
                 .isEqualTo("self_merge");
         JsonNode survivor = post("/v1/customers/" + alice + "/merge",
                 "{\"duplicate_customer_id\":\"" + dup + "\",\"reason\":\"same person\"}", 200);
-        assertThat(survivor.get("metadata").get("merged_from").toString()).contains(dup);
+        assertThat(survivor.hasNonNull("merged_into_customer_id")).isFalse();
         JsonNode merged = get("/v1/customers/" + dup, TENANT);
         assertThat(merged.get("status").asString()).isEqualTo("CLOSED");
-        assertThat(merged.get("metadata").get("merged_into").asString()).isEqualTo(alice);
+        assertThat(merged.get("merged_into_customer_id").asString()).isEqualTo(alice);
+        assertThat(merged.get("status_reason").asString()).isEqualTo("same person");
         // The duplicate mobile collapsed into the survivor's; the new email moved over.
         assertThat(get("/v1/customers/" + alice + "/contacts", TENANT).get("data")).hasSize(3);
         assertThat(get("/v1/customers/" + dup + "/contacts", TENANT).get("data")).isEmpty();
@@ -342,7 +436,7 @@ class CustomerFlowIT {
         assertThat(code(send("POST", "/v1/customers/" + alice + "/credentials/pin", "{\"new_pin_block\":\"1204\"}", key(), TENANT, "u")))
                 .isEqualTo("weak_pin"); // DDMM of the date of birth
         assertThat(send("POST", "/v1/customers/" + alice + "/credentials/pin", "{\"new_pin_block\":\"4826\"}", key(), TENANT, "u")
-                .statusCode()).isEqualTo(204);
+                .statusCode()).isEqualTo(200);
         assertThat(code(send("POST", "/v1/customers/" + alice + "/credentials/pin", "{\"new_pin_block\":\"7391\"}", key(), TENANT, "u")))
                 .isEqualTo("old_pin_required");
         for (int i = 0; i < 2; i++) {
@@ -362,7 +456,7 @@ class CustomerFlowIT {
         assertThat(code(post("/v1/customers/" + alice + "/credentials/" + pinId + "/unlock", "{\"reason\":\"again\"}", 409)))
                 .isEqualTo("invalid_transition");
         assertThat(send("POST", "/v1/customers/" + alice + "/credentials/pin",
-                "{\"new_pin_block\":\"7391\",\"old_pin_block\":\"4826\"}", key(), TENANT, "u").statusCode()).isEqualTo(204);
+                "{\"new_pin_block\":\"7391\",\"old_pin_block\":\"4826\"}", key(), TENANT, "u").statusCode()).isEqualTo(200);
         assertThat(outbox("party.customer_credential.locked", pinId)).isEqualTo(1);
 
         // Passkey registration ceremony bound to the trusted device.
@@ -453,7 +547,8 @@ class CustomerFlowIT {
                 .isEqualTo("invalid_due_at");
         assertThat(outbox("party.consent.given", null)).isGreaterThanOrEqualTo(4);
         assertThat(outbox("party.consent.withdrawn", marketing)).isEqualTo(1);
-        assertThat(outbox("party.privacy_request.completed", null)).isEqualTo(4);
+        assertThat(outbox("party.privacy_request.completed", null)).isEqualTo(3);
+        assertThat(outbox("party.privacy_request.rejected", rejected)).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ groups and segments
@@ -535,17 +630,30 @@ class CustomerFlowIT {
 
     // ------------------------------------------------------------------ helpers
 
-    private static String individual(String number, String first, String last, String dob) {
-        return """
-                {"customer_number":"%s","customer_type":"INDIVIDUAL","legal_entity_id":"%s","display_name":"%s %s",
-                 "first_name":"%s","last_name":"%s","date_of_birth":"%s","residence_country":"GB"}"""
-                .formatted(number, LEGAL_ENTITY, first, last, first, last, dob);
+    private static boolean luhnValid(String digits) {
+        int sum = 0;
+        for (int i = digits.length() - 1, k = 0; i >= 0; i--, k++) {
+            int d = digits.charAt(i) - '0';
+            if (k % 2 == 1) {
+                d = d * 2 > 9 ? d * 2 - 9 : d * 2;
+            }
+            sum += d;
+        }
+        return sum % 10 == 0;
     }
 
-    private static String company(String number, String name) {
+    /** The customer number is server-generated; {@code ref} is the client's migration reference (external_ref). */
+    private static String individual(String ref, String first, String last, String dob) {
         return """
-                {"customer_number":"%s","customer_type":"COMPANY","legal_entity_id":"%s","display_name":"%s",
-                 "registration_number":"%s"}""".formatted(number, LEGAL_ENTITY, name, number.replace("-", ""));
+                {"external_ref":"%s","customer_type":"INDIVIDUAL","legal_entity_id":"%s",
+                 "first_name":"%s","last_name":"%s","date_of_birth":"%s","residence_country":"GB"}"""
+                .formatted(ref, LEGAL_ENTITY, first, last, dob);
+    }
+
+    private static String company(String ref, String name) {
+        return """
+                {"external_ref":"%s","customer_type":"COMPANY","legal_entity_id":"%s","legal_name":"%s",
+                 "registration_number":"%s"}""".formatted(ref, LEGAL_ENTITY, name, ref.replace("-", ""));
     }
 
     private static String rel(String subject, String related, String type, String pct) {

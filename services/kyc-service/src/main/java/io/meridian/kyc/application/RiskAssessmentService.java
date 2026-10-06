@@ -52,7 +52,7 @@ public class RiskAssessmentService {
         if (!v.hasNonNull("assessed_by") && KycSupport.principalId() != null) {
             v.put("assessed_by", KycSupport.principalId().toString());
         }
-        ObjectNode profile = profiles.provision(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
+        ObjectNode profile = profiles.forCustomer(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
         ObjectNode row = rows.insert(TABLE, v);
         String effective = override != null ? override : level;
         String previous = text(profile, "risk_level");

@@ -37,6 +37,13 @@ class ActionRunner {
         });
     }
 
+    /** For actions answering a computed JSON document (contract response type {@code object}). */
+    @SuppressWarnings("unchecked")
+    ResponseEntity<Map<String, Object>> document(String key, String op, Object id, Object body, HttpStatus status,
+                                                 Supplier<ObjectNode> action) {
+        return run(key, op, id, body, (Class<Map<String, Object>>) (Class<?>) Map.class, status, action);
+    }
+
     <T> T model(ObjectNode row, Class<T> type) {
         return crud.read(json.writeValueAsString(row), type);
     }

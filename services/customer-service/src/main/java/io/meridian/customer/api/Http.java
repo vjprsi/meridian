@@ -61,12 +61,19 @@ class Http {
         return rows.read(row, type);
     }
 
-    /** For actions whose answer is a composed JSON document rather than a resource. */
-    ResponseEntity<JsonNode> document(String key, String op, Object id, Object body, HttpStatus status,
-                                      Supplier<JsonNode> action) {
+    /** For POST actions whose answer is a computed JSON document (contract response type {@code object}). */
+    @SuppressWarnings("unchecked")
+    ResponseEntity<Map<String, Object>> document(String key, String op, Object id, Object body, HttpStatus status,
+                                                 Supplier<JsonNode> action) {
         TenantContext.require();
-        return idempotency.execute(key, fingerprint(op, id, body), JsonNode.class,
-                () -> ResponseEntity.status(status).body(action.get()));
+        return idempotency.execute(key, fingerprint(op, id, body), (Class<Map<String, Object>>) (Class<?>) Map.class,
+                () -> ResponseEntity.status(status).body(map(action.get())));
+    }
+
+    /** A computed JSON document as the generated {@code object} response type. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> map(JsonNode node) {
+        return json.treeToValue(node, Map.class);
     }
 
     ResponseEntity<Void> noContent(String key, String op, Object id, Object body, Runnable action) {

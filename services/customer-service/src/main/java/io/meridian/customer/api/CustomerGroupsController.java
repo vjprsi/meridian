@@ -6,15 +6,13 @@ import io.meridian.customer.api.generated.model.CustomerGroupMember;
 import io.meridian.customer.api.generated.model.CustomerGroupMemberPage;
 import io.meridian.customer.api.generated.model.CustomerGroupsMembersRequest;
 import io.meridian.customer.application.GroupService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * Groups and their members. Contract gap: {@code /exposure} is declared 204 without a body; it returns 200 with
- * the exposure document.
- */
+/** Groups, their members and the aggregated exposure document. */
 @RestController
 public class CustomerGroupsController implements CustomerGroupsApi {
     private final GroupService groups;
@@ -52,9 +50,8 @@ public class CustomerGroupsController implements CustomerGroupsApi {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public ResponseEntity customerGroupsExposure(UUID id) {
+    public ResponseEntity<Map<String, Object>> customerGroupsExposure(UUID id) {
         TenantContext.require();
-        return ResponseEntity.ok(groups.exposure(id));
+        return ResponseEntity.ok(http.map(groups.exposure(id)));
     }
 }

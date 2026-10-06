@@ -47,39 +47,42 @@ public class KycSupport {
         return o == null ? json.createObjectNode() : json.valueToTree(o);
     }
 
-    /**
-     * Reads a list stored in a json column. The contract types json columns as objects, so lists are kept as
-     * {"values": [...]}; a plain array or a {"KEY": true} map are accepted too.
-     */
+    /** Writable column values of an API model (snake_case, nulls dropped). */
+    public ObjectNode columns(String table, Object body) {
+        return crud.toColumns(table, body);
+    }
+
+    /** Row JSON text (row_to_json) as a tree. */
+    public ObjectNode parse(String rowJson) {
+        return (ObjectNode) json.readTree(rowJson);
+    }
+
+    /** row_version from an If-Match header. */
+    public static int version(String ifMatch) {
+        if (ifMatch == null || ifMatch.isBlank()) {
+            throw io.meridian.common.error.ApiException.badRequest("if_match_required",
+                    "If-Match header with the current row_version is required");
+        }
+        try {
+            return Integer.parseInt(ifMatch.replace("W/", "").replace("\"", "").trim());
+        } catch (NumberFormatException e) {
+            throw io.meridian.common.error.ApiException.badRequest("invalid_if_match", "If-Match must be the resource's row_version");
+        }
+    }
+
+    /** The string values of a list-valued (json[]) column; empty for null / missing. */
     public static List<String> values(JsonNode n) {
         List<String> out = new ArrayList<>();
-        if (n == null || n.isNull() || n.isMissingNode()) {
-            return out;
-        }
-        if (n.isArray()) {
+        if (n != null && n.isArray()) {
             n.forEach(v -> out.add(v.asString()));
-        } else if (n.isObject()) {
-            if (n.has("values") && n.get("values").isArray()) {
-                n.get("values").forEach(v -> out.add(v.asString()));
-            } else {
-                n.propertyNames().forEach(k -> {
-                    JsonNode v = n.get(k);
-                    if (v.isBoolean() ? v.asBoolean() : !v.isNull()) {
-                        out.add(k);
-                    }
-                });
-            }
-        } else if (n.isString()) {
-            out.add(n.asString());
         }
         return out;
     }
 
-    public ObjectNode valuesObject(Collection<String> values) {
-        ObjectNode o = json.createObjectNode();
-        ArrayNode a = o.putArray("values");
+    public ArrayNode array(Collection<String> values) {
+        ArrayNode a = json.createArrayNode();
         values.forEach(a::add);
-        return o;
+        return a;
     }
 
     public static String text(JsonNode n, String field) {

@@ -3,6 +3,7 @@ package io.meridian.kyc.api;
 import io.meridian.kyc.api.generated.KycProfilesApi;
 import io.meridian.kyc.api.generated.model.KycCheckPage;
 import io.meridian.kyc.api.generated.model.KycProfile;
+import io.meridian.kyc.api.generated.model.KycProfileCreate;
 import io.meridian.kyc.api.generated.model.KycProfilesCompleteEddRequest;
 import io.meridian.kyc.api.generated.model.KycProfilesRequireEddRequest;
 import io.meridian.kyc.api.generated.model.KycRiskAssessmentPage;
@@ -27,6 +28,11 @@ public class KycProfilesController implements KycProfilesApi {
         this.actions = actions;
         this.crud = crud;
         this.kyc = kyc;
+    }
+
+    @Override
+    public ResponseEntity<KycProfile> kycProfilesCreate(String idempotencyKey, KycProfileCreate body) {
+        return actions.created(idempotencyKey, "profile.create", body, KycProfile.class, () -> profiles.create(body));
     }
 
     @Override

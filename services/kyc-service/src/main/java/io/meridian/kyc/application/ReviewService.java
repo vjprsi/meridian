@@ -39,7 +39,7 @@ public class ReviewService {
             v.remove(f);
         }
         LocalDate due = date(v, "due_date");
-        profiles.provision(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
+        profiles.forCustomer(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
         v.put("status", KycRules.initialReviewStatus(due, KycSupport.today()));
         ObjectNode row = rows.insert(TABLE, v);
         if ("DUE".equals(text(row, "status"))) {

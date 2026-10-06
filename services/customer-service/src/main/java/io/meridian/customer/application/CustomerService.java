@@ -14,19 +14,20 @@ import io.meridian.customer.api.generated.model.CustomerKycTierHistory;
 import io.meridian.customer.domain.KycTierPolicy;
 import io.meridian.customer.domain.Lifecycles;
 import io.meridian.customer.infrastructure.Rows;
+import io.meridian.customer.infrastructure.WorkflowGateway;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** Customer master data: creation, maintenance, lifecycle, KYC tier (maker-checker) and duplicate merge. */
@@ -34,21 +35,22 @@ import tools.jackson.databind.node.ObjectNode;
 public class CustomerService {
     static final String T = "customer";
     static final Set<String> NATURAL_PERSON = Set.of("INDIVIDUAL", "SOLE_TRADER");
-    private static final Pattern CUSTOMER_NUMBER = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._/-]{2,31}$");
     private static final int AGE_OF_MAJORITY = 18;
-    static final String PENDING_TIER = "_pending_tier_change";
-    static final String LIFECYCLE = "_lifecycle";
+    /** resource_type of KYC tier upgrade approval requests in workflow-service. */
+    public static final String TIER_APPROVAL_RESOURCE = "customer_kyc_tier";
 
     private final Rows rows;
     private final CrudEngine crud;
     private final Events events;
     private final JsonMapper json;
+    private final WorkflowGateway workflow;
 
-    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json) {
+    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, WorkflowGateway workflow) {
         this.rows = rows;
         this.crud = crud;
         this.events = events;
         this.json = json;
+        this.workflow = workflow;
     }
 
     // ------------------------------------------------------------------ create / update
@@ -61,16 +63,19 @@ public class CustomerService {
             throw ApiException.unprocessable("invalid_initial_status",
                     "A customer is created as PROSPECT or PENDING_KYC; use the lifecycle actions afterwards");
         }
-        String number = text(v, "customer_number").trim();
-        if (!CUSTOMER_NUMBER.matcher(number).matches()) {
-            throw ApiException.unprocessable("invalid_customer_number",
-                    "customer_number must be 3-32 letters, digits or . _ / - separators");
+        String type = text(v, "customer_type");
+        String display = deriveDisplayName(v, type);
+        if (display == null) {
+            throw new ApiException(422, "invalid_customer", "Customer data is invalid", List.of(NATURAL_PERSON.contains(type)
+                    ? new FieldError("last_name", "required", "first_name/last_name or display_name is required")
+                    : new FieldError("legal_name", "required", "legal_name, trading_name or display_name is required")));
         }
-        v.put("customer_number", number);
-        validateProfile(v, text(v, "customer_type"));
-        if (!NATURAL_PERSON.contains(text(v, "customer_type")) && text(v, "legal_name") == null) {
-            v.put("legal_name", text(v, "display_name"));
+        v.put("display_name", display);
+        validateProfile(v, type);
+        if (!NATURAL_PERSON.contains(type) && text(v, "legal_name") == null) {
+            v.put("legal_name", display);
         }
+        v.put("customer_number", nextCustomerNumber());
         ObjectNode row = rows.insert(T, v);
         events.publish("party.customer.created", T, row, Customer.class);
         return row;
@@ -112,6 +117,59 @@ public class CustomerService {
         ObjectNode row = rows.update(T, id, v, expected).orElseThrow(() -> versionConflict(expected));
         events.publish("party.customer.updated", T, row, Customer.class);
         return row;
+    }
+
+    /** display_name as sent, else first (+ middle) + last name for natural persons, trading or legal name otherwise. */
+    static String deriveDisplayName(ObjectNode v, String type) {
+        String given = text(v, "display_name");
+        if (given != null && !given.isBlank()) {
+            return given.trim();
+        }
+        String derived;
+        if (NATURAL_PERSON.contains(type)) {
+            derived = String.join(" ", java.util.stream.Stream.of(text(v, "first_name"), text(v, "last_name"))
+                    .filter(s -> s != null && !s.isBlank()).map(String::trim).toList());
+            if (derived.isBlank() && "SOLE_TRADER".equals(type)) {
+                derived = text(v, "trading_name");
+            }
+        } else {
+            derived = text(v, "trading_name") != null && !text(v, "trading_name").isBlank()
+                    ? text(v, "trading_name") : text(v, "legal_name");
+        }
+        return derived == null || derived.isBlank() ? null : truncate(derived.trim(), 200);
+    }
+
+    /**
+     * Next customer number of the tenant: "C" + 9-digit tenant sequence + Luhn check digit (e.g. C0000000018). The
+     * per-tenant counter row is incremented atomically (upsert), so concurrent creates never collide.
+     */
+    String nextCustomerNumber() {
+        long n = rows.jdbc().sql("""
+                insert into customer_number_counter (tenant_id, last_value, created_by, updated_by)
+                values (?::uuid, 1, ?, ?)
+                on conflict (tenant_id) do update set last_value = customer_number_counter.last_value + 1
+                returning last_value""").params(TenantContext.require().toString(), TenantContext.principal(), TenantContext.principal())
+                .query(Long.class).single();
+        String digits = String.format("%09d", n);
+        return "C" + digits + luhn(digits);
+    }
+
+    /** Luhn (mod 10) check digit over a digit string. */
+    static int luhn(String digits) {
+        int sum = 0;
+        boolean dbl = true;
+        for (int i = digits.length() - 1; i >= 0; i--) {
+            int d = digits.charAt(i) - '0';
+            if (dbl) {
+                d *= 2;
+                if (d > 9) {
+                    d -= 9;
+                }
+            }
+            sum += d;
+            dbl = !dbl;
+        }
+        return (10 - sum % 10) % 10;
     }
 
     /** Shared field rules for create and update; derives is_minor from the date of birth. */
@@ -223,28 +281,20 @@ public class CustomerService {
         if (deceasedOn.isAfter(today()) || (dob != null && deceasedOn.isBefore(dob))) {
             throw ApiException.unprocessable("invalid_deceased_on", "deceased_on must be between birth and today");
         }
-        ObjectNode v = status(c, "mark-deceased", to, null);
-        ((ObjectNode) v.get("metadata").get(LIFECYCLE)).put("document_id", documentId.toString());
+        ObjectNode v = status(c, "mark-deceased", to, "Death notified, deceased on " + deceasedOn);
+        v.put("deceased_document_id", documentId.toString());
         v.put("deceased_on", deceasedOn.toString());
         revokeAccess(id, "Customer deceased");
         return changeStatus(id, v);
     }
 
-    /** New status plus an audit note (who, when, why) kept under metadata._lifecycle. */
-    private ObjectNode status(ObjectNode current, String action, String to, String reason) {
-        ObjectNode v = rows.object();
+    /** New status plus the audit columns of the change (who, when, why; the action when no reason is given). */
+    private static ObjectNode status(ObjectNode current, String action, String to, String reason) {
+        ObjectNode v = tools.jackson.databind.node.JsonNodeFactory.instance.objectNode();
         v.put("status", to);
-        ObjectNode meta = metadata(current);
-        ObjectNode note = meta.putObject(LIFECYCLE);
-        note.put("action", action);
-        note.put("from", text(current, "status"));
-        note.put("to", to);
-        note.put("by", TenantContext.principal());
-        note.put("at", now().toString());
-        if (reason != null) {
-            note.put("reason", truncate(reason, 255));
-        }
-        v.set("metadata", meta);
+        v.put("status_reason", truncate(reason == null ? action : reason, 255));
+        v.put("status_changed_at", now().toString());
+        v.put("status_changed_by", truncate(TenantContext.principal(), 64));
         return v;
     }
 
@@ -268,11 +318,12 @@ public class CustomerService {
     public record TierResult(ObjectNode customer, boolean pending) {}
 
     /**
-     * Downgrades apply at once (risk-reducing). Upgrades need the evidence for the tier, are requested by a maker
-     * and take effect when a different user (the checker) confirms the same target tier.
+     * Downgrades apply at once (risk-reducing). Upgrades need the evidence for the tier and are maker-checker: the
+     * request opens a workflow-service approval request and parks the target in {@code pending_tier}; the change
+     * takes effect when {@code platform.approval_request.approved} arrives (four-eyes is enforced by workflow-service).
      */
     @Transactional
-    public TierResult changeTier(UUID id, String toTier, String reason) {
+    public TierResult changeTier(UUID id, String toTier, String reason, String idempotencyKey) {
         ObjectNode c = rows.lock(T, id);
         if (!Lifecycles.CUSTOMER_OPEN.contains(text(c, "status"))) {
             throw ApiException.conflict("customer_closed", "The KYC tier of a " + text(c, "status") + " customer cannot change");
@@ -284,41 +335,77 @@ public class CustomerService {
         if (from.equals(toTier)) {
             throw ApiException.conflict("tier_unchanged", "Customer is already " + toTier);
         }
-        ObjectNode meta = metadata(c);
-        JsonNode pending = meta.get(PENDING_TIER);
+        String pending = text(c, "pending_tier");
         if (KycTierPolicy.rank(toTier) < KycTierPolicy.rank(from)) {
-            meta.remove(PENDING_TIER);
-            return new TierResult(applyTier(id, c, meta, toTier, reason), false);
+            ObjectNode v = rows.object();
+            v.putNull("pending_tier");
+            v.putNull("tier_approval_request_id");
+            return new TierResult(applyTier(id, c, v, toTier, reason), false);
+        }
+        if (pending != null) {
+            throw ApiException.conflict("tier_change_pending", "A change to " + pending
+                    + " is awaiting approval (request " + text(c, "tier_approval_request_id") + ")");
         }
         List<FieldError> unmet = KycTierPolicy.unmet(toTier, evidence(id, c));
         if (!unmet.isEmpty()) {
             throw new ApiException(422, "tier_requirements_not_met", "Evidence does not support " + toTier, unmet);
         }
-        String principal = TenantContext.principal();
-        if (pending == null || pending.isNull()) {
-            ObjectNode request = meta.putObject(PENDING_TIER);
-            request.put("to_tier", toTier);
-            request.put("reason", truncate(reason, 255));
-            request.put("requested_by", principal);
-            request.put("requested_at", now().toString());
-            ObjectNode v = rows.object();
-            v.set("metadata", meta);
-            return new TierResult(rows.update(T, id, v), true);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("customer_id", id.toString());
+        payload.put("from_tier", from);
+        payload.put("to_tier", toTier);
+        payload.put("reason", truncate(reason, 255));
+        JsonNode approval = workflow.requestApproval(TIER_APPROVAL_RESOURCE, id, "change_tier",
+                "KYC tier " + from + " -> " + toTier + " for " + text(c, "customer_number"), truncate(reason, 255),
+                payload, "tier:" + id + ":" + idempotencyKey);
+        String approvalId = text(approval, "id");
+        if (approvalId == null) {
+            throw new ApiException(502, "upstream_error", "workflow-service did not return an approval request id");
         }
-        if (!toTier.equals(text(pending, "to_tier"))) {
-            throw ApiException.conflict("tier_change_pending",
-                    "A change to " + text(pending, "to_tier") + " is awaiting approval");
-        }
-        if (principal.equals(text(pending, "requested_by"))) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    "The tier change must be approved by a different user than the requester");
-        }
-        String combined = truncate(text(pending, "reason") + " (approved by " + principal + ": " + reason + ")", 255);
-        meta.remove(PENDING_TIER);
-        return new TierResult(applyTier(id, c, meta, toTier, combined), false);
+        ObjectNode v = rows.object();
+        v.put("pending_tier", toTier);
+        v.put("tier_approval_request_id", approvalId);
+        ObjectNode row = rows.update(T, id, v);
+        events.publish("party.customer.tier_change_requested", T, row, Customer.class);
+        return new TierResult(row, true);
     }
 
-    private ObjectNode applyTier(UUID id, ObjectNode c, ObjectNode meta, String toTier, String reason) {
+    /**
+     * Applies ({@code approved}) or drops ({@code rejected}, {@code expired}, {@code cancelled}) the pending tier
+     * upgrade linked to the approval request. Returns false when the request is not (or no longer) the pending one,
+     * which makes redelivered events harmless. The evidence is re-checked at execution time: an approved upgrade the
+     * evidence no longer supports (or for a customer closed meanwhile) is dropped instead of applied.
+     */
+    @Transactional
+    public boolean onTierApprovalDecided(JsonNode approval, String outcome) {
+        UUID customerId = Json.uuid(approval, "resource_id");
+        String approvalId = text(approval, "id");
+        if (customerId == null || approvalId == null || rows.find(T, customerId).isEmpty()) {
+            return false;
+        }
+        ObjectNode c = rows.lock(T, customerId);
+        String toTier = text(c, "pending_tier");
+        if (toTier == null || !approvalId.equals(text(c, "tier_approval_request_id"))) {
+            return false;
+        }
+        ObjectNode clear = rows.object();
+        clear.putNull("pending_tier");
+        clear.putNull("tier_approval_request_id");
+        String requestedTo = text(approval.path("payload"), "to_tier");
+        boolean applicable = "approved".equals(outcome) && (requestedTo == null || requestedTo.equals(toTier))
+                && Lifecycles.CUSTOMER_OPEN.contains(text(c, "status"))
+                && KycTierPolicy.unmet(toTier, evidence(customerId, c)).isEmpty();
+        if (!applicable) {
+            rows.update(T, customerId, clear);
+            return true;
+        }
+        String reason = text(approval.path("payload"), "reason");
+        applyTier(customerId, c, clear, toTier,
+                (reason == null ? "Tier upgrade" : reason) + " (approved, request " + approvalId + ")");
+        return true;
+    }
+
+    private ObjectNode applyTier(UUID id, ObjectNode c, ObjectNode values, String toTier, String reason) {
         ObjectNode h = rows.object();
         h.put("customer_id", id.toString());
         h.put("from_tier", text(c, "kyc_tier"));
@@ -326,9 +413,8 @@ public class CustomerService {
         h.put("reason", truncate(reason, 255));
         h.put("effective_at", now().toString());
         ObjectNode history = rows.insert("customer_kyc_tier_history", h);
-        ObjectNode v = rows.object();
+        ObjectNode v = values.deepCopy();
         v.put("kyc_tier", toTier);
-        v.set("metadata", meta);
         ObjectNode row = rows.update(T, id, v);
         ObjectNode payload = (ObjectNode) json.valueToTree(rows.read(history, CustomerKycTierHistory.class));
         payload.set("limits", json.valueToTree(KycTierPolicy.limits(toTier).asMap()));
@@ -380,7 +466,17 @@ public class CustomerService {
             throw ApiException.unprocessable("incompatible_customer_types",
                     "An individual and an organisation cannot be merged");
         }
-        // Contacts: drop the duplicate's copies of contact points the survivor already has.
+        // Contacts: drop the duplicate's copies of contact points the survivor already has. Verification challenges
+        // follow their contact; open ones are superseded (a code sent for the duplicate must not verify the survivor).
+        rows.execute("""
+                update contact_verification set customer_id = ?, status = case when status in ('PENDING', 'LOCKED')
+                then 'SUPERSEDED' else status end where customer_id = ?""", survivorId, duplicateId);
+        rows.execute("""
+                delete from contact_verification v where v.customer_contact_id in (select d.id from customer_contact d
+                where d.customer_id = ? and exists (select 1 from customer_contact s
+                where s.customer_id = ? and s.contact_type = d.contact_type
+                and coalesce(s.phone, '') = coalesce(d.phone, '') and coalesce(lower(s.email), '') = coalesce(lower(d.email), '')))""",
+                duplicateId, survivorId);
         rows.execute("""
                 delete from customer_contact d where d.customer_id = ? and exists (select 1 from customer_contact s
                 where s.customer_id = ? and s.contact_type = d.contact_type
@@ -418,17 +514,12 @@ public class CustomerService {
         revokeAccess(duplicateId, "Merged into " + text(survivor, "customer_number"));
 
         ObjectNode dupValues = status(duplicate, "merge", dupTo, reason);
-        ((ObjectNode) dupValues.get("metadata")).put("merged_into", survivorId.toString());
+        dupValues.put("merged_into_customer_id", survivorId.toString());
         dupValues.put("closed_at", now().toString());
         dupValues.put("closure_reason", truncate("MERGED into " + text(survivor, "customer_number") + ": " + reason, 255));
         changeStatus(duplicateId, dupValues);
 
-        ObjectNode survivorMeta = metadata(survivor);
-        ArrayNode mergedFrom = survivorMeta.has("merged_from") && survivorMeta.get("merged_from").isArray()
-                ? (ArrayNode) survivorMeta.get("merged_from") : survivorMeta.putArray("merged_from");
-        mergedFrom.add(duplicateId.toString());
         ObjectNode sv = rows.object();
-        sv.set("metadata", survivorMeta);
         if (!survivor.path("is_pep").asBoolean() && duplicate.path("is_pep").asBoolean()) {
             sv.put("is_pep", true);
         }
@@ -446,11 +537,6 @@ public class CustomerService {
     }
 
     // ------------------------------------------------------------------ helpers
-
-    ObjectNode metadata(ObjectNode customer) {
-        JsonNode m = customer.get("metadata");
-        return m != null && m.isObject() ? ((ObjectNode) m).deepCopy() : rows.object();
-    }
 
     int count(String sql, Object... args) {
         return rows.jdbc().sql(sql).params(java.util.Arrays.asList(args)).query(Integer.class).single();

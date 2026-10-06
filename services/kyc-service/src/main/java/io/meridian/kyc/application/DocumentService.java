@@ -52,7 +52,7 @@ public class DocumentService {
         if (v.hasNonNull("issuing_country")) {
             v.put("issuing_country", text(v, "issuing_country").toUpperCase(java.util.Locale.ROOT));
         }
-        profiles.provision(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
+        profiles.forCustomer(uuid(v, "kyc_profile_id"), uuid(v, "customer_id"));
         v.put("status", "UPLOADED");
         v.remove("rejection_reason");
         ObjectNode row = rows.insert(TABLE, v);
@@ -73,7 +73,9 @@ public class DocumentService {
         }
         ObjectNode v = rows.object();
         v.put("status", "ACCEPTED");
-        return rows.update(TABLE, id, v);
+        ObjectNode updated = rows.update(TABLE, id, v);
+        kyc.publish("party.kyc_document.accepted", TABLE, updated, KycDocument.class);
+        return updated;
     }
 
     @Transactional
@@ -86,6 +88,8 @@ public class DocumentService {
         ObjectNode v = rows.object();
         v.put("status", "REJECTED");
         v.put("rejection_reason", reason);
-        return rows.update(TABLE, id, v);
+        ObjectNode updated = rows.update(TABLE, id, v);
+        kyc.publish("party.kyc_document.rejected", TABLE, updated, KycDocument.class);
+        return updated;
     }
 }

@@ -87,7 +87,7 @@ public class CustomerQueryService {
         }
         List<ObjectNode> candidates = rows.query("""
                 select row_to_json(t)::text from customer t
-                where not (t.status = 'CLOSED' and coalesce(t.metadata ->> 'merged_into', '') <> '') and (
+                where t.merged_into_customer_id is null and (
                   (cast(? as text) is not null and lower(t.last_name) = cast(? as text))
                   or (cast(? as date) is not null and t.date_of_birth = cast(? as date))
                   or (cast(? as text) is not null and upper(regexp_replace(coalesce(t.registration_number, ''), '[\\s./-]', '', 'g')) = cast(? as text))
@@ -188,7 +188,7 @@ public class CustomerQueryService {
                 from customer_device t where t.customer_id = ? and t.status <> 'REVOKED' order by t.id""", id)));
         view.set("credentials", json.valueToTree(rows.query("""
                 select json_build_object('credential_type', credential_type, 'status', status, 'count', count(*))::text
-                from customer_credential where customer_id = ? and credential_type <> 'SMS_OTP' and status <> 'REVOKED'
+                from customer_credential where customer_id = ? and status <> 'REVOKED'
                 group by credential_type, status""", id)));
         ObjectNode kyc = view.putObject("kyc");
         String tier = text(c, "kyc_tier");
@@ -196,10 +196,8 @@ public class CustomerQueryService {
         kyc.set("tier_limits", json.valueToTree(KycTierPolicy.limits(tier).asMap()));
         kyc.set("risk_level", c.get("risk_level"));
         kyc.set("is_pep", c.get("is_pep"));
-        JsonNode pending = c.path("metadata").get(CustomerService.PENDING_TIER);
-        if (pending != null && !pending.isNull()) {
-            kyc.set("pending_tier_change", pending);
-        }
+        kyc.set("pending_tier", c.get("pending_tier"));
+        kyc.set("tier_approval_request_id", c.get("tier_approval_request_id"));
         kyc.set("last_tier_change", rows.query("""
                 select row_to_json(t)::text from customer_kyc_tier_history t where t.customer_id = ?
                 order by t.effective_at desc limit 1""", id).stream().findFirst().map(JsonNode.class::cast)
