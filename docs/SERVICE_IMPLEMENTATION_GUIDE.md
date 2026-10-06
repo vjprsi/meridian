@@ -49,6 +49,13 @@ coupling to generated getter names. Responses: `crud.read(rowJson, Model.class)`
 - Every state change publishes its domain event via the outbox in the same transaction.
 - Money movements never update balances directly: they post to `ledger-service` (journal entries / holds).
 
+## Time
+
+- Validity windows, expiries and "is it effective now" checks must use one clock. When SQL compares with `now()`,
+  write the timestamps from the database clock too (`select now()`), never `OffsetDateTime.now()` in the JVM —
+  the JVM and database clocks differ by milliseconds and cause flaky "not yet valid" bugs.
+- Store and compare timestamps in UTC; business dates come from business-day-service, not the wall clock.
+
 ## Tests (required per service)
 
 - Keep the generated `<Name>ApplicationTests` (context + migration).

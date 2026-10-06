@@ -87,6 +87,24 @@ services:
 | `ro` | read-only in the API (server-computed) |
 | `hide` | never exposed in the API |
 
+### Advanced notation (contract hardening)
+
+| Need | Notation | Generates |
+| --- | --- | --- |
+| A JSON list column (ids, codes, rules, rows) | `"rules json[] | ..."` | `jsonb` column; OpenAPI `array` (never wrap lists in objects) |
+| A JSON object column | `"settings json | ..."` | `jsonb`; OpenAPI `object` |
+| Child rows sent with the parent on create | table `nested: ["entries list:ledger_entry nn | ..."]` | `entries` array of `<Child>Create` in the create body and of `<Child>` in the response |
+| A value returned once, never stored (API secret, TOTP seed) | table `response_only: ["client_secret string(128) | ..."]` | read-only response property; no column |
+| Action query parameters | `"GET /{id}/balance-at?at:ts!&currency:currency | ..."` (`!` = required) | query params on the operation |
+| Action returning a computed JSON result | 4th part `object`: `"POST /calculate | ... | body fields | object"` | `200` with a free-form JSON object |
+| Action returning a file/text | 4th part MIME type: `"GET /{id}/download | ... | | text/csv"` | `200` with that content type (string body) |
+| Action returning a list of rows | 4th part `table[]` | `<Table>Page` (cursor paging) |
+| True no-content action | 4th part `none` | `204` (use only when nothing is returned) |
+| Provider callback without bearer token | summary starts with `[public]` | `security: []`, no Idempotency-Key, permitted by the service's security chain; the service must verify the provider signature and resolve the tenant from the referenced entity |
+
+Rule of thumb: an action whose purpose is to compute, preview, simulate, test, export or download something must
+declare `object`, a MIME type or a table — never `none`.
+
 ### Standard columns (added automatically)
 
 | Column | Type | Notes |

@@ -85,6 +85,7 @@ class Table:
     unique: list = field(default_factory=list)
     indexes: list = field(default_factory=list)
     nested: list = field(default_factory=list)   # [(field, target_table, required, description)]
+    response_only: list = field(default_factory=list)  # [Column]: returned by the API, never stored
 
     def col(self, name):
         for c in self.columns:
@@ -161,6 +162,8 @@ def parse_column(text: str, ctx: str) -> Column:
         raise SpecError(f"{ctx}: bad column name {name!r}")
     if typ.startswith("enum:"):
         col = Column(name=name, type="enum", arg=typ[5:])
+    elif typ == "json[]":
+        col = Column(name=name, type="jsonarray")
     else:
         m = TYPE_RE.match(typ)
         if not m or m.group("base") not in SIMPLE_TYPES:
@@ -271,7 +274,8 @@ def load_domains() -> list:
                     description=t.get("description", ""), prefix=t.get("prefix", ""),
                     immutable=imm, tenant=ten, std=std, fr=t.get("fr", []) or [],
                     columns=cols, unique=t.get("unique", []) or [], indexes=t.get("indexes", []) or [],
-                    nested=[parse_nested(x, ctx) for x in (t.get("nested", []) or [])]))
+                    nested=[parse_nested(x, ctx) for x in (t.get("nested", []) or [])],
+                    response_only=[parse_column(x, ctx) for x in (t.get("response_only", []) or [])]))
             for a in s.get("apis", []) or []:
                 ctx = f"{path.name}:{a['resource']}"
                 apis.append(Api(
@@ -355,7 +359,7 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
                     if not t.col(f):
                         errors.append(f"api {a.resource}: filter {f} is not a column of {t.name}")
                 for act in a.actions:
-                    if act.response and act.response != "none" and act.response.rstrip("[]") not in tables_global:
+                    if act.response and act.response not in ("none", "object") and "/" not in act.response                             and act.response.rstrip("[]") not in tables_global:
                         errors.append(f"api {a.resource}: action response {act.response} unknown")
                     for c in act.body:
                         if c.type == "enum" and c.arg not in all_enums:
@@ -393,7 +397,7 @@ def pg_type(c: Column) -> str:
     return {
         "uuid": "uuid", "text": "text", "int": "integer", "bigint": "bigint",
         "amount": "numeric(28,8)", "rate": "numeric(18,10)", "bool": "boolean", "date": "date",
-        "ts": "timestamptz", "json": "jsonb", "currency": "char(3)", "country": "char(2)",
+        "ts": "timestamptz", "json": "jsonb", "jsonarray": "jsonb", "currency": "char(3)", "country": "char(2)",
         "email": "varchar(320)", "phone": "varchar(20)", "bytes": "bytea", "inet": "inet",
         "enum": "varchar(40)",
     }.get(c.type) or f"varchar({c.arg or 255})"
@@ -591,6 +595,8 @@ def oa_type(c: Column, enums) -> dict:
         s = {"type": "string", "format": "date-time"}
     elif t == "json":
         s = {"type": "object", "additionalProperties": True}
+    elif t == "jsonarray":
+        s = {"type": "array", "items": {}}
     elif t == "currency":
         s = {"type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217"}
     elif t == "country":
@@ -638,6 +644,11 @@ def table_schemas(t: Table, enums) -> dict:
         create["required"] = creq
     update = {"type": "object", "properties": dict(
         (c.name, oa_type(c, enums)) for c in t.columns if c.writable and not t.immutable)}
+    for c in t.response_only:
+        sch = oa_type(c, enums)
+        sch["readOnly"] = True
+        sch["description"] = (c.description + " " if c.description else "") + "(returned once; never stored)"
+        full["properties"][c.name] = sch
     for fname, target, required, desc in t.nested:
         tp = pascal(target)
         full["properties"][fname] = {"type": "array", "items": {"$ref": f"#/components/schemas/{tp}"},
@@ -729,6 +740,7 @@ class Endpoint:
     request_schema: str
     response_schema: str
     fr: list
+    public: bool = False
 
 
 def prune_components(doc: dict) -> None:
@@ -800,7 +812,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                 base_params = path_params(a.path)
 
                 def add(method, path, op, kind, summary, request=None, response=None, status="200",
-                        params=None, scope="read", extra_errs=None, req_schema="", resp_schema=""):
+                        params=None, scope="read", extra_errs=None, req_schema="", resp_schema="",
+                        content_type="application/json", public=False):
                     oid = op
                     i = 2
                     while oid in used_ids:
@@ -816,14 +829,21 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         o["responses"][status] = {"description": "No content"}
                     else:
                         o["responses"][status] = {"description": "OK" if status == "200" else "Created",
-                                                  "content": {"application/json": {"schema": response}}}
+                                                  "content": {content_type: {"schema": response}}}
                     o["responses"].update(STD_ERRS)
                     if extra_errs:
                         o["responses"].update(extra_errs)
                     if a.fr or t.fr:
                         o["x-requirements"] = sorted(set(a.fr + t.fr))
                     o["x-service"] = s.name
-                    o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{d.id}:{scope}")'
+                    if public:
+                        o["security"] = []
+                        o["x-public"] = True
+                        o["description"] = ("Public endpoint for an external provider callback: no bearer token; the "
+                                            "service verifies the provider signature and resolves the tenant from "
+                                            "the referenced entity.")
+                    else:
+                        o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{d.id}:{scope}")'
                     o["x-table"] = t.name
                     if kind in ("list", "get", "create", "update", "delete"):
                         o["x-crud"] = True
@@ -831,8 +851,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     for target in (doc, bundle):
                         target["paths"].setdefault(path, {})[method] = o
                     endpoints.append(Endpoint(oid, method.upper(), path, summary, d.id, s.name, a.resource,
-                                              t.name, kind, f"{d.id}:{scope}", req_schema, resp_schema,
-                                              sorted(set(a.fr + t.fr))))
+                                              t.name, kind, "public" if public else f"{d.id}:{scope}", req_schema,
+                                              resp_schema, sorted(set(a.fr + t.fr)), public))
 
                 rn = camel(a.resource)
                 noun = a.resource.replace("-", " ")
@@ -897,15 +917,23 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     resp_tbl = act.response or t.name
                     is_list = resp_tbl.endswith("[]")
                     resp_tbl = resp_tbl.rstrip("[]")
+                    content_type = "application/json"
                     if resp_tbl == "none":
                         resp = None
+                    elif resp_tbl == "object":
+                        resp = {"type": "object", "additionalProperties": True,
+                                "description": "Computed result (see operation summary)"}
+                    elif "/" in resp_tbl:
+                        content_type = resp_tbl
+                        resp = {"type": "string"}
                     elif is_list:
                         page_schema(doc, bundle, pascal(resp_tbl))
                         resp = ref(f"{pascal(resp_tbl)}Page")
                     else:
                         resp = ref(pascal(resp_tbl))
-                    if resp_tbl != "none":
+                    if resp_tbl != "none" and resp_tbl != "object" and "/" not in resp_tbl:
                         needed_tables.add(resp_tbl)
+                    public = act.summary.startswith("[public]")
                     params = path_params(full)
                     for qc in act.query:
                         qs = oa_type(qc, enums)
@@ -915,9 +943,10 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         params += [{"$ref": "#/components/parameters/Limit"},
                                    {"$ref": "#/components/parameters/Cursor"}]
                     write = act.method != "GET"
-                    if write:
+                    if write and not public:
                         params = params + [{"$ref": "#/components/parameters/IdempotencyKey"}]
-                    add(act.method.lower(), full, aname, "action", act.summary, request=req, response=resp,
+                    add(act.method.lower(), full, aname, "action", act.summary.removeprefix("[public]").strip(),
+                        request=req, response=resp, content_type=content_type, public=public,
                         status="200" if resp is not None else "204", params=params,
                         scope="write" if write else "read",
                         extra_errs=ERR(("404", "NotFound"), ("409", "Conflict"), ("422", "Unprocessable")) if write else ERR(("404", "NotFound")),
@@ -1064,9 +1093,10 @@ def gen_routes(endpoints):
     """generated/routes.json: every operation's method + path template -> owning service and port (edge gateway)."""
     import json
     ports = {x["name"]: x["port"] for x in json.loads((OUT / "services.json").read_text(encoding="utf-8"))}
-    routes = sorted({(e.method, e.path, e.service) for e in endpoints}, key=lambda r: (r[1], r[0]))
+    routes = sorted({(e.method, e.path, e.service, e.public) for e in endpoints}, key=lambda r: (r[1], r[0]))
     (OUT / "routes.json").write_text(json.dumps(
-        [{"method": m, "path": pth, "service": svc, "port": ports[svc]} for m, pth, svc in routes], indent=1),
+        [{"method": m, "path": pth, "service": svc, "port": ports[svc], "public": pub}
+         for m, pth, svc, pub in routes], indent=1),
         encoding="utf-8", newline="\n")
 
 

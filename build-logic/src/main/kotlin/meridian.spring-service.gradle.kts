@@ -68,4 +68,6 @@ tasks.named<ProcessResources>("processResources") {
     from(svc.database.map { rootProject.layout.projectDirectory.dir("generated/db/$it") }) { into("db/migration") }
     // Service directory (names -> ports) for ServiceClient.
     from(rootProject.layout.projectDirectory.file("generated/services.json")) { into("meridian") }
+    // Route table: lets the service permit its own public (provider callback) endpoints without a token.
+    from(rootProject.layout.projectDirectory.file("generated/routes.json")) { into("meridian") }
 }

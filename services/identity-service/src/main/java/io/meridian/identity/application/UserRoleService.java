@@ -136,7 +136,10 @@ public class UserRoleService {
         }
         JsonNode role = store.require("role", roleId);
         checkSegregationOfDuties(userId, role);
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        // Database clock: validity is evaluated with now() in SQL, so the grant must use the same clock
+        // (the JVM and database clocks can differ by milliseconds).
+        OffsetDateTime now = store.jdbc().sql("select now()").query(OffsetDateTime.class).single()
+                .withOffsetSameInstant(ZoneOffset.UTC);
         ObjectNode v = json.createObjectNode();
         v.put("user_id", userId.toString());
         v.put("role_id", roleId.toString());

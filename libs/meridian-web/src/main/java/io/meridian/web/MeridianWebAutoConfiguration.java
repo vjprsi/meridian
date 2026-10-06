@@ -60,13 +60,20 @@ public class MeridianWebAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
-    SecurityFilterChain meridianSecurity(HttpSecurity http, MeridianProperties props) throws Exception {
+    SecurityFilterChain meridianSecurity(HttpSecurity http, MeridianProperties props, JsonMapper json,
+                                         org.springframework.core.env.Environment env) throws Exception {
+        java.util.List<String[]> publicRoutes = publicRoutes(json, env.getProperty("spring.application.name", ""));
         http.csrf(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .addFilterAfter(new TenantFilter(props), AnonymousAuthenticationFilter.class);
         if (props.devMode()) {
             http.authorizeHttpRequests(a -> a.anyRequest().permitAll());
         } else {
+            http.authorizeHttpRequests(a -> {
+                for (String[] r : publicRoutes) {
+                    a.requestMatchers(HttpMethod.valueOf(r[0]), r[1]).permitAll();
+                }
+            });
             http.authorizeHttpRequests(a -> a
                     .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -113,5 +120,28 @@ public class MeridianWebAutoConfiguration {
                 registry.addInterceptor(new ScopeInterceptor(props)).addPathPatterns("/v1/**");
             }
         };
+    }
+
+    /**
+     * Public operations of this service (provider callbacks marked [public] in the spec), as {method, ant pattern}.
+     * Read from the generated route table shipped on the classpath.
+     */
+    static java.util.List<String[]> publicRoutes(JsonMapper json, String service) {
+        var res = new org.springframework.core.io.ClassPathResource("meridian/routes.json");
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        if (!res.exists()) {
+            return out;
+        }
+        try (var in = res.getInputStream()) {
+            for (var r : json.readTree(in)) {
+                if (r.path("public").asBoolean(false) && service.equals(r.path("service").asString())) {
+                    out.add(new String[] {r.get("method").asString(),
+                            r.get("path").asString().replaceAll("\\{[^}/]+}", "*")});
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("cannot read route table", e);
+        }
+        return out;
     }
 }
