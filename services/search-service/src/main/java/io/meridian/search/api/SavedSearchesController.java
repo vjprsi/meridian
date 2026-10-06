@@ -9,6 +9,7 @@ import io.meridian.search.api.generated.model.SavedSearchesRunRequest;
 import io.meridian.search.application.SearchService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,10 +59,10 @@ public class SavedSearchesController implements SavedSearchesApi {
 
     /** Read-only execution: like the query endpoint, results are not replayed from the idempotency store. */
     @Override
-    public ResponseEntity<Void> savedSearchesRun(UUID id, String idempotencyKey, SavedSearchesRunRequest body) {
+    public ResponseEntity<Map<String, Object>> savedSearchesRun(UUID id, String idempotencyKey, SavedSearchesRunRequest body) {
         TenantContext.require();
         JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
-        return Http.ok(search.runSaved(id, req.hasNonNull("limit") ? req.get("limit").asInt() : null,
-                Http.text(req, "cursor"), permissions.piiAllowed()));
+        return ResponseEntity.ok(Http.object(json, search.runSaved(id, req.hasNonNull("limit") ? req.get("limit").asInt() : null,
+                Http.text(req, "cursor"), permissions.piiAllowed())));
     }
 }

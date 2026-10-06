@@ -16,8 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Synonym sets. {@code terms} is stored normalised (lower case, distinct) as {@code {"terms": [...]}}, the
- * object form the generated contract can carry; the request may send that form or any object listing terms.
+ * Synonym sets. {@code terms} (a JSON array) is stored normalised: lower case and distinct.
  */
 @RestController
 public class SearchSynonymsController implements SearchSynonymsApi {
@@ -43,7 +42,7 @@ public class SearchSynonymsController implements SearchSynonymsApi {
         TenantContext.require();
         return idempotency.execute(idempotencyKey, body, SearchSynonym.class, () -> {
             ObjectNode values = crud.toColumns(TABLE, body);
-            values.set("terms", json.createObjectNode().set("terms", search.validateSynonyms(values)));
+            values.set("terms", search.validateSynonyms(values));
             return ResponseEntity.status(HttpStatus.CREATED).body(crud.read(crud.insert(TABLE, values), SearchSynonym.class));
         });
     }
@@ -54,7 +53,7 @@ public class SearchSynonymsController implements SearchSynonymsApi {
         return updates.apply(TABLE, id, ifMatch, crud.toColumns(TABLE, body), SearchSynonym.class, (merged, changes) -> {
             var terms = search.validateSynonyms(merged);
             if (changes.has("terms")) {
-                changes.set("terms", json.createObjectNode().set("terms", terms));
+                changes.set("terms", terms);
             }
         });
     }

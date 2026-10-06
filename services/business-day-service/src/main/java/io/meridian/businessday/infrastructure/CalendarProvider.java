@@ -50,7 +50,7 @@ public class CalendarProvider {
                     + " returned no weekend definition");
         }
         Set<DayOfWeek> weekend = EnumSet.noneOf(DayOfWeek.class);
-        for (String d : JsonValues.strings(cal.get("weekend_days"))) {
+        for (String d : weekendDays(cal.get("weekend_days"))) {
             try {
                 weekend.add(DayOfWeek.valueOf(d.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException e) {
@@ -79,5 +79,19 @@ public class CalendarProvider {
             cursor = res.get("next_cursor").asString();
         }
         return new BusinessCalendar(weekend, holidays);
+    }
+
+    /**
+     * reference-data-service (platform domain) still types {@code weekend_days} as an object and stores
+     * {@code {"days": [...]}}; a plain array is accepted too, so this keeps working once that contract is hardened.
+     */
+    static List<String> weekendDays(JsonNode node) {
+        List<String> out = new ArrayList<>();
+        if (node == null || node.isNull()) {
+            return out;
+        }
+        JsonNode list = node.isArray() ? node : node.path("days");
+        list.forEach(v -> out.add(v.asString()));
+        return out;
     }
 }

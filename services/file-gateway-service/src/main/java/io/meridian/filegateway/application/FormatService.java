@@ -68,11 +68,14 @@ public class FormatService {
      * Validates a sample against the layout. The sample is taken inline ({@code content} / {@code content_base64}
      * in the body) or, by {@code document_id}, from document-service's pre-signed download URL.
      */
-    public JsonNode validateSample(UUID formatId, JsonNode raw) {
+    public JsonNode validateSample(UUID formatId, JsonNode req) {
         JsonNode format = rows.require("file_format_definition", formatId, false);
-        byte[] content = inlineContent(raw);
+        byte[] content = inlineContent(req);
         if (content == null) {
-            String documentId = JsonValues.text(raw, "document_id");
+            String documentId = JsonValues.text(req, "document_id");
+            if (documentId == null) {
+                throw ApiException.unprocessable("sample_required", "Provide document_id, content or content_base64");
+            }
             JsonNode link = services.get("document-service", "/v1/documents/" + documentId + "/download-url");
             String url = link == null ? null : JsonValues.text(link, "url");
             if (url == null) {
@@ -106,17 +109,17 @@ public class FormatService {
         return a;
     }
 
-    /** Inline content from a raw request body: {@code content} (text) or {@code content_base64}. */
-    public static byte[] inlineContent(JsonNode raw) {
-        if (raw.hasNonNull("content_base64")) {
+    /** Inline content from the request: {@code content} (text) or {@code content_base64}. */
+    public static byte[] inlineContent(JsonNode req) {
+        if (req.hasNonNull("content_base64")) {
             try {
-                return Base64.getDecoder().decode(raw.get("content_base64").asString());
+                return Base64.getDecoder().decode(req.get("content_base64").asString());
             } catch (IllegalArgumentException e) {
                 throw ApiException.unprocessable("invalid_base64", "content_base64 is not valid base64");
             }
         }
-        if (raw.hasNonNull("content")) {
-            return raw.get("content").asString().getBytes(StandardCharsets.UTF_8);
+        if (req.hasNonNull("content")) {
+            return req.get("content").asString().getBytes(StandardCharsets.UTF_8);
         }
         return null;
     }

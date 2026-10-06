@@ -27,8 +27,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 public class ChannelService {
-    /** Write-only secret references (not part of the API model; read from the raw request body). */
-    public static final List<String> SECRET_FIELDS = List.of("credential_secret_ref", "pgp_encrypt_key_ref", "pgp_decrypt_key_ref");
+    /** Secret-store references (vault paths, never the secret material). */
+    public static final List<String> SECRET_REF_FIELDS = List.of("credential_secret_ref", "pgp_encrypt_key_ref", "pgp_decrypt_key_ref");
     private static final Set<String> SERVER_PROTOCOLS = Set.of("SFTP", "FTPS", "AS2", "CONNECT_DIRECT");
 
     private final Rows rows;
@@ -48,22 +48,22 @@ public class ChannelService {
         this.json = json;
     }
 
-    /** Copies secret references from the raw body into the column values, validating their form. */
-    public void applySecrets(ObjectNode values, JsonNode raw, boolean creating) {
-        for (String f : SECRET_FIELDS) {
-            if (raw.hasNonNull(f)) {
-                FileRules.requireSecretRef(f, raw.get(f).asString(), false);
-                values.put(f, raw.get(f).asString());
+    /**
+     * Checks the form of the secret references being written ({@code current} is null on create). The credential
+     * reference is changed only through {@code rotate-credentials} (audited), never by PATCH.
+     */
+    public void checkSecretRefs(ObjectNode values, JsonNode current) {
+        for (String f : SECRET_REF_FIELDS) {
+            if (values.hasNonNull(f)) {
+                FileRules.requireSecretRef(f, values.get(f).asString(), false);
             }
         }
-        if (creating) {
+        if (current == null) {
             FileRules.requireSecretRef("credential_secret_ref", JsonValues.text(values, "credential_secret_ref"), true);
-        }
-        for (String forbidden : List.of("password", "private_key", "secret", "access_key", "secret_key")) {
-            if (raw.has(forbidden)) {
-                throw ApiException.unprocessable("literal_credential_rejected",
-                        "Credentials are never accepted inline; store them in the vault and send credential_secret_ref");
-            }
+        } else if (values.hasNonNull("credential_secret_ref")
+                && !values.get("credential_secret_ref").asString().equals(current.path("credential_secret_ref").asString(null))) {
+            throw ApiException.unprocessable("use_rotate_credentials",
+                    "Change credential_secret_ref with POST /v1/files/channels/{id}/rotate-credentials");
         }
     }
 
@@ -208,9 +208,11 @@ public class ChannelService {
             if (Objects.equals(channel.path("credential_secret_ref").asString(null), ref)) {
                 throw ApiException.unprocessable("credential_unchanged", "The new credential reference equals the current one");
             }
-            return rows.updateReturning("""
+            String r = rows.updateReturning("""
                     update file_channel set credential_secret_ref = ?, updated_by = ? where id = ?
                     returning row_to_json(file_channel)::text""", ref, TenantContext.principal(), id);
+            outbox.publish("operations.file_channel.credentials_rotated", "file_channel", id, json.readTree(r));
+            return r;
         });
         log.append(new TransferLog.Entry(id, null, null, "CONNECT", true, null, null, null,
                 "Credentials rotated to a new secret reference"));
@@ -251,7 +253,6 @@ public class ChannelService {
             if (!Objects.equals(previous, health)) {
                 JsonNode n = json.readTree(row);
                 ObjectNode payload = ((ObjectNode) n).deepCopy();
-                SECRET_FIELDS.forEach(payload::remove);
                 payload.put("previous_health_status", previous);
                 outbox.publish("operations.file_channel.health_changed", "file_channel", id, payload);
             }

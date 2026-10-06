@@ -5,6 +5,7 @@ import io.meridian.archive.api.generated.model.ArchivedObjectsRestoreRequest;
 import io.meridian.archive.application.CatalogService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,18 +26,19 @@ public class ArchivedObjectsController implements ArchivedObjectsApi {
     }
 
     @Override
-    public ResponseEntity<Void> archivedObjectsRestore(UUID id, String idempotencyKey, ArchivedObjectsRestoreRequest body) {
+    public ResponseEntity<Map<String, Object>> archivedObjectsRestore(UUID id, String idempotencyKey,
+                                                                      ArchivedObjectsRestoreRequest body) {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
         String reason = Http.required(req, "reason");
-        return Http.json(idempotency.execute(idempotencyKey, req, JsonNode.class,
+        return Http.object(json, idempotency.execute(idempotencyKey, req, JsonNode.class,
                 () -> ResponseEntity.ok(catalog.restore(id, reason))));
     }
 
     /** Verification is re-run on every call (a replayed result could hide later tampering). */
     @Override
-    public ResponseEntity<Void> archivedObjectsVerify(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> archivedObjectsVerify(UUID id, String idempotencyKey) {
         TenantContext.require();
-        return Http.ok(catalog.verify(id));
+        return ResponseEntity.ok(Http.object(json, catalog.verify(id)));
     }
 }

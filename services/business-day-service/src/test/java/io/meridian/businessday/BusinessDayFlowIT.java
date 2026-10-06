@@ -73,6 +73,9 @@ class BusinessDayFlowIT {
 
     final HttpClient http = HttpClient.newHttpClient();
     final List<String> calls = Collections.synchronizedList(new ArrayList<>());
+    /** Every dispatch: method, full path, Idempotency-Key, tenant in context, body. */
+    record Dispatch(String method, String path, String key, String tenant, JsonNode body) {}
+    final List<Dispatch> dispatches = Collections.synchronizedList(new ArrayList<>());
     final Map<String, AtomicInteger> counts = new ConcurrentHashMap<>();
     final Map<String, IntFunction<JsonNode>> behaviour = new ConcurrentHashMap<>();
     String dayId;
@@ -81,8 +84,11 @@ class BusinessDayFlowIT {
     /** Stubs are re-registered per test: @MockitoBean mocks are reset after each test method. */
     @BeforeEach
     void stubs() {
-        when(serviceClient.post(anyString(), anyString(), any(), any())).thenAnswer(inv -> {
-            String path = inv.getArgument(1);
+        when(serviceClient.send(anyString(), anyString(), anyString(), any(), any())).thenAnswer(inv -> {
+            String full = inv.getArgument(2);
+            dispatches.add(new Dispatch(inv.getArgument(1), full, inv.getArgument(4),
+                    TenantContext.current().map(UUID::toString).orElse(null), (JsonNode) inv.getArgument(3)));
+            String path = full.contains("?") ? full.substring(0, full.indexOf('?')) : full;
             calls.add(path);
             int n = counts.computeIfAbsent(path, k -> new AtomicInteger()).incrementAndGet();
             IntFunction<JsonNode> b = behaviour.get(path);
@@ -110,10 +116,26 @@ class BusinessDayFlowIT {
     @Test
     @Order(1)
     void jobGraphIsValidatedOnEveryChange() throws Exception {
-        jobDef("ACCRUAL", "INTEREST_ACCRUAL", "/jobs/accrual", "[]", 1, true, "RETRY_THEN_STOP", 10);
+        jobDef("ACCRUAL", "INTEREST_ACCRUAL", "/jobs/accrual?business_date={business_date}", "[]", 1, true,
+                "RETRY_THEN_STOP", 10);
         jobDef("CAPITALISE", "INTEREST_CAPITALISATION", "/jobs/capitalise", "[\"ACCRUAL\"]", 2, true, "RETRY_THEN_STOP", 20);
         jobDef("STATEMENTS", "STATEMENTS", "/jobs/statements", "[\"ACCRUAL\"]", 1, false, "RETRY_THEN_CONTINUE", 30);
-        String gl = jobDef("GL_CLOSE", "GL_CLOSE", "/jobs/gl-close", "[\"CAPITALISE\"]", 1, true, "RETRY_THEN_STOP", 40);
+        String gl = postJson("/v1/operations/eod-jobs", jobBody("GL_CLOSE", "GL_CLOSE", "/jobs/gl-close", "[\"CAPITALISE\"]",
+                1, true, "RETRY_THEN_STOP", 40).replace("\"max_retries\":3",
+                "\"max_retries\":3,\"http_method\":\"PUT\",\"body_template\":{\"date\":\"{business_date}\",\"run\":\"{eod_run_id}\","
+                        + "\"partition\":\"{partition_no}\",\"note\":\"close {cycle_type}\"}"), 201).get("id").asString();
+
+        // list fields are JSON arrays: the former object wrapping is rejected by the contract
+        HttpResponse<String> wrapped = send("POST", "/v1/operations/eod-jobs", jobBody("WRAPPED", "CUSTOM", "/jobs/x", "[]",
+                1, true, "CONTINUE", 50).replace("[\"EOD\"]", "{\"codes\":[\"EOD\"]}"), UUID.randomUUID().toString(), TENANT,
+                "dev-user", null);
+        assertThat(wrapped.statusCode()).as(wrapped.body()).isEqualTo(400);
+        JsonNode badPlaceholder = postJson("/v1/operations/eod-jobs", jobBody("X", "CUSTOM", "/jobs/x?d={today}", "[]", 1, true,
+                "CONTINUE", 50), 422);
+        assertThat(badPlaceholder.get("code").asString()).isEqualTo("unknown_placeholder");
+        JsonNode badPath = postJson("/v1/operations/eod-jobs", jobBody("X", "CUSTOM", "https://evil/x", "[]", 1, true,
+                "CONTINUE", 50), 422);
+        assertThat(badPath.get("code").asString()).isEqualTo("invalid_http_path");
 
         JsonNode missing = postJson("/v1/operations/eod-jobs", jobBody("BROKEN", "CUSTOM", "/jobs/x", "[\"NOPE\"]", 1, true,
                 "CONTINUE", 50), 422);
@@ -132,7 +154,7 @@ class BusinessDayFlowIT {
             }
         }
         HttpResponse<String> cyc = send("PATCH", "/v1/operations/eod-jobs/" + accrualId,
-                "{\"depends_on\":{\"codes\":[\"GL_CLOSE\"]}}", null, TENANT, "dev-user", "1");
+                "{\"depends_on\":[\"GL_CLOSE\"]}", null, TENANT, "dev-user", "1");
         assertThat(cyc.statusCode()).as(cyc.body()).isEqualTo(422);
         assertThat(json.readTree(cyc.body()).get("code").asString()).isEqualTo("dependency_cycle");
 
@@ -145,6 +167,10 @@ class BusinessDayFlowIT {
         assertThat(graph.get("levels").toString())
                 .isEqualTo("[[\"ACCRUAL\"],[\"CAPITALISE\",\"STATEMENTS\"],[\"GL_CLOSE\"]]");
         assertThat(graph.get("edges")).hasSize(3);
+        assertThat(graph.get("nodes").get(0).get("cycle_types").isArray()).isTrue();
+        assertThat(graph.get("nodes").get(0).get("http_method").asString()).isEqualTo("POST");
+        assertThat(send("GET", "/v1/operations/eod-jobs/graph?cycle_type=NOPE", null, null, TENANT, "dev-user", null)
+                .statusCode()).isIn(400, 422);
 
         JsonNode report = postJson("/v1/operations/eod-jobs/validate", null, 200);
         assertThat(report.get("valid").asBoolean()).isTrue();
@@ -229,6 +255,26 @@ class BusinessDayFlowIT {
         assertThat(calls.lastIndexOf("/jobs/capitalise")).isLessThan(calls.indexOf("/jobs/gl-close"));
         assertThat(counts.get("/jobs/capitalise").get()).isEqualTo(3); // 2 partitions + 1 retry
         assertThat(counts.get("/jobs/statements").get()).isEqualTo(4); // 1 + max_retries(3)
+
+        // cross-service EOD contract: path template, method, body template, tenant and Idempotency-Key per partition
+        List<Dispatch> accrual = dispatches.stream().filter(d -> d.path().startsWith("/jobs/accrual")).toList();
+        assertThat(accrual).hasSize(1);
+        assertThat(accrual.getFirst().path()).isEqualTo("/jobs/accrual?business_date=2026-01-30");
+        assertThat(accrual.getFirst().method()).isEqualTo("POST");
+        assertThat(accrual.getFirst().key()).isEqualTo("eod:" + runId + ":ACCRUAL:0");
+        assertThat(accrual.getFirst().tenant()).isEqualTo(TENANT);
+        assertThat(accrual.getFirst().body().get("business_date").asString()).isEqualTo("2026-01-30");
+        List<String> capitaliseKeys = dispatches.stream().filter(d -> d.path().equals("/jobs/capitalise"))
+                .map(Dispatch::key).toList();
+        assertThat(capitaliseKeys).hasSize(3); // 2 partitions + 1 retry that reuses its partition's key
+        assertThat(new java.util.TreeSet<>(capitaliseKeys))
+                .containsExactly("eod:" + runId + ":CAPITALISE:0", "eod:" + runId + ":CAPITALISE:1");
+        Dispatch glClose = dispatches.stream().filter(d -> d.path().equals("/jobs/gl-close")).findFirst().orElseThrow();
+        assertThat(glClose.method()).isEqualTo("PUT");
+        assertThat(glClose.body().get("date").asString()).isEqualTo("2026-01-30");
+        assertThat(glClose.body().get("run").asString()).isEqualTo(runId);
+        assertThat(glClose.body().get("partition").isInt()).isTrue();
+        assertThat(glClose.body().get("note").asString()).isEqualTo("close EOM");
 
         JsonNode jobs = get("/v1/operations/eod-runs/" + runId + "/jobs?limit=50", TENANT).get("data");
         assertThat(jobs).hasSize(5);
@@ -355,8 +401,15 @@ class BusinessDayFlowIT {
                 .isEqualTo("validation_failed");
         HttpResponse<String> rel = send("POST", "/v1/operations/batch-locks/" + lockId + "/force-release",
                 "{\"reason\":\"instance crashed\"}", UUID.randomUUID().toString(), TENANT, "ops", null);
-        assertThat(rel.statusCode()).isEqualTo(204);
-        assertThat(get("/v1/operations/batch-locks?lock_key=" + key, TENANT).get("data")).isEmpty();
+        assertThat(rel.statusCode()).as(rel.body()).isEqualTo(200);
+        JsonNode released = json.readTree(rel.body());
+        assertThat(released.get("force_release_reason").asString()).isEqualTo("instance crashed");
+        assertThat(released.get("force_released_by").asString()).isEqualTo("ops");
+        assertThat(released.get("fencing_token").asLong()).isEqualTo(locks.get(0).get("fencing_token").asLong() + 1);
+        // the stale holder can no longer renew its lease
+        assertThat(TenantContext.callAs(UUID.fromString(TENANT), "other-instance",
+                () -> lockStore.renew(key, "other-instance", locks.get(0).get("fencing_token").asLong(),
+                        Duration.ofMinutes(5)))).isFalse();
         JsonNode run = postJson("/v1/operations/business-days/" + current.get("id").asString() + "/start-eod", "{}", 200);
         assertThat(awaitRun(run.get("id").asString()).get("status").asString()).isEqualTo("SUCCEEDED");
     }
@@ -421,7 +474,8 @@ class BusinessDayFlowIT {
         assertThat(types).contains("operations.business_day.opened", "operations.business_day.cut_off",
                 "operations.business_day.closed", "operations.eod_run.started", "operations.eod_run.completed",
                 "operations.eod_run.failed", "operations.eod_job_run.requested", "operations.eod_job_run.failed",
-                "operations.date_roll.completed", "operations.job_schedule_run.completed");
+                "operations.date_roll.completed", "operations.job_schedule_run.completed",
+                "operations.batch_job_lock.force_released");
     }
 
     @Test
@@ -447,15 +501,15 @@ class BusinessDayFlowIT {
     private static String jobBody(String code, String type, String endpoint, String deps, int parallelism, boolean critical,
                                   String policy, int seq) {
         return """
-                {"code":"%s","name":"%s","job_type":"%s","cycle_types":{"codes":["EOD"]},"owning_service":"deposit-service",
-                 "endpoint":"%s","depends_on":{"codes":%s},"parallelism":%d,"is_critical":%s,"failure_policy":"%s",
+                {"code":"%s","name":"%s","job_type":"%s","cycle_types":["EOD"],"owning_service":"deposit-service",
+                 "http_path":"%s","depends_on":%s,"parallelism":%d,"is_critical":%s,"failure_policy":"%s",
                  "sequence":%d,"max_retries":3,"parameters":{"batch_size":500}}"""
                 .formatted(code, code, type, endpoint, deps, parallelism, critical, policy, seq);
     }
 
     private static String schedule(String code, String cron, String zone) {
         return """
-                {"code":"%s","name":"Sweep","owning_service":"deposit-service","endpoint":"/jobs/sweep",
+                {"code":"%s","name":"Sweep","owning_service":"deposit-service","http_path":"/jobs/sweep",
                  "cron_expression":"%s","time_zone":"%s"}""".formatted(code, cron, zone);
     }
 

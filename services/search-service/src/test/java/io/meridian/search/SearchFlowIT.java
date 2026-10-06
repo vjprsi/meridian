@@ -68,7 +68,7 @@ class SearchFlowIT {
         assertThat(idx.get("physical_index").asString()).startsWith("customers_v1_");
         post("/v1/search/indexes", index("PAYMENT", "payments",
                 "{\"properties\":{\"reference\":{},\"payer_name\":{},\"amount\":{}}}", "[\"reference^3\",\"payer_name\"]",
-                "[\"meridian.payments.v1\"]").replace(",\"masked_fields\":{\"fields\":[\"email\",\"phone\"]}", ""), 201);
+                "[\"meridian.payments.v1\"]").replace(",\"masked_fields\":[\"email\",\"phone\"]", ""), 201);
         assertThat(post("/v1/search/indexes", index("CARD", "customers", mapping, "[\"full_name\"]", "[\"meridian.cards.v1\"]"),
                 409).get("code").asString()).isEqualTo("alias_in_use");
     }
@@ -81,14 +81,18 @@ class SearchFlowIT {
                  {"entity_type":"CUSTOMER","entity_id":"c1","version":1,"document":{"full_name":"Mohammed Ali","email":"mo@example.com","phone":"+254700123456","city":"Nairobi","segment":"RETAIL"}},
                  {"entity_type":"CUSTOMER","entity_id":"c2","version":1,"document":{"full_name":"Muhammad Hassan","email":"mh@example.com","phone":"+254711000222","city":"Mombasa","segment":"RETAIL"}},
                  {"entity_type":"CUSTOMER","entity_id":"c3","version":1,"document":{"full_name":"Jane Doe","email":"jane@example.com","phone":"+254722333444","city":"Nairobi","segment":"PREMIUM"}},
-                 {"entity_type":"PAYMENT","entity_id":"p1","document":{"reference":"INV-2026-001","payer_name":"Jane Doe","amount":"120.00"}}]}""", 202);
+                 {"entity_type":"PAYMENT","entity_id":"p1","document":{"reference":"INV-2026-001","payer_name":"Jane Doe","amount":"120.00"}}]}""", 200);
         assertThat(r.get("indexed").asInt()).isEqualTo(4);
         // stale version is ignored (out-of-order event)
         post("/v1/search/documents", """
-                {"entity_type":"CUSTOMER","entity_id":"c1","version":0,"document":{"full_name":"Old Name"}}""", 202);
+                {"documents":[{"entity_type":"CUSTOMER","entity_id":"c1","version":0,"document":{"full_name":"Old Name"}}]}""", 200);
         assertThat(post("/v1/search/documents", """
-                {"entity_type":"WALLET","entity_id":"w1","document":{"x":1}}""", 422).get("code").asString())
+                {"documents":[{"entity_type":"WALLET","entity_id":"w1","document":{"x":1}}]}""", 422).get("code").asString())
                 .isEqualTo("index_not_found");
+        // the batch is the declared contract: a bare document (no documents array) is rejected
+        assertThat(post("/v1/search/documents", """
+                {"entity_type":"CUSTOMER","entity_id":"c5","document":{"full_name":"X"}}""", 400).get("code").asString())
+                .isEqualTo("validation_failed");
     }
 
     @Test
@@ -111,10 +115,12 @@ class SearchFlowIT {
         assertThat(ids(post("/v1/search/query", "{\"query_text\":\"mohammed\"}", 200))).containsExactly("c1");
         assertThat(ids(post("/v1/search/query", "{\"query_text\":\"old\"}", 200))).isEmpty();
         assertThat(ids(post("/v1/search/query",
-                "{\"query_text\":\"nairobi\",\"filters\":{\"segment\":\"PREMIUM\"},\"entity_types\":{\"types\":[\"CUSTOMER\"]}}", 200)))
+                "{\"query_text\":\"nairobi\",\"filters\":{\"segment\":\"PREMIUM\"},\"entity_types\":[\"CUSTOMER\"]}", 200)))
                 .containsExactly("c3");
-        assertThat(post("/v1/search/query", "{\"query_text\":\"x\",\"entity_types\":{\"types\":[\"SPACESHIP\"]}}", 422)
+        assertThat(post("/v1/search/query", "{\"query_text\":\"x\",\"entity_types\":[\"SPACESHIP\"]}", 422)
                 .get("code").asString()).isEqualTo("unknown_entity_type");
+        assertThat(post("/v1/search/query", "{\"query_text\":\"x\",\"entity_types\":{\"types\":[\"CUSTOMER\"]}}", 400)
+                .get("code").asString()).isEqualTo("malformed_request");
         assertThat(post("/v1/search/query", "{}", 400).get("code").asString()).isEqualTo("query_required");
 
         JsonNode page1 = post("/v1/search/query", "{\"query_text\":\"nairobi\",\"limit\":1}", 200);
@@ -130,11 +136,11 @@ class SearchFlowIT {
     @Order(4)
     void synonymsExpandQueries() throws Exception {
         assertThat(ids(post("/v1/search/query", "{\"query_text\":\"mohamed\"}", 200))).isEmpty();
-        assertThat(post("/v1/search/synonyms", "{\"terms\":{\"terms\":[\"solo\"]}}", 422).get("code").asString())
+        assertThat(post("/v1/search/synonyms", "{\"terms\":[\"solo\"]}", 422).get("code").asString())
                 .isEqualTo("invalid_synonyms");
         JsonNode syn = post("/v1/search/synonyms",
-                "{\"search_index_id\":\"" + customers + "\",\"terms\":{\"terms\":[\"Mohammed\",\"Muhammad\",\"Mohamed\",\"mohamed\"]}}", 201);
-        assertThat(syn.get("terms").get("terms")).hasSize(3);
+                "{\"search_index_id\":\"" + customers + "\",\"terms\":[\"Mohammed\",\"Muhammad\",\"Mohamed\",\"mohamed\"]}", 201);
+        assertThat(syn.get("terms").toString()).isEqualTo("[\"mohammed\",\"muhammad\",\"mohamed\"]");
         assertThat(ids(post("/v1/search/query", "{\"query_text\":\"mohamed\"}", 200))).containsExactlyInAnyOrder("c1", "c2");
     }
 
@@ -152,10 +158,10 @@ class SearchFlowIT {
     @Test
     @Order(6)
     void savedSearchesRunForTheirOwner() throws Exception {
-        assertThat(post("/v1/search/saved", "{\"app_user_id\":\"" + OWNER + "\",\"name\":\"bad\",\"entity_types\":{\"types\":[\"PLANET\"]},"
+        assertThat(post("/v1/search/saved", "{\"app_user_id\":\"" + OWNER + "\",\"name\":\"bad\",\"entity_types\":[\"PLANET\"],"
                 + "\"query_text\":\"x\"}", 422).get("code").asString()).isEqualTo("unknown_entity_type");
         JsonNode saved = post("/v1/search/saved", "{\"app_user_id\":\"" + OWNER + "\",\"name\":\"Nairobi customers\","
-                + "\"entity_types\":{\"types\":[\"CUSTOMER\"]},\"query_text\":\"nairobi\"}", 201);
+                + "\"entity_types\":[\"CUSTOMER\"],\"query_text\":\"nairobi\"}", 201);
         savedId = saved.get("id").asString();
         HttpResponse<String> other = send("POST", "/v1/search/saved/" + savedId + "/run", "{}", UUID.randomUUID().toString(),
                 TENANT, UUID.randomUUID().toString(), null);
@@ -173,7 +179,7 @@ class SearchFlowIT {
         JsonNode before = get("/v1/search/indexes/" + customers, TENANT);
         String oldPhysical = before.get("physical_index").asString();
         HttpResponse<String> patch = send("PATCH", "/v1/search/indexes/" + customers,
-                "{\"searchable_fields\":{\"fields\":[\"full_name^3\",\"email\",\"phone\",\"city^2\",\"segment\"]}}", null, TENANT,
+                "{\"searchable_fields\":[\"full_name^3\",\"email\",\"phone\",\"city^2\",\"segment\"]}", null, TENANT,
                 "dev-user", null, before.get("row_version").asString());
         assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
         assertThat(json.readTree(patch.body()).get("mapping_version").asInt()).isEqualTo(2);
@@ -197,8 +203,10 @@ class SearchFlowIT {
     @Test
     @Order(8)
     void deletesAndCatchUp() throws Exception {
-        assertThat(send("DELETE", "/v1/search/documents/CUSTOMER/c2", null, null, TENANT, "dev-user", null).statusCode())
-                .isEqualTo(200);
+        HttpResponse<String> removed = send("DELETE", "/v1/search/documents/CUSTOMER/c2", null, UUID.randomUUID().toString(),
+                TENANT, "dev-user", null);
+        assertThat(removed.statusCode()).as(removed.body()).isEqualTo(200);
+        assertThat(json.readTree(removed.body()).get("operation").asString()).isEqualTo("DELETE");
         assertThat(ids(post("/v1/search/query", "{\"query_text\":\"hassan\"}", 200))).isEmpty();
         assertThat(post("/v1/search/indexes/" + customers + "/catch-up",
                 "{\"from_timestamp\":\"" + OffsetDateTime.now().plusHours(1) + "\"}", 422).get("code").asString())
@@ -218,8 +226,8 @@ class SearchFlowIT {
         JsonNode healthy = get("/v1/search/indexes/" + customers + "/stats", TENANT);
         assertThat(healthy.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(healthy.get("document_count").asLong()).isEqualTo(2);
-        post("/v1/search/documents", "{\"entity_type\":\"CUSTOMER\",\"entity_id\":\"c9\",\"occurred_at\":\""
-                + OffsetDateTime.now().minusHours(3) + "\",\"document\":{\"full_name\":\"Late Event\"}}", 202);
+        post("/v1/search/documents", "{\"documents\":[{\"entity_type\":\"CUSTOMER\",\"entity_id\":\"c9\",\"occurred_at\":\""
+                + OffsetDateTime.now().minusHours(3) + "\",\"document\":{\"full_name\":\"Late Event\"}}]}", 200);
         JsonNode degraded = get("/v1/search/indexes/" + customers + "/stats", TENANT);
         assertThat(degraded.get("status").asString()).isEqualTo("DEGRADED");
         assertThat(degraded.get("lag_seconds").asInt()).isGreaterThan(300);
@@ -243,8 +251,8 @@ class SearchFlowIT {
 
     private static String index(String type, String alias, String mapping, String fields, String topics) {
         return """
-                {"entity_type":"%s","alias_name":"%s","mapping":%s,"searchable_fields":{"fields":%s},
-                 "source_topics":{"topics":%s},"masked_fields":{"fields":["email","phone"]}}"""
+                {"entity_type":"%s","alias_name":"%s","mapping":%s,"searchable_fields":%s,
+                 "source_topics":%s,"masked_fields":["email","phone"]}"""
                 .formatted(type, alias, mapping, fields, topics);
     }
 

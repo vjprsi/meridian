@@ -4,8 +4,8 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.filegateway.api.generated.InboundFilesApi;
 import io.meridian.filegateway.api.generated.model.FileTransferLogPage;
 import io.meridian.filegateway.api.generated.model.InboundFile;
-import io.meridian.filegateway.api.generated.model.InboundFileCreate;
 import io.meridian.filegateway.api.generated.model.InboundFilesReleaseQuarantineRequest;
+import io.meridian.filegateway.api.generated.model.InboundFilesUploadRequest;
 import io.meridian.filegateway.application.FormatService;
 import io.meridian.filegateway.application.InboundService;
 import io.meridian.filegateway.infrastructure.ContentFetcher;
@@ -13,16 +13,16 @@ import io.meridian.filegateway.infrastructure.Rows;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Inbound files pushed to us (or registered after a pull). Besides the contract fields the body carries the
- * file itself: {@code content} (text), {@code content_base64} or {@code content_url} (fetched by the gateway).
+ * Inbound files pushed to us ({@code POST /upload}) or received by polling. The upload carries the file itself:
+ * {@code content} (text), {@code content_base64} or {@code content_url} (fetched by the gateway).
  */
 @RestController
 public class InboundFilesController implements InboundFilesApi {
@@ -44,19 +44,18 @@ public class InboundFilesController implements InboundFilesApi {
     }
 
     @Override
-    public ResponseEntity<InboundFile> inboundFilesCreate(String idempotencyKey, InboundFileCreate body) {
+    public ResponseEntity<InboundFile> inboundFilesUpload(String idempotencyKey, InboundFilesUploadRequest body) {
         TenantContext.require();
-        JsonNode raw = Http.rawBody(json);
         JsonNode req = json.valueToTree(body);
-        return idempotency.execute(idempotencyKey, raw, InboundFile.class, () -> {
+        return idempotency.execute(idempotencyKey, req, InboundFile.class, () -> {
             JsonNode channel = rows.require("file_channel", UUID.fromString(req.get("file_channel_id").asString()), false);
-            byte[] content = FormatService.inlineContent(raw);
-            if (content == null && raw.hasNonNull("content_url")) {
-                content = fetcher.fetch(raw.get("content_url").asString());
+            byte[] content = FormatService.inlineContent(req);
+            if (content == null && req.hasNonNull("content_url")) {
+                content = fetcher.fetch(req.get("content_url").asString());
             }
             JsonNode row = inbound.receive(channel, Http.text(req, "original_file_name"), Http.text(req, "remote_path"),
                     content, req, "UPLOAD");
-            return ResponseEntity.status(HttpStatus.CREATED).body(crud.read(row.toString(), InboundFile.class));
+            return ResponseEntity.ok(crud.read(row.toString(), InboundFile.class));
         });
     }
 
@@ -78,9 +77,9 @@ public class InboundFilesController implements InboundFilesApi {
     }
 
     @Override
-    public ResponseEntity<Void> inboundFilesDownload(UUID id) {
+    public ResponseEntity<Map<String, Object>> inboundFilesDownload(UUID id) {
         TenantContext.require();
-        return Http.ok(inbound.downloadLink(id, Http::absolute));
+        return ResponseEntity.ok(Http.object(json, inbound.downloadLink(id, Http::absolute)));
     }
 
     @Override

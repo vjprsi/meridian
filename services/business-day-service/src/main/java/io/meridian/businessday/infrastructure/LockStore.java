@@ -33,7 +33,13 @@ public class LockStore {
                        expires_at = excluded.expires_at,
                        fencing_token = case when l.holder = excluded.holder and l.expires_at > now()
                                             then l.fencing_token else l.fencing_token + 1 end,
-                       updated_by = excluded.updated_by
+                       updated_by = excluded.updated_by,
+                       force_released_at = case when l.holder = excluded.holder and l.expires_at > now()
+                                                then l.force_released_at end,
+                       force_released_by = case when l.holder = excluded.holder and l.expires_at > now()
+                                                then l.force_released_by end,
+                       force_release_reason = case when l.holder = excluded.holder and l.expires_at > now()
+                                                   then l.force_release_reason end
                  where l.expires_at <= now() or l.holder = excluded.holder
                 returning fencing_token""")
                 .params(TenantContext.require(), lockKey, holder, (double) lease.toMillis() / 1000.0,
@@ -60,7 +66,12 @@ public class LockStore {
                 .param(id).query(String.class).optional();
     }
 
-    public void delete(UUID id) {
-        jdbc.sql("delete from batch_job_lock where id = ?").param(id).update();
+    /** Expires the lease now and bumps the fencing token (the stale holder can no longer renew); returns the row. */
+    public String forceRelease(UUID id, String by, String reason) {
+        return jdbc.sql("""
+                update batch_job_lock set expires_at = now(), fencing_token = fencing_token + 1,
+                       force_released_at = now(), force_released_by = ?, force_release_reason = ?, updated_by = ?
+                where id = ? returning row_to_json(batch_job_lock)::text""")
+                .params(by, reason, by, id).query(String.class).single();
     }
 }

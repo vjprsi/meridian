@@ -12,12 +12,11 @@ class SearchTextTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @Test
-    void parsesBoostedFieldsInAllForms() {
+    void parsesBoostedFieldsFromAnArray() {
         assertThat(SearchText.fields(JSON.readTree("[\"full_name^3\",\"email\"]")))
                 .containsExactly(new SearchText.Field("full_name", 3), new SearchText.Field("email", 1));
-        assertThat(SearchText.fields(JSON.readTree("{\"fields\":[\"a^2\"]}"))).containsExactly(new SearchText.Field("a", 2));
-        assertThat(SearchText.fields(JSON.readTree("{\"a\":3,\"b\":1}")))
-                .containsExactly(new SearchText.Field("a", 3), new SearchText.Field("b", 1));
+        // searchable_fields is a JSON array in the contract; other shapes carry no fields
+        assertThat(SearchText.fields(JSON.readTree("{\"fields\":[\"a^2\"]}"))).isEmpty();
     }
 
     @Test

@@ -107,7 +107,7 @@ public class CatalogService {
                     v.put("database_name", t.database());
                     v.put("table_name", t.table());
                     v.put("sensitivity", s.sensitivity());
-                    v.putObject("pii_columns").set("columns", pii.deepCopy());
+                    v.set("pii_columns", pii.deepCopy());
                     v.put("description", "Suggested by catalogue scan");
                     tx.executeWithoutResult(x -> crud.insert("data_classification", v));
                     n.put("created", true);

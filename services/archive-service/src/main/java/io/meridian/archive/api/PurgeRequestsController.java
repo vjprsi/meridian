@@ -4,25 +4,22 @@ import io.meridian.archive.api.generated.PurgeRequestsApi;
 import io.meridian.archive.api.generated.model.PurgeRequest;
 import io.meridian.archive.api.generated.model.PurgeRequestCreate;
 import io.meridian.archive.api.generated.model.PurgeRequestsCancelRequest;
+import io.meridian.archive.api.generated.model.PurgeRequestsRejectRequest;
 import io.meridian.archive.application.PurgeService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Purge requests with four-eyes approval. The contract has no approve/reject operation although the domain
- * defines {@code PENDING_APPROVAL -> APPROVED / REJECTED} and the {@code purge_request.approved} event, so
- * {@code POST /{id}/approve} and {@code POST /{id}/reject} are added here.
+ * Purge requests: DRAFT -> submit -> PENDING_APPROVAL -> approve (four-eyes) / reject (with reason) -> execute,
+ * cancel (with reason) before execution, and the certificate of destruction of a completed purge.
  */
 @RestController
 public class PurgeRequestsController implements PurgeRequestsApi {
@@ -52,20 +49,18 @@ public class PurgeRequestsController implements PurgeRequestsApi {
         return action(idempotencyKey, "submit", id, () -> purges.submit(id));
     }
 
-    @PostMapping(value = "/v1/archive/purge-requests/{id}/approve", produces = "application/json")
-    public ResponseEntity<PurgeRequest> purgeRequestsApprove(@PathVariable("id") UUID id,
-                                                             @RequestHeader("Idempotency-Key") String idempotencyKey) {
+    @Override
+    public ResponseEntity<PurgeRequest> purgeRequestsApprove(UUID id, String idempotencyKey) {
         TenantContext.require();
         return action(idempotencyKey, "approve", id, () -> purges.approve(id));
     }
 
-    @PostMapping(value = "/v1/archive/purge-requests/{id}/reject", produces = "application/json")
-    public ResponseEntity<PurgeRequest> purgeRequestsReject(@PathVariable("id") UUID id,
-                                                            @RequestHeader("Idempotency-Key") String idempotencyKey,
-                                                            @RequestBody JsonNode body) {
+    @Override
+    public ResponseEntity<PurgeRequest> purgeRequestsReject(UUID id, String idempotencyKey, PurgeRequestsRejectRequest body) {
         TenantContext.require();
-        String reason = Http.required(body, "reason");
-        return idempotency.execute(idempotencyKey, body, PurgeRequest.class,
+        JsonNode req = json.valueToTree(body);
+        String reason = Http.required(req, "reason");
+        return idempotency.execute(idempotencyKey, req, PurgeRequest.class,
                 () -> ResponseEntity.ok(crud.read(purges.reject(id, reason), PurgeRequest.class)));
     }
 
@@ -85,9 +80,9 @@ public class PurgeRequestsController implements PurgeRequestsApi {
     }
 
     @Override
-    public ResponseEntity<Void> purgeRequestsCertificate(UUID id) {
+    public ResponseEntity<Map<String, Object>> purgeRequestsCertificate(UUID id) {
         TenantContext.require();
-        return Http.ok(purges.certificate(id));
+        return ResponseEntity.ok(Http.object(json, purges.certificate(id)));
     }
 
     private ResponseEntity<PurgeRequest> action(String key, String name, UUID id, java.util.function.Supplier<String> op) {

@@ -10,6 +10,7 @@ import io.meridian.archive.infrastructure.Rows;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,8 +68,8 @@ public class LegalHoldsController implements LegalHoldsApi {
 
     /** {@code ?scope_type=CUSTOMER&id=...} -> {@code {scope_type, id, on_hold, holds:[...]}}. */
     @Override
-    public ResponseEntity<Void> legalHoldsCheck() {
+    public ResponseEntity<Map<String, Object>> legalHoldsCheck(String scopeType, String id) {
         TenantContext.require();
-        return Http.ok(holds.check(Http.query("scope_type"), Http.query("id")));
+        return ResponseEntity.ok(Http.object(json, holds.check(scopeType, id)));
     }
 }
