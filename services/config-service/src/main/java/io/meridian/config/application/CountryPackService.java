@@ -55,7 +55,7 @@ public class CountryPackService {
         values.put("country_pack_id", packId.toString());
         values.put("legal_entity_id", legalEntityId.toString());
         values.put("status", "INSTALLED");
-        values.put("installed_at", OffsetDateTime.now().toString());
+        values.put("installed_at", io.meridian.common.time.Clocks.now().toString());
         if (overrides != null && !overrides.isNull()) {
             if (!overrides.isObject()) {
                 throw ApiException.unprocessable("invalid_overrides", "overrides must be a JSON object");
@@ -96,7 +96,7 @@ public class CountryPackService {
         ObjectNode upd = json.createObjectNode();
         upd.put("country_pack_id", targetPackId.toString());
         upd.put("status", "INSTALLED");
-        upd.put("installed_at", OffsetDateTime.now().toString());
+        upd.put("installed_at", io.meridian.common.time.Clocks.now().toString());
         String row = crud.updateRow("tenant_country_pack", Map.of("id", installId), upd, null).orElseThrow();
         seedTaxRules(target, legalEntityId);
         outbox.publish("platform.country_pack.installed", "tenant_country_pack", installId, json.readTree(row));

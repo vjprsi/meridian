@@ -48,7 +48,7 @@ final class Json {
     }
 
     static OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneOffset.UTC);
+        return io.meridian.common.time.Clocks.now();
     }
 
     static LocalDate today() {

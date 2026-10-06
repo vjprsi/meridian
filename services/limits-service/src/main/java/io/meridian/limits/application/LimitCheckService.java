@@ -108,7 +108,7 @@ public class LimitCheckService {
         }
         if (body.hasNonNull("expires_at")) {
             java.time.OffsetDateTime exp = java.time.OffsetDateTime.parse(body.get("expires_at").asString());
-            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+            java.time.OffsetDateTime now = io.meridian.common.time.Clocks.now();
             if (!exp.isAfter(now) || exp.isAfter(now.plusHours(24))) {
                 throw ApiException.unprocessable("invalid_expiry", "expires_at must be within the next 24 hours");
             }

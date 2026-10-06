@@ -182,7 +182,7 @@ public class PurgeService {
             return tx.execute(s -> rows.updateReturning("""
                     update purge_request set status = 'FAILED' where id = ? returning row_to_json(purge_request)::text""", id));
         }
-        OffsetDateTime executedAt = OffsetDateTime.now();
+        OffsetDateTime executedAt = io.meridian.common.time.Clocks.now();
         UUID certId = Ids.newId();
         ObjectNode cert = json.createObjectNode();
         cert.put("certificate_id", certId.toString());

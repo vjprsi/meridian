@@ -120,7 +120,7 @@ public class ApplicationService {
         v.put("status", "STARTED");
         v.put("current_step", def.start());
         v.put("progress_percent", 0);
-        v.put("expires_at", OffsetDateTime.now(ZoneOffset.UTC).plusDays(journey.path("expiry_days").asInt(30)).toString());
+        v.put("expires_at", io.meridian.common.time.Clocks.now().plusDays(journey.path("expiry_days").asInt(30)).toString());
         ObjectNode app = rows.insert(T_APP, v);
         for (StepDef s : def.steps()) {
             ObjectNode step = JsonNodeFactory.instance.objectNode();
@@ -161,7 +161,7 @@ public class ApplicationService {
         ObjectNode app = rows.lock(T_APP, id);
         OffsetDateTime exp = Events.ts(app, "expires_at");
         if (Lifecycles.APP_OPEN.contains(app.get("status").asString()) && exp != null
-                && exp.isBefore(OffsetDateTime.now())) {
+                && exp.isBefore(io.meridian.common.time.Clocks.now())) {
             ObjectNode v = JsonNodeFactory.instance.objectNode();
             v.put("status", "EXPIRED");
             ObjectNode updated = rows.update(T_APP, id, v);
@@ -440,7 +440,7 @@ public class ApplicationService {
         String status = app.get("status").asString();
         Lifecycles.application(status, "resume");
         OffsetDateTime exp = Events.ts(app, "expires_at");
-        if (exp != null && exp.isBefore(OffsetDateTime.now())) {
+        if (exp != null && exp.isBefore(io.meridian.common.time.Clocks.now())) {
             throw ApiException.conflict("application_expired", "The application has expired; start a new one");
         }
         String channel;
@@ -455,7 +455,7 @@ public class ApplicationService {
             throw ApiException.unprocessable("no_contact_channel", "The application has no phone or email to send the link to");
         }
         ObjectNode journey = rows.get(T_JOURNEY, Events.uuid(app, "onboarding_journey_id"));
-        OffsetDateTime newExpiry = OffsetDateTime.now(ZoneOffset.UTC).plusDays(journey.path("expiry_days").asInt(30));
+        OffsetDateTime newExpiry = io.meridian.common.time.Clocks.now().plusDays(journey.path("expiry_days").asInt(30));
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("expires_at", newExpiry.toString());
         if ("ABANDONED".equals(status)) {

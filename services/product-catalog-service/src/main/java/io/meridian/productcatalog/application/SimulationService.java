@@ -69,7 +69,7 @@ public class SimulationService {
         UUID id = ProductService.id(row);
         ObjectNode start = json.createObjectNode();
         start.put("status", Lifecycles.SIMULATION.apply("QUEUED", "start"));
-        start.put("started_at", OffsetDateTime.now().toString());
+        start.put("started_at", io.meridian.common.time.Clocks.now().toString());
         store.update(SIMULATION, id, start);
 
         ObjectNode done = json.createObjectNode();
@@ -82,7 +82,7 @@ public class SimulationService {
             done.put("status", Lifecycles.SIMULATION.apply("RUNNING", "fail"));
             done.put("error", e.code() + ": " + e.getMessage());
         }
-        done.put("finished_at", OffsetDateTime.now().toString());
+        done.put("finished_at", io.meridian.common.time.Clocks.now().toString());
         JsonNode finished = store.update(SIMULATION, id, done);
         outbox.publish("product.product_simulation.completed", SIMULATION, id, finished);
         return finished.toString();
@@ -93,7 +93,7 @@ public class SimulationService {
         JsonNode s = store.lock(SIMULATION, id);
         ObjectNode values = json.createObjectNode();
         values.put("status", Lifecycles.SIMULATION.apply(s.get("status").asString(), "cancel"));
-        values.put("finished_at", OffsetDateTime.now().toString());
+        values.put("finished_at", io.meridian.common.time.Clocks.now().toString());
         return store.update(SIMULATION, id, values).toString();
     }
 

@@ -64,7 +64,7 @@ public class AuditQueryService {
         result.put("last_sequence_checked", rows.isEmpty() || !v.valid() ? null
                 : rows.getLast().sequenceNo());
         result.put("algorithm", "SHA-256/canonical-v" + HashChain.VERSION);
-        result.put("verified_at", OffsetDateTime.now().toString());
+        result.put("verified_at", io.meridian.common.time.Clocks.now().toString());
         if (!v.valid()) {
             result.put("first_broken_sequence", v.firstBrokenSequence());
             result.put("reason", v.reason().name());

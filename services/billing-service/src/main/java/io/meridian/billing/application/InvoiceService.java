@@ -199,10 +199,10 @@ public class InvoiceService {
         ObjectNode changes = json.createObjectNode();
         boolean nothingDue = Rows.decimal(inv, "total").signum() <= 0;
         changes.put("status", nothingDue ? "PAID" : "ISSUED");
-        changes.put("issued_at", OffsetDateTime.now().toString());
+        changes.put("issued_at", io.meridian.common.time.Clocks.now().toString());
         changes.put("due_date", today.plusDays(Rows.longOr(sub, "payment_terms_days", 30)).toString());
         if (nothingDue) {
-            changes.put("paid_at", OffsetDateTime.now().toString());
+            changes.put("paid_at", io.meridian.common.time.Clocks.now().toString());
         }
         String row = crud.updateRow("tenant_invoice", Map.of("id", id), changes, null).orElseThrow();
         outbox.publish("platform.tenant_invoice.issued", "tenant_invoice", id, json.readTree(row));
@@ -222,7 +222,7 @@ public class InvoiceService {
         ObjectNode changes = json.createObjectNode();
         changes.put("status", "VOID");
         changes.put("void_reason", reason);
-        changes.put("voided_at", OffsetDateTime.now().toString());
+        changes.put("voided_at", io.meridian.common.time.Clocks.now().toString());
         String row = crud.updateRow("tenant_invoice", Map.of("id", id), changes, null).orElseThrow();
         outbox.publish("platform.tenant_invoice.voided", "tenant_invoice", id, json.readTree(row));
         UUID subId = Rows.uuid(inv, "tenant_subscription_id");
@@ -243,7 +243,7 @@ public class InvoiceService {
         if (amount.stripTrailingZeros().scale() > 2) {
             throw ApiException.unprocessable("invalid_amount", "Payment amount has more than 2 decimals");
         }
-        if (paidAt.isAfter(OffsetDateTime.now().plusMinutes(5))) {
+        if (paidAt.isAfter(io.meridian.common.time.Clocks.now().plusMinutes(5))) {
             throw ApiException.unprocessable("invalid_paid_at", "paid_at cannot be in the future");
         }
         BigDecimal total = Rows.decimal(inv, "total");

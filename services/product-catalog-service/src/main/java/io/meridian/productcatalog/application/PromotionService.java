@@ -44,7 +44,7 @@ public class PromotionService {
             throw ApiException.conflict("product_retired", "Cannot promote a retired product");
         }
         validate(values);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         OffsetDateTime starts = OffsetDateTime.parse(values.get("starts_at").asString());
         OffsetDateTime ends = OffsetDateTime.parse(values.get("ends_at").asString());
         if (!ends.isAfter(now)) {
@@ -99,7 +99,7 @@ public class PromotionService {
         String to = Lifecycles.PROMOTION.apply(p.get("status").asString(), "cancel");
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         if (OffsetDateTime.parse(p.get("ends_at").asString()).isAfter(now)) {
             values.put("ends_at", now.toString());
         }

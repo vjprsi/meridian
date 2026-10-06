@@ -139,7 +139,7 @@ public class OutboundService {
         });
         JsonNode scheduled = values.get("scheduled_for");
         if (scheduled != null && !scheduled.isNull()
-                && OffsetDateTime.parse(scheduled.asString()).isAfter(OffsetDateTime.now())) {
+                && OffsetDateTime.parse(scheduled.asString()).isAfter(io.meridian.common.time.Clocks.now())) {
             return json.readTree(rows.updateReturning("""
                     update outbound_file set status = 'QUEUED' where id = ? returning row_to_json(outbound_file)::text""", id));
         }

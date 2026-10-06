@@ -30,7 +30,7 @@ public class Events {
     }
 
     public static String now() {
-        return OffsetDateTime.now(ZoneOffset.UTC).toString();
+        return io.meridian.common.time.Clocks.now().toString();
     }
 
     public static OffsetDateTime ts(ObjectNode row, String field) {

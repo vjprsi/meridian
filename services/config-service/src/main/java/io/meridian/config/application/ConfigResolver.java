@@ -73,7 +73,7 @@ public class ConfigResolver {
         if (country != null) {
             result.put("country", country);
         }
-        result.put("resolved_at", OffsetDateTime.now().toString());
+        result.put("resolved_at", io.meridian.common.time.Clocks.now().toString());
         ObjectNode values = result.putObject("values");
         ObjectNode sources = result.putObject("sources");
         out.forEach((k, v) -> {

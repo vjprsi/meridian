@@ -250,7 +250,7 @@ public class DeliveryService {
         if (p.mode() == Mode.TEST) {
             status = "FAILED";
         } else {
-            Optional<OffsetDateTime> n = RetrySchedule.nextAttempt(attemptNo, d.createdAt(), OffsetDateTime.now());
+            Optional<OffsetDateTime> n = RetrySchedule.nextAttempt(attemptNo, d.createdAt(), io.meridian.common.time.Clocks.now());
             if (n.isPresent()) {
                 status = "RETRYING";
                 next = n.get();

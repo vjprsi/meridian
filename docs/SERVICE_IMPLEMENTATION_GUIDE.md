@@ -64,6 +64,8 @@ coupling to generated getter names. Responses: `crud.read(rowJson, Model.class)`
 - Validity windows, expiries and "is it effective now" checks must use one clock. When SQL compares with `now()`,
   write the timestamps from the database clock too (`select now()`), never `OffsetDateTime.now()` in the JVM —
   the JVM and database clocks differ by milliseconds and cause flaky "not yet valid" bugs.
+- Never persist `OffsetDateTime.now()`: use `io.meridian.common.time.Clocks.now()` (UTC, microseconds). PostgreSQL rounds
+  sub-microsecond digits, so a raw JVM timestamp can read back in the future and break effective-date checks.
 - Store and compare timestamps in UTC; business dates come from business-day-service, not the wall clock.
 
 ## Tests (required per service)

@@ -134,7 +134,7 @@ public class ConfigEntryService {
             upd.put("approval_request_id", approvalId);
             upd.put("change_reason", changeReason);
             upd.put("submitted_by", TenantContext.principal());
-            upd.put("submitted_at", OffsetDateTime.now().toString());
+            upd.put("submitted_at", io.meridian.common.time.Clocks.now().toString());
             crud.updateRow("config_entry", java.util.Map.of("id", id), upd, null);
         });
         return approval;
@@ -188,7 +188,7 @@ public class ConfigEntryService {
             ObjectNode upd = json.createObjectNode();
             upd.put("status", Status.ACTIVE.name());
             upd.put("effective_from", locked.hasNonNull("effective_from") ? locked.get("effective_from").asString()
-                    : OffsetDateTime.now().toString());
+                    : io.meridian.common.time.Clocks.now().toString());
             String row = crud.updateRow("config_entry", java.util.Map.of("id", id), upd, null).orElseThrow();
             JsonNode rowNode = json.readTree(row);
             change(rowNode, previous.map(p -> p.get("version").asInt()).orElse(null), "ACTIVATED",
@@ -227,7 +227,7 @@ public class ConfigEntryService {
             values.set("value_schema", target.get("value_schema"));
         }
         values.put("status", Status.ACTIVE.name());
-        values.put("effective_from", OffsetDateTime.now().toString());
+        values.put("effective_from", io.meridian.common.time.Clocks.now().toString());
         String changeReason = "Rollback to v" + target.get("version").asInt() + ": " + reason;
         values.put("change_reason", changeReason.substring(0, Math.min(500, changeReason.length())));
         if (target.hasNonNull("approval_request_id")) {
@@ -266,7 +266,7 @@ public class ConfigEntryService {
         }
         ObjectNode bundle = json.createObjectNode();
         bundle.put("format", BUNDLE_FORMAT);
-        bundle.put("exported_at", OffsetDateTime.now().toString());
+        bundle.put("exported_at", io.meridian.common.time.Clocks.now().toString());
         if (environment != null) {
             bundle.put("environment", environment);
         }

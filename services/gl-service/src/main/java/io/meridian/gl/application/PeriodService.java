@@ -85,7 +85,7 @@ public class PeriodService {
         UUID le = UUID.fromString(period.get("legal_entity_id").asString());
         LocalDate start = LocalDate.parse(period.get("start_date").asString());
         LocalDate end = LocalDate.parse(period.get("end_date").asString());
-        OffsetDateTime startedAt = OffsetDateTime.now();
+        OffsetDateTime startedAt = io.meridian.common.time.Clocks.now();
 
         ArrayNode checklist = json.createArrayNode();
         int failed = 0;
@@ -146,7 +146,7 @@ public class PeriodService {
         run.put("accounting_period_id", id.toString());
         run.put("status", failed == 0 ? "SUCCEEDED" : "FAILED");
         run.put("started_at", startedAt.toString());
-        run.put("finished_at", OffsetDateTime.now().toString());
+        run.put("finished_at", io.meridian.common.time.Clocks.now().toString());
         run.set("steps", steps);
         if (failed > 0) {
             run.put("error", failed + " blocking checklist step(s) failed; the period stays " + from);

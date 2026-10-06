@@ -270,7 +270,7 @@ public class PricingService {
         int minor = FeeCalculator.minorUnits(currency);
         Map<String, Object> applicant = q.applicant() == null ? Map.of() : q.applicant();
         LocalDate today = LocalDate.now();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         BigDecimal amount = q.amount() == null ? BigDecimal.ZERO : q.amount();
         int term = q.termMonths() == null ? 12 : q.termMonths();
         UUID versionId = ProductService.id(version);
@@ -537,7 +537,7 @@ public class PricingService {
         if (forChannel.isEmpty()) {
             return rows.isEmpty();
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         return forChannel.stream().anyMatch(r -> r.get("is_available").asBoolean()
                 && (!r.hasNonNull("available_from") || !OffsetDateTime.parse(r.get("available_from").asString()).isAfter(now))
                 && (!r.hasNonNull("available_to") || OffsetDateTime.parse(r.get("available_to").asString()).isAfter(now)));

@@ -156,7 +156,7 @@ public class ScriptService {
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("submitted_by", TenantContext.principal());
-        values.put("submitted_at", OffsetDateTime.now().toString());
+        values.put("submitted_at", io.meridian.common.time.Clocks.now().toString());
         values.putNull("approved_by");
         values.putNull("approved_at");
         values.putNull("rejection_reason");
@@ -174,7 +174,7 @@ public class ScriptService {
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("approved_by", TenantContext.principal());
-        values.put("approved_at", OffsetDateTime.now().toString());
+        values.put("approved_at", io.meridian.common.time.Clocks.now().toString());
         if (comment != null) {
             Map<String, Object> report = CatalogStore.toMap(s.get("validation_report"));
             report.put("approval_comment", comment);

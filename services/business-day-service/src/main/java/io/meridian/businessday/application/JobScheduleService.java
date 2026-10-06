@@ -81,7 +81,7 @@ public class JobScheduleService {
         String status = values.hasNonNull("status") ? values.get("status").asString() : "ACTIVE";
         if ("ACTIVE".equals(status)) {
             OffsetDateTime next = nextRun(cron, zone, values.path("business_days_only").asBoolean(false),
-                    uuid(values, "holiday_calendar_id"), OffsetDateTime.now());
+                    uuid(values, "holiday_calendar_id"), io.meridian.common.time.Clocks.now());
             values.put("next_run_at", next == null ? null : next.toString());
         } else {
             values.putNull("next_run_at");
@@ -157,7 +157,7 @@ public class JobScheduleService {
             throw ApiException.conflict("schedule_already_running", "Schedule " + sch.get("code").asString() + " is already running");
         }
         try {
-            OffsetDateTime started = OffsetDateTime.now();
+            OffsetDateTime started = io.meridian.common.time.Clocks.now();
             ObjectNode payload = json.createObjectNode();
             payload.put("job_schedule_id", id.toString());
             payload.put("code", sch.get("code").asString());
@@ -194,7 +194,7 @@ public class JobScheduleService {
                 run.put("job_schedule_id", id.toString());
                 run.put("scheduled_for", started.toString());
                 run.put("started_at", started.toString());
-                run.put("finished_at", OffsetDateTime.now().toString());
+                run.put("finished_at", io.meridian.common.time.Clocks.now().toString());
                 run.put("status", finalStatus);
                 if (finalRecords != null) {
                     run.put("records_processed", finalRecords);
@@ -208,7 +208,7 @@ public class JobScheduleService {
                 if ("ACTIVE".equals(current.get("status").asString())) {
                     OffsetDateTime n = nextRun(cron(current.get("cron_expression").asString()),
                             zone(current.get("time_zone").asString()), current.path("business_days_only").asBoolean(false),
-                            uuid(current, "holiday_calendar_id"), OffsetDateTime.now());
+                            uuid(current, "holiday_calendar_id"), io.meridian.common.time.Clocks.now());
                     next = n == null ? null : n.toString();
                 }
                 rows.update("""

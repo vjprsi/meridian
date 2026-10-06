@@ -217,7 +217,7 @@ public class SarService {
             }
         }
         return GoAmlWriter.write(new GoAmlWriter.Report(TenantContext.require().toString(), s.get("report_type").asString(),
-                s.get("id").asString(), OffsetDateTime.now(ZoneOffset.UTC).withNano(0).toString(),
+                s.get("id").asString(), io.meridian.common.time.Clocks.now().withNano(0).toString(),
                 Db.str(s, "currency") == null ? "USD" : Db.str(s, "currency"),
                 Db.str(s, "prepared_by") == null ? "unknown" : Db.str(s, "prepared_by"),
                 Db.str(s, "narrative"), action, Db.str(s, "regulator_reference"), txns, subjects, indicators));

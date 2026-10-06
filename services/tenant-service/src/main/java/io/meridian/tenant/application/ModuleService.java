@@ -128,7 +128,7 @@ public class ModuleService {
             values.put("approval_request_id", approval.get("id").asString());
         }
         if (enable) {
-            values.put("enabled_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+            values.put("enabled_at", io.meridian.common.time.Clocks.now().toString());
             if (payload.hasNonNull("config")) {
                 values.set("config", payload.get("config"));
             }

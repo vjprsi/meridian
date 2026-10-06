@@ -205,7 +205,7 @@ public class SubscriptionService {
         changes.put("status", "CANCELLED");
         changes.put("end_date", (currentEnd != null && currentEnd.isBefore(periodEnd) ? currentEnd : periodEnd).toString());
         changes.put("cancellation_reason", reason);
-        changes.put("cancelled_at", OffsetDateTime.now().toString());
+        changes.put("cancelled_at", io.meridian.common.time.Clocks.now().toString());
         String row = crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow();
         publish(EVENT_CANCELLED, row);
         return row;

@@ -74,7 +74,7 @@ public class PostingService {
         });
 
         UUID entryId = Ids.newId();
-        OffsetDateTime effectiveAt = EntryHasher.normalize(p.effectiveAt() != null ? p.effectiveAt() : OffsetDateTime.now());
+        OffsetDateTime effectiveAt = EntryHasher.normalize(p.effectiveAt() != null ? p.effectiveAt() : io.meridian.common.time.Clocks.now());
         LocalDate valueDate = p.valueDate() != null ? p.valueDate() : effectiveAt.toLocalDate();
         BigDecimal totalDebitsBase = BigDecimal.ZERO;
         List<EntryHasher.Line> hashLines = new java.util.ArrayList<>();

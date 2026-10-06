@@ -160,7 +160,7 @@ public class PaymentsController implements PaymentsApi {
     }
 
     @Override
-    public ResponseEntity<String> paymentsReceipt(UUID id) {
+    public ResponseEntity<org.springframework.core.io.Resource> paymentsReceipt(UUID id) {
         TenantContext.require();
         byte[] pdf = queries.receipt(id);
         return actions.raw(pdf, "application/pdf", "payment-" + id + ".pdf");

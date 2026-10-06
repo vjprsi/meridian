@@ -70,7 +70,7 @@ public class DataExportService {
         if (from != null && to != null && !to.isAfter(from)) {
             throw ApiException.unprocessable("invalid_time_range", "to_time must be after from_time");
         }
-        if (to != null && to.isAfter(OffsetDateTime.now().plusMinutes(5))) {
+        if (to != null && to.isAfter(io.meridian.common.time.Clocks.now().plusMinutes(5))) {
             throw ApiException.unprocessable("invalid_time_range", "to_time cannot be in the future");
         }
         if (ExportRules.SUBJECT_TYPES_REQUIRED.contains(type)

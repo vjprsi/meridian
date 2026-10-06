@@ -131,7 +131,7 @@ public class DecisionTableService {
         ObjectNode values = json.createObjectNode();
         values.put("status", target);
         values.put("submitted_by", TenantContext.principal());
-        values.put("submitted_at", OffsetDateTime.now().toString());
+        values.put("submitted_at", io.meridian.common.time.Clocks.now().toString());
         values.putNull("rejected_by");
         values.putNull("rejection_reason");
         values.put("checksum", checksum(v));
@@ -161,7 +161,7 @@ public class DecisionTableService {
         if (VersionLifecycle.RETIRED.equals(table.get("status").asString())) {
             throw ApiException.conflict("table_retired", "Decision table " + tableId + " is retired");
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         ObjectNode values = json.createObjectNode();
         values.put("status", target);
         values.put("approved_by", TenantContext.principal());
@@ -224,7 +224,7 @@ public class DecisionTableService {
 
     /** Publishes APPROVED versions whose effective_from has been reached (oldest first). */
     private void promoteDue(UUID tableId) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         List<JsonNode> due = store.versionsInStatus(tableId, VersionLifecycle.APPROVED).stream()
                 .filter(a -> !effectiveFrom(a).isAfter(now))
                 .sorted(java.util.Comparator.comparing(DecisionTableService::effectiveFrom))
@@ -374,7 +374,7 @@ public class DecisionTableService {
         }
         UUID versionId = UUID.fromString(table.get("current_version_id").asString());
         JsonNode v = store.require(VERSION, versionId);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         if (v.hasNonNull("effective_from") && OffsetDateTime.parse(v.get("effective_from").asString()).isAfter(now)) {
             throw ApiException.conflict("version_not_effective", "The published version is effective from "
                     + v.get("effective_from").asString());

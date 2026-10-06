@@ -54,7 +54,7 @@ public class CaseService {
         v.put("case_number", "%s-%d-%06d".formatted(CaseRules.prefix(type), LocalDate.now(ZoneOffset.UTC).getYear(), seq));
         v.put("status", "OPEN");
         if (!v.hasNonNull("due_at")) {
-            v.put("due_at", java.time.OffsetDateTime.now(ZoneOffset.UTC).plusDays(CaseRules.dueDays(priority)).toString());
+            v.put("due_at", io.meridian.common.time.Clocks.now().plusDays(CaseRules.dueDays(priority)).toString());
         }
         String row = crud.insert("aml_case", v);
         JsonNode n = json.readTree(row);
@@ -252,7 +252,7 @@ public class CaseService {
         v.put("disposition", disposition);
         v.put("rationale", rationale);
         v.put("decided_by", TenantContext.principal());
-        v.put("decided_at", java.time.OffsetDateTime.now(ZoneOffset.UTC).toString());
+        v.put("decided_at", io.meridian.common.time.Clocks.now().toString());
         v.put("approval_status", "PENDING_APPROVAL");
         if (actions != null && actions.isArray()) {
             v.set("actions_taken", actions);

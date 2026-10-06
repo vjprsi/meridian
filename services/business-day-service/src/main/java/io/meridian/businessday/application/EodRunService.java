@@ -260,7 +260,7 @@ public class EodRunService {
         run.put("triggered_by", TenantContext.principal());
         run.put("workflow_id", "eod-" + day.get("legal_entity_id").asString() + "-" + day.get("business_date").asString()
                 + "-" + runId);
-        run.put("started_at", java.time.OffsetDateTime.now().toString());
+        run.put("started_at", io.meridian.common.time.Clocks.now().toString());
         run.put("jobs_succeeded", 0);
         run.put("jobs_failed", 0);
         return run;

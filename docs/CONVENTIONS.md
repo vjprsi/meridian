@@ -110,6 +110,9 @@ API surface rules (checked by the generator): resource names are unique platform
 (`/v1/campaigns/variants/{id}` vs `/v1/campaigns/{id}/submit` is ambiguous) — use `/v1/campaign-variants` or
 `/v1/campaigns/{campaign_id}/variants`.
 
+Authorisation is generated: every operation requires `<domain>:read` or `<domain>:write`; writes to
+platform-global tables (`tenant: false`) require `meridian:admin` (platform operators only).
+
 Rule of thumb: an action whose purpose is to compute, preview, simulate, test, export or download something must
 declare `object`, a MIME type or a table — never `none`.
 

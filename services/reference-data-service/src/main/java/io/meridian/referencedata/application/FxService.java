@@ -164,7 +164,7 @@ public class FxService {
         }
         OffsetDateTime from = timestamp(v, "valid_from", p, errors);
         if (from == null && !v.hasNonNull("valid_from")) {
-            from = OffsetDateTime.now(ZoneOffset.UTC);
+            from = io.meridian.common.time.Clocks.now();
             v.put("valid_from", from.toString());
         }
         OffsetDateTime to = timestamp(v, "valid_to", p, errors);
@@ -190,7 +190,7 @@ public class FxService {
         String t = rateType(type);
         requireCcy("base", base);
         requireCcy("quote", quote);
-        Leg leg = leg(base, quote, t, OffsetDateTime.now(ZoneOffset.UTC))
+        Leg leg = leg(base, quote, t, io.meridian.common.time.Clocks.now())
                 .orElseThrow(() -> new ApiException(404, "rate_not_found",
                         "No " + t + " rate for " + base + "/" + quote + " is currently valid"));
         if (!leg.derived()) {
@@ -216,7 +216,7 @@ public class FxService {
                 throw ApiException.unprocessable("unknown_currency", "Currency " + c + " is not defined");
             }
         }
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         List<Leg> legs = new ArrayList<>();
         String path;
         BigDecimal rate;

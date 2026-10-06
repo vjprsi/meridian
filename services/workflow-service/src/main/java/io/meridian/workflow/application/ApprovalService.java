@@ -375,7 +375,7 @@ public class ApprovalService {
     }
 
     private static OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneOffset.UTC);
+        return io.meridian.common.time.Clocks.now();
     }
 
     private static String key(String resourceType, String action) {

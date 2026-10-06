@@ -163,7 +163,7 @@ public class LimitAdminService {
         if (Duration.between(from, to).compareTo(MAX_OVERRIDE) > 0) {
             throw ApiException.unprocessable("override_too_long", "Overrides are temporary: at most " + MAX_OVERRIDE.toDays() + " days");
         }
-        if (!to.isAfter(OffsetDateTime.now())) {
+        if (!to.isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("invalid_validity", "valid_to is in the past");
         }
         ObjectNode v = crud.toColumns("limit_override", body);

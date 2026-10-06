@@ -53,7 +53,7 @@ public class ReplayService {
         if (Duration.between(from, to).compareTo(MAX_RANGE) > 0) {
             throw ApiException.unprocessable("replay_range_too_large", "A replay may cover at most 31 days");
         }
-        if (from.isAfter(OffsetDateTime.now())) {
+        if (from.isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("invalid_time_range", "from_time must be in the past");
         }
         eventTypes(v.get("event_types"));

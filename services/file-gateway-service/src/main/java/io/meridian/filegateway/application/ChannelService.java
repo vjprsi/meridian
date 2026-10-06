@@ -138,7 +138,7 @@ public class ChannelService {
         out.put("latency_ms", r.latencyMs());
         out.put("remote_address", r.remoteAddress());
         out.put("message", r.message());
-        out.put("tested_at", OffsetDateTime.now().toString());
+        out.put("tested_at", io.meridian.common.time.Clocks.now().toString());
         return out;
     }
 

@@ -54,7 +54,7 @@ public class ApiKeyService {
                 throw ApiException.unprocessable("scope_not_allowed", "Scope " + s + " is not allowed for this client");
             }
         }
-        if (v.hasNonNull("expires_at") && !OffsetDateTime.parse(v.get("expires_at").asString()).isAfter(OffsetDateTime.now())) {
+        if (v.hasNonNull("expires_at") && !OffsetDateTime.parse(v.get("expires_at").asString()).isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("invalid_expiry", "expires_at must be in the future");
         }
         v.set("scopes", JsonItems.canonical(json, scopes));
@@ -74,7 +74,7 @@ public class ApiKeyService {
                     + old.get("status").asString());
         }
         JsonNode client = activeClient(clientId);
-        OffsetDateTime graceEnd = OffsetDateTime.now(ZoneOffset.UTC).plusHours(grace);
+        OffsetDateTime graceEnd = io.meridian.common.time.Clocks.now().plusHours(grace);
         String oldRow;
         if (grace == 0) {
             oldRow = store.updateReturning("""

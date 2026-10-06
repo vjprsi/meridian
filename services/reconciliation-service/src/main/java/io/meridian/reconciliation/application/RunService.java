@@ -86,7 +86,7 @@ public class RunService {
             v.put("from_date", from.toString());
             v.put("to_date", to.toString());
             v.put("status", "RUNNING");
-            v.put("started_at", OffsetDateTime.now().toString());
+            v.put("started_at", io.meridian.common.time.Clocks.now().toString());
             crud.insert("recon_run", v);
         });
 

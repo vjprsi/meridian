@@ -113,7 +113,7 @@ public class VersionService {
         values.set("definition", store.toNumericNode(def));
         values.put("checksum", definitions.checksum(def));
         values.put("submitted_by", TenantContext.principal());
-        values.put("submitted_at", OffsetDateTime.now().toString());
+        values.put("submitted_at", io.meridian.common.time.Clocks.now().toString());
         values.putNull("approved_by");
         values.putNull("approved_at");
         values.putNull("rejected_by");
@@ -138,7 +138,7 @@ public class VersionService {
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("approved_by", TenantContext.principal());
-        values.put("approved_at", OffsetDateTime.now().toString());
+        values.put("approved_at", io.meridian.common.time.Clocks.now().toString());
         JsonNode row = store.update(VERSION, id, values);
         outbox.publish("product.product_version.approved", VERSION, id, withNote(row, "comment", comment));
         return row.toString();
@@ -154,7 +154,7 @@ public class VersionService {
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("rejected_by", TenantContext.principal());
-        values.put("rejected_at", OffsetDateTime.now().toString());
+        values.put("rejected_at", io.meridian.common.time.Clocks.now().toString());
         values.put("rejection_reason", reason);
         JsonNode row = store.update(VERSION, id, values);
         outbox.publish("product.product_version.rejected", VERSION, id, row);
@@ -176,7 +176,7 @@ public class VersionService {
             throw ApiException.conflict("product_retired", "Cannot publish a version of a retired product");
         }
         requireIntact(v);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         OffsetDateTime from = effectiveFrom != null ? effectiveFrom : now;
         JsonNode previous = null;
         for (JsonNode other : store.versionsOfProduct(productId)) {
@@ -293,7 +293,7 @@ public class VersionService {
         req.put("effective_date", effectiveDate.toString());
         req.put("migration_policy", target.get("migration_policy").asString());
         req.put("requested_by", TenantContext.principal());
-        req.put("requested_at", OffsetDateTime.now().toString());
+        req.put("requested_at", io.meridian.common.time.Clocks.now().toString());
         outbox.publish(MIGRATION_EVENT, VERSION, id, payload);
         return target.toString();
     }

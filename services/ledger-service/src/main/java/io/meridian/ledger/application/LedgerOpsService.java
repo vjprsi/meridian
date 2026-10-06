@@ -158,7 +158,7 @@ public class LedgerOpsService {
     @Transactional
     public String endOfDay(UUID ledgerId, LocalDate businessDate) {
         store.ledger(ledgerId);
-        OffsetDateTime started = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime started = io.meridian.common.time.Clocks.now();
         OffsetDateTime dayStart = businessDate.atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime dayEnd = dayStart.plusDays(1);
 
@@ -221,7 +221,7 @@ public class LedgerOpsService {
         run.put("snapshots_written", written);
         run.put("snapshots_skipped", skipped);
         run.put("started_at", started.toString());
-        run.put("finished_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        run.put("finished_at", io.meridian.common.time.Clocks.now().toString());
         String saved = crud.insert("ledger_eod_run", run);
         outbox.publish("ledger.eod.completed", "ledger_eod_run", id, json.readTree(saved));
         return saved;

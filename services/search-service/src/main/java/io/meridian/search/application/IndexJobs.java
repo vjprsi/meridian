@@ -81,7 +81,7 @@ public class IndexJobs {
     }
 
     public String catchUp(UUID indexId, OffsetDateTime from) {
-        if (from.isAfter(OffsetDateTime.now())) {
+        if (from.isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("from_timestamp_in_future", "from_timestamp must not be in the future");
         }
         return tx.execute(s -> {

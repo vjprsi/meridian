@@ -64,7 +64,7 @@ public class PriceQuoteService {
         if (values.hasNonNull("currency") && !values.get("currency").asString().matches("[A-Z]{3}")) {
             errors.add(new ApiException.FieldError("currency", "invalid_currency", "currency must be ISO 4217 alpha-3"));
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         if (values.hasNonNull("expires_at")) {
             OffsetDateTime exp = OffsetDateTime.parse(values.get("expires_at").asString());
             if (!exp.isAfter(now)) {
@@ -92,7 +92,7 @@ public class PriceQuoteService {
         if (q.hasNonNull("accepted_at")) {
             throw ApiException.conflict("quote_already_accepted", "Quote " + id + " was accepted at " + q.get("accepted_at").asString());
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         if (!OffsetDateTime.parse(q.get("expires_at").asString()).isAfter(now)) {
             throw ApiException.conflict("quote_expired", "Quote " + id + " expired at " + q.get("expires_at").asString());
         }

@@ -336,6 +336,6 @@ public class InstanceService {
     }
 
     private static OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneOffset.UTC);
+        return io.meridian.common.time.Clocks.now();
     }
 }

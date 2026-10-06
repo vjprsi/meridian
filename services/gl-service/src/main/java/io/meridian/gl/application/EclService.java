@@ -180,8 +180,8 @@ public class EclService {
         run.put("id", runId.toString());
         run.put("accounting_period_id", periods.getFirst().get("id").asString());
         run.put("status", "SUCCEEDED");
-        run.put("started_at", OffsetDateTime.now().toString());
-        run.put("finished_at", OffsetDateTime.now().toString());
+        run.put("started_at", io.meridian.common.time.Clocks.now().toString());
+        run.put("finished_at", io.meridian.common.time.Clocks.now().toString());
         run.set("steps", steps);
         String runRow = crud.insert("period_close_run", run);
         outbox.publish("ledger.period_close_run.completed", "period_close_run", runId, json.readTree(runRow));

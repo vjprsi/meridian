@@ -99,7 +99,7 @@ public class ApiClientService {
     public String reactivate(UUID id) {
         JsonNode c = store.lock("api_client", id);
         requireStatus(c, "SUSPENDED");
-        if (c.hasNonNull("expires_at") && OffsetDateTime.parse(c.get("expires_at").asString()).isBefore(OffsetDateTime.now())) {
+        if (c.hasNonNull("expires_at") && OffsetDateTime.parse(c.get("expires_at").asString()).isBefore(io.meridian.common.time.Clocks.now())) {
             throw ApiException.conflict("client_expired", "Client expired; register a new client");
         }
         return changed(store.updateReturning(
@@ -109,7 +109,7 @@ public class ApiClientService {
     /** Request counts, error rate and latency from the gateway request log for [from, to). Default: last 30 days. */
     public JsonNode usage(UUID id, OffsetDateTime fromParam, OffsetDateTime toParam) {
         store.require("api_client", id);
-        OffsetDateTime to = toParam == null ? OffsetDateTime.now(ZoneOffset.UTC) : toParam;
+        OffsetDateTime to = toParam == null ? io.meridian.common.time.Clocks.now() : toParam;
         OffsetDateTime from = fromParam == null ? to.minusDays(30) : fromParam;
         if (!from.isBefore(to)) {
             throw ApiException.badRequest("invalid_period", "from must be before to");

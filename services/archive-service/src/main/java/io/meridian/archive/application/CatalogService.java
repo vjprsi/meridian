@@ -235,7 +235,7 @@ public class CatalogService {
         out.put("checksum_match", checksumOk);
         out.put("record_count_match", countOk);
         out.put("valid", checksumOk && countOk && lock.compliant(expected));
-        out.put("verified_at", OffsetDateTime.now().toString());
+        out.put("verified_at", io.meridian.common.time.Clocks.now().toString());
         return out;
     }
 
@@ -256,8 +256,8 @@ public class CatalogService {
         out.put("record_count", o.get("record_count").asLong());
         out.put("reason", reason);
         out.put("restored_by", TenantContext.principal());
-        out.put("restored_at", OffsetDateTime.now().toString());
-        out.put("expires_at", OffsetDateTime.now().plusDays(30).toString());
+        out.put("restored_at", io.meridian.common.time.Clocks.now().toString());
+        out.put("expires_at", io.meridian.common.time.Clocks.now().plusDays(30).toString());
         return out;
     }
 }

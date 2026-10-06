@@ -137,7 +137,7 @@ public class FraudAlertService {
             ObjectNode v = crud.toColumns("fraud_feedback", body);
             v.put("fraud_score_id", scoreId.toString());
             if (!v.hasNonNull("reported_at")) {
-                v.put("reported_at", java.time.OffsetDateTime.now().toString());
+                v.put("reported_at", io.meridian.common.time.Clocks.now().toString());
             }
             BigDecimal loss = Db.dec(v, "loss_amount");
             BigDecimal recovered = Db.dec(v, "recovered_amount");

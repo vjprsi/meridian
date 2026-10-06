@@ -37,7 +37,7 @@ public class FraudListService {
             throw ApiException.unprocessable("value_required", "value is required");
         }
         String type = list.get("entity_type").asString();
-        if (expiresAt != null && !OffsetDateTime.parse(expiresAt).isAfter(OffsetDateTime.now())) {
+        if (expiresAt != null && !OffsetDateTime.parse(expiresAt).isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("invalid_expiry", "expires_at must be in the future");
         }
         String row = db.one("""

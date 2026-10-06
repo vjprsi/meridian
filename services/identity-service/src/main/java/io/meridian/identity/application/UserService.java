@@ -51,7 +51,7 @@ public class UserService {
         }
         v.put("status", initial);
         if ("INVITED".equals(initial)) {
-            v.put("invited_at", OffsetDateTime.now().toString());
+            v.put("invited_at", io.meridian.common.time.Clocks.now().toString());
         }
         String row = crud.insert("app_user", v);
         ObjectNode pub = store.publicView(row);

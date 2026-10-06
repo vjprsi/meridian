@@ -96,7 +96,7 @@ public class MatchService {
         copy(m, v, "recon_run_id", "recon_rule_id", "match_type", "external_record_ids", "internal_entry_ids",
                 "difference", "confidence");
         v.put("confirmed_by", TenantContext.principal());
-        v.put("unmatched_at", java.time.OffsetDateTime.now().toString());
+        v.put("unmatched_at", io.meridian.common.time.Clocks.now().toString());
         String row = crud.insert("recon_match", v);
         JsonNode compensating = json.readTree(row);
         ObjectNode payload = ((ObjectNode) compensating).deepCopy();

@@ -903,7 +903,11 @@ def gen_openapi(domains, enums, tables_global) -> list:
                                             "service verifies the provider signature and resolves the tenant from "
                                             "the referenced entity.")
                     else:
-                        o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{d.id}:{scope}")'
+                        # Platform-global tables (no tenant column) are shared by every tenant: only platform
+                        # operators (meridian:admin) may change them; reads use the normal domain scope.
+                        need = "meridian:admin" if (scope == "write" and not t.tenant) else f"{d.id}:{scope}"
+                        o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
+                        o["x-required-scope"] = need
                     o["x-table"] = t.name
                     if kind in ("list", "get", "create", "update", "delete"):
                         o["x-crud"] = True

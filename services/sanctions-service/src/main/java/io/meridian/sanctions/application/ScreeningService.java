@@ -173,7 +173,7 @@ public class ScreeningService {
         res.put("has_adverse_media", adverseMedia);
         res.put("suppressed_count", suppressed);
         if ("CLEAR".equals(status) && PERIODIC_SUBJECTS.contains(req.get("subject_type").asString())) {
-            res.put("rescreen_due_at", java.time.OffsetDateTime.now().plusYears(1).toString());
+            res.put("rescreen_due_at", io.meridian.common.time.Clocks.now().plusYears(1).toString());
         }
         res.put("latency_ms", (System.nanoTime() - started) / 1_000_000);
         return store.persist(req, res, matches, TenantContext.principal());
@@ -294,7 +294,7 @@ public class ScreeningService {
         UUID entryId = Db.uuid(body, "sanctions_list_entry_id");
         catalog.requireEntry(entryId);
         if (body.hasNonNull("expires_at")
-                && !java.time.OffsetDateTime.parse(body.get("expires_at").asString()).isAfter(java.time.OffsetDateTime.now())) {
+                && !java.time.OffsetDateTime.parse(body.get("expires_at").asString()).isAfter(io.meridian.common.time.Clocks.now())) {
             throw ApiException.unprocessable("invalid_expiry", "expires_at must be in the future");
         }
         return tx.execute(s -> {

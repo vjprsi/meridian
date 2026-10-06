@@ -61,7 +61,7 @@ public class TenantLifecycleService {
         }
         ObjectNode tenant = store.insert("tenant", values);
         if (cellId != null) {
-            placement(tenantId, cellId, null, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement");
+            placement(tenantId, cellId, null, "ACTIVE", io.meridian.common.time.Clocks.now(), "initial placement");
         }
         seedTenant(tenantId, null, values.path("default_currency").asString());
         events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
@@ -99,7 +99,7 @@ public class TenantLifecycleService {
         values.put("home_region", cell.get("region").asString());
         values.put("template_code", template.code());
         ObjectNode tenant = store.insert("tenant", values);
-        placement(tenantId, cellId, null, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement (template " + template.code() + ")");
+        placement(tenantId, cellId, null, "ACTIVE", io.meridian.common.time.Clocks.now(), "initial placement (template " + template.code() + ")");
         seedTenant(tenantId, template, req.get("default_currency").asString());
         events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
         return tenant;
@@ -122,7 +122,7 @@ public class TenantLifecycleService {
         }
         ObjectNode values = json.createObjectNode();
         values.put("status", "ACTIVE");
-        values.put("activated_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        values.put("activated_at", io.meridian.common.time.Clocks.now().toString());
         ObjectNode row = store.update("tenant", id, values);
         events.publishForTenant(id, "platform.tenant.activated", "tenant", id, row);
         return row;
@@ -137,7 +137,7 @@ public class TenantLifecycleService {
         }
         ObjectNode values = json.createObjectNode();
         values.put("status", "SUSPENDED");
-        values.put("suspended_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        values.put("suspended_at", io.meridian.common.time.Clocks.now().toString());
         values.put("suspension_reason", reason);
         ObjectNode row = store.update("tenant", id, values);
         events.publishForTenant(id, "platform.tenant.suspended", "tenant", id, row);
@@ -156,7 +156,7 @@ public class TenantLifecycleService {
         values.putNull("suspended_at");
         values.putNull("suspension_reason");
         values.put("reinstatement_reason", reason);
-        values.put("reinstated_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        values.put("reinstated_at", io.meridian.common.time.Clocks.now().toString());
         ObjectNode row = store.update("tenant", id, values);
         events.publishForTenant(id, "platform.tenant.reinstated", "tenant", id, row);
         return row;
@@ -198,7 +198,7 @@ public class TenantLifecycleService {
                     + t.get("home_region").asString() + " (data residency " + t.get("data_residency_country").asString() + ")");
         }
         reserveCapacity(targetCellId);
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
         boolean scheduled = scheduledAt != null && scheduledAt.isAfter(now.plusMinutes(1));
         ObjectNode placement;
         if (scheduled) {
@@ -235,7 +235,7 @@ public class TenantLifecycleService {
         ObjectNode values = json.createObjectNode();
         values.put("status", "DRAINING");
         values.put("drain_reason", reason);
-        values.put("drain_requested_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        values.put("drain_requested_at", io.meridian.common.time.Clocks.now().toString());
         ObjectNode row = store.update("cell", cellId, values);
         events.publish("platform.cell.drain_started", "cell", cellId, row);
         return row;
@@ -314,7 +314,7 @@ public class TenantLifecycleService {
         store.scopeTransactionTo(tenantId);
         try {
             TenantContext.callAs(tenantId, TenantContext.principal(), () -> {
-                String now = OffsetDateTime.now(ZoneOffset.UTC).toString();
+                String now = io.meridian.common.time.Clocks.now().toString();
                 for (String module : Modules.ALL) {
                     boolean enabled = template != null && template.modules().contains(module);
                     ObjectNode m = json.createObjectNode();
