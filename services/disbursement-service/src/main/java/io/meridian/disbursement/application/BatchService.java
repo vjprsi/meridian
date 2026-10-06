@@ -7,6 +7,8 @@ import static io.meridian.disbursement.infrastructure.Rows.integer;
 import static io.meridian.disbursement.infrastructure.Rows.str;
 import static io.meridian.disbursement.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.disbursement.config.DisbursementProperties;
@@ -23,6 +25,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,8 +55,17 @@ public class BatchService {
     private final WalletPort wallets;
     private final TransactionTemplate tx;
     private final DisbursementProperties props;
+    private final Approvals approvals;
 
-    public BatchService(Rows rows, Events events, WalletPort wallets, TransactionTemplate tx, DisbursementProperties props) {
+    /**
+     * Approval resource type for disbursement batches in workflow-service (G11). Each approval level is its own
+     * request with action {@code approve-level-<n>}: see {@link BatchApprovalHandler}.
+     */
+    public static final String APPROVAL_RESOURCE = "disbursement_batch";
+
+    public BatchService(Rows rows, Events events, WalletPort wallets, TransactionTemplate tx, DisbursementProperties props,
+                        Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.events = events;
         this.wallets = wallets;
@@ -282,7 +294,57 @@ public class BatchService {
         rows.execute("update disbursement_batch set submitted_at = now() where id = ?", id);
         ObjectNode updated = rows.get(TABLE, id);
         events.publish("wallets.disbursement_batch.submitted", TABLE, updated);
+        requestLevel(updated, 1);
         return updated;
+    }
+
+    /** The workflow-service action for one approval level. */
+    public static String levelAction(int level) {
+        return "approve-level-" + level;
+    }
+
+    /**
+     * Central maker-checker: opens the workflow-service request for one approval level of the submitted batch. The
+     * submission time and the level fingerprint the request, so a decision for an earlier submission or level is
+     * stale. Approvers see who approved the earlier levels (they cannot decide again).
+     */
+    private void requestLevel(ObjectNode batch, int level) {
+        UUID id = uuid(batch, "id");
+        int required = integer(batch, "approvals_required");
+        String submittedAt = str(batch, "submitted_at");
+        BigDecimal amount = decOr0(batch, "valid_amount").stripTrailingZeros();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("batch_reference", str(batch, "batch_reference"));
+        payload.put("disbursement_program_id", str(batch, "disbursement_program_id"));
+        payload.put("currency", str(batch, "currency"));
+        payload.put("valid_count", integer(batch, "valid_count"));
+        payload.put("valid_amount", amount.toPlainString());
+        payload.put("file_name", str(batch, "file_name"));
+        payload.put("file_sha256", str(batch, "file_sha256"));
+        payload.put("submitted_by", str(batch, "submitted_by"));
+        payload.put("submitted_at", submittedAt);
+        payload.put("level", level);
+        payload.put("approvals_required", required);
+        payload.put("earlier_approvers", rows.query("""
+                select row_to_json(t)::text from (select level, decided_by from disbursement_batch_approval
+                where disbursement_batch_id = ? and decision = 'APPROVED' order by level) t""", id)
+                .stream().map(r -> str(r, "decided_by")).toList());
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, levelAction(level),
+                        "Disbursement batch " + str(batch, "batch_reference") + " - approval " + level + " of " + required,
+                        payload).withAmount(amount, str(batch, "currency")),
+                "submit:" + id + ":" + submittedAt + ":level:" + level);
+    }
+
+    /**
+     * True while the batch is PENDING_APPROVAL for the same submission ({@code submittedAt}) and waits for exactly
+     * this approval level (levels already approved = level - 1).
+     */
+    public boolean awaitsLevel(UUID id, String submittedAt, int level) {
+        return rows.find(TABLE, id)
+                .filter(b -> "PENDING_APPROVAL".equals(str(b, "status")))
+                .filter(b -> submittedAt == null || submittedAt.equals(str(b, "submitted_at")))
+                .filter(b -> integer(b, "approvals_received") != null && integer(b, "approvals_received") == level - 1)
+                .isPresent();
     }
 
     /** One approval level; the final level checks the funding and executes the batch. */
@@ -315,7 +377,10 @@ public class BatchService {
             ObjectNode updated = rows.update(TABLE, id, v);
             if (last) {
                 events.publish("wallets.disbursement_batch.approved", TABLE, updated);
+            } else {
+                requestLevel(updated, level + 1);
             }
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, levelAction(level), "level " + level + " approved directly");
             return last;
         }));
         return fin ? execute(id, false) : rows.get(TABLE, id);
@@ -333,6 +398,7 @@ public class BatchService {
         v.put("rejection_reason", reason);
         ObjectNode updated = rows.update(TABLE, id, v);
         events.publish("wallets.disbursement_batch.rejected", TABLE, updated);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return updated;
     }
 
@@ -345,6 +411,7 @@ public class BatchService {
         putOrNull(v, "cancel_reason", reason);
         ObjectNode updated = rows.update(TABLE, id, v);
         events.publish("wallets.disbursement_batch.cancelled", TABLE, updated);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "batch cancelled");
         return updated;
     }
 

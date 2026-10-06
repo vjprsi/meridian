@@ -1,5 +1,7 @@
 package io.meridian.merchant.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.merchant.config.MerchantProperties;
@@ -7,11 +9,14 @@ import io.meridian.merchant.domain.MdrCalculator;
 import io.meridian.merchant.infrastructure.Rows;
 import io.meridian.merchant.infrastructure.WalletClient;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -33,9 +38,14 @@ public class SettlementService {
     private final Events events;
     private final TransactionTemplate tx;
     private final MerchantProperties props;
+    private final Approvals approvals;
+
+    /** Approval resource type for merchant settlements in workflow-service (G11); the action is {@code approve}. */
+    public static final String APPROVAL_RESOURCE = "merchant_settlement";
 
     public SettlementService(Rows rows, WalletClient wallets, Events events, TransactionTemplate tx,
-                             MerchantProperties props) {
+                             MerchantProperties props, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.wallets = wallets;
         this.events = events;
@@ -111,8 +121,35 @@ public class SettlementService {
             if (m.hasNonNull("settlement_account_id")) {
                 v.put("settlement_account_id", Rows.str(m, "settlement_account_id"));
             }
-            return rows.insert(TABLE, v);
+            ObjectNode row = rows.insert(TABLE, v);
+            // Central maker-checker: the checker approves in the workflow inbox; SettlementApprovalHandler applies it.
+            UUID id = Rows.uuid(row, "id");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("merchant_id", merchantId.toString());
+            payload.put("merchant_code", Rows.str(m, "merchant_code"));
+            payload.put("trading_name", Rows.str(m, "trading_name"));
+            payload.put("period_start", start.toString());
+            payload.put("period_end", end.toString());
+            payload.put("currency", currency);
+            payload.put("payment_count", t.count());
+            payload.put("gross_amount", t.gross().toPlainString());
+            payload.put("mdr_amount", t.mdr().toPlainString());
+            payload.put("refund_amount", t.refunds().toPlainString());
+            payload.put("net_amount", t.net().toPlainString());
+            payload.put("settlement_account_id", Rows.str(row, "settlement_account_id"));
+            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                            "Settlement " + start + " to " + end + " for merchant " + Rows.str(m, "trading_name"), payload)
+                    .withAmount(t.net().setScale(2, RoundingMode.HALF_UP), currency), "approve:" + id);
+            return row;
         });
+    }
+
+    /** True while the settlement is CALCULATED with the submitted net amount (the submission's fingerprint). */
+    public boolean awaitsApproval(UUID id, String netAmount) {
+        return rows.find(TABLE, id)
+                .filter(st -> "CALCULATED".equals(Rows.str(st, "status")))
+                .filter(st -> netAmount == null || new BigDecimal(netAmount).compareTo(Rows.dec(st, "net_amount")) == 0)
+                .isPresent();
     }
 
     MdrCalculator.Plan plan(ObjectNode m) {
@@ -141,6 +178,7 @@ public class SettlementService {
             rows.execute("update merchant_settlement set approved_at = now() where id = ?", id);
             ObjectNode after = rows.get(TABLE, id);
             events.publish("wallets.merchant_settlement.approved", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
             return after;
         });
     }

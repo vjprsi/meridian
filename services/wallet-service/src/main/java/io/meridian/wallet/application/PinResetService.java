@@ -1,11 +1,15 @@
 package io.meridian.wallet.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.wallet.config.WalletProperties;
 import io.meridian.wallet.domain.PinPolicy;
 import io.meridian.wallet.infrastructure.Downstream;
 import io.meridian.wallet.infrastructure.Rows;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -28,9 +32,17 @@ public class PinResetService {
     private final TransactionTemplate tx;
     private final WalletProperties props;
     private final WalletService wallets;
+    private final Approvals approvals;
+
+    /**
+     * Approval resource type for staff-verified PIN resets (ID_CHECK / AGENT / SECURITY_QUESTIONS) in workflow-service
+     * (G11); the action is {@code verify}. OTP resets are verified by the customer and never go to workflow-service.
+     */
+    public static final String APPROVAL_RESOURCE = "wallet_pin_reset";
 
     public PinResetService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx,
-                           WalletProperties props, WalletService wallets) {
+                           WalletProperties props, WalletService wallets, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
@@ -69,6 +81,20 @@ public class PinResetService {
                     props.pinResetMinutes()).orElseThrow());
             ObjectNode r = rows.insert(TABLE, v);
             events.publish("wallets.wallet_pin_reset.requested", TABLE, r);
+            if (otp == null) {
+                // Central maker-checker for staff verification; never carries a PIN, OTP or hash.
+                UUID id = Rows.uuid(r, "id");
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("wallet_id", Rows.str(r, "wallet_id"));
+                payload.put("wallet_number", Rows.str(wallet, "wallet_number"));
+                payload.put("wallet_name", Rows.str(wallet, "display_name"));
+                payload.put("verification_method", method);
+                payload.put("agent_id", Rows.str(r, "agent_id"));
+                payload.put("document_id", Rows.str(r, "document_id"));
+                payload.put("expires_at", Rows.str(r, "expires_at"));
+                approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "verify",
+                        "Verify PIN reset for wallet " + Rows.str(wallet, "wallet_number"), payload), "verify:" + id);
+            }
             return r;
         });
         if (otp != null) {
@@ -130,8 +156,17 @@ public class PinResetService {
             }
             rows.update(TABLE, id, v);
             rows.execute("update wallet_pin_reset set verified_at = now(), otp_hash = null where id = ?", id);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "verified directly");
             return rows.get(TABLE, id);
         });
+    }
+
+    /** True while a staff-verified reset still awaits verification (REQUESTED, not an OTP reset). */
+    public boolean awaitsVerification(UUID id) {
+        return rows.find(TABLE, id)
+                .filter(r -> "REQUESTED".equals(Rows.str(r, "status")))
+                .filter(r -> !"OTP".equals(Rows.str(r, "verification_method")))
+                .isPresent();
     }
 
     public ObjectNode complete(UUID id, String newPin) {
@@ -158,6 +193,7 @@ public class PinResetService {
             ObjectNode v = rows.object();
             v.put("status", "REJECTED");
             v.put("rejected_reason", reason);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
             return rows.update(TABLE, id, v);
         });
     }

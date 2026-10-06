@@ -1,5 +1,7 @@
 package io.meridian.biller.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.biller.config.BillerProperties;
 import io.meridian.biller.domain.Lifecycle;
 import io.meridian.biller.infrastructure.Rows;
@@ -8,6 +10,8 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +33,14 @@ public class SettlementService {
     private final TransactionTemplate tx;
     private final BillerProperties props;
     private final CatalogService catalog;
+    private final Approvals approvals;
+
+    /** Approval resource type for biller settlements in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "biller_settlement";
 
     public SettlementService(Rows rows, WalletClient wallet, Events events, TransactionTemplate tx, BillerProperties props,
-                             CatalogService catalog) {
+                             CatalogService catalog, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.wallet = wallet;
         this.events = events;
@@ -81,7 +90,32 @@ public class SettlementService {
         u.put("net_amount", gross.subtract(commission).toPlainString());
         Lifecycle.settlement("PENDING", "CALCULATED");
         u.put("status", "CALCULATED");
-        return rows.update(TABLE, id, u);
+        ObjectNode calculated = rows.update(TABLE, id, u);
+        // Central maker-checker: the checker decides in the workflow inbox; SettlementApprovalHandler applies it.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("biller_id", billerId.toString());
+        payload.put("biller_code", Rows.str(biller, "biller_code"));
+        payload.put("period_start", start.toString());
+        payload.put("period_end", end.toString());
+        payload.put("currency", currency);
+        payload.put("payment_count", payments);
+        payload.put("topup_count", topups);
+        payload.put("gross_amount", Rows.str(calculated, "gross_amount"));
+        payload.put("net_amount", Rows.str(calculated, "net_amount"));
+        payload.put("created_by", Rows.str(calculated, "created_by"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Biller settlement " + Rows.str(biller, "biller_code") + " " + start + ".." + end, payload)
+                .withAmount(gross.subtract(commission), currency), "create:" + id);
+        return calculated;
+    }
+
+    /** True while the settlement is CALCULATED (awaiting approval) with the submitted net amount unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String netAmount) {
+        return rows.find(TABLE, id)
+                .filter(s -> "CALCULATED".equals(Rows.str(s, "status")))
+                .filter(s -> netAmount == null || new BigDecimal(netAmount).compareTo(Rows.dec(s, "net_amount")) == 0)
+                .isPresent();
     }
 
     @Transactional
@@ -98,6 +132,7 @@ public class SettlementService {
         rows.execute("update biller_settlement set approved_at = now() where id = ?", id);
         ObjectNode after = rows.get(TABLE, id);
         events.publish("wallets.biller_settlement.approved", TABLE, after);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return after;
     }
 
