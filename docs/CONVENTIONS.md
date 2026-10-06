@@ -93,6 +93,7 @@ services:
 | --- | --- | --- |
 | A JSON list column (ids, codes, rules, rows) | `"rules json[] | ..."` | `jsonb` column; OpenAPI `array` (never wrap lists in objects) |
 | A JSON object column | `"settings json | ..."` | `jsonb`; OpenAPI `object` |
+| A typed list of scalars (ids, codes, currencies, dates, enum values) | `"account_ids uuid[] | ..."`, `"channels enum:Channel[] | ..."` | `jsonb`; OpenAPI `array` with typed items (Java `List<UUID>` etc.) |
 | Any JSON value (scalar, list or object, e.g. a rule operand) | `"value json* | ..."` | `jsonb`; OpenAPI untyped (Java `Object`) |
 | Child rows sent with the parent on create | table `nested: ["entries list:ledger_entry nn | ..."]` | `entries` array of `<Child>Create` in the create body and of `<Child>` in the response |
 | Input accepted on create but not stored as a column (file content, a secret to vault, an initial PIN) | table `request_only: ["content text nn | ..."]` | write-only property on `<Table>Create` |

@@ -161,12 +161,15 @@ def parse_column(text: str, ctx: str) -> Column:
     name, typ = toks[0], toks[1]
     if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
         raise SpecError(f"{ctx}: bad column name {name!r}")
-    if typ.startswith("enum:"):
+    if typ.startswith("enum:") and not typ.endswith("[]"):
         col = Column(name=name, type="enum", arg=typ[5:])
     elif typ == "json[]":
         col = Column(name=name, type="jsonarray")
     elif typ == "json*":
         col = Column(name=name, type="jsonany")
+    elif typ.endswith("[]"):
+        item = parse_column(f"{name} {typ[:-2]}", ctx)   # validates the element type
+        col = Column(name=name, type="typedarray", arg=f"{item.type}:{item.arg or ''}")
     else:
         m = TYPE_RE.match(typ)
         if not m or m.group("base") not in SIMPLE_TYPES:
@@ -334,6 +337,8 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
         for s in d.services:
             for t in s.tables:
                 for c in t.columns:
+                    if c.type == "typedarray" and c.arg.startswith("enum:") and c.arg[5:] not in all_enums:
+                        errors.append(f"{c.name}: unknown enum in array type {c.arg}")
                     if c.type == "enum" and c.arg not in all_enums:
                         errors.append(f"{t.name}.{c.name}: unknown enum {c.arg}")
                     if c.type == "enum" and c.default and c.default not in all_enums.get(c.arg, []):
@@ -366,6 +371,8 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
                     if act.response and act.response not in ("none", "object") and "/" not in act.response                             and act.response.rstrip("[]") not in tables_global:
                         errors.append(f"api {a.resource}: action response {act.response} unknown")
                     for c in act.body:
+                        if c.type == "typedarray" and c.arg.startswith("enum:") and c.arg[5:] not in all_enums:
+                            errors.append(f"{c.name}: unknown enum in array type {c.arg}")
                         if c.type == "enum" and c.arg not in all_enums:
                             errors.append(f"api {a.resource}: body field {c.name} unknown enum {c.arg}")
             for e in s.events:
@@ -401,7 +408,7 @@ def pg_type(c: Column) -> str:
     return {
         "uuid": "uuid", "text": "text", "int": "integer", "bigint": "bigint",
         "amount": "numeric(28,8)", "rate": "numeric(18,10)", "bool": "boolean", "date": "date",
-        "ts": "timestamptz", "json": "jsonb", "jsonarray": "jsonb", "jsonany": "jsonb", "currency": "char(3)", "country": "char(2)",
+        "ts": "timestamptz", "json": "jsonb", "jsonarray": "jsonb", "jsonany": "jsonb", "typedarray": "jsonb", "currency": "char(3)", "country": "char(2)",
         "email": "varchar(320)", "phone": "varchar(20)", "bytes": "bytea", "inet": "inet",
         "enum": "varchar(40)",
     }.get(c.type) or f"varchar({c.arg or 255})"
@@ -603,6 +610,9 @@ def oa_type(c: Column, enums) -> dict:
         s = {"type": "array", "items": {}}
     elif t == "jsonany":
         s = {"description": "Any JSON value (string, number, boolean, array or object)"}
+    elif t == "typedarray":
+        etype, earg = c.arg.split(":", 1)
+        s = {"type": "array", "items": oa_type(Column(name=c.name, type=etype, arg=earg or None), enums)}
     elif t == "currency":
         s = {"type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217"}
     elif t == "country":
@@ -938,7 +948,9 @@ def gen_openapi(domains, enums, tables_global) -> list:
                                 "description": "Computed result (see operation summary)"}
                     elif "/" in resp_tbl:
                         content_type = resp_tbl
-                        resp = {"type": "string"}
+                        textual = resp_tbl.startswith("text/") or resp_tbl.endswith(("json", "xml"))
+                        # Binary payloads (PDF, octet-stream, images) generate Spring Resource, not String.
+                        resp = {"type": "string"} if textual else {"type": "string", "format": "binary"}
                     elif is_list:
                         page_schema(doc, bundle, pascal(resp_tbl))
                         resp = ref(f"{pascal(resp_tbl)}Page")
