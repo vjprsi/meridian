@@ -40,4 +40,32 @@ public class OutboxWriter {
                 .update();
         return id;
     }
+
+    /** One outbox row per event in a single statement. Each event: {type, aggregate_type, aggregate_id, payload}. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishMany(java.util.List<Event> events) {
+        if (events.isEmpty()) {
+            return;
+        }
+        UUID tenant = TenantContext.require();
+        String headers = json.writeValueAsString(java.util.Map.of("ce_principal", TenantContext.principal()));
+        var arr = json.createArrayNode();
+        for (Event e : events) {
+            var n = arr.addObject();
+            n.put("id", Ids.newId().toString());
+            n.put("tenant_id", tenant.toString());
+            n.put("aggregate_type", e.aggregateType());
+            n.put("aggregate_id", e.aggregateId().toString());
+            n.put("event_type", e.type());
+            n.set("payload", json.valueToTree(e.payload()));
+            n.set("headers", json.readTree(headers));
+        }
+        jdbc.sql("""
+                insert into outbox (id, tenant_id, aggregate_type, aggregate_id, event_type, payload, headers)
+                select id, tenant_id, aggregate_type, aggregate_id, event_type, payload, headers
+                from json_populate_recordset(null::outbox, ?::json)""")
+                .param(json.writeValueAsString(arr)).update();
+    }
+
+    public record Event(String type, String aggregateType, UUID aggregateId, Object payload) {}
 }

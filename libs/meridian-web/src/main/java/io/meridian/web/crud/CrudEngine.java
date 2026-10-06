@@ -129,6 +129,39 @@ public class CrudEngine {
         return jdbc.sql(sql).param(json.writeValueAsString(values)).query(String.class).single();
     }
 
+    /**
+     * Inserts many rows of one table in a single statement (json_populate_recordset); all rows must carry the same
+     * column set. Returns the inserted rows as JSON text (order not guaranteed).
+     */
+    public List<String> insertMany(String table, List<ObjectNode> rows) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        String tenant = TenantContext.require().toString();
+        tools.jackson.databind.node.ArrayNode arr = json.createArrayNode();
+        for (ObjectNode r : rows) {
+            r.put("tenant_id", tenant);
+            if (catalog.has(table, "created_by")) {
+                r.put("created_by", TenantContext.principal());
+            }
+            if (catalog.has(table, "updated_by")) {
+                r.put("updated_by", TenantContext.principal());
+            }
+            arr.add(r);
+        }
+        List<String> cols = new ArrayList<>();
+        rows.getFirst().propertyNames().forEach(name -> {
+            if (catalog.has(table, name)) {
+                cols.add(ident(name));
+            }
+        });
+        String colList = String.join(", ", cols);
+        String selList = String.join(", ", cols.stream().map(c -> "r." + c).toList());
+        String sql = "insert into " + ident(table) + " as t (" + colList + ") select " + selList
+                + " from json_populate_recordset(null::" + ident(table) + ", ?::json) r returning row_to_json(t)::text";
+        return jdbc.sql(sql).param(json.writeValueAsString(arr)).query(String.class).list();
+    }
+
     public <T> ResponseEntity<T> update(String table, Class<T> type, Object body, String ifMatch, Crud.Params params) {
         TenantContext.require();
         Map<String, Object> keys = params.asMap();

@@ -132,24 +132,34 @@ public class PostingService {
             p.customFields().propertyNames().forEach(n -> entry.set(n, p.customFields().get(n)));
         }
 
+        String journalRow;
         try {
-            insertWithId("journal_entry", entry);
+            journalRow = crud.insert("journal_entry", entry);
         } catch (DuplicateKeyException race) {
             // Another request with the same idempotency key committed first: return its result.
             UUID winner = store.journalEntryByKey(p.ledgerId(), p.idempotencyKey()).orElseThrow(() -> race);
             return new Posted(store.journalEntryJson(winner).orElseThrow(), true);
         }
-        lineRows.forEach(r -> crud.insert("ledger_entry", r));
-        accounts.values().stream().filter(a -> a.changed).forEach(store::saveBalance);
+        List<String> lineJson = crud.insertMany("ledger_entry", lineRows);
+        store.saveBalances(accounts.values());
 
-        String posted = store.journalEntryJson(entryId).orElseThrow();
-        outbox.publish(p.reversalOfId() == null ? "ledger.journal_entry.posted" : "ledger.journal_entry.reversed",
-                "journal_entry", entryId, json.readTree(posted));
-        for (AccountState a : accounts.values()) {
-            store.balanceJson(a.id).ifPresent(b ->
-                    outbox.publish("ledger.balance.changed", "account_balance", a.id, json.readTree(b)));
+        // Response = journal row + its lines (sorted by line_no), built from what the inserts returned.
+        ObjectNode posted = (ObjectNode) json.readTree(journalRow);
+        var lines = posted.putArray("entries");
+        lineJson.stream().map(json::readTree)
+                .sorted(java.util.Comparator.comparingInt(n -> n.get("line_no").asInt()))
+                .forEach(lines::add);
+        List<OutboxWriter.Event> events = new java.util.ArrayList<>();
+        events.add(new OutboxWriter.Event(
+                p.reversalOfId() == null ? "ledger.journal_entry.posted" : "ledger.journal_entry.reversed",
+                "journal_entry", entryId, posted));
+        for (String b : store.balancesJson(accounts.keySet())) {
+            JsonNode node = json.readTree(b);
+            events.add(new OutboxWriter.Event("ledger.balance.changed", "account_balance",
+                    UUID.fromString(node.get("ledger_account_id").asString()), node));
         }
-        return new Posted(posted, false);
+        outbox.publishMany(events);
+        return new Posted(json.writeValueAsString(posted), false);
     }
 
     /** Reverses a posted entry with an exactly mirrored entry. An entry can be reversed only once. */
@@ -175,10 +185,6 @@ public class PostingService {
         return post(new Posting(ledgerId, idempotencyKey, "REVERSAL", "Reversal of " + journalEntryId + ": " + reason,
                 effectiveAt, null, TenantContext.principal(), "JOURNAL_ENTRY", journalEntryId, null, journalEntryId,
                 null, null, lines));
-    }
-
-    private void insertWithId(String table, ObjectNode values) {
-        crud.insert(table, values);
     }
 
     private static BigDecimal fxRate(PostingLine line, String baseCurrency) {

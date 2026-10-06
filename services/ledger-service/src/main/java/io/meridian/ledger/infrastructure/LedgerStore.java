@@ -70,6 +70,37 @@ public class LedgerStore {
                 .update();
     }
 
+    /** Writes all changed balances in one statement. */
+    public void saveBalances(Collection<AccountState> accounts) {
+        List<AccountState> changed = accounts.stream().filter(a -> a.changed).toList();
+        if (changed.isEmpty()) {
+            return;
+        }
+        jdbc.sql("""
+                update account_balance b set posted_balance = u.posted, posted_debits = u.debits,
+                       posted_credits = u.credits, pending_debits = u.pdebits, pending_credits = u.pcredits,
+                       available_balance = u.available, account_version = u.version, last_entry_at = now()
+                from unnest(?::uuid[], ?::numeric[], ?::numeric[], ?::numeric[], ?::numeric[], ?::numeric[],
+                            ?::numeric[], ?::bigint[])
+                     as u(id, posted, debits, credits, pdebits, pcredits, available, version)
+                where b.ledger_account_id = u.id""")
+                .params(changed.stream().map(x -> x.id).toArray(UUID[]::new),
+                        changed.stream().map(x -> x.postedBalance).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(x -> x.postedDebits).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(x -> x.postedCredits).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(x -> x.pendingDebits).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(x -> x.pendingCredits).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(AccountState::available).toArray(java.math.BigDecimal[]::new),
+                        changed.stream().map(x -> x.version).toArray(Long[]::new))
+                .update();
+    }
+
+    /** Current balance rows of several accounts as JSON text. */
+    public List<String> balancesJson(Collection<UUID> accountIds) {
+        return jdbc.sql("select row_to_json(b)::text from account_balance b where b.ledger_account_id = any(?)")
+                .param(accountIds.toArray(UUID[]::new)).query(String.class).list();
+    }
+
     public Optional<UUID> journalEntryByKey(UUID ledgerId, String idempotencyKey) {
         return jdbc.sql("select id from journal_entry where ledger_id = ? and idempotency_key = ?")
                 .params(ledgerId, idempotencyKey)

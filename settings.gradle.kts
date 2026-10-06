@@ -13,6 +13,7 @@ include(":libs:meridian-test")
 include(":libs:meridian-web")
 
 include(":platform:edge-gateway")
+include(":platform:load-tests")
 
 include(":services:agent-network-service")
 include(":services:ai-platform-service")
