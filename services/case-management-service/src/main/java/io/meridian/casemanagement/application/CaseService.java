@@ -1,5 +1,7 @@
 package io.meridian.casemanagement.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.casemanagement.domain.CaseRules;
 import io.meridian.casemanagement.domain.NarrativeBuilder;
 import io.meridian.casemanagement.infrastructure.Db;
@@ -28,12 +30,17 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 public class CaseService {
+    /** Approval resource type for proposed case dispositions in workflow-service (G11). */
+    public static final String DISPOSITION_APPROVAL = "aml_case_disposition";
+
     private final Db db;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public CaseService(Db db, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public CaseService(Db db, CrudEngine crud, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.db = db;
         this.crud = crud;
         this.outbox = outbox;
@@ -261,7 +268,38 @@ public class CaseService {
         db.update("update aml_case set status = 'PENDING_APPROVAL', updated_by = ? where id = ?", TenantContext.principal(), caseId);
         JsonNode n = json.readTree(row);
         outbox.publish("risk.aml_case_disposition.recorded", "aml_case_disposition", id(n), n);
+        approvals.request(dispositionApproval(c, n), "disposition:" + id(n));
         return row;
+    }
+
+    /**
+     * Central maker-checker: the MLRO decides in the workflow inbox; DispositionApprovalHandler applies the decision.
+     * Tipping-off: the payload carries ids and the case header only; the rationale and case content stay here.
+     */
+    private ApprovalSpec dispositionApproval(JsonNode c, JsonNode d) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("aml_case_disposition_id", d.get("id").asString());
+        payload.put("aml_case_id", c.get("id").asString());
+        payload.put("case_number", c.get("case_number").asString());
+        payload.put("case_type", c.get("case_type").asString());
+        payload.put("case_priority", Db.str(c, "priority"));
+        payload.put("disposition", d.get("disposition").asString());
+        payload.put("decided_by", d.get("decided_by").asString());
+        payload.put("actions_taken", d.path("actions_taken").size());
+        ApprovalSpec spec = ApprovalSpec.of(DISPOSITION_APPROVAL, id(d), "approve",
+                        "Case " + c.get("case_number").asString() + " disposition " + d.get("disposition").asString(), payload)
+                .withSummary("Approve the proposed disposition to close case " + c.get("case_number").asString()
+                        + " (details in case management)");
+        BigDecimal amount = Db.dec(c, "total_amount");
+        return amount != null && Db.str(c, "currency") != null ? spec.withAmount(amount, Db.str(c, "currency")) : spec;
+    }
+
+    /** True while the disposition is still PENDING_APPROVAL (each proposal is its own row). */
+    @Transactional(readOnly = true)
+    public boolean dispositionAwaitsApproval(UUID id) {
+        return db.one("select row_to_json(d)::text from aml_case_disposition d where id = ?", id)
+                .filter(d -> "PENDING_APPROVAL".equals(Db.str(d, "approval_status")))
+                .isPresent();
     }
 
     @Transactional
@@ -279,6 +317,7 @@ public class CaseService {
         JsonNode row = db.require("aml_case_disposition", id, false);
         outbox.publish("risk.aml_case_disposition.approved", "aml_case_disposition", id, row);
         publish(caseId, "risk.aml_case.closed");
+        approvals.cancelOpen(DISPOSITION_APPROVAL, id, null, "approved directly");
         return db.text(row);
     }
 
@@ -294,6 +333,7 @@ public class CaseService {
         note(caseId, "Disposition " + d.get("disposition").asString() + " rejected: " + reason, "INTERNAL");
         JsonNode row = db.require("aml_case_disposition", id, false);
         outbox.publish("risk.aml_case_disposition.rejected", "aml_case_disposition", id, row);
+        approvals.cancelOpen(DISPOSITION_APPROVAL, id, null, "rejected directly");
         return db.text(row);
     }
 

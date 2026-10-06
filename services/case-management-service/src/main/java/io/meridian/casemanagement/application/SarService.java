@@ -1,5 +1,7 @@
 package io.meridian.casemanagement.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.casemanagement.domain.CaseRules;
 import io.meridian.casemanagement.domain.GoAmlWriter;
 import io.meridian.casemanagement.domain.NarrativeBuilder;
@@ -8,6 +10,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -29,14 +32,18 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class SarService {
     static final int MIN_NARRATIVE = 80;
+    /** Approval resource type for SAR / STR reports sent to the MLRO in workflow-service (G11). */
+    public static final String SAR_APPROVAL = "sar_report";
 
     private final Db db;
     private final CrudEngine crud;
     private final CaseService cases;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public SarService(Db db, CrudEngine crud, CaseService cases, OutboxWriter outbox, JsonMapper json) {
+    public SarService(Db db, CrudEngine crud, CaseService cases, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.db = db;
         this.crud = crud;
         this.cases = cases;
@@ -130,7 +137,49 @@ public class SarService {
         }
         db.update("update sar_report set status = 'PENDING_APPROVAL', prepared_by = ?, updated_by = ? where id = ?",
                 TenantContext.principal(), TenantContext.principal(), id);
-        return publish(id, "risk.sar_report.submitted_for_approval");
+        String out = publish(id, "risk.sar_report.submitted_for_approval");
+        JsonNode submitted = db.require("sar_report", id, false);
+        approvals.request(sarApproval(submitted), "sar:" + id + ":" + submitted.get("row_version").asInt());
+        return out;
+    }
+
+    /**
+     * Central maker-checker: the MLRO decides in the workflow inbox; SarApprovalHandler applies the decision.
+     * Tipping-off: the payload carries ids, the report header and counts only - never the narrative, subjects or
+     * transactions, which the MLRO reviews in case management. row_version fingerprints the submission.
+     */
+    private ApprovalSpec sarApproval(JsonNode s) {
+        UUID caseId = Db.uuid(s, "aml_case_id");
+        String caseNumber = caseId == null ? null
+                : db.one("select json_build_object('n', case_number)::text from aml_case where id = ?", caseId)
+                        .map(n -> n.get("n").asString()).orElse(null);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sar_report_id", s.get("id").asString());
+        payload.put("aml_case_id", caseId == null ? null : caseId.toString());
+        payload.put("case_number", caseNumber);
+        payload.put("report_type", s.get("report_type").asString());
+        payload.put("jurisdiction", Db.str(s, "jurisdiction"));
+        payload.put("regulator", Db.str(s, "regulator"));
+        payload.put("filing_deadline", Db.str(s, "filing_deadline"));
+        payload.put("subjects", s.path("subjects").size());
+        payload.put("transactions", s.path("transactions").size());
+        payload.put("prepared_by", Db.str(s, "prepared_by"));
+        payload.put("row_version", s.get("row_version").asInt());
+        String title = s.get("report_type").asString() + " to " + Db.str(s, "regulator")
+                + (caseNumber == null ? "" : " for case " + caseNumber);
+        ApprovalSpec spec = ApprovalSpec.of(SAR_APPROVAL, UUID.fromString(s.get("id").asString()), "approve", title, payload)
+                .withSummary("MLRO approval of a regulatory report before filing (content in case management)");
+        BigDecimal amount = Db.dec(s, "suspicious_amount");
+        return amount != null && Db.str(s, "currency") != null ? spec.withAmount(amount, Db.str(s, "currency")) : spec;
+    }
+
+    /** True while the report is PENDING_APPROVAL in the submission identified by its row_version. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return db.one("select row_to_json(s)::text from sar_report s where id = ?", id)
+                .filter(s -> "PENDING_APPROVAL".equals(Db.str(s, "status")))
+                .filter(s -> rowVersion == null || rowVersion == s.get("row_version").asInt())
+                .isPresent();
     }
 
     @Transactional
@@ -142,6 +191,7 @@ public class SarService {
         }
         db.update("update sar_report set status = 'APPROVED', approved_by = ?, updated_by = ? where id = ?",
                 TenantContext.principal(), TenantContext.principal(), id);
+        approvals.cancelOpen(SAR_APPROVAL, id, null, "approved directly");
         return publish(id, "risk.sar_report.approved");
     }
 
