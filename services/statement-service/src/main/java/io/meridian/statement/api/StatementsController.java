@@ -52,13 +52,13 @@ public class StatementsController implements StatementsApi {
 
     /** The file (content type per format, checksum verified); a signed link's expires/signature are verified first. */
     @Override
-    public ResponseEntity<String> statementsDownload(UUID id, Long expires, String signature) {
+    public ResponseEntity<org.springframework.core.io.Resource> statementsDownload(UUID id, Long expires, String signature) {
         TenantContext.require();
         if (expires != null || signature != null) {
             statements.verifySignature(id, String.valueOf(expires), String.valueOf(signature));
         }
         StatementService.Download d = statements.download(id);
-        return Http.file(d.content(), d.contentType(), d.filename(), d.checksum());
+        return Http.binary(d.content(), d.contentType(), d.filename(), d.checksum());
     }
 
     @Override

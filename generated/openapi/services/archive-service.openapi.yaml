@@ -497,10 +497,10 @@ components:
           - string
           - 'null'
         pii_columns:
-          additionalProperties: true
           description: Columns holding personal data
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -594,9 +594,9 @@ components:
           maxLength: 120
           type: string
         pii_columns:
-          additionalProperties: true
           description: Columns holding personal data
-          type: object
+          items: {}
+          type: array
         sensitivity:
           description: Sensitivity
           enum:
@@ -684,9 +684,9 @@ components:
           maxLength: 120
           type: string
         pii_columns:
-          additionalProperties: true
           description: Columns holding personal data
-          type: object
+          items: {}
+          type: array
         sensitivity:
           description: Sensitivity
           enum:
@@ -816,9 +816,9 @@ components:
           readOnly: true
           type: integer
         scope_ids:
-          additionalProperties: true
           description: Ids covered (customers, accounts, cases, tables...)
-          type: object
+          items: {}
+          type: array
         scope_type:
           description: What the hold covers
           enum:
@@ -914,9 +914,9 @@ components:
           format: date
           type: string
         scope_ids:
-          additionalProperties: true
           description: Ids covered (customers, accounts, cases, tables...)
-          type: object
+          items: {}
+          type: array
         scope_type:
           description: What the hold covers
           enum:
@@ -1013,9 +1013,9 @@ components:
           format: date
           type: string
         scope_ids:
-          additionalProperties: true
           description: Ids covered (customers, accounts, cases, tables...)
-          type: object
+          items: {}
+          type: array
         scope_type:
           description: What the hold covers
           enum:
@@ -1098,9 +1098,17 @@ components:
           type:
           - string
           - 'null'
+        approved_by:
+          description: Checker who approved the purge (differs from the requester)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         blocked_by_hold_id:
           description: Hold blocking execution
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1166,6 +1174,20 @@ components:
           type:
           - string
           - 'null'
+        decided_at:
+          description: When the request was approved, rejected or cancelled
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        decision_reason:
+          description: Reason given on rejection or cancellation
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
         estimated_records:
           description: Records selected
           format: int64
@@ -1222,6 +1244,7 @@ components:
           - COMPLETED
           - FAILED
           - BLOCKED_BY_HOLD
+          - CANCELLED
           readOnly: true
           type: string
         updated_at:
@@ -1258,10 +1281,6 @@ components:
           type: string
         approval_request_id:
           description: Maker-checker approval
-          format: uuid
-          type: string
-        blocked_by_hold_id:
-          description: Hold blocking execution
           format: uuid
           type: string
         custom_field_1:
@@ -1326,7 +1345,15 @@ components:
     PurgeRequestsCancelRequest:
       properties:
         reason:
-          maxLength: 255
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    PurgeRequestsRejectRequest:
+      properties:
+        reason:
+          maxLength: 500
           type: string
       required:
       - reason
@@ -1876,17 +1903,28 @@ paths:
   /v1/archive/classifications/scan:
     post:
       operationId: dataClassificationsScan
-      summary: Discover tables and suggest classifications from the spec catalogue
+      summary: Discover tables and suggest classifications from the spec catalogue (apply=true stores new suggestions)
       tags:
       - Data Classifications
       security:
       - oauth2:
         - operations:write
       parameters:
+      - name: apply
+        in: query
+        required: false
+        schema:
+          type: boolean
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2112,8 +2150,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2484,8 +2528,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2511,7 +2561,7 @@ paths:
   /v1/archive/objects/{id}/verify:
     post:
       operationId: archivedObjectsVerify
-      summary: Verify checksum and object-lock of an archive
+      summary: Verify checksum and object-lock of an archive (re-run on every call)
       tags:
       - Archived Objects
       security:
@@ -2526,8 +2576,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2793,16 +2849,40 @@ paths:
   /v1/archive/legal-holds/check:
     get:
       operationId: legalHoldsCheck
-      summary: Check whether an entity is under hold (?scope_type=&id=)
+      summary: Check whether an entity is under hold
       tags:
       - Legal Holds
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: scope_type
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2847,6 +2927,7 @@ paths:
           - COMPLETED
           - FAILED
           - BLOCKED_BY_HOLD
+          - CANCELLED
       - name: data_classification_id
         in: query
         schema:
@@ -3012,6 +3093,92 @@ paths:
       x-service: archive-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
       x-table: purge_request
+  /v1/archive/purge-requests/{id}/approve:
+    post:
+      operationId: purgeRequestsApprove
+      summary: 'Approve a pending purge (four-eyes: the approver differs from the requester)'
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: purge_request
+  /v1/archive/purge-requests/{id}/reject:
+    post:
+      operationId: purgeRequestsReject
+      summary: Reject a pending purge
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurgeRequestsRejectRequest'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: purge_request
   /v1/archive/purge-requests/{id}/execute:
     post:
       operationId: purgeRequestsExecute
@@ -3055,7 +3222,7 @@ paths:
   /v1/archive/purge-requests/{id}/cancel:
     post:
       operationId: purgeRequestsCancel
-      summary: Cancel the request
+      summary: Cancel the request before execution
       tags:
       - Purge Requests
       security:
@@ -3101,7 +3268,7 @@ paths:
   /v1/archive/purge-requests/{id}/certificate:
     get:
       operationId: purgeRequestsCertificate
-      summary: Signed URL of the certificate of destruction
+      summary: Certificate of destruction with its hash verification
       tags:
       - Purge Requests
       security:
@@ -3115,8 +3282,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

@@ -20,18 +20,14 @@ public class FilesController implements FilesApi {
         this.store = store;
     }
 
-    /**
-     * The contract declares the body as {@code application/octet-stream} (a binary string). The generated
-     * signature types it as {@code String}; the raw bytes are written as-is so binary (e.g. PGP) files stay intact.
-     */
+    /** Signed blob download: raw bytes, unchanged (binary-safe for PGP and other payloads). */
     @Override
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public ResponseEntity<String> filesBlobs(String key, Long expires, String signature) {
+    public ResponseEntity<org.springframework.core.io.Resource> filesBlobs(String key, Long expires, String signature) {
         byte[] content = store.readSigned(key, expires, signature);
         String name = key.substring(key.lastIndexOf('/') + 1);
-        return (ResponseEntity) ResponseEntity.ok()
+        return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(name).build().toString())
-                .body(content);
+                .body(new org.springframework.core.io.ByteArrayResource(content));
     }
 }

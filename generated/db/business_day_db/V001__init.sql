@@ -57,7 +57,7 @@ COMMENT ON COLUMN business_day.updated_by IS 'Principal that last updated the ro
 COMMENT ON COLUMN business_day.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN business_day.legal_entity_id IS 'Legal entity';
 COMMENT ON COLUMN business_day.business_date IS 'Business date';
-COMMENT ON COLUMN business_day.state IS 'Processing state';
+COMMENT ON COLUMN business_day.state IS 'Processing state (changed by actions only)';
 COMMENT ON COLUMN business_day.holiday_calendar_id IS 'Calendar used to compute the next business date';
 COMMENT ON COLUMN business_day.is_current IS 'True for the open business date of the entity';
 COMMENT ON COLUMN business_day.opened_at IS 'When the date was opened';
@@ -80,7 +80,8 @@ ALTER TABLE business_day ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON business_day USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_business_day_touch BEFORE UPDATE ON business_day FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- eod_job_definition: A step in an end-of-period job graph, executed by an owning service
+-- eod_job_definition: A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id}, {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+
 CREATE TABLE eod_job_definition (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -95,7 +96,9 @@ CREATE TABLE eod_job_definition (
   job_type                     varchar(40) NOT NULL CHECK (job_type IN ('INTEREST_ACCRUAL', 'INTEREST_CAPITALISATION', 'FEE_CHARGING', 'DORMANCY', 'STATEMENTS', 'LOAN_ACCRUAL', 'DELINQUENCY_AGEING', 'ECL_PROVISION', 'RECONCILIATION', 'FX_REVALUATION', 'GL_CLOSE', 'REGULATORY_REPORTS', 'BALANCE_SNAPSHOT', 'STANDING_ORDERS', 'TERM_DEPOSIT_MATURITY', 'CARD_STATEMENT_CYCLE', 'ARCHIVAL', 'CUSTOM')),
   cycle_types                  jsonb NOT NULL,
   owning_service               varchar(64) NOT NULL,
-  endpoint                     varchar(255) NOT NULL,
+  http_method                  varchar(40) NOT NULL DEFAULT 'POST' CHECK (http_method IN ('POST', 'PUT', 'PATCH', 'GET')),
+  http_path                    varchar(500) NOT NULL,
+  body_template                jsonb,
   depends_on                   jsonb,
   sequence                     integer NOT NULL DEFAULT 100,
   parallelism                  integer NOT NULL DEFAULT 1,
@@ -113,7 +116,8 @@ CREATE TABLE eod_job_definition (
   custom_field_5               varchar(500),
   CONSTRAINT uq_eod_job_definition_code UNIQUE (tenant_id, code)
 );
-COMMENT ON TABLE eod_job_definition IS 'A step in an end-of-period job graph, executed by an owning service';
+COMMENT ON TABLE eod_job_definition IS 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id}, {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+';
 COMMENT ON COLUMN eod_job_definition.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN eod_job_definition.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN eod_job_definition.created_at IS 'Creation time';
@@ -127,7 +131,9 @@ COMMENT ON COLUMN eod_job_definition.name IS 'Display name';
 COMMENT ON COLUMN eod_job_definition.job_type IS 'Kind of job';
 COMMENT ON COLUMN eod_job_definition.cycle_types IS 'Cycles the job runs in, e.g. [EOD, EOM]';
 COMMENT ON COLUMN eod_job_definition.owning_service IS 'Service that executes the job, e.g. deposit-service';
-COMMENT ON COLUMN eod_job_definition.endpoint IS 'Internal command/topic the orchestrator invokes';
+COMMENT ON COLUMN eod_job_definition.http_method IS 'HTTP method of the job endpoint';
+COMMENT ON COLUMN eod_job_definition.http_path IS 'Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}';
+COMMENT ON COLUMN eod_job_definition.body_template IS 'JSON body template (placeholders in string values); empty = the standard job context';
 COMMENT ON COLUMN eod_job_definition.depends_on IS 'Codes of jobs that must finish first';
 COMMENT ON COLUMN eod_job_definition.sequence IS 'Ordering hint within the same dependency level';
 COMMENT ON COLUMN eod_job_definition.parallelism IS 'Number of partitions run in parallel';
@@ -334,7 +340,8 @@ CREATE TABLE job_schedule (
   code                         varchar(64) NOT NULL,
   name                         varchar(160) NOT NULL,
   owning_service               varchar(64) NOT NULL,
-  endpoint                     varchar(255) NOT NULL,
+  http_method                  varchar(40) NOT NULL DEFAULT 'POST' CHECK (http_method IN ('POST', 'PUT', 'PATCH', 'GET')),
+  http_path                    varchar(500) NOT NULL,
   cron_expression              varchar(64) NOT NULL,
   time_zone                    varchar(64) NOT NULL DEFAULT 'UTC',
   business_days_only           boolean NOT NULL DEFAULT false,
@@ -363,7 +370,8 @@ COMMENT ON COLUMN job_schedule.row_version IS 'Optimistic lock version; send as 
 COMMENT ON COLUMN job_schedule.code IS 'Schedule code';
 COMMENT ON COLUMN job_schedule.name IS 'Display name';
 COMMENT ON COLUMN job_schedule.owning_service IS 'Service that runs the job';
-COMMENT ON COLUMN job_schedule.endpoint IS 'Command/topic invoked';
+COMMENT ON COLUMN job_schedule.http_method IS 'HTTP method of the job endpoint';
+COMMENT ON COLUMN job_schedule.http_path IS 'Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>';
 COMMENT ON COLUMN job_schedule.cron_expression IS 'Cron expression';
 COMMENT ON COLUMN job_schedule.time_zone IS 'IANA time zone';
 COMMENT ON COLUMN job_schedule.business_days_only IS 'Skip non-business days';
@@ -441,6 +449,9 @@ CREATE TABLE batch_job_lock (
   acquired_at                  timestamptz NOT NULL DEFAULT now(),
   expires_at                   timestamptz NOT NULL,
   fencing_token                bigint NOT NULL DEFAULT 0,
+  force_released_at            timestamptz,
+  force_released_by            varchar(64),
+  force_release_reason         varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -461,6 +472,9 @@ COMMENT ON COLUMN batch_job_lock.holder IS 'Instance id holding the lock';
 COMMENT ON COLUMN batch_job_lock.acquired_at IS 'Acquired';
 COMMENT ON COLUMN batch_job_lock.expires_at IS 'Lease expiry';
 COMMENT ON COLUMN batch_job_lock.fencing_token IS 'Monotonic token to reject stale holders';
+COMMENT ON COLUMN batch_job_lock.force_released_at IS 'When an operator last force-released the lock';
+COMMENT ON COLUMN batch_job_lock.force_released_by IS 'Operator who force-released the lock';
+COMMENT ON COLUMN batch_job_lock.force_release_reason IS 'Why the lock was force-released';
 COMMENT ON COLUMN batch_job_lock.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN batch_job_lock.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN batch_job_lock.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

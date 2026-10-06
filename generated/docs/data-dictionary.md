@@ -27,7 +27,7 @@ API: /v1/deposit-accounts · Requirements: DEP-01, DEP-04, PRD-01, CIF-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| account_number | varchar(34) | no | UQ | account_number | Bank account number |
+| account_number | varchar(34) | no | UQ | account_number (read-only) | Bank account number (server-generated, check digit per country) |
 | iban | varchar(34) | yes | UQ | iban | IBAN where applicable |
 | bban | varchar(34) | yes |  | bban | Basic bank account number |
 | routing_code | varchar(20) | yes |  | routing_code | Sort code / routing number / IFSC / CLABE prefix |
@@ -63,6 +63,8 @@ API: /v1/deposit-accounts · Requirements: DEP-01, DEP-04, PRD-01, CIF-02
 | source_of_funds | varchar(255) | yes |  | source_of_funds | Declared source of funds |
 | expected_monthly_volume | numeric(28,8) | yes |  | expected_monthly_volume | Declared expected monthly turnover (AML profile) |
 | external_ref | varchar(128) | yes |  | external_ref | Client or migration reference |
+| product_terms | jsonb | yes |  | product_terms (read-only) | Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees, withholding_tax_rate, overdraft) |
+| pending_product_change | jsonb | yes |  | pending_product_change (read-only) | Scheduled product change (product_id, product_version_id, effective_date, product_terms) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -124,7 +126,7 @@ API: /v1/account-mandates · Requirements: DEP-02, LIM-02
 | max_amount | numeric(28,8) | yes |  | max_amount | Applies up to this amount |
 | rule | varchar(40) (MandateRule) | no |  | rule | Approval rule |
 | required_approvals | integer | no |  | required_approvals | Number of approvals for CUSTOM |
-| approver_groups | jsonb | yes |  | approver_groups | Signing groups required, e.g. [[A],[A,B]] |
+| approver_groups | jsonb | yes |  | approver_groups | Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]] |
 | valid_from | date | no |  | valid_from | Start date |
 | valid_to | date | yes |  | valid_to | End date |
 | document_id | uuid | yes | ref → document | document_id | Board resolution or signed mandate |
@@ -363,7 +365,7 @@ API: /v1/term-deposits · Requirements: DEP-03, PRC-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deposit_number | varchar(34) | no | UQ | deposit_number | Deposit reference number |
+| deposit_number | varchar(34) | no | UQ | deposit_number (read-only) | Deposit reference number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | product_id | uuid | no | ref → product | product_id | Product |
 | product_version_id | uuid | no | ref → product_version | product_version_id | Version pinned |
@@ -388,6 +390,7 @@ API: /v1/term-deposits · Requirements: DEP-03, PRC-01
 | status | varchar(40) (TermDepositStatus) | no |  | status (read-only) | Status |
 | certificate_document_id | uuid | yes | ref → document | certificate_document_id | Deposit certificate |
 | previous_deposit_id | uuid | yes | FK → term_deposit | previous_deposit_id | Deposit it rolled over from |
+| product_terms | jsonb | yes |  | product_terms (read-only) | Product terms pinned from the catalog at placement (copied on rollover) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -679,7 +682,9 @@ API: /v1/cheque-books · Requirements: DEP-07
 | last_cheque_no | varchar(16) | no |  | last_cheque_no | Last serial |
 | delivery_branch_id | uuid | yes | ref → branch | delivery_branch_id | Collection branch |
 | status | varchar(40) (ChequeBookStatus) | no |  | status (read-only) | Status |
+| dispatch_reference | varchar(64) | yes |  | dispatch_reference (read-only) | Courier / dispatch tracking reference |
 | dispatched_at | timestamptz | yes |  | dispatched_at (read-only) | Dispatch time |
+| activated_at | timestamptz | yes |  | activated_at (read-only) | Time the customer confirmed receipt and the book was activated |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -736,7 +741,7 @@ API: /v1/virtual-accounts · Requirements: LED-08, DEP-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | master_account_id | uuid | no | FK → deposit_account | master_account_id | Real account receiving the funds |
-| virtual_account_number | varchar(34) | no | UQ | virtual_account_number | Virtual account number |
+| virtual_account_number | varchar(34) | no | UQ | virtual_account_number (read-only) | Virtual account number (server-generated) |
 | iban | varchar(34) | yes | UQ | iban | Virtual IBAN |
 | purpose | varchar(40) (VirtualAccountPurpose) | no |  | purpose | Purpose |
 | owner_customer_id | uuid | yes | ref → customer | owner_customer_id | End customer (e.g. marketplace seller) |
@@ -748,6 +753,34 @@ API: /v1/virtual-accounts · Requirements: LED-08, DEP-01
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
 | status | varchar(40) (VirtualAccountStatus) | no |  | status | Status |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `deposit_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/deposit-eod-runs · Requirements: DEP-01, PRC-01, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (DepositEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (DepositEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -775,7 +808,7 @@ API: /v1/statements · Requirements: DEP-06
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | deposit_account_id | uuid | no | ref → deposit_account | deposit_account_id | Account |
-| statement_no | integer | no |  | statement_no | Sequential statement number per account |
+| statement_no | integer | no |  | statement_no (read-only) | Sequential statement number per account (server-assigned; shared by all formats of one period) |
 | period_start | date | no |  | period_start | First day |
 | period_end | date | no |  | period_end | Last day |
 | format | varchar(40) (StatementFormat) | no |  | format | Format |
@@ -790,7 +823,8 @@ API: /v1/statements · Requirements: DEP-06
 | line_count | integer | yes |  | line_count (read-only) | Number of lines |
 | is_on_demand | boolean | no |  | is_on_demand | Requested outside the cycle |
 | status | varchar(40) (StatementStatus) | no |  | status (read-only) | Generation status |
-| document_id | uuid | yes | ref → document | document_id (read-only) | Generated file |
+| failure_reason | varchar(500) | yes |  | failure_reason (read-only) | Why generation failed (status FAILED) |
+| document_id | uuid | yes | ref → document | document_id (read-only) | Generated file registered with document-service |
 | checksum | varchar(64) | yes |  | checksum (read-only) | SHA-256 of the file |
 | generated_at | timestamptz | yes |  | generated_at (read-only) | Generation time |
 | delivered_at | timestamptz | yes |  | delivered_at (read-only) | Delivery time |
@@ -848,7 +882,7 @@ API: /v1/statement-schedules · Requirements: DEP-06, NOT-02
 | deposit_account_id | uuid | no | ref → deposit_account | deposit_account_id | Account |
 | frequency | varchar(40) (ScheduleFrequency) | no |  | frequency | Cycle |
 | cycle_day | integer | no |  | cycle_day | Cycle end day |
-| formats | jsonb | no |  | formats | StatementFormat values to generate |
+| formats | jsonb | no |  | formats | StatementFormat values to generate, e.g. [PDF, CSV] |
 | delivery_channel | varchar(40) (StatementDeliveryChannel) | no |  | delivery_channel | Channel |
 | email | varchar(320) | yes |  | email | Override delivery email PII |
 | postal_address_id | uuid | yes | ref → customer_address | postal_address_id | Postal address for POST |
@@ -5488,9 +5522,9 @@ API: /v1/operations/business-days · Requirements: OPS-01, GL-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
 | business_date | date | no |  | business_date | Business date |
-| state | varchar(40) (BusinessDayState) | no |  | state | Processing state |
+| state | varchar(40) (BusinessDayState) | no |  | state (read-only) | Processing state (changed by actions only) |
 | holiday_calendar_id | uuid | yes | ref → holiday_calendar | holiday_calendar_id | Calendar used to compute the next business date |
-| is_current | boolean | no |  | is_current | True for the open business date of the entity |
+| is_current | boolean | no |  | is_current (read-only) | True for the open business date of the entity |
 | opened_at | timestamptz | no |  | opened_at (read-only) | When the date was opened |
 | cut_off_at | timestamptz | yes |  | cut_off_at (read-only) | When transaction cut-off was applied |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | When the date was closed |
@@ -5507,7 +5541,8 @@ API: /v1/operations/business-days · Requirements: OPS-01, GL-03
 
 #### `eod_job_definition`
 
-A step in an end-of-period job graph, executed by an owning service
+A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id}, {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+
 
 API: /v1/operations/eod-jobs · Requirements: OPS-01, GL-03, DEP-06
 
@@ -5526,7 +5561,9 @@ API: /v1/operations/eod-jobs · Requirements: OPS-01, GL-03, DEP-06
 | job_type | varchar(40) (EodJobType) | no |  | job_type | Kind of job |
 | cycle_types | jsonb | no |  | cycle_types | Cycles the job runs in, e.g. [EOD, EOM] |
 | owning_service | varchar(64) | no |  | owning_service | Service that executes the job, e.g. deposit-service |
-| endpoint | varchar(255) | no |  | endpoint | Internal command/topic the orchestrator invokes |
+| http_method | varchar(40) (JobHttpMethod) | no |  | http_method | HTTP method of the job endpoint |
+| http_path | varchar(500) | no |  | http_path | Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date} |
+| body_template | jsonb | yes |  | body_template | JSON body template (placeholders in string values); empty = the standard job context |
 | depends_on | jsonb | yes |  | depends_on | Codes of jobs that must finish first |
 | sequence | integer | no |  | sequence | Ordering hint within the same dependency level |
 | parallelism | integer | no |  | parallelism | Number of partitions run in parallel |
@@ -5657,7 +5694,8 @@ API: /v1/operations/job-schedules · Requirements: OPS-01
 | code | varchar(64) | no | UQ | code | Schedule code |
 | name | varchar(160) | no |  | name | Display name |
 | owning_service | varchar(64) | no |  | owning_service | Service that runs the job |
-| endpoint | varchar(255) | no |  | endpoint | Command/topic invoked |
+| http_method | varchar(40) (JobHttpMethod) | no |  | http_method | HTTP method of the job endpoint |
+| http_path | varchar(500) | no |  | http_path | Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key> |
 | cron_expression | varchar(64) | no |  | cron_expression | Cron expression |
 | time_zone | varchar(64) | no |  | time_zone | IANA time zone |
 | business_days_only | boolean | no |  | business_days_only | Skip non-business days |
@@ -5719,6 +5757,9 @@ API: /v1/operations/batch-locks · Requirements: OPS-01
 | acquired_at | timestamptz | no |  | acquired_at | Acquired |
 | expires_at | timestamptz | no |  | expires_at | Lease expiry |
 | fencing_token | bigint | no |  | fencing_token | Monotonic token to reject stale holders |
+| force_released_at | timestamptz | yes |  | force_released_at (read-only) | When an operator last force-released the lock |
+| force_released_by | varchar(64) | yes |  | force_released_by (read-only) | Operator who force-released the lock |
+| force_release_reason | varchar(500) | yes |  | force_release_reason (read-only) | Why the lock was force-released |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5757,15 +5798,15 @@ API: /v1/files/channels · Requirements: OPS-02
 | remote_inbound_path | varchar(500) | yes |  | remote_inbound_path | Remote folder to pull from |
 | remote_outbound_path | varchar(500) | yes |  | remote_outbound_path | Remote folder to push to |
 | username | varchar(128) | yes |  | username | Login user |
-| credential_secret_ref | varchar(255) | no |  | — | Vault path of password or private key secret |
+| credential_secret_ref | varchar(255) | no |  | credential_secret_ref | Vault path of password or private key (a reference, never the secret; change it with rotate-credentials) |
 | host_key_fingerprint | varchar(128) | yes |  | host_key_fingerprint | Expected SFTP host key fingerprint |
-| pgp_encrypt_key_ref | varchar(255) | yes |  | — | Vault ref of counterparty public key for outbound encryption secret |
-| pgp_decrypt_key_ref | varchar(255) | yes |  | — | Vault ref of our private key for inbound decryption secret |
+| pgp_encrypt_key_ref | varchar(255) | yes |  | pgp_encrypt_key_ref | Vault ref of counterparty public key for outbound encryption |
+| pgp_decrypt_key_ref | varchar(255) | yes |  | pgp_decrypt_key_ref | Vault ref of our private key for inbound decryption |
 | pgp_sign | boolean | no |  | pgp_sign | Sign outbound files |
 | poll_cron | varchar(64) | yes |  | poll_cron | Polling schedule for inbound files |
 | file_name_pattern | varchar(255) | yes |  | file_name_pattern | Regex of inbound file names to pick up |
 | delete_after_download | boolean | no |  | delete_after_download | Remove remote file after successful download |
-| ip_allowlist | jsonb | yes |  | ip_allowlist | Allowed source IPs for push channels |
+| ip_allowlist | jsonb | yes |  | ip_allowlist | Allowed source IPs / CIDR blocks for push channels |
 | is_active | boolean | no |  | is_active | Active |
 | last_connected_at | timestamptz | yes |  | last_connected_at (read-only) | Last successful connection |
 | health_status | varchar(32) | yes |  | health_status (read-only) | UP, DEGRADED or DOWN |
@@ -5842,7 +5883,7 @@ API: /v1/files/routes · Requirements: OPS-02
 
 A file received from a counterparty
 
-API: /v1/files/inbound · Requirements: OPS-02
+API: /v1/files, /v1/files/inbound · Requirements: OPS-02
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -5970,8 +6011,8 @@ API: /v1/search, /v1/search/indexes · Requirements: OPS-03
 | physical_index | varchar(160) | no |  | physical_index (read-only) | Current physical index behind the alias |
 | mapping_version | integer | no |  | mapping_version | Version of the field mapping |
 | mapping | jsonb | no |  | mapping | OpenSearch mapping and analysers |
-| source_topics | jsonb | no |  | source_topics | Event topics feeding the index |
-| searchable_fields | jsonb | no |  | searchable_fields | Fields matched by free-text search with boosts |
+| source_topics | jsonb | no |  | source_topics | Event topics feeding the index, e.g. [meridian.party.v1] |
+| searchable_fields | jsonb | no |  | searchable_fields | Fields matched by free-text search with boosts, e.g. [full_name^3, email] |
 | masked_fields | jsonb | yes |  | masked_fields | Fields masked unless the caller holds a PII permission |
 | status | varchar(40) (SearchIndexStatus) | no |  | status (read-only) | Status |
 | document_count | bigint | yes |  | document_count (read-only) | Documents indexed |
@@ -6031,7 +6072,7 @@ API: /v1/search/synonyms · Requirements: OPS-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | search_index_id | uuid | yes | FK → search_index | search_index_id | Index (empty = all) |
 | language_code | varchar(8) | yes |  | language_code | Language |
-| terms | jsonb | no |  | terms | Equivalent terms, e.g. [mohammed, muhammad, mohamed] |
+| terms | jsonb | no |  | terms | Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed] |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -6056,10 +6097,10 @@ API: /v1/search/saved · Requirements: OPS-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | app_user_id | uuid | no | ref → app_user | app_user_id | Owner |
 | name | varchar(160) | no |  | name | Name |
-| entity_types | jsonb | no |  | entity_types | Entity types searched |
+| entity_types | jsonb | no |  | entity_types | Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT] |
 | query_text | varchar(500) | yes |  | query_text | Free text |
-| filters | jsonb | yes |  | filters | Structured filters |
-| sort | jsonb | yes |  | sort | Sort order |
+| filters | jsonb | yes |  | filters | Structured filters (JSON containment on the document) |
+| sort | jsonb | yes |  | sort | Sort order, e.g. [-score, title] |
 | shared_with_role_id | uuid | yes | ref → role | shared_with_role_id | Role it is shared with |
 | is_pinned | boolean | no |  | is_pinned | Pinned in the console |
 | last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last use |
@@ -6068,6 +6109,57 @@ API: /v1/search/saved · Requirements: OPS-03
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `search_document`
+
+One indexed entity document per physical index (the PostgreSQL full-text engine; aliases swap between physical indexes on reindex). Weighted text A/B/C feeds the ranked tsvector computed at query time.
+
+
+API: internal only · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| physical_index | varchar(160) | no |  | physical_index | Physical index holding the document |
+| entity_type | varchar(40) (SearchEntityType) | no |  | entity_type | Entity type |
+| entity_id | varchar(128) | no |  | entity_id | Id of the entity in its owning service |
+| title | text | yes |  | title | Display title (used by type-ahead) |
+| body | jsonb | no |  | body | Indexed document (masked on output by role) |
+| search_text | text | no |  | search_text | All searchable text |
+| text_a | text | yes |  | text_a | Weight A text (boost >= 3) |
+| text_b | text | yes |  | text_b | Weight B text (boost >= 2) |
+| text_c | text | yes |  | text_c | Weight C text |
+| source_event_id | varchar(128) | yes |  | source_event_id | Event that produced the version |
+| source_version | bigint | yes |  | source_version | Source version (out-of-order events are ignored) |
+| occurred_at | timestamptz | yes |  | occurred_at | When the change happened in the owning service |
+| indexed_at | timestamptz | no |  | indexed_at | When the document was indexed |
+
+#### `search_ingest_log` (append-only)
+
+Append-only journal of ingested changes, the source for full reindex and catch-up replays
+
+API: internal only · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| entity_type | varchar(40) (SearchEntityType) | no |  | entity_type | Entity type |
+| entity_id | varchar(128) | no |  | entity_id | Entity id |
+| operation | varchar(40) (SearchIngestOperation) | no |  | operation | Upsert or delete |
+| document | jsonb | yes |  | document | Document (upserts) |
+| source_event_id | varchar(128) | yes |  | source_event_id | Source event id |
+| source_version | bigint | yes |  | source_version | Source version |
+| occurred_at | timestamptz | no |  | occurred_at | When the change happened |
+| ingested_at | timestamptz | no |  | ingested_at | When it was ingested |
 
 ### Service `archive-service` — database `archive_db`
 
@@ -6256,7 +6348,10 @@ API: /v1/archive/purge-requests · Requirements: OPS-04, CIF-04
 | estimated_records | bigint | yes |  | estimated_records (read-only) | Records selected |
 | status | varchar(40) (PurgeRequestStatus) | no |  | status (read-only) | Status |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
-| blocked_by_hold_id | uuid | yes | FK → legal_hold | blocked_by_hold_id | Hold blocking execution |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved the purge (differs from the requester) |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | When the request was approved, rejected or cancelled |
+| decision_reason | varchar(500) | yes |  | decision_reason (read-only) | Reason given on rejection or cancellation |
+| blocked_by_hold_id | uuid | yes | FK → legal_hold | blocked_by_hold_id (read-only) | Hold blocking execution |
 | executed_at | timestamptz | yes |  | executed_at (read-only) | Execution time |
 | records_purged | bigint | yes |  | records_purged (read-only) | Records purged |
 | certificate_document_id | uuid | yes | ref → document | certificate_document_id (read-only) | Certificate of destruction |

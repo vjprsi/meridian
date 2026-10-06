@@ -1310,10 +1310,10 @@ components:
       description: Signing mandate for an account (who must approve which operations above which amount)
       properties:
         approver_groups:
-          additionalProperties: true
-          description: Signing groups required, e.g. [[A],[A,B]]
+          description: Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]]
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         created_at:
           description: Creation time
@@ -1451,9 +1451,9 @@ components:
     AccountMandateCreate:
       properties:
         approver_groups:
-          additionalProperties: true
-          description: Signing groups required, e.g. [[A],[A,B]]
-          type: object
+          description: Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]]
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1552,9 +1552,9 @@ components:
     AccountMandateUpdate:
       properties:
         approver_groups:
-          additionalProperties: true
-          description: Signing groups required, e.g. [[A],[A,B]]
-          type: object
+          description: Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]]
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1639,6 +1639,9 @@ components:
         operation_type:
           maxLength: 64
           type: string
+        signatories:
+          items: {}
+          type: array
       required:
       - deposit_account_id
       - operation_type
@@ -2196,6 +2199,13 @@ components:
     ChequeBook:
       description: Cheque book issued on an account
       properties:
+        activated_at:
+          description: Time the customer confirmed receipt and the book was activated
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -2248,6 +2258,13 @@ components:
           description: Account
           format: uuid
           type: string
+        dispatch_reference:
+          description: Courier / dispatch tracking reference
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         dispatched_at:
           description: Dispatch time
           format: date-time
@@ -2385,6 +2402,15 @@ components:
       required:
       - reason
       type: object
+    ChequeBooksDispatchRequest:
+      properties:
+        delivery_branch_id:
+          format: uuid
+          type: string
+        dispatch_reference:
+          maxLength: 64
+          type: string
+      type: object
     ChequePage:
       description: One page of Cheque results (newest first)
       properties:
@@ -2444,8 +2470,9 @@ components:
       description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
       properties:
         account_number:
-          description: Bank account number
+          description: Bank account number (server-generated, check digit per country)
           maxLength: 34
+          readOnly: true
           type: string
         account_type:
           description: Account type
@@ -2672,10 +2699,25 @@ components:
           format: decimal
           readOnly: true
           type: string
+        pending_product_change:
+          additionalProperties: true
+          description: Scheduled product change (product_id, product_version_id, effective_date, product_terms)
+          readOnly: true
+          type:
+          - object
+          - 'null'
         product_id:
           description: Product
           format: uuid
           type: string
+        product_terms:
+          additionalProperties: true
+          description: Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees,
+            withholding_tax_rate, overdraft)
+          readOnly: true
+          type:
+          - object
+          - 'null'
         product_version_id:
           description: Product version pinned at opening
           format: uuid
@@ -2787,10 +2829,6 @@ components:
       type: object
     DepositAccountCreate:
       properties:
-        account_number:
-          description: Bank account number
-          maxLength: 34
-          type: string
         account_type:
           description: Account type
           enum:
@@ -2936,7 +2974,6 @@ components:
           - ANNUAL
           type: string
       required:
-      - account_number
       - account_type
       - customer_id
       - product_id
@@ -2964,10 +3001,6 @@ components:
       type: object
     DepositAccountUpdate:
       properties:
-        account_number:
-          description: Bank account number
-          maxLength: 34
-          type: string
         account_type:
           description: Account type
           enum:
@@ -3187,6 +3220,149 @@ components:
           type: string
       required:
       - reason
+      type: object
+    DepositEodRun:
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        attempts:
+          description: Executions for this job and date
+          format: int32
+          readOnly: true
+          type: integer
+        business_date:
+          description: Business date processed
+          format: date
+          type: string
+        completed_at:
+          description: End of the last execution
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        job:
+          description: Job
+          enum:
+          - INTEREST_ACCRUAL
+          - PRODUCT_CHANGES
+          - MATURITY_PROCESSING
+          - STANDING_ORDERS
+          - POT_RULES
+          - SWEEPS
+          - DORMANCY_SCAN
+          type: string
+        result:
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start of the last execution
+          format: date-time
+          readOnly: true
+          type: string
+        status:
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
+      type: object
+    DepositEodRunPage:
+      description: One page of DepositEodRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DepositEodRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
       type: object
     FeeCharge:
       description: A fee charged (or refunded) on an account. Append-only; refunds are new rows.
@@ -5809,8 +5985,9 @@ components:
           maxLength: 16
           type: string
         deposit_number:
-          description: Deposit reference number
+          description: Deposit reference number (server-generated)
           maxLength: 34
+          readOnly: true
           type: string
         expected_interest:
           description: Interest at maturity if held to term
@@ -5898,6 +6075,13 @@ components:
           description: Product
           format: uuid
           type: string
+        product_terms:
+          additionalProperties: true
+          description: Product terms pinned from the catalog at placement (copied on rollover)
+          readOnly: true
+          type:
+          - object
+          - 'null'
         product_version_id:
           description: Version pinned
           format: uuid
@@ -6011,10 +6195,6 @@ components:
           description: Day-count convention
           maxLength: 16
           type: string
-        deposit_number:
-          description: Deposit reference number
-          maxLength: 34
-          type: string
         funding_account_id:
           description: Account funded from
           format: uuid
@@ -6086,7 +6266,6 @@ components:
           format: int32
           type: integer
       required:
-      - deposit_number
       - customer_id
       - product_id
       - product_version_id
@@ -6292,10 +6471,6 @@ components:
         day_count:
           description: Day-count convention
           maxLength: 16
-          type: string
-        deposit_number:
-          description: Deposit reference number
-          maxLength: 34
           type: string
         funding_account_id:
           description: Account funded from
@@ -6577,8 +6752,9 @@ components:
           - string
           - 'null'
         virtual_account_number:
-          description: Virtual account number
+          description: Virtual account number (server-generated)
           maxLength: 34
+          readOnly: true
           type: string
       required:
       - id
@@ -6669,13 +6845,8 @@ components:
           - SUSPENDED
           - CLOSED
           type: string
-        virtual_account_number:
-          description: Virtual account number
-          maxLength: 34
-          type: string
       required:
       - master_account_id
-      - virtual_account_number
       - purpose
       - currency
       type: object
@@ -6774,16 +6945,12 @@ components:
           - SUSPENDED
           - CLOSED
           type: string
-        virtual_account_number:
-          description: Virtual account number
-          maxLength: 34
-          type: string
       type: object
     VirtualAccountsBulkRequest:
       properties:
         items:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       required:
       - items
       type: object
@@ -7403,7 +7570,7 @@ paths:
   /v1/deposit-accounts/{id}/transactions:
     get:
       operationId: depositAccountsTransactions
-      summary: Ledger entries of the account (?from=&to=)
+      summary: Ledger entries of the account booked in [from, to)
       tags:
       - Deposit Accounts
       security:
@@ -7416,6 +7583,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -7598,7 +7777,7 @@ paths:
   /v1/deposit-accounts/{id}/accruals:
     get:
       operationId: depositAccountsAccruals
-      summary: Daily interest accruals (?from=&to=)
+      summary: Daily interest accruals with accrual_date in [from, to]
       tags:
       - Deposit Accounts
       security:
@@ -7611,6 +7790,30 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CREDIT
+          - DEBIT
+          - OVERDRAFT
+          - UNARRANGED_OVERDRAFT
+          - PENALTY
+          - BONUS
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -7853,7 +8056,7 @@ paths:
   /v1/deposit-accounts/{id}/interest-projection:
     get:
       operationId: depositAccountsInterestProjection
-      summary: Projected interest for the next N days (?days=)
+      summary: Projected interest for the next days (1-1830, default 30)
       tags:
       - Deposit Accounts
       security:
@@ -7866,9 +8069,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7886,7 +8101,7 @@ paths:
   /v1/deposit-accounts/{id}/confirmation-letter:
     get:
       operationId: depositAccountsConfirmationLetter
-      summary: Generate an account confirmation letter
+      summary: Account confirmation letter (printable text)
       tags:
       - Deposit Accounts
       security:
@@ -7900,8 +8115,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7916,6 +8135,438 @@ paths:
       x-service: deposit-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
       x-table: deposit_account
+  /v1/deposit-accounts/eod/accrue:
+    post:
+      operationId: depositAccountsEodAccrue
+      summary: End of day - accrue interest through business_date and capitalise where due, every open account of the tenant
+        (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/product-changes:
+    post:
+      operationId: depositAccountsEodProductChanges
+      summary: End of day - apply scheduled product changes effective on or before business_date (idempotent per business
+        date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/maturities:
+    post:
+      operationId: depositAccountsEodMaturities
+      summary: End of day - term deposit maturities (payout or rollover) and maturing notices (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/standing-orders:
+    post:
+      operationId: depositAccountsEodStandingOrders
+      summary: End of day - execute standing orders due on or before business_date (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/pot-rules:
+    post:
+      operationId: depositAccountsEodPotRules
+      summary: End of day - run scheduled savings pot rules due on or before business_date (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/sweeps:
+    post:
+      operationId: depositAccountsEodSweeps
+      summary: End of day - evaluate sweep rules due by the end of business_date (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-accounts/eod/dormancy:
+    post:
+      operationId: depositAccountsEodDormancy
+      summary: End of day - dormancy scan (warnings, inactive, dormant) as of business_date (idempotent per business date)
+      tags:
+      - Deposit Accounts
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - DEP-01
+      - DEP-04
+      - PRD-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: deposit_account
+  /v1/deposit-eod-runs:
+    get:
+      operationId: depositEodRunsList
+      summary: List deposit eod runs
+      tags:
+      - Deposit Eod Runs
+      security:
+      - oauth2:
+        - accounts:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - INTEREST_ACCRUAL
+          - PRODUCT_CHANGES
+          - MATURITY_PROCESSING
+          - STANDING_ORDERS
+          - POT_RULES
+          - SWEEPS
+          - DORMANCY_SCAN
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - DEP-01
+      - OPS-01
+      - PRC-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
+      x-table: deposit_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/deposit-eod-runs/{id}:
+    get:
+      operationId: depositEodRunsGet
+      summary: Retrieve deposit eod run
+      tags:
+      - Deposit Eod Runs
+      security:
+      - oauth2:
+        - accounts:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-01
+      - OPS-01
+      - PRC-01
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
+      x-table: deposit_eod_run
+      x-crud: true
+      x-crud-get: true
   /v1/account-holders:
     get:
       operationId: accountHoldersList
@@ -8368,7 +9019,7 @@ paths:
   /v1/account-mandates/evaluate:
     post:
       operationId: accountMandatesEvaluate
-      summary: Check which approvals an operation needs
+      summary: Check which approvals an operation needs and whether the signatories (customer ids) satisfy them
       tags:
       - Account Mandates
       security:
@@ -8377,8 +9028,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10170,8 +10827,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10362,7 +11025,7 @@ paths:
   /v1/term-deposits/{id}/certificate:
     get:
       operationId: termDepositsCertificate
-      summary: Download the deposit certificate
+      summary: Deposit certificate (printable text)
       tags:
       - Term Deposits
       security:
@@ -10376,8 +11039,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11940,16 +12607,28 @@ paths:
   /v1/account-closures/quote:
     get:
       operationId: accountClosuresQuote
-      summary: Closure quote for an account (?deposit_account_id=)
+      summary: Closure quote for an account (final interest, fees, payout, blockers)
       tags:
       - Account Closures
       security:
       - oauth2:
         - accounts:read
-      parameters: []
+      parameters:
+      - name: deposit_account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12243,6 +12922,90 @@ paths:
       x-table: cheque_book
       x-crud: true
       x-crud-get: true
+  /v1/cheque-books/{id}/dispatch:
+    post:
+      operationId: chequeBooksDispatch
+      summary: Dispatch the book to the customer or collection branch
+      tags:
+      - Cheque Books
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChequeBook'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChequeBooksDispatchRequest'
+      x-requirements:
+      - DEP-07
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: cheque_book
+  /v1/cheque-books/{id}/activate:
+    post:
+      operationId: chequeBooksActivate
+      summary: Activate the book once the customer confirms receipt (cheques clear only on ACTIVE books)
+      tags:
+      - Cheque Books
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChequeBook'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - DEP-07
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: cheque_book
   /v1/cheque-books/{id}/cancel:
     post:
       operationId: chequeBooksCancel
@@ -12304,6 +13067,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ISSUED
+          - PRESENTED
+          - CLEARED
+          - RETURNED
+          - STOPPED
+          - CANCELLED
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -12798,7 +13573,7 @@ paths:
   /v1/virtual-accounts/bulk:
     post:
       operationId: virtualAccountsBulk
-      summary: Create up to 10,000 virtual accounts
+      summary: Create up to 10,000 virtual accounts, all or nothing; each item has the VirtualAccountCreate fields
       tags:
       - Virtual Accounts
       security:
@@ -12807,8 +13582,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12959,6 +13740,8 @@ servers:
 tags:
 - description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
   name: Deposit Accounts
+- description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+  name: Deposit Eod Runs
 - description: Customer linked to an account in a role (joint holder, minor, guardian, signatory, POA)
   name: Account Holders
 - description: Signing mandate for an account (who must approve which operations above which amount)

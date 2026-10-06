@@ -123,6 +123,10 @@ components:
           type:
           - string
           - 'null'
+        credential_secret_ref:
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -194,10 +198,10 @@ components:
           readOnly: true
           type: string
         ip_allowlist:
-          additionalProperties: true
-          description: Allowed source IPs for push channels
+          description: Allowed source IPs / CIDR blocks for push channels
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         is_active:
           description: Active
@@ -219,6 +223,18 @@ components:
           description: Display name
           maxLength: 160
           type: string
+        pgp_decrypt_key_ref:
+          description: Vault ref of our private key for inbound decryption
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        pgp_encrypt_key_ref:
+          description: Vault ref of counterparty public key for outbound encryption
+          maxLength: 255
+          type:
+          - string
+          - 'null'
         pgp_sign:
           description: Sign outbound files
           type: boolean
@@ -292,6 +308,7 @@ components:
       - counterparty_type
       - protocol
       - direction
+      - credential_secret_ref
       - pgp_sign
       - delete_after_download
       - is_active
@@ -319,6 +336,10 @@ components:
           - ERP
           - BILLER
           - OTHER
+          type: string
+        credential_secret_ref:
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
+          maxLength: 255
           type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
@@ -363,9 +384,9 @@ components:
           maxLength: 128
           type: string
         ip_allowlist:
-          additionalProperties: true
-          description: Allowed source IPs for push channels
-          type: object
+          description: Allowed source IPs / CIDR blocks for push channels
+          items: {}
+          type: array
         is_active:
           description: Active
           type: boolean
@@ -376,6 +397,14 @@ components:
         name:
           description: Display name
           maxLength: 160
+          type: string
+        pgp_decrypt_key_ref:
+          description: Vault ref of our private key for inbound decryption
+          maxLength: 255
+          type: string
+        pgp_encrypt_key_ref:
+          description: Vault ref of counterparty public key for outbound encryption
+          maxLength: 255
           type: string
         pgp_sign:
           description: Sign outbound files
@@ -419,6 +448,7 @@ components:
       - counterparty_type
       - protocol
       - direction
+      - credential_secret_ref
       type: object
     FileChannelPage:
       description: One page of FileChannel results (newest first)
@@ -461,6 +491,10 @@ components:
           - ERP
           - BILLER
           - OTHER
+          type: string
+        credential_secret_ref:
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
+          maxLength: 255
           type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
@@ -505,9 +539,9 @@ components:
           maxLength: 128
           type: string
         ip_allowlist:
-          additionalProperties: true
-          description: Allowed source IPs for push channels
-          type: object
+          description: Allowed source IPs / CIDR blocks for push channels
+          items: {}
+          type: array
         is_active:
           description: Active
           type: boolean
@@ -518,6 +552,14 @@ components:
         name:
           description: Display name
           maxLength: 160
+          type: string
+        pgp_decrypt_key_ref:
+          description: Vault ref of our private key for inbound decryption
+          maxLength: 255
+          type: string
+        pgp_encrypt_key_ref:
+          description: Vault ref of counterparty public key for outbound encryption
+          maxLength: 255
           type: string
         pgp_sign:
           description: Sign outbound files
@@ -900,11 +942,13 @@ components:
       type: object
     FileFormatsValidateSampleRequest:
       properties:
+        content:
+          type: string
+        content_base64:
+          type: string
         document_id:
           format: uuid
           type: string
-      required:
-      - document_id
       type: object
     FileRoute:
       description: Routing rule sending matching inbound files to a consumer service
@@ -1515,56 +1559,6 @@ components:
       - virus_scan_status
       - status
       type: object
-    InboundFileCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        document_id:
-          description: Document record for retention
-          format: uuid
-          type: string
-        file_channel_id:
-          description: Channel received on
-          format: uuid
-          type: string
-        file_format_definition_id:
-          description: Detected format
-          format: uuid
-          type: string
-        file_route_id:
-          description: Route applied
-          format: uuid
-          type: string
-        original_file_name:
-          description: Name as received
-          maxLength: 255
-          type: string
-        remote_path:
-          description: Remote location
-          maxLength: 500
-          type: string
-      required:
-      - file_channel_id
-      - original_file_name
-      type: object
     InboundFilePage:
       description: One page of InboundFile results (newest first)
       properties:
@@ -1590,6 +1584,37 @@ components:
           type: string
       required:
       - reason
+      type: object
+    InboundFilesUploadRequest:
+      properties:
+        content:
+          type: string
+        content_base64:
+          type: string
+        content_url:
+          maxLength: 1000
+          type: string
+        document_id:
+          format: uuid
+          type: string
+        file_channel_id:
+          format: uuid
+          type: string
+        file_format_definition_id:
+          format: uuid
+          type: string
+        file_route_id:
+          format: uuid
+          type: string
+        original_file_name:
+          maxLength: 255
+          type: string
+        remote_path:
+          maxLength: 500
+          type: string
+      required:
+      - file_channel_id
+      - original_file_name
       type: object
     OutboundFile:
       description: A file generated for and delivered to a counterparty
@@ -1785,60 +1810,6 @@ components:
       - status
       - delivery_attempts
       type: object
-    OutboundFileCreate:
-      properties:
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        encrypt:
-          description: PGP-encrypt before delivery
-          type: boolean
-        file_channel_id:
-          description: Delivery channel
-          format: uuid
-          type: string
-        file_format_definition_id:
-          description: Format
-          format: uuid
-          type: string
-        file_name:
-          description: File name to deliver
-          maxLength: 255
-          type: string
-        requested_by_service:
-          description: Service that requested the file
-          maxLength: 64
-          type: string
-        scheduled_for:
-          description: Earliest delivery time (e.g. scheme window)
-          format: date-time
-          type: string
-        source_reference:
-          description: Batch / run id in the requesting service
-          maxLength: 128
-          type: string
-      required:
-      - file_channel_id
-      - requested_by_service
-      - file_name
-      type: object
     OutboundFilePage:
       description: One page of OutboundFile results (newest first)
       properties:
@@ -1872,6 +1843,40 @@ components:
           type: string
       required:
       - reason
+      type: object
+    OutboundFilesGenerateRequest:
+      properties:
+        content:
+          type: string
+        content_base64:
+          type: string
+        encrypt:
+          type: boolean
+        file_channel_id:
+          format: uuid
+          type: string
+        file_format_definition_id:
+          format: uuid
+          type: string
+        file_name:
+          maxLength: 255
+          type: string
+        records:
+          items: {}
+          type: array
+        requested_by_service:
+          maxLength: 64
+          type: string
+        scheduled_for:
+          format: date-time
+          type: string
+        source_reference:
+          maxLength: 128
+          type: string
+      required:
+      - file_channel_id
+      - requested_by_service
+      - file_name
       type: object
     OutboundFilesRedeliverRequest:
       properties:
@@ -2178,8 +2183,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2198,7 +2209,7 @@ paths:
   /v1/files/channels/{id}/poll-now:
     post:
       operationId: fileChannelsPollNow
-      summary: Poll the remote inbound folder now
+      summary: Poll the remote inbound folder now and receive new files
       tags:
       - File Channels
       security:
@@ -2213,8 +2224,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2519,7 +2536,7 @@ paths:
   /v1/files/formats/{id}/validate-sample:
     post:
       operationId: fileFormatsValidateSample
-      summary: Parse an uploaded sample against the layout
+      summary: Parse a sample (document_id, or inline content / content_base64) against the layout
       tags:
       - File Formats
       security:
@@ -2534,8 +2551,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2900,44 +2923,6 @@ paths:
       x-table: inbound_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: inboundFilesCreate
-      summary: Create inbound file
-      tags:
-      - Inbound Files
-      security:
-      - oauth2:
-        - operations:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InboundFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InboundFileCreate'
-      x-requirements:
-      - OPS-02
-      x-service: file-gateway-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
-      x-table: inbound_file
-      x-crud: true
-      x-crud-create: true
   /v1/files/inbound/{id}:
     get:
       operationId: inboundFilesGet
@@ -2974,6 +2959,46 @@ paths:
       x-table: inbound_file
       x-crud: true
       x-crud-get: true
+  /v1/files/inbound/upload:
+    post:
+      operationId: inboundFilesUpload
+      summary: Receive a file pushed by a counterparty (inline content, content_base64, or content_url fetched by the gateway)
+        and run the pipeline
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundFilesUploadRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: inbound_file
   /v1/files/inbound/{id}/reprocess:
     post:
       operationId: inboundFilesReprocess
@@ -3061,7 +3086,7 @@ paths:
   /v1/files/inbound/{id}/download:
     get:
       operationId: inboundFilesDownload
-      summary: Signed URL for the raw file
+      summary: Pre-signed URL for the raw file (url, expires_at, checksum)
       tags:
       - Inbound Files
       security:
@@ -3075,8 +3100,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3212,45 +3243,6 @@ paths:
       x-table: outbound_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: outboundFilesCreate
-      summary: Create outbound file
-      tags:
-      - Outbound Files
-      security:
-      - oauth2:
-        - operations:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OutboundFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OutboundFileCreate'
-      x-requirements:
-      - DEP-06
-      - OPS-02
-      x-service: file-gateway-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
-      x-table: outbound_file
-      x-crud: true
-      x-crud-create: true
   /v1/files/outbound/{id}:
     get:
       operationId: outboundFilesGet
@@ -3288,6 +3280,46 @@ paths:
       x-table: outbound_file
       x-crud: true
       x-crud-get: true
+  /v1/files/outbound/generate:
+    post:
+      operationId: outboundFilesGenerate
+      summary: Generate a file from records (rendered with the format layout) or inline content and deliver it
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFilesGenerateRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: outbound_file
   /v1/files/outbound/{id}/redeliver:
     post:
       operationId: outboundFilesRedeliver
@@ -3429,7 +3461,7 @@ paths:
   /v1/files/outbound/{id}/download:
     get:
       operationId: outboundFilesDownload
-      summary: Signed URL for the generated file
+      summary: Pre-signed URL for the generated file (url, expires_at, checksum)
       tags:
       - Outbound Files
       security:
@@ -3443,8 +3475,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3588,6 +3626,54 @@ paths:
       x-table: file_transfer_log
       x-crud: true
       x-crud-get: true
+  /v1/files/blobs:
+    get:
+      operationId: filesBlobs
+      summary: Download a file through a pre-signed link issued by a download operation (the HMAC signature and expiry authorise
+        the request)
+      tags:
+      - Files
+      security: []
+      parameters:
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 1000
+      - name: expires
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: signature
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: inbound_file
 security:
 - oauth2: []
 servers:
@@ -3608,3 +3694,5 @@ tags:
   name: Outbound Files
 - description: Immutable audit of every action on a file or channel
   name: File Transfer Logs
+- description: Object-store access through pre-signed links
+  name: Files

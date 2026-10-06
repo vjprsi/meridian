@@ -63,6 +63,8 @@ CREATE TABLE deposit_account (
   source_of_funds              varchar(255),
   expected_monthly_volume      numeric(28,8),
   external_ref                 varchar(128),
+  product_terms                jsonb,
+  pending_product_change       jsonb,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -81,7 +83,7 @@ COMMENT ON COLUMN deposit_account.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN deposit_account.updated_at IS 'Last update time';
 COMMENT ON COLUMN deposit_account.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN deposit_account.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN deposit_account.account_number IS 'Bank account number';
+COMMENT ON COLUMN deposit_account.account_number IS 'Bank account number (server-generated, check digit per country)';
 COMMENT ON COLUMN deposit_account.iban IS 'IBAN where applicable';
 COMMENT ON COLUMN deposit_account.bban IS 'Basic bank account number';
 COMMENT ON COLUMN deposit_account.routing_code IS 'Sort code / routing number / IFSC / CLABE prefix';
@@ -117,6 +119,8 @@ COMMENT ON COLUMN deposit_account.purpose IS 'Declared account purpose';
 COMMENT ON COLUMN deposit_account.source_of_funds IS 'Declared source of funds';
 COMMENT ON COLUMN deposit_account.expected_monthly_volume IS 'Declared expected monthly turnover (AML profile)';
 COMMENT ON COLUMN deposit_account.external_ref IS 'Client or migration reference';
+COMMENT ON COLUMN deposit_account.product_terms IS 'Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees, withholding_tax_rate, overdraft)';
+COMMENT ON COLUMN deposit_account.pending_product_change IS 'Scheduled product change (product_id, product_version_id, effective_date, product_terms)';
 COMMENT ON COLUMN deposit_account.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN deposit_account.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN deposit_account.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -235,7 +239,7 @@ COMMENT ON COLUMN account_mandate.min_amount IS 'Applies from this amount';
 COMMENT ON COLUMN account_mandate.max_amount IS 'Applies up to this amount';
 COMMENT ON COLUMN account_mandate.rule IS 'Approval rule';
 COMMENT ON COLUMN account_mandate.required_approvals IS 'Number of approvals for CUSTOM';
-COMMENT ON COLUMN account_mandate.approver_groups IS 'Signing groups required, e.g. [[A],[A,B]]';
+COMMENT ON COLUMN account_mandate.approver_groups IS 'Alternative signing-group combinations for CUSTOM, each a list of groups, e.g. [[A],[A,B]]';
 COMMENT ON COLUMN account_mandate.valid_from IS 'Start date';
 COMMENT ON COLUMN account_mandate.valid_to IS 'End date';
 COMMENT ON COLUMN account_mandate.document_id IS 'Board resolution or signed mandate';
@@ -668,6 +672,7 @@ CREATE TABLE term_deposit (
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_FUNDING' CHECK (status IN ('PENDING_FUNDING', 'ACTIVE', 'MATURED', 'ROLLED_OVER', 'BROKEN', 'CLOSED', 'CANCELLED')),
   certificate_document_id      uuid,
   previous_deposit_id          uuid REFERENCES term_deposit(id),
+  product_terms                jsonb,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -685,7 +690,7 @@ COMMENT ON COLUMN term_deposit.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN term_deposit.updated_at IS 'Last update time';
 COMMENT ON COLUMN term_deposit.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN term_deposit.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN term_deposit.deposit_number IS 'Deposit reference number';
+COMMENT ON COLUMN term_deposit.deposit_number IS 'Deposit reference number (server-generated)';
 COMMENT ON COLUMN term_deposit.customer_id IS 'Customer';
 COMMENT ON COLUMN term_deposit.product_id IS 'Product';
 COMMENT ON COLUMN term_deposit.product_version_id IS 'Version pinned';
@@ -710,6 +715,7 @@ COMMENT ON COLUMN term_deposit.has_lien IS 'Pledged as collateral';
 COMMENT ON COLUMN term_deposit.status IS 'Status';
 COMMENT ON COLUMN term_deposit.certificate_document_id IS 'Deposit certificate';
 COMMENT ON COLUMN term_deposit.previous_deposit_id IS 'Deposit it rolled over from';
+COMMENT ON COLUMN term_deposit.product_terms IS 'Product terms pinned from the catalog at placement (copied on rollover)';
 COMMENT ON COLUMN term_deposit.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN term_deposit.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN term_deposit.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -1209,7 +1215,9 @@ CREATE TABLE cheque_book (
   last_cheque_no               varchar(16) NOT NULL,
   delivery_branch_id           uuid,
   status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'PRINTED', 'DISPATCHED', 'ACTIVE', 'EXHAUSTED', 'CANCELLED')),
+  dispatch_reference           varchar(64),
   dispatched_at                timestamptz,
+  activated_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -1230,7 +1238,9 @@ COMMENT ON COLUMN cheque_book.first_cheque_no IS 'First serial';
 COMMENT ON COLUMN cheque_book.last_cheque_no IS 'Last serial';
 COMMENT ON COLUMN cheque_book.delivery_branch_id IS 'Collection branch';
 COMMENT ON COLUMN cheque_book.status IS 'Status';
+COMMENT ON COLUMN cheque_book.dispatch_reference IS 'Courier / dispatch tracking reference';
 COMMENT ON COLUMN cheque_book.dispatched_at IS 'Dispatch time';
+COMMENT ON COLUMN cheque_book.activated_at IS 'Time the customer confirmed receipt and the book was activated';
 COMMENT ON COLUMN cheque_book.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cheque_book.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cheque_book.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -1347,7 +1357,7 @@ COMMENT ON COLUMN virtual_account.updated_at IS 'Last update time';
 COMMENT ON COLUMN virtual_account.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN virtual_account.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN virtual_account.master_account_id IS 'Real account receiving the funds';
-COMMENT ON COLUMN virtual_account.virtual_account_number IS 'Virtual account number';
+COMMENT ON COLUMN virtual_account.virtual_account_number IS 'Virtual account number (server-generated)';
 COMMENT ON COLUMN virtual_account.iban IS 'Virtual IBAN';
 COMMENT ON COLUMN virtual_account.purpose IS 'Purpose';
 COMMENT ON COLUMN virtual_account.owner_customer_id IS 'End customer (e.g. marketplace seller)';
@@ -1371,6 +1381,54 @@ CREATE INDEX ix_virtual_account_owner_reference ON virtual_account (owner_refere
 ALTER TABLE virtual_account ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON virtual_account USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_virtual_account_touch BEFORE UPDATE ON virtual_account FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- deposit_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE deposit_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('INTEREST_ACCRUAL', 'PRODUCT_CHANGES', 'MATURITY_PROCESSING', 'STANDING_ORDERS', 'POT_RULES', 'SWEEPS', 'DORMANCY_SCAN')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_deposit_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE deposit_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN deposit_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN deposit_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN deposit_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN deposit_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN deposit_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN deposit_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN deposit_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN deposit_eod_run.job IS 'Job';
+COMMENT ON COLUMN deposit_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN deposit_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN deposit_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN deposit_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN deposit_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN deposit_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN deposit_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN deposit_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN deposit_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN deposit_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN deposit_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_deposit_eod_run_tenant ON deposit_eod_run (tenant_id, created_at);
+ALTER TABLE deposit_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON deposit_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_deposit_eod_run_touch BEFORE UPDATE ON deposit_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

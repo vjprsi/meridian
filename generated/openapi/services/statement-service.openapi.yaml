@@ -197,8 +197,15 @@ components:
           format: uuid
           type: string
         document_id:
-          description: Generated file
+          description: Generated file registered with document-service
           format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        failure_reason:
+          description: Why generation failed (status FAILED)
+          maxLength: 500
           readOnly: true
           type:
           - string
@@ -280,8 +287,9 @@ components:
           readOnly: true
           type: integer
         statement_no:
-          description: Sequential statement number per account
+          description: Sequential statement number per account (server-assigned; shared by all formats of one period)
           format: int32
+          readOnly: true
           type: integer
         status:
           description: Generation status
@@ -393,13 +401,8 @@ components:
           description: First day
           format: date
           type: string
-        statement_no:
-          description: Sequential statement number per account
-          format: int32
-          type: integer
       required:
       - deposit_account_id
-      - statement_no
       - period_start
       - period_end
       - currency
@@ -634,9 +637,9 @@ components:
           - string
           - 'null'
         formats:
-          additionalProperties: true
-          description: StatementFormat values to generate
-          type: object
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+          items: {}
+          type: array
         frequency:
           description: Cycle
           enum:
@@ -747,9 +750,9 @@ components:
           maxLength: 320
           type: string
         formats:
-          additionalProperties: true
-          description: StatementFormat values to generate
-          type: object
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+          items: {}
+          type: array
         frequency:
           description: Cycle
           enum:
@@ -843,9 +846,9 @@ components:
           maxLength: 320
           type: string
         formats:
-          additionalProperties: true
-          description: StatementFormat values to generate
-          type: object
+          description: StatementFormat values to generate, e.g. [PDF, CSV]
+          items: {}
+          type: array
         frequency:
           description: Cycle
           enum:
@@ -1359,7 +1362,55 @@ paths:
   /v1/statements/{id}/download:
     get:
       operationId: statementsDownload
-      summary: Signed URL to download the statement file
+      summary: Statement file; Content-Type follows the format (application/pdf, text/csv, application/xml, text/plain, application/x-ofx,
+        application/json); expires and signature come from download-link
+      tags:
+      - Statements
+      security:
+      - oauth2:
+        - accounts:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: expires
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: signature
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      x-service: statement-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
+      x-table: statement
+  /v1/statements/{id}/download-link:
+    get:
+      operationId: statementsDownloadLink
+      summary: Signed, expiring download URL (url, expires_at, checksum)
       tags:
       - Statements
       security:
@@ -1373,8 +1424,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1455,6 +1512,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Statement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - DEP-06
+      x-service: statement-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-table: statement
+  /v1/statements/cycle:
+    post:
+      operationId: statementsCycle
+      summary: End of day - generate and deliver statements for schedules whose cycle ends on business_date (idempotent per
+        business date)
+      tags:
+      - Statements
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1828,7 +1927,54 @@ paths:
   /v1/tax-certificates/{id}/download:
     get:
       operationId: taxCertificatesDownload
-      summary: Signed URL to download the certificate
+      summary: Certificate (printable text); expires and signature come from download-link
+      tags:
+      - Tax Certificates
+      security:
+      - oauth2:
+        - accounts:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: expires
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: signature
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - PRC-03
+      x-service: statement-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:read")'
+      x-table: tax_certificate
+  /v1/tax-certificates/{id}/download-link:
+    get:
+      operationId: taxCertificatesDownloadLink
+      summary: Signed, expiring download URL (url, expires_at)
       tags:
       - Tax Certificates
       security:
@@ -1842,8 +1988,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

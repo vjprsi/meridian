@@ -170,12 +170,12 @@ components:
           - string
           - 'null'
         entity_types:
-          additionalProperties: true
-          description: Entity types searched
-          type: object
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
+          items: {}
+          type: array
         filters:
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
           type:
           - object
           - 'null'
@@ -216,10 +216,10 @@ components:
           - string
           - 'null'
         sort:
-          additionalProperties: true
-          description: Sort order
+          description: Sort order, e.g. [-score, title]
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         updated_at:
           description: Last update time
@@ -270,12 +270,12 @@ components:
           maxLength: 500
           type: string
         entity_types:
-          additionalProperties: true
-          description: Entity types searched
-          type: object
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
+          items: {}
+          type: array
         filters:
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
           type: object
         is_pinned:
           description: Pinned in the console
@@ -293,9 +293,9 @@ components:
           format: uuid
           type: string
         sort:
-          additionalProperties: true
-          description: Sort order
-          type: object
+          description: Sort order, e.g. [-score, title]
+          items: {}
+          type: array
       required:
       - app_user_id
       - name
@@ -346,12 +346,12 @@ components:
           maxLength: 500
           type: string
         entity_types:
-          additionalProperties: true
-          description: Entity types searched
-          type: object
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
+          items: {}
+          type: array
         filters:
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
           type: object
         is_pinned:
           description: Pinned in the console
@@ -369,9 +369,9 @@ components:
           format: uuid
           type: string
         sort:
-          additionalProperties: true
-          description: Sort order
-          type: object
+          description: Sort order, e.g. [-score, title]
+          items: {}
+          type: array
       type: object
     SavedSearchesRunRequest:
       properties:
@@ -381,6 +381,14 @@ components:
         limit:
           format: int32
           type: integer
+      type: object
+    SearchDocumentsRequest:
+      properties:
+        documents:
+          items: {}
+          type: array
+      required:
+      - documents
       type: object
     SearchIndex:
       description: Definition of a searchable index for one entity type
@@ -483,10 +491,10 @@ components:
           format: int32
           type: integer
         masked_fields:
-          additionalProperties: true
           description: Fields masked unless the caller holds a PII permission
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         physical_index:
           description: Current physical index behind the alias
@@ -499,13 +507,13 @@ components:
           readOnly: true
           type: integer
         searchable_fields:
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
-          type: object
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
+          items: {}
+          type: array
         source_topics:
-          additionalProperties: true
-          description: Event topics feeding the index
-          type: object
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
+          items: {}
+          type: array
         status:
           description: Status
           enum:
@@ -594,17 +602,17 @@ components:
           format: int32
           type: integer
         masked_fields:
-          additionalProperties: true
           description: Fields masked unless the caller holds a PII permission
-          type: object
+          items: {}
+          type: array
         searchable_fields:
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
-          type: object
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
+          items: {}
+          type: array
         source_topics:
-          additionalProperties: true
-          description: Event topics feeding the index
-          type: object
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
+          items: {}
+          type: array
       required:
       - entity_type
       - alias_name
@@ -846,17 +854,17 @@ components:
           format: int32
           type: integer
         masked_fields:
-          additionalProperties: true
           description: Fields masked unless the caller holds a PII permission
-          type: object
+          items: {}
+          type: array
         searchable_fields:
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
-          type: object
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
+          items: {}
+          type: array
         source_topics:
-          additionalProperties: true
-          description: Event topics feeding the index
-          type: object
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
+          items: {}
+          type: array
       type: object
     SearchIndexesCatchUpRequest:
       properties:
@@ -872,8 +880,8 @@ components:
           maxLength: 255
           type: string
         entity_types:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
         filters:
           additionalProperties: true
           type: object
@@ -955,9 +963,9 @@ components:
           - string
           - 'null'
         terms:
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
-          type: object
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
+          items: {}
+          type: array
         updated_at:
           description: Last update time
           format: date-time
@@ -1012,9 +1020,9 @@ components:
           format: uuid
           type: string
         terms:
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
-          type: object
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
+          items: {}
+          type: array
       required:
       - terms
       type: object
@@ -1070,9 +1078,9 @@ components:
           format: uuid
           type: string
         terms:
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
-          type: object
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
+          items: {}
+          type: array
       type: object
   securitySchemes:
     oauth2:
@@ -1104,7 +1112,7 @@ paths:
   /v1/search/query:
     post:
       operationId: searchQuery
-      summary: Search across entity types (free text + filters, paged)
+      summary: Search across entity types (free text + filters, paged; read-only, never replayed)
       tags:
       - Search
       security:
@@ -1113,8 +1121,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -1143,16 +1157,53 @@ paths:
   /v1/search/suggest:
     get:
       operationId: searchSuggest
-      summary: Type-ahead suggestions (?q=&entity_type=)
+      summary: 'Type-ahead suggestions on titles (q: 2+ characters, limit max 25)'
       tags:
       - Search
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+      - name: entity_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1163,6 +1214,93 @@ paths:
       - OPS-03
       x-service: search-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-table: search_index
+  /v1/search/documents:
+    post:
+      operationId: searchDocuments
+      summary: Index entity documents pushed by owning services or the CDC consumer (1..500 per call; each entity_type, entity_id,
+        document or deleted, event_id, version, occurred_at)
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchDocumentsRequest'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: search_index
+  /v1/search/documents/{entity_type}/{entity_ref}:
+    delete:
+      operationId: searchRemoveDocuments
+      summary: Remove an entity (entity_ref = its id in the owning service) from its search index
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: entity_type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entity_ref
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
       x-table: search_index
   /v1/search/indexes:
     get:
@@ -2067,7 +2205,7 @@ paths:
   /v1/search/saved/{id}/run:
     post:
       operationId: savedSearchesRun
-      summary: Execute a saved search
+      summary: Execute a saved search (read-only, never replayed)
       tags:
       - Saved Searches
       security:
@@ -2082,8 +2220,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

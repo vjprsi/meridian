@@ -141,6 +141,27 @@ components:
           description: Monotonic token to reject stale holders
           format: int64
           type: integer
+        force_release_reason:
+          description: Why the lock was force-released
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        force_released_at:
+          description: When an operator last force-released the lock
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        force_released_by:
+          description: Operator who force-released the lock
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         holder:
           description: Instance id holding the lock
           maxLength: 128
@@ -203,7 +224,7 @@ components:
     BatchJobLocksForceReleaseRequest:
       properties:
         reason:
-          maxLength: 255
+          maxLength: 500
           type: string
       required:
       - reason
@@ -284,6 +305,7 @@ components:
           type: string
         is_current:
           description: True for the open business date of the entity
+          readOnly: true
           type: boolean
         is_month_end:
           description: EOM processing applies
@@ -325,13 +347,14 @@ components:
           readOnly: true
           type: integer
         state:
-          description: Processing state
+          description: Processing state (changed by actions only)
           enum:
           - OPEN
           - CUT_OFF
           - EOD_RUNNING
           - EOD_FAILED
           - CLOSED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -358,6 +381,48 @@ components:
       - is_month_end
       - is_quarter_end
       - is_year_end
+      type: object
+    BusinessDayCreate:
+      properties:
+        business_date:
+          description: Business date
+          format: date
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        holiday_calendar_id:
+          description: Calendar used to compute the next business date
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        notes:
+          description: Operator notes
+          maxLength: 500
+          type: string
+      required:
+      - legal_entity_id
+      - business_date
       type: object
     BusinessDayPage:
       description: One page of BusinessDay results (newest first)
@@ -520,8 +585,25 @@ components:
       - has_more
       type: object
     EodJobDefinition:
-      description: A step in an end-of-period job graph, executed by an owning service
+      description: 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every
+        tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id
+        (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every
+        retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id},
+        {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted
+        (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context
+        (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end,
+        is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service
+        POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed,
+        records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+
+        '
       properties:
+        body_template:
+          additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+          type:
+          - object
+          - 'null'
         code:
           description: Job code, e.g. DEP_INTEREST_ACCRUAL
           maxLength: 64
@@ -569,19 +651,15 @@ components:
           - string
           - 'null'
         cycle_types:
-          additionalProperties: true
           description: Cycles the job runs in, e.g. [EOD, EOM]
-          type: object
+          items: {}
+          type: array
         depends_on:
-          additionalProperties: true
           description: Codes of jobs that must finish first
+          items: {}
           type:
-          - object
+          - array
           - 'null'
-        endpoint:
-          description: Internal command/topic the orchestrator invokes
-          maxLength: 255
-          type: string
         failure_policy:
           description: What happens on final failure
           enum:
@@ -589,6 +667,18 @@ components:
           - CONTINUE
           - RETRY_THEN_STOP
           - RETRY_THEN_CONTINUE
+          type: string
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+          maxLength: 500
           type: string
         id:
           description: Unique id (UUIDv7, time-ordered)
@@ -692,7 +782,8 @@ components:
       - job_type
       - cycle_types
       - owning_service
-      - endpoint
+      - http_method
+      - http_path
       - sequence
       - parallelism
       - timeout_minutes
@@ -703,6 +794,10 @@ components:
       type: object
     EodJobDefinitionCreate:
       properties:
+        body_template:
+          additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+          type: object
         code:
           description: Job code, e.g. DEP_INTEREST_ACCRUAL
           maxLength: 64
@@ -728,17 +823,13 @@ components:
           maxLength: 500
           type: string
         cycle_types:
-          additionalProperties: true
           description: Cycles the job runs in, e.g. [EOD, EOM]
-          type: object
+          items: {}
+          type: array
         depends_on:
-          additionalProperties: true
           description: Codes of jobs that must finish first
-          type: object
-        endpoint:
-          description: Internal command/topic the orchestrator invokes
-          maxLength: 255
-          type: string
+          items: {}
+          type: array
         failure_policy:
           description: What happens on final failure
           enum:
@@ -746,6 +837,18 @@ components:
           - CONTINUE
           - RETRY_THEN_STOP
           - RETRY_THEN_CONTINUE
+          type: string
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+          maxLength: 500
           type: string
         is_active:
           description: Active
@@ -817,7 +920,7 @@ components:
       - job_type
       - cycle_types
       - owning_service
-      - endpoint
+      - http_path
       type: object
     EodJobDefinitionPage:
       description: One page of EodJobDefinition results (newest first)
@@ -839,6 +942,10 @@ components:
       type: object
     EodJobDefinitionUpdate:
       properties:
+        body_template:
+          additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+          type: object
         code:
           description: Job code, e.g. DEP_INTEREST_ACCRUAL
           maxLength: 64
@@ -864,17 +971,13 @@ components:
           maxLength: 500
           type: string
         cycle_types:
-          additionalProperties: true
           description: Cycles the job runs in, e.g. [EOD, EOM]
-          type: object
+          items: {}
+          type: array
         depends_on:
-          additionalProperties: true
           description: Codes of jobs that must finish first
-          type: object
-        endpoint:
-          description: Internal command/topic the orchestrator invokes
-          maxLength: 255
-          type: string
+          items: {}
+          type: array
         failure_policy:
           description: What happens on final failure
           enum:
@@ -882,6 +985,18 @@ components:
           - CONTINUE
           - RETRY_THEN_STOP
           - RETRY_THEN_CONTINUE
+          type: string
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+          maxLength: 500
           type: string
         is_active:
           description: Active
@@ -1397,16 +1512,24 @@ components:
           type:
           - string
           - 'null'
-        endpoint:
-          description: Command/topic invoked
-          maxLength: 255
-          type: string
         holiday_calendar_id:
           description: Calendar for business-day checks
           format: uuid
           type:
           - string
           - 'null'
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
+          maxLength: 500
+          type: string
         id:
           description: Unique id (UUIDv7, time-ordered)
           format: uuid
@@ -1493,7 +1616,8 @@ components:
       - code
       - name
       - owning_service
-      - endpoint
+      - http_method
+      - http_path
       - cron_expression
       - time_zone
       - business_days_only
@@ -1533,13 +1657,21 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
           type: string
-        endpoint:
-          description: Command/topic invoked
-          maxLength: 255
-          type: string
         holiday_calendar_id:
           description: Calendar for business-day checks
           format: uuid
+          type: string
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
+          maxLength: 500
           type: string
         misfire_policy:
           description: RUN_ONCE, SKIP or RUN_ALL after downtime
@@ -1572,7 +1704,7 @@ components:
       - code
       - name
       - owning_service
-      - endpoint
+      - http_path
       - cron_expression
       type: object
     JobSchedulePage:
@@ -1742,13 +1874,21 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
           type: string
-        endpoint:
-          description: Command/topic invoked
-          maxLength: 255
-          type: string
         holiday_calendar_id:
           description: Calendar for business-day checks
           format: uuid
+          type: string
+        http_method:
+          description: HTTP method of the job endpoint
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          type: string
+        http_path:
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
+          maxLength: 500
           type: string
         misfire_policy:
           description: RUN_ONCE, SKIP or RUN_ALL after downtime
@@ -1933,6 +2073,45 @@ paths:
       x-table: business_day
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: businessDaysCreate
+      summary: Create business day
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDayCreate'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: business_day
+      x-crud: true
+      x-crud-create: true
   /v1/operations/business-days/{id}:
     get:
       operationId: businessDaysGet
@@ -1973,13 +2152,19 @@ paths:
   /v1/operations/business-days/current:
     get:
       operationId: businessDaysCurrent
-      summary: Current business date per legal entity (?legal_entity_id=)
+      summary: Current business date of a legal entity (required when several entities have an open date)
       tags:
       - Business Days
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK
@@ -2431,16 +2616,39 @@ paths:
   /v1/operations/eod-jobs/graph:
     get:
       operationId: eodJobDefinitionsGraph
-      summary: Dependency graph of jobs for a cycle (?cycle_type=)
+      summary: Dependency graph (nodes, edges, execution levels) of the jobs of a cycle
       tags:
       - Eod Job Definitions
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: cycle_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EOD
+          - EOM
+          - EOQ
+          - EOY
+          - INTRADAY
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2457,7 +2665,7 @@ paths:
   /v1/operations/eod-jobs/validate:
     post:
       operationId: eodJobDefinitionsValidate
-      summary: Validate the graph for cycles and missing dependencies
+      summary: Validate the graph for cycles and missing dependencies and plan every cycle
       tags:
       - Eod Job Definitions
       security:
@@ -2466,8 +2674,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3513,7 +3727,7 @@ paths:
   /v1/operations/batch-locks/{id}/force-release:
     post:
       operationId: batchJobLocksForceRelease
-      summary: Force-release a stale lock
+      summary: Force-release a stale lock (expires the lease and bumps the fencing token)
       tags:
       - Batch Job Locks
       security:
@@ -3528,8 +3742,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobLock'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3561,7 +3779,18 @@ servers:
 tags:
 - description: Current and historical business date per legal entity with its processing state
   name: Business Days
-- description: A step in an end-of-period job graph, executed by an owning service
+- description: 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every
+    tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id
+    (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry
+    of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id}, {cycle_type},
+    {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted (URL-encoded)
+    in http_path and in the string values of body_template. Without body_template the body is the job context (eod_run_id,
+    eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end,
+    partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service POST /v1/deposit-accounts/eod/accrue?business_date={business_date}.
+    The job answers 2xx with optional records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried
+    per the failure policy, other 4xx fail the job.
+
+    '
   name: Eod Job Definitions
 - description: Execution of a full end-of-period cycle for one legal entity and business date
   name: Eod Runs

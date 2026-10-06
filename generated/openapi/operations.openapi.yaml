@@ -20,7 +20,18 @@ tags:
 - name: Business Days
   description: Current and historical business date per legal entity with its processing state
 - name: Eod Job Definitions
-  description: A step in an end-of-period job graph, executed by an owning service
+  description: 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every
+    tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id
+    (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every retry
+    of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id}, {cycle_type},
+    {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted (URL-encoded)
+    in http_path and in the string values of body_template. Without body_template the body is the job context (eod_run_id,
+    eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end, is_year_end,
+    partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service POST /v1/deposit-accounts/eod/accrue?business_date={business_date}.
+    The job answers 2xx with optional records_processed, records_failed and checkpoint; 408, 409, 429 and 5xx are retried
+    per the failure policy, other 4xx fail the job.
+
+    '
 - name: Eod Runs
   description: Execution of a full end-of-period cycle for one legal entity and business date
 - name: Eod Job Runs
@@ -43,6 +54,8 @@ tags:
   description: A file generated for and delivered to a counterparty
 - name: File Transfer Logs
   description: Immutable audit of every action on a file or channel
+- name: Files
+  description: Object-store access through pre-signed links
 - name: Search
   description: Federated search across entity types with masking by caller permissions
 - name: Search Indexes
@@ -152,6 +165,45 @@ paths:
       x-table: business_day
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: businessDaysCreate
+      summary: Create business day
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDayCreate'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: business_day
+      x-crud: true
+      x-crud-create: true
   /v1/operations/business-days/{id}:
     get:
       operationId: businessDaysGet
@@ -192,13 +244,19 @@ paths:
   /v1/operations/business-days/current:
     get:
       operationId: businessDaysCurrent
-      summary: Current business date per legal entity (?legal_entity_id=)
+      summary: Current business date of a legal entity (required when several entities have an open date)
       tags:
       - Business Days
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK
@@ -650,16 +708,39 @@ paths:
   /v1/operations/eod-jobs/graph:
     get:
       operationId: eodJobDefinitionsGraph
-      summary: Dependency graph of jobs for a cycle (?cycle_type=)
+      summary: Dependency graph (nodes, edges, execution levels) of the jobs of a cycle
       tags:
       - Eod Job Definitions
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: cycle_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EOD
+          - EOM
+          - EOQ
+          - EOY
+          - INTRADAY
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -676,7 +757,7 @@ paths:
   /v1/operations/eod-jobs/validate:
     post:
       operationId: eodJobDefinitionsValidate
-      summary: Validate the graph for cycles and missing dependencies
+      summary: Validate the graph for cycles and missing dependencies and plan every cycle
       tags:
       - Eod Job Definitions
       security:
@@ -685,8 +766,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1732,7 +1819,7 @@ paths:
   /v1/operations/batch-locks/{id}/force-release:
     post:
       operationId: batchJobLocksForceRelease
-      summary: Force-release a stale lock
+      summary: Force-release a stale lock (expires the lease and bumps the fencing token)
       tags:
       - Batch Job Locks
       security:
@@ -1747,8 +1834,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobLock'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2002,8 +2093,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2022,7 +2119,7 @@ paths:
   /v1/files/channels/{id}/poll-now:
     post:
       operationId: fileChannelsPollNow
-      summary: Poll the remote inbound folder now
+      summary: Poll the remote inbound folder now and receive new files
       tags:
       - File Channels
       security:
@@ -2037,8 +2134,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2343,7 +2446,7 @@ paths:
   /v1/files/formats/{id}/validate-sample:
     post:
       operationId: fileFormatsValidateSample
-      summary: Parse an uploaded sample against the layout
+      summary: Parse a sample (document_id, or inline content / content_base64) against the layout
       tags:
       - File Formats
       security:
@@ -2358,8 +2461,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2724,44 +2833,6 @@ paths:
       x-table: inbound_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: inboundFilesCreate
-      summary: Create inbound file
-      tags:
-      - Inbound Files
-      security:
-      - oauth2:
-        - operations:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InboundFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InboundFileCreate'
-      x-requirements:
-      - OPS-02
-      x-service: file-gateway-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
-      x-table: inbound_file
-      x-crud: true
-      x-crud-create: true
   /v1/files/inbound/{id}:
     get:
       operationId: inboundFilesGet
@@ -2798,6 +2869,46 @@ paths:
       x-table: inbound_file
       x-crud: true
       x-crud-get: true
+  /v1/files/inbound/upload:
+    post:
+      operationId: inboundFilesUpload
+      summary: Receive a file pushed by a counterparty (inline content, content_base64, or content_url fetched by the gateway)
+        and run the pipeline
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundFilesUploadRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: inbound_file
   /v1/files/inbound/{id}/reprocess:
     post:
       operationId: inboundFilesReprocess
@@ -2885,7 +2996,7 @@ paths:
   /v1/files/inbound/{id}/download:
     get:
       operationId: inboundFilesDownload
-      summary: Signed URL for the raw file
+      summary: Pre-signed URL for the raw file (url, expires_at, checksum)
       tags:
       - Inbound Files
       security:
@@ -2899,8 +3010,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3036,45 +3153,6 @@ paths:
       x-table: outbound_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: outboundFilesCreate
-      summary: Create outbound file
-      tags:
-      - Outbound Files
-      security:
-      - oauth2:
-        - operations:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OutboundFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OutboundFileCreate'
-      x-requirements:
-      - DEP-06
-      - OPS-02
-      x-service: file-gateway-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
-      x-table: outbound_file
-      x-crud: true
-      x-crud-create: true
   /v1/files/outbound/{id}:
     get:
       operationId: outboundFilesGet
@@ -3112,6 +3190,46 @@ paths:
       x-table: outbound_file
       x-crud: true
       x-crud-get: true
+  /v1/files/outbound/generate:
+    post:
+      operationId: outboundFilesGenerate
+      summary: Generate a file from records (rendered with the format layout) or inline content and deliver it
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFilesGenerateRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: outbound_file
   /v1/files/outbound/{id}/redeliver:
     post:
       operationId: outboundFilesRedeliver
@@ -3253,7 +3371,7 @@ paths:
   /v1/files/outbound/{id}/download:
     get:
       operationId: outboundFilesDownload
-      summary: Signed URL for the generated file
+      summary: Pre-signed URL for the generated file (url, expires_at, checksum)
       tags:
       - Outbound Files
       security:
@@ -3267,8 +3385,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3412,10 +3536,58 @@ paths:
       x-table: file_transfer_log
       x-crud: true
       x-crud-get: true
+  /v1/files/blobs:
+    get:
+      operationId: filesBlobs
+      summary: Download a file through a pre-signed link issued by a download operation (the HMAC signature and expiry authorise
+        the request)
+      tags:
+      - Files
+      security: []
+      parameters:
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 1000
+      - name: expires
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: signature
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: inbound_file
   /v1/search/query:
     post:
       operationId: searchQuery
-      summary: Search across entity types (free text + filters, paged)
+      summary: Search across entity types (free text + filters, paged; read-only, never replayed)
       tags:
       - Search
       security:
@@ -3424,8 +3596,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3450,16 +3628,53 @@ paths:
   /v1/search/suggest:
     get:
       operationId: searchSuggest
-      summary: Type-ahead suggestions (?q=&entity_type=)
+      summary: 'Type-ahead suggestions on titles (q: 2+ characters, limit max 25)'
       tags:
       - Search
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+      - name: entity_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3470,6 +3685,93 @@ paths:
       - OPS-03
       x-service: search-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-table: search_index
+  /v1/search/documents:
+    post:
+      operationId: searchDocuments
+      summary: Index entity documents pushed by owning services or the CDC consumer (1..500 per call; each entity_type, entity_id,
+        document or deleted, event_id, version, occurred_at)
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchDocumentsRequest'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: search_index
+  /v1/search/documents/{entity_type}/{entity_ref}:
+    delete:
+      operationId: searchRemoveDocuments
+      summary: Remove an entity (entity_ref = its id in the owning service) from its search index
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: entity_type
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entity_ref
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
       x-table: search_index
   /v1/search/indexes:
     get:
@@ -4374,7 +4676,7 @@ paths:
   /v1/search/saved/{id}/run:
     post:
       operationId: savedSearchesRun
-      summary: Execute a saved search
+      summary: Execute a saved search (read-only, never replayed)
       tags:
       - Saved Searches
       security:
@@ -4389,8 +4691,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4615,17 +4923,28 @@ paths:
   /v1/archive/classifications/scan:
     post:
       operationId: dataClassificationsScan
-      summary: Discover tables and suggest classifications from the spec catalogue
+      summary: Discover tables and suggest classifications from the spec catalogue (apply=true stores new suggestions)
       tags:
       - Data Classifications
       security:
       - oauth2:
         - operations:write
       parameters:
+      - name: apply
+        in: query
+        required: false
+        schema:
+          type: boolean
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4851,8 +5170,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5223,8 +5548,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5250,7 +5581,7 @@ paths:
   /v1/archive/objects/{id}/verify:
     post:
       operationId: archivedObjectsVerify
-      summary: Verify checksum and object-lock of an archive
+      summary: Verify checksum and object-lock of an archive (re-run on every call)
       tags:
       - Archived Objects
       security:
@@ -5265,8 +5596,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5532,16 +5869,40 @@ paths:
   /v1/archive/legal-holds/check:
     get:
       operationId: legalHoldsCheck
-      summary: Check whether an entity is under hold (?scope_type=&id=)
+      summary: Check whether an entity is under hold
       tags:
       - Legal Holds
       security:
       - oauth2:
         - operations:read
-      parameters: []
+      parameters:
+      - name: scope_type
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5586,6 +5947,7 @@ paths:
           - COMPLETED
           - FAILED
           - BLOCKED_BY_HOLD
+          - CANCELLED
       - name: data_classification_id
         in: query
         schema:
@@ -5751,6 +6113,92 @@ paths:
       x-service: archive-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
       x-table: purge_request
+  /v1/archive/purge-requests/{id}/approve:
+    post:
+      operationId: purgeRequestsApprove
+      summary: 'Approve a pending purge (four-eyes: the approver differs from the requester)'
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: purge_request
+  /v1/archive/purge-requests/{id}/reject:
+    post:
+      operationId: purgeRequestsReject
+      summary: Reject a pending purge
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurgeRequestsRejectRequest'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-table: purge_request
   /v1/archive/purge-requests/{id}/execute:
     post:
       operationId: purgeRequestsExecute
@@ -5794,7 +6242,7 @@ paths:
   /v1/archive/purge-requests/{id}/cancel:
     post:
       operationId: purgeRequestsCancel
-      summary: Cancel the request
+      summary: Cancel the request before execution
       tags:
       - Purge Requests
       security:
@@ -5840,7 +6288,7 @@ paths:
   /v1/archive/purge-requests/{id}/certificate:
     get:
       operationId: purgeRequestsCertificate
-      summary: Signed URL of the certificate of destruction
+      summary: Certificate of destruction with its hash verification
       tags:
       - Purge Requests
       security:
@@ -5854,8 +6302,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6194,7 +6648,7 @@ components:
       properties:
         reason:
           type: string
-          maxLength: 255
+          maxLength: 500
       required:
       - reason
     FileChannelPage:
@@ -6255,8 +6709,10 @@ components:
         document_id:
           type: string
           format: uuid
-      required:
-      - document_id
+        content:
+          type: string
+        content_base64:
+          type: string
     FileRoutePage:
       type: object
       description: One page of FileRoute results (newest first)
@@ -6304,6 +6760,37 @@ components:
       required:
       - data
       - has_more
+    InboundFilesUploadRequest:
+      type: object
+      properties:
+        file_channel_id:
+          type: string
+          format: uuid
+        original_file_name:
+          type: string
+          maxLength: 255
+        remote_path:
+          type: string
+          maxLength: 500
+        file_route_id:
+          type: string
+          format: uuid
+        file_format_definition_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        content_base64:
+          type: string
+        content_url:
+          type: string
+          maxLength: 1000
+      required:
+      - file_channel_id
+      - original_file_name
     InboundFilesReleaseQuarantineRequest:
       type: object
       properties:
@@ -6348,6 +6835,40 @@ components:
       required:
       - data
       - has_more
+    OutboundFilesGenerateRequest:
+      type: object
+      properties:
+        file_channel_id:
+          type: string
+          format: uuid
+        file_format_definition_id:
+          type: string
+          format: uuid
+        requested_by_service:
+          type: string
+          maxLength: 64
+        source_reference:
+          type: string
+          maxLength: 128
+        file_name:
+          type: string
+          maxLength: 255
+        encrypt:
+          type: boolean
+        scheduled_for:
+          type: string
+          format: date-time
+        records:
+          type: array
+          items: {}
+        content:
+          type: string
+        content_base64:
+          type: string
+      required:
+      - file_channel_id
+      - requested_by_service
+      - file_name
     OutboundFilesRedeliverRequest:
       type: object
       properties:
@@ -6377,8 +6898,8 @@ components:
           type: string
           maxLength: 500
         entity_types:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
         filters:
           type: object
           additionalProperties: true
@@ -6388,6 +6909,14 @@ components:
         cursor:
           type: string
           maxLength: 255
+    SearchDocumentsRequest:
+      type: object
+      properties:
+        documents:
+          type: array
+          items: {}
+      required:
+      - documents
     SearchIndexPage:
       type: object
       description: One page of SearchIndex results (newest first)
@@ -6601,12 +7130,20 @@ components:
       required:
       - data
       - has_more
+    PurgeRequestsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     PurgeRequestsCancelRequest:
       type: object
       properties:
         reason:
           type: string
-          maxLength: 255
+          maxLength: 500
       required:
       - reason
     ArchiveJob:
@@ -6965,6 +7502,27 @@ components:
           type: integer
           format: int64
           description: Monotonic token to reject stale holders
+        force_released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When an operator last force-released the lock
+          readOnly: true
+        force_released_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator who force-released the lock
+          readOnly: true
+        force_release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the lock was force-released
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -7059,7 +7617,8 @@ components:
           - EOD_RUNNING
           - EOD_FAILED
           - CLOSED
-          description: Processing state
+          description: Processing state (changed by actions only)
+          readOnly: true
         holiday_calendar_id:
           type:
           - string
@@ -7069,6 +7628,7 @@ components:
         is_current:
           type: boolean
           description: True for the open business date of the entity
+          readOnly: true
         opened_at:
           type: string
           format: date-time
@@ -7156,6 +7716,48 @@ components:
       - is_month_end
       - is_quarter_end
       - is_year_end
+    BusinessDayCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        business_date:
+          type: string
+          format: date
+          description: Business date
+        holiday_calendar_id:
+          type: string
+          format: uuid
+          description: Calendar used to compute the next business date
+        notes:
+          type: string
+          maxLength: 500
+          description: Operator notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - legal_entity_id
+      - business_date
     DataClassification:
       type: object
       description: Catalogue entry classifying a table (or column set) by sensitivity and data class
@@ -7223,9 +7825,9 @@ components:
           description: Sensitivity
         pii_columns:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Columns holding personal data
         owner:
           type:
@@ -7316,8 +7918,8 @@ components:
           - SPECIAL_CATEGORY
           description: Sensitivity
         pii_columns:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Columns holding personal data
         owner:
           type: string
@@ -7388,8 +7990,8 @@ components:
           - SPECIAL_CATEGORY
           description: Sensitivity
         pii_columns:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Columns holding personal data
         owner:
           type: string
@@ -7516,7 +8118,18 @@ components:
       - forced
     EodJobDefinition:
       type: object
-      description: A step in an end-of-period job graph, executed by an owning service
+      description: 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every
+        tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id
+        (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every
+        retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id},
+        {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted
+        (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context
+        (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end,
+        is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service
+        POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed,
+        records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+
+        '
       properties:
         id:
           type: string
@@ -7589,22 +8202,36 @@ components:
           - CUSTOM
           description: Kind of job
         cycle_types:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Cycles the job runs in, e.g. [EOD, EOM]
         owning_service:
           type: string
           maxLength: 64
           description: Service that executes the job, e.g. deposit-service
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Internal command/topic the orchestrator invokes
-        depends_on:
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+        body_template:
           type:
           - object
           - 'null'
           additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+        depends_on:
+          type:
+          - array
+          - 'null'
+          items: {}
           description: Codes of jobs that must finish first
         sequence:
           type: integer
@@ -7688,7 +8315,8 @@ components:
       - job_type
       - cycle_types
       - owning_service
-      - endpoint
+      - http_method
+      - http_path
       - sequence
       - parallelism
       - timeout_minutes
@@ -7734,20 +8362,32 @@ components:
           - CUSTOM
           description: Kind of job
         cycle_types:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Cycles the job runs in, e.g. [EOD, EOM]
         owning_service:
           type: string
           maxLength: 64
           description: Service that executes the job, e.g. deposit-service
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Internal command/topic the orchestrator invokes
-        depends_on:
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+        body_template:
           type: object
           additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+        depends_on:
+          type: array
+          items: {}
           description: Codes of jobs that must finish first
         sequence:
           type: integer
@@ -7813,7 +8453,7 @@ components:
       - job_type
       - cycle_types
       - owning_service
-      - endpoint
+      - http_path
     EodJobDefinitionUpdate:
       type: object
       properties:
@@ -7852,20 +8492,32 @@ components:
           - CUSTOM
           description: Kind of job
         cycle_types:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Cycles the job runs in, e.g. [EOD, EOM]
         owning_service:
           type: string
           maxLength: 64
           description: Service that executes the job, e.g. deposit-service
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Internal command/topic the orchestrator invokes
-        depends_on:
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+        body_template:
           type: object
           additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+        depends_on:
+          type: array
+          items: {}
           description: Codes of jobs that must finish first
         sequence:
           type: integer
@@ -8388,12 +9040,28 @@ components:
           - 'null'
           maxLength: 128
           description: Login user
+        credential_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
         host_key_fingerprint:
           type:
           - string
           - 'null'
           maxLength: 128
           description: Expected SFTP host key fingerprint
+        pgp_encrypt_key_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault ref of counterparty public key for outbound encryption
+        pgp_decrypt_key_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault ref of our private key for inbound decryption
         pgp_sign:
           type: boolean
           description: Sign outbound files
@@ -8414,10 +9082,10 @@ components:
           description: Remove remote file after successful download
         ip_allowlist:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Allowed source IPs for push channels
+          items: {}
+          description: Allowed source IPs / CIDR blocks for push channels
         is_active:
           type: boolean
           description: Active
@@ -8475,6 +9143,7 @@ components:
       - counterparty_type
       - protocol
       - direction
+      - credential_secret_ref
       - pgp_sign
       - delete_after_download
       - is_active
@@ -8551,10 +9220,22 @@ components:
           type: string
           maxLength: 128
           description: Login user
+        credential_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
         host_key_fingerprint:
           type: string
           maxLength: 128
           description: Expected SFTP host key fingerprint
+        pgp_encrypt_key_ref:
+          type: string
+          maxLength: 255
+          description: Vault ref of counterparty public key for outbound encryption
+        pgp_decrypt_key_ref:
+          type: string
+          maxLength: 255
+          description: Vault ref of our private key for inbound decryption
         pgp_sign:
           type: boolean
           description: Sign outbound files
@@ -8570,9 +9251,9 @@ components:
           type: boolean
           description: Remove remote file after successful download
         ip_allowlist:
-          type: object
-          additionalProperties: true
-          description: Allowed source IPs for push channels
+          type: array
+          items: {}
+          description: Allowed source IPs / CIDR blocks for push channels
         is_active:
           type: boolean
           description: Active
@@ -8602,6 +9283,7 @@ components:
       - counterparty_type
       - protocol
       - direction
+      - credential_secret_ref
     FileChannelUpdate:
       type: object
       properties:
@@ -8675,10 +9357,22 @@ components:
           type: string
           maxLength: 128
           description: Login user
+        credential_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
         host_key_fingerprint:
           type: string
           maxLength: 128
           description: Expected SFTP host key fingerprint
+        pgp_encrypt_key_ref:
+          type: string
+          maxLength: 255
+          description: Vault ref of counterparty public key for outbound encryption
+        pgp_decrypt_key_ref:
+          type: string
+          maxLength: 255
+          description: Vault ref of our private key for inbound decryption
         pgp_sign:
           type: boolean
           description: Sign outbound files
@@ -8694,9 +9388,9 @@ components:
           type: boolean
           description: Remove remote file after successful download
         ip_allowlist:
-          type: object
-          additionalProperties: true
-          description: Allowed source IPs for push channels
+          type: array
+          items: {}
+          description: Allowed source IPs / CIDR blocks for push channels
         is_active:
           type: boolean
           description: Active
@@ -9590,56 +10284,6 @@ components:
       - was_encrypted
       - virus_scan_status
       - status
-    InboundFileCreate:
-      type: object
-      properties:
-        file_channel_id:
-          type: string
-          format: uuid
-          description: Channel received on
-        file_route_id:
-          type: string
-          format: uuid
-          description: Route applied
-        file_format_definition_id:
-          type: string
-          format: uuid
-          description: Detected format
-        original_file_name:
-          type: string
-          maxLength: 255
-          description: Name as received
-        remote_path:
-          type: string
-          maxLength: 500
-          description: Remote location
-        document_id:
-          type: string
-          format: uuid
-          description: Document record for retention
-        custom_field_1:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-      required:
-      - file_channel_id
-      - original_file_name
     JobSchedule:
       type: object
       description: Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)
@@ -9690,10 +10334,18 @@ components:
           type: string
           maxLength: 64
           description: Service that runs the job
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Command/topic invoked
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
         cron_expression:
           type: string
           maxLength: 64
@@ -9793,7 +10445,8 @@ components:
       - code
       - name
       - owning_service
-      - endpoint
+      - http_method
+      - http_path
       - cron_expression
       - time_zone
       - business_days_only
@@ -9814,10 +10467,18 @@ components:
           type: string
           maxLength: 64
           description: Service that runs the job
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Command/topic invoked
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
         cron_expression:
           type: string
           maxLength: 64
@@ -9872,7 +10533,7 @@ components:
       - code
       - name
       - owning_service
-      - endpoint
+      - http_path
       - cron_expression
     JobScheduleUpdate:
       type: object
@@ -9889,10 +10550,18 @@ components:
           type: string
           maxLength: 64
           description: Service that runs the job
-        endpoint:
+        http_method:
           type: string
-          maxLength: 255
-          description: Command/topic invoked
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path on the owning service, called with X-Tenant-Id and Idempotency-Key jsr:<schedule id>:<run key>
         cron_expression:
           type: string
           maxLength: 64
@@ -10094,8 +10763,8 @@ components:
           - TENANT
           description: What the hold covers
         scope_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ids covered (customers, accounts, cases, tables...)
         customer_id:
           type:
@@ -10212,8 +10881,8 @@ components:
           - TENANT
           description: What the hold covers
         scope_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ids covered (customers, accounts, cases, tables...)
         customer_id:
           type: string
@@ -10293,8 +10962,8 @@ components:
           - TENANT
           description: What the hold covers
         scope_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ids covered (customers, accounts, cases, tables...)
         customer_id:
           type: string
@@ -10543,60 +11212,6 @@ components:
       - encrypt
       - status
       - delivery_attempts
-    OutboundFileCreate:
-      type: object
-      properties:
-        file_channel_id:
-          type: string
-          format: uuid
-          description: Delivery channel
-        file_format_definition_id:
-          type: string
-          format: uuid
-          description: Format
-        requested_by_service:
-          type: string
-          maxLength: 64
-          description: Service that requested the file
-        source_reference:
-          type: string
-          maxLength: 128
-          description: Batch / run id in the requesting service
-        file_name:
-          type: string
-          maxLength: 255
-          description: File name to deliver
-        encrypt:
-          type: boolean
-          description: PGP-encrypt before delivery
-        scheduled_for:
-          type: string
-          format: date-time
-          description: Earliest delivery time (e.g. scheme window)
-        custom_field_1:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-      required:
-      - file_channel_id
-      - requested_by_service
-      - file_name
     PurgeRequest:
       type: object
       description: Request to permanently delete or anonymise data that reached end of retention
@@ -10681,6 +11296,7 @@ components:
           - COMPLETED
           - FAILED
           - BLOCKED_BY_HOLD
+          - CANCELLED
           description: Status
           readOnly: true
         approval_request_id:
@@ -10689,12 +11305,34 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved the purge (differs from the requester)
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the request was approved, rejected or cancelled
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason given on rejection or cancellation
+          readOnly: true
         blocked_by_hold_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Hold blocking execution
+          readOnly: true
         executed_at:
           type:
           - string
@@ -10793,10 +11431,6 @@ components:
           type: string
           format: uuid
           description: Maker-checker approval
-        blocked_by_hold_id:
-          type: string
-          format: uuid
-          description: Hold blocking execution
         custom_field_1:
           type: string
           maxLength: 500
@@ -11161,9 +11795,9 @@ components:
           maxLength: 160
           description: Name
         entity_types:
-          type: object
-          additionalProperties: true
-          description: Entity types searched
+          type: array
+          items: {}
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
         query_text:
           type:
           - string
@@ -11175,13 +11809,13 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
         sort:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Sort order
+          items: {}
+          description: Sort order, e.g. [-score, title]
         shared_with_role_id:
           type:
           - string
@@ -11249,9 +11883,9 @@ components:
           maxLength: 160
           description: Name
         entity_types:
-          type: object
-          additionalProperties: true
-          description: Entity types searched
+          type: array
+          items: {}
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
         query_text:
           type: string
           maxLength: 500
@@ -11259,11 +11893,11 @@ components:
         filters:
           type: object
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
         sort:
-          type: object
-          additionalProperties: true
-          description: Sort order
+          type: array
+          items: {}
+          description: Sort order, e.g. [-score, title]
         shared_with_role_id:
           type: string
           format: uuid
@@ -11307,9 +11941,9 @@ components:
           maxLength: 160
           description: Name
         entity_types:
-          type: object
-          additionalProperties: true
-          description: Entity types searched
+          type: array
+          items: {}
+          description: Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]
         query_text:
           type: string
           maxLength: 500
@@ -11317,11 +11951,11 @@ components:
         filters:
           type: object
           additionalProperties: true
-          description: Structured filters
+          description: Structured filters (JSON containment on the document)
         sort:
-          type: object
-          additionalProperties: true
-          description: Sort order
+          type: array
+          items: {}
+          description: Sort order, e.g. [-score, title]
         shared_with_role_id:
           type: string
           format: uuid
@@ -11422,18 +12056,18 @@ components:
           additionalProperties: true
           description: OpenSearch mapping and analysers
         source_topics:
-          type: object
-          additionalProperties: true
-          description: Event topics feeding the index
+          type: array
+          items: {}
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
         searchable_fields:
-          type: object
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
+          type: array
+          items: {}
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
         masked_fields:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Fields masked unless the caller holds a PII permission
         status:
           type: string
@@ -11542,16 +12176,16 @@ components:
           additionalProperties: true
           description: OpenSearch mapping and analysers
         source_topics:
-          type: object
-          additionalProperties: true
-          description: Event topics feeding the index
+          type: array
+          items: {}
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
         searchable_fields:
-          type: object
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
+          type: array
+          items: {}
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
         masked_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Fields masked unless the caller holds a PII permission
         custom_field_1:
           type: string
@@ -11612,16 +12246,16 @@ components:
           additionalProperties: true
           description: OpenSearch mapping and analysers
         source_topics:
-          type: object
-          additionalProperties: true
-          description: Event topics feeding the index
+          type: array
+          items: {}
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
         searchable_fields:
-          type: object
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
+          type: array
+          items: {}
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
         masked_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Fields masked unless the caller holds a PII permission
         custom_field_1:
           type: string
@@ -11840,9 +12474,9 @@ components:
           maxLength: 8
           description: Language
         terms:
-          type: object
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: array
+          items: {}
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
         is_active:
           type: boolean
           description: Active
@@ -11895,9 +12529,9 @@ components:
           maxLength: 8
           description: Language
         terms:
-          type: object
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: array
+          items: {}
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
         is_active:
           type: boolean
           description: Active
@@ -11935,9 +12569,9 @@ components:
           maxLength: 8
           description: Language
         terms:
-          type: object
-          additionalProperties: true
-          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: array
+          items: {}
+          description: Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]
         is_active:
           type: boolean
           description: Active

@@ -381,6 +381,8 @@ channels:
         $ref: '#/components/messages/OperationsDateRollCompleted'
       OperationsJobScheduleRunCompleted:
         $ref: '#/components/messages/OperationsJobScheduleRunCompleted'
+      OperationsBatchJobLockForceReleased:
+        $ref: '#/components/messages/OperationsBatchJobLockForceReleased'
       OperationsInboundFileReceived:
         $ref: '#/components/messages/OperationsInboundFileReceived'
       OperationsInboundFileQuarantined:
@@ -397,6 +399,8 @@ channels:
         $ref: '#/components/messages/OperationsOutboundFileFailed'
       OperationsFileChannelHealthChanged:
         $ref: '#/components/messages/OperationsFileChannelHealthChanged'
+      OperationsFileChannelCredentialsRotated:
+        $ref: '#/components/messages/OperationsFileChannelCredentialsRotated'
       OperationsSearchIndexReindexed:
         $ref: '#/components/messages/OperationsSearchIndexReindexed'
       OperationsSearchIndexDegraded:
@@ -409,6 +413,10 @@ channels:
         $ref: '#/components/messages/OperationsLegalHoldReleased'
       OperationsPurgeRequestApproved:
         $ref: '#/components/messages/OperationsPurgeRequestApproved'
+      OperationsPurgeRequestRejected:
+        $ref: '#/components/messages/OperationsPurgeRequestRejected'
+      OperationsPurgeRequestCancelled:
+        $ref: '#/components/messages/OperationsPurgeRequestCancelled'
       OperationsPurgeRequestCompleted:
         $ref: '#/components/messages/OperationsPurgeRequestCompleted'
   party:
@@ -4818,6 +4826,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/JobScheduleRun'
+    OperationsBatchJobLockForceReleased:
+      name: operations.batch_job_lock.force_released
+      title: An operator force-released a batch job lock
+      summary: An operator force-released a batch job lock
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.batch_job_lock.force_released
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BatchJobLock'
     OperationsInboundFileReceived:
       name: operations.inbound_file.received
       title: A file was received from a counterparty
@@ -4994,6 +5024,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/FileChannel'
+    OperationsFileChannelCredentialsRotated:
+      name: operations.file_channel.credentials_rotated
+      title: A channel's credential reference was rotated
+      summary: A channel's credential reference was rotated
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.file_channel.credentials_rotated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FileChannel'
     OperationsSearchIndexReindexed:
       name: operations.search_index.reindexed
       title: An index finished a full reindex and swapped its alias
@@ -5114,6 +5166,50 @@ components:
           ce_type:
             type: string
             const: operations.purge_request.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PurgeRequest'
+    OperationsPurgeRequestRejected:
+      name: operations.purge_request.rejected
+      title: A purge was rejected by the checker
+      summary: A purge was rejected by the checker
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.purge_request.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PurgeRequest'
+    OperationsPurgeRequestCancelled:
+      name: operations.purge_request.cancelled
+      title: A purge request was cancelled
+      summary: A purge request was cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.purge_request.cancelled
           ce_source:
             type: string
           ce_id:
@@ -10910,7 +11006,8 @@ components:
         account_number:
           type: string
           maxLength: 34
-          description: Bank account number
+          description: Bank account number (server-generated, check digit per country)
+          readOnly: true
         iban:
           type:
           - string
@@ -11156,6 +11253,21 @@ components:
           - 'null'
           maxLength: 128
           description: Client or migration reference
+        product_terms:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees,
+            withholding_tax_rate, overdraft)
+          readOnly: true
+        pending_product_change:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Scheduled product change (product_id, product_version_id, effective_date, product_terms)
+          readOnly: true
         metadata:
           type:
           - object
@@ -11997,7 +12109,8 @@ components:
         deposit_number:
           type: string
           maxLength: 34
-          description: Deposit reference number
+          description: Deposit reference number (server-generated)
+          readOnly: true
         customer_id:
           type: string
           format: uuid
@@ -12137,6 +12250,13 @@ components:
           - 'null'
           format: uuid
           description: Deposit it rolled over from
+        product_terms:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Product terms pinned from the catalog at placement (copied on rollover)
+          readOnly: true
         metadata:
           type:
           - object
@@ -12735,7 +12855,8 @@ components:
         virtual_account_number:
           type: string
           maxLength: 34
-          description: Virtual account number
+          description: Virtual account number (server-generated)
+          readOnly: true
         iban:
           type:
           - string
@@ -12892,7 +13013,8 @@ components:
         statement_no:
           type: integer
           format: int32
-          description: Sequential statement number per account
+          description: Sequential statement number per account (server-assigned; shared by all formats of one period)
+          readOnly: true
         period_start:
           type: string
           format: date
@@ -12993,12 +13115,19 @@ components:
           - FAILED
           description: Generation status
           readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why generation failed (status FAILED)
+          readOnly: true
         document_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Generated file
+          description: Generated file registered with document-service
           readOnly: true
         checksum:
           type:
@@ -26614,7 +26743,8 @@ components:
           - EOD_RUNNING
           - EOD_FAILED
           - CLOSED
-          description: Processing state
+          description: Processing state (changed by actions only)
+          readOnly: true
         holiday_calendar_id:
           type:
           - string
@@ -26624,6 +26754,7 @@ components:
         is_current:
           type: boolean
           description: True for the open business date of the entity
+          readOnly: true
         opened_at:
           type: string
           format: date-time
@@ -27241,6 +27372,125 @@ components:
       - job_schedule_id
       - scheduled_for
       - status
+    BatchJobLock:
+      type: object
+      description: Distributed lock preventing concurrent execution of the same batch job or partition
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        lock_key:
+          type: string
+          maxLength: 160
+          description: Job / partition key
+        holder:
+          type: string
+          maxLength: 128
+          description: Instance id holding the lock
+        acquired_at:
+          type: string
+          format: date-time
+          description: Acquired
+        expires_at:
+          type: string
+          format: date-time
+          description: Lease expiry
+        fencing_token:
+          type: integer
+          format: int64
+          description: Monotonic token to reject stale holders
+        force_released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When an operator last force-released the lock
+          readOnly: true
+        force_released_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator who force-released the lock
+          readOnly: true
+        force_release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the lock was force-released
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - lock_key
+      - holder
+      - acquired_at
+      - expires_at
+      - fencing_token
     InboundFile:
       type: object
       description: A file received from a counterparty
@@ -27759,12 +28009,28 @@ components:
           - 'null'
           maxLength: 128
           description: Login user
+        credential_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of password or private key (a reference, never the secret; change it with rotate-credentials)
         host_key_fingerprint:
           type:
           - string
           - 'null'
           maxLength: 128
           description: Expected SFTP host key fingerprint
+        pgp_encrypt_key_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault ref of counterparty public key for outbound encryption
+        pgp_decrypt_key_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault ref of our private key for inbound decryption
         pgp_sign:
           type: boolean
           description: Sign outbound files
@@ -27785,10 +28051,10 @@ components:
           description: Remove remote file after successful download
         ip_allowlist:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Allowed source IPs for push channels
+          items: {}
+          description: Allowed source IPs / CIDR blocks for push channels
         is_active:
           type: boolean
           description: Active
@@ -27846,6 +28112,7 @@ components:
       - counterparty_type
       - protocol
       - direction
+      - credential_secret_ref
       - pgp_sign
       - delete_after_download
       - is_active
@@ -27922,18 +28189,18 @@ components:
           additionalProperties: true
           description: OpenSearch mapping and analysers
         source_topics:
-          type: object
-          additionalProperties: true
-          description: Event topics feeding the index
+          type: array
+          items: {}
+          description: Event topics feeding the index, e.g. [meridian.party.v1]
         searchable_fields:
-          type: object
-          additionalProperties: true
-          description: Fields matched by free-text search with boosts
+          type: array
+          items: {}
+          description: Fields matched by free-text search with boosts, e.g. [full_name^3, email]
         masked_fields:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Fields masked unless the caller holds a PII permission
         status:
           type: string
@@ -28203,8 +28470,8 @@ components:
           - TENANT
           description: What the hold covers
         scope_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ids covered (customers, accounts, cases, tables...)
         customer_id:
           type:
@@ -28387,6 +28654,7 @@ components:
           - COMPLETED
           - FAILED
           - BLOCKED_BY_HOLD
+          - CANCELLED
           description: Status
           readOnly: true
         approval_request_id:
@@ -28395,12 +28663,34 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved the purge (differs from the requester)
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the request was approved, rejected or cancelled
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason given on rejection or cancellation
+          readOnly: true
         blocked_by_hold_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Hold blocking execution
+          readOnly: true
         executed_at:
           type:
           - string

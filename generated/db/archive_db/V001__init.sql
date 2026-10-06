@@ -314,8 +314,11 @@ CREATE TABLE purge_request (
   record_selector              jsonb NOT NULL,
   action                       varchar(40) NOT NULL CHECK (action IN ('ARCHIVE', 'ANONYMISE', 'PURGE', 'ARCHIVE_THEN_PURGE')),
   estimated_records            bigint,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'EXECUTING', 'COMPLETED', 'FAILED', 'BLOCKED_BY_HOLD')),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'EXECUTING', 'COMPLETED', 'FAILED', 'BLOCKED_BY_HOLD', 'CANCELLED')),
   approval_request_id          uuid,
+  approved_by                  varchar(64),
+  decided_at                   timestamptz,
+  decision_reason              varchar(500),
   blocked_by_hold_id           uuid REFERENCES legal_hold(id),
   executed_at                  timestamptz,
   records_purged               bigint,
@@ -343,6 +346,9 @@ COMMENT ON COLUMN purge_request.action IS 'PURGE or ANONYMISE';
 COMMENT ON COLUMN purge_request.estimated_records IS 'Records selected';
 COMMENT ON COLUMN purge_request.status IS 'Status';
 COMMENT ON COLUMN purge_request.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN purge_request.approved_by IS 'Checker who approved the purge (differs from the requester)';
+COMMENT ON COLUMN purge_request.decided_at IS 'When the request was approved, rejected or cancelled';
+COMMENT ON COLUMN purge_request.decision_reason IS 'Reason given on rejection or cancellation';
 COMMENT ON COLUMN purge_request.blocked_by_hold_id IS 'Hold blocking execution';
 COMMENT ON COLUMN purge_request.executed_at IS 'Execution time';
 COMMENT ON COLUMN purge_request.records_purged IS 'Records purged';

@@ -59,8 +59,8 @@ COMMENT ON COLUMN search_index.alias_name IS 'Read alias used by queries';
 COMMENT ON COLUMN search_index.physical_index IS 'Current physical index behind the alias';
 COMMENT ON COLUMN search_index.mapping_version IS 'Version of the field mapping';
 COMMENT ON COLUMN search_index.mapping IS 'OpenSearch mapping and analysers';
-COMMENT ON COLUMN search_index.source_topics IS 'Event topics feeding the index';
-COMMENT ON COLUMN search_index.searchable_fields IS 'Fields matched by free-text search with boosts';
+COMMENT ON COLUMN search_index.source_topics IS 'Event topics feeding the index, e.g. [meridian.party.v1]';
+COMMENT ON COLUMN search_index.searchable_fields IS 'Fields matched by free-text search with boosts, e.g. [full_name^3, email]';
 COMMENT ON COLUMN search_index.masked_fields IS 'Fields masked unless the caller holds a PII permission';
 COMMENT ON COLUMN search_index.status IS 'Status';
 COMMENT ON COLUMN search_index.document_count IS 'Documents indexed';
@@ -159,7 +159,7 @@ COMMENT ON COLUMN search_synonym.updated_by IS 'Principal that last updated the 
 COMMENT ON COLUMN search_synonym.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN search_synonym.search_index_id IS 'Index (empty = all)';
 COMMENT ON COLUMN search_synonym.language_code IS 'Language';
-COMMENT ON COLUMN search_synonym.terms IS 'Equivalent terms, e.g. [mohammed, muhammad, mohamed]';
+COMMENT ON COLUMN search_synonym.terms IS 'Equivalent terms, stored lower case and distinct, e.g. [mohammed, muhammad, mohamed]';
 COMMENT ON COLUMN search_synonym.is_active IS 'Active';
 COMMENT ON COLUMN search_synonym.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN search_synonym.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -206,10 +206,10 @@ COMMENT ON COLUMN saved_search.updated_by IS 'Principal that last updated the ro
 COMMENT ON COLUMN saved_search.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN saved_search.app_user_id IS 'Owner';
 COMMENT ON COLUMN saved_search.name IS 'Name';
-COMMENT ON COLUMN saved_search.entity_types IS 'Entity types searched';
+COMMENT ON COLUMN saved_search.entity_types IS 'Entity types searched, e.g. [CUSTOMER, DEPOSIT_ACCOUNT]';
 COMMENT ON COLUMN saved_search.query_text IS 'Free text';
-COMMENT ON COLUMN saved_search.filters IS 'Structured filters';
-COMMENT ON COLUMN saved_search.sort IS 'Sort order';
+COMMENT ON COLUMN saved_search.filters IS 'Structured filters (JSON containment on the document)';
+COMMENT ON COLUMN saved_search.sort IS 'Sort order, e.g. [-score, title]';
 COMMENT ON COLUMN saved_search.shared_with_role_id IS 'Role it is shared with';
 COMMENT ON COLUMN saved_search.is_pinned IS 'Pinned in the console';
 COMMENT ON COLUMN saved_search.last_used_at IS 'Last use';
@@ -224,6 +224,94 @@ CREATE INDEX ix_saved_search_shared_with_role_id ON saved_search (shared_with_ro
 ALTER TABLE saved_search ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON saved_search USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_saved_search_touch BEFORE UPDATE ON saved_search FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- search_document: One indexed entity document per physical index (the PostgreSQL full-text engine; aliases swap between physical indexes on reindex). Weighted text A/B/C feeds the ranked tsvector computed at query time.
+
+CREATE TABLE search_document (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  physical_index               varchar(160) NOT NULL,
+  entity_type                  varchar(40) NOT NULL CHECK (entity_type IN ('CUSTOMER', 'DEPOSIT_ACCOUNT', 'WALLET', 'CARD', 'LOAN', 'PAYMENT', 'WALLET_TRANSACTION', 'SERVICE_CASE', 'AML_CASE', 'MERCHANT', 'AGENT', 'DOCUMENT', 'LEDGER_ACCOUNT')),
+  entity_id                    varchar(128) NOT NULL,
+  title                        text,
+  body                         jsonb NOT NULL,
+  search_text                  text NOT NULL,
+  text_a                       text,
+  text_b                       text,
+  text_c                       text,
+  source_event_id              varchar(128),
+  source_version               bigint,
+  occurred_at                  timestamptz,
+  indexed_at                   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_search_document_1 UNIQUE (tenant_id, physical_index, entity_id)
+);
+COMMENT ON TABLE search_document IS 'One indexed entity document per physical index (the PostgreSQL full-text engine; aliases swap between physical indexes on reindex). Weighted text A/B/C feeds the ranked tsvector computed at query time.
+';
+COMMENT ON COLUMN search_document.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN search_document.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN search_document.created_at IS 'Creation time';
+COMMENT ON COLUMN search_document.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN search_document.updated_at IS 'Last update time';
+COMMENT ON COLUMN search_document.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN search_document.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN search_document.physical_index IS 'Physical index holding the document';
+COMMENT ON COLUMN search_document.entity_type IS 'Entity type';
+COMMENT ON COLUMN search_document.entity_id IS 'Id of the entity in its owning service';
+COMMENT ON COLUMN search_document.title IS 'Display title (used by type-ahead)';
+COMMENT ON COLUMN search_document.body IS 'Indexed document (masked on output by role)';
+COMMENT ON COLUMN search_document.search_text IS 'All searchable text';
+COMMENT ON COLUMN search_document.text_a IS 'Weight A text (boost >= 3)';
+COMMENT ON COLUMN search_document.text_b IS 'Weight B text (boost >= 2)';
+COMMENT ON COLUMN search_document.text_c IS 'Weight C text';
+COMMENT ON COLUMN search_document.source_event_id IS 'Event that produced the version';
+COMMENT ON COLUMN search_document.source_version IS 'Source version (out-of-order events are ignored)';
+COMMENT ON COLUMN search_document.occurred_at IS 'When the change happened in the owning service';
+COMMENT ON COLUMN search_document.indexed_at IS 'When the document was indexed';
+CREATE INDEX ix_search_document_tenant ON search_document (tenant_id, created_at);
+CREATE INDEX ix_search_document_c1 ON search_document (physical_index, entity_type);
+ALTER TABLE search_document ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON search_document USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_search_document_touch BEFORE UPDATE ON search_document FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- search_ingest_log: Append-only journal of ingested changes, the source for full reindex and catch-up replays
+CREATE TABLE search_ingest_log (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  entity_type                  varchar(40) NOT NULL CHECK (entity_type IN ('CUSTOMER', 'DEPOSIT_ACCOUNT', 'WALLET', 'CARD', 'LOAN', 'PAYMENT', 'WALLET_TRANSACTION', 'SERVICE_CASE', 'AML_CASE', 'MERCHANT', 'AGENT', 'DOCUMENT', 'LEDGER_ACCOUNT')),
+  entity_id                    varchar(128) NOT NULL,
+  operation                    varchar(40) NOT NULL CHECK (operation IN ('UPSERT', 'DELETE')),
+  document                     jsonb,
+  source_event_id              varchar(128),
+  source_version               bigint,
+  occurred_at                  timestamptz NOT NULL DEFAULT now(),
+  ingested_at                  timestamptz NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE search_ingest_log IS 'Append-only journal of ingested changes, the source for full reindex and catch-up replays';
+COMMENT ON COLUMN search_ingest_log.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN search_ingest_log.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN search_ingest_log.created_at IS 'Creation time';
+COMMENT ON COLUMN search_ingest_log.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN search_ingest_log.entity_type IS 'Entity type';
+COMMENT ON COLUMN search_ingest_log.entity_id IS 'Entity id';
+COMMENT ON COLUMN search_ingest_log.operation IS 'Upsert or delete';
+COMMENT ON COLUMN search_ingest_log.document IS 'Document (upserts)';
+COMMENT ON COLUMN search_ingest_log.source_event_id IS 'Source event id';
+COMMENT ON COLUMN search_ingest_log.source_version IS 'Source version';
+COMMENT ON COLUMN search_ingest_log.occurred_at IS 'When the change happened';
+COMMENT ON COLUMN search_ingest_log.ingested_at IS 'When it was ingested';
+CREATE INDEX ix_search_ingest_log_tenant ON search_ingest_log (tenant_id, created_at);
+CREATE INDEX ix_search_ingest_log_c1 ON search_ingest_log (entity_type, entity_id);
+CREATE INDEX ix_search_ingest_log_c2 ON search_ingest_log (entity_type, occurred_at);
+ALTER TABLE search_ingest_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON search_ingest_log USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_search_ingest_log_append_only BEFORE UPDATE OR DELETE ON search_ingest_log FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

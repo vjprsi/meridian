@@ -43,6 +43,7 @@ CREATE TABLE statement (
   line_count                   integer,
   is_on_demand                 boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'GENERATING', 'READY', 'DELIVERED', 'FAILED')),
+  failure_reason               varchar(500),
   document_id                  uuid,
   checksum                     varchar(64),
   generated_at                 timestamptz,
@@ -63,7 +64,7 @@ COMMENT ON COLUMN statement.updated_at IS 'Last update time';
 COMMENT ON COLUMN statement.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN statement.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN statement.deposit_account_id IS 'Account';
-COMMENT ON COLUMN statement.statement_no IS 'Sequential statement number per account';
+COMMENT ON COLUMN statement.statement_no IS 'Sequential statement number per account (server-assigned; shared by all formats of one period)';
 COMMENT ON COLUMN statement.period_start IS 'First day';
 COMMENT ON COLUMN statement.period_end IS 'Last day';
 COMMENT ON COLUMN statement.format IS 'Format';
@@ -78,7 +79,8 @@ COMMENT ON COLUMN statement.fees_charged IS 'Fees in period';
 COMMENT ON COLUMN statement.line_count IS 'Number of lines';
 COMMENT ON COLUMN statement.is_on_demand IS 'Requested outside the cycle';
 COMMENT ON COLUMN statement.status IS 'Generation status';
-COMMENT ON COLUMN statement.document_id IS 'Generated file';
+COMMENT ON COLUMN statement.failure_reason IS 'Why generation failed (status FAILED)';
+COMMENT ON COLUMN statement.document_id IS 'Generated file registered with document-service';
 COMMENT ON COLUMN statement.checksum IS 'SHA-256 of the file';
 COMMENT ON COLUMN statement.generated_at IS 'Generation time';
 COMMENT ON COLUMN statement.delivered_at IS 'Delivery time';
@@ -185,7 +187,7 @@ COMMENT ON COLUMN statement_schedule.row_version IS 'Optimistic lock version; se
 COMMENT ON COLUMN statement_schedule.deposit_account_id IS 'Account';
 COMMENT ON COLUMN statement_schedule.frequency IS 'Cycle';
 COMMENT ON COLUMN statement_schedule.cycle_day IS 'Cycle end day';
-COMMENT ON COLUMN statement_schedule.formats IS 'StatementFormat values to generate';
+COMMENT ON COLUMN statement_schedule.formats IS 'StatementFormat values to generate, e.g. [PDF, CSV]';
 COMMENT ON COLUMN statement_schedule.delivery_channel IS 'Channel';
 COMMENT ON COLUMN statement_schedule.email IS 'Override delivery email [PII]';
 COMMENT ON COLUMN statement_schedule.postal_address_id IS 'Postal address for POST';
