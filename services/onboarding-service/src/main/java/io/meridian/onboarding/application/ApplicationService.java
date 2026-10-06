@@ -311,21 +311,15 @@ public class ApplicationService {
         facts.put("channel", channel);
         DecisionEngine.Decision d = DecisionEngine.decide(ctx.journey().get("decision_rules"), facts, failed, waiting);
 
-        ObjectNode reasons = reasons(ctx.app());
-        reasons.put("submitted_by", TenantContext.principal());
-        reasons.put("submitted_at", Events.now());
-        reasons.put("decision", d.decision());
-        ArrayNode rules = reasons.putArray("rules");
-        d.reasons().forEach(rules::add);
-        reasons.set("risk_factors", risk.factors());
-
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("status", "SUBMITTED");
         v.put("submitted_at", Events.now());
+        v.put("submitted_by", TenantContext.principal());
         v.put("risk_score", risk.score());
         v.put("risk_level", risk.level());
         v.put("decision", d.decision());
-        v.set("decision_reasons", reasons);
+        v.set("decision_reasons", JsonValues.of(d.reasons()));
+        v.set("risk_factors", risk.factors());
         v.put("progress_percent", 100);
         v.putNull("current_step");
         ObjectNode app = rows.update(T_APP, id, v);
@@ -361,15 +355,10 @@ public class ApplicationService {
         Ctx ctx = load(rows.lock(T_APP, id));
         Lifecycles.application(ctx.app().get("status").asString(), "approve");
         checker(ctx.app());
-        ObjectNode reasons = reasons(ctx.app());
-        ObjectNode review = reasons.putObject("review");
-        review.put("decision", "APPROVED");
-        review.put("by", TenantContext.principal());
-        if (comment != null) {
-            review.put("comment", comment);
-        }
         ObjectNode v = reviewed("APPROVED");
-        v.set("decision_reasons", reasons);
+        if (comment != null) {
+            v.put("review_comment", comment.length() > 500 ? comment.substring(0, 500) : comment);
+        }
         v.put("completed_at", Events.now());
         ensureCustomer(ctx, ctx.app(), v);
         ObjectNode app = rows.update(T_APP, id, v);
@@ -417,18 +406,20 @@ public class ApplicationService {
             sv.putNull("error");
             ctx.steps().put(c, rows.update(T_STEP, Events.uuid(ctx.steps().get(c), "id"), sv));
         }
-        ObjectNode reasons = reasons(ctx.app());
-        ArrayNode requests = reasons.has("info_requests") && reasons.get("info_requests").isArray()
-                ? (ArrayNode) reasons.get("info_requests") : reasons.putArray("info_requests");
+        JsonNode previous = ctx.app().get("info_requests");
+        ArrayNode requests = previous != null && previous.isArray() ? (ArrayNode) previous.deepCopy()
+                : JsonNodeFactory.instance.arrayNode();
         ObjectNode r = requests.addObject();
         r.put("message", message);
-        r.set("step_codes", JsonValues.of(codes).get("values"));
+        r.set("step_codes", JsonValues.of(codes));
         r.put("requested_by", TenantContext.principal());
         r.put("requested_at", Events.now());
         ObjectNode v = progress(ctx);
         v.put("status", "IN_PROGRESS");
-        v.set("decision_reasons", reasons);
-        return rows.update(T_APP, id, v);
+        v.set("info_requests", requests);
+        ObjectNode updated = rows.update(T_APP, id, v);
+        events.publish("party.onboarding_application.info_requested", T_APP, updated, OnboardingApplication.class);
+        return updated;
     }
 
     @Transactional
@@ -524,20 +515,16 @@ public class ApplicationService {
         return v;
     }
 
-    private static ObjectNode reasons(ObjectNode app) {
-        JsonNode r = app.get("decision_reasons");
-        return r != null && r.isObject() ? ((ObjectNode) r).deepCopy() : JsonNodeFactory.instance.objectNode();
-    }
-
     /** Checker must be neither the creator nor the submitter of the application. */
     private static void checker(ObjectNode app) {
-        Events.fourEyes(app.path("created_by").asString(null), reasons(app).path("submitted_by").asString(null));
+        Events.fourEyes(app.path("created_by").asString(null), app.path("submitted_by").asString(null));
     }
 
     private static ObjectNode reviewed(String status) {
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("status", status);
         v.put("reviewed_at", Events.now());
+        v.put("reviewed_by", TenantContext.principal());
         UUID reviewer = Events.principalUuid();
         if (reviewer != null) {
             v.put("reviewer_id", reviewer.toString());
@@ -553,17 +540,20 @@ public class ApplicationService {
         ObjectNode d = ctx.data();
         String first = d.path("first_name").asString("");
         String last = d.path("last_name").asString("");
-        String display = !JsonValues.blank(d.get("display_name")) ? d.get("display_name").asString()
-                : (first + " " + last).trim();
-        if (display.isBlank() || JsonValues.blank(d.get("legal_entity_id"))) {
-            return;
+        if (JsonValues.blank(app.get("legal_entity_id"))) {
+            throw ApiException.unprocessable("legal_entity_required",
+                    "legal_entity_id is required on the application to open the customer relationship");
         }
+        // customer_number is assigned by customer-service; display_name is derived there when not captured.
         Map<String, Object> body = new LinkedHashMap<>();
-        String number = "ONB-" + app.get("application_number").asString();
-        body.put("customer_number", number.substring(0, Math.min(32, number.length())));
         body.put("customer_type", ctx.journey().get("customer_type").asString());
-        body.put("legal_entity_id", d.get("legal_entity_id").asString());
-        body.put("display_name", display);
+        body.put("legal_entity_id", app.get("legal_entity_id").asString());
+        body.put("external_ref", app.get("application_number").asString());
+        for (String f : List.of("display_name", "legal_name", "trading_name", "registration_number", "nationality")) {
+            if (!JsonValues.blank(d.get(f))) {
+                body.put(f, d.get(f).asString());
+            }
+        }
         if (!first.isBlank()) {
             body.put("first_name", first);
         }

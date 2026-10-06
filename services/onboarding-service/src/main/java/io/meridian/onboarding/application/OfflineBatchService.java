@@ -166,6 +166,9 @@ public class OfflineBatchService {
         if (!JsonValues.blank(rec.get("email"))) {
             v.put("email", rec.get("email").asString());
         }
+        if (!JsonValues.blank(rec.get("legal_entity_id"))) {
+            v.put("legal_entity_id", rec.get("legal_entity_id").asString());
+        }
         if (rec.path("collected_data").isObject()) {
             v.set("collected_data", rec.get("collected_data"));
         }

@@ -158,9 +158,12 @@ public class CredentialService {
 
     // ------------------------------------------------------------------ PIN
 
-    /** Sets the first PIN, or changes it after verifying the old one; wrong old PINs count towards a lockout. */
+    /**
+     * Sets the first PIN, or changes it after verifying the old one; wrong old PINs count towards a lockout. Returns
+     * the PIN credential (the hash itself is never exposed).
+     */
     @Transactional(noRollbackFor = ApiException.class)
-    public void setPin(UUID customerId, String newPin, String oldPin) {
+    public ObjectNode setPin(UUID customerId, String newPin, String oldPin) {
         ObjectNode customer = guards.activeCustomer(customerId);
         PinPolicy.requireStrong(newPin, Json.date(customer, "date_of_birth"));
         Optional<ObjectNode> existing = rows.query("""
@@ -172,8 +175,7 @@ public class CredentialService {
             v.put("credential_type", "PIN");
             v.put("status", "ACTIVE");
             v.put("secret_hash", crypto.hashSecret(newPin));
-            rows.insert(T, v);
-            return;
+            return rows.insert(T, v);
         }
         ObjectNode pin = existing.get();
         UUID pinId = UUID.fromString(text(pin, "id"));
@@ -208,7 +210,7 @@ public class CredentialService {
         v.put("status", "ACTIVE");
         v.putNull("locked_until");
         v.put("last_used_at", now().toString());
-        rows.update(T, pinId, v);
+        return rows.update(T, pinId, v);
     }
 
     // ------------------------------------------------------------------ unlock / revoke
@@ -218,9 +220,6 @@ public class CredentialService {
         guards.openCustomer(customerId);
         ObjectNode cred = guards.child(T, customerId, id, true);
         String to = Lifecycles.CREDENTIAL.apply("unlock", text(cred, "status"));
-        if ("SMS_OTP".equals(text(cred, "credential_type"))) {
-            throw ApiException.unprocessable("not_unlockable", "One-time passwords are not unlocked; request a new code");
-        }
         ObjectNode v = rows.object();
         v.put("status", to);
         v.put("failed_attempts", 0);

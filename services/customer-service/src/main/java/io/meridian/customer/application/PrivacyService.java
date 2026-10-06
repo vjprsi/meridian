@@ -136,8 +136,7 @@ public class PrivacyService {
         v.put("rejection_reason", truncate(reason, 255));
         v.put("completed_at", now().toString());
         ObjectNode row = rows.update(T, id, v);
-        // The request is concluded; consumers read the outcome from status (REJECTED).
-        events.publish("party.privacy_request.completed", T, row, PrivacyRequest.class);
+        events.publish("party.privacy_request.rejected", T, row, PrivacyRequest.class);
         return row;
     }
 
@@ -162,7 +161,7 @@ public class PrivacyService {
                 ArrayNode blockers = erase(customer);
                 if (!blockers.isEmpty()) {
                     outcome = "PARTIALLY_COMPLETED";
-                    v.set("retention_blockers", json.createObjectNode().set("blockers", blockers));
+                    v.set("retention_blockers", blockers);
                 }
             }
             case "OBJECTION" -> stopMarketing(customerId, Set.of("MARKETING", "PROFILING"), "Objection " + id);
@@ -197,7 +196,7 @@ public class PrivacyService {
         e.set("credentials", json.valueToTree(rows.query("""
                 select json_build_object('credential_type', credential_type, 'status', status, 'created_at', created_at,
                     'last_used_at', last_used_at)::text
-                from customer_credential where customer_id = ? and credential_type <> 'SMS_OTP' order by id""", id)));
+                from customer_credential where customer_id = ? order by id""", id)));
         return e;
     }
 
@@ -239,11 +238,13 @@ public class PrivacyService {
                         "AML/CFT record keeping: identification data is retained for " + AML_RETENTION_YEARS
                                 + " years after the relationship ends", retainUntil.toLocalDate().toString()));
                 // Contact points are not part of the AML record and can go.
+                rows.execute("delete from contact_verification where customer_id = ?", id);
                 rows.execute("delete from customer_contact where customer_id = ?", id);
                 return blockers;
             }
         }
         // Full anonymisation.
+        rows.execute("delete from contact_verification where customer_id = ?", id);
         rows.execute("delete from customer_contact where customer_id = ?", id);
         rows.execute("delete from customer_address where customer_id = ?", id);
         rows.execute("""
@@ -257,13 +258,15 @@ public class PrivacyService {
                 "custom_field_1", "custom_field_2", "custom_field_3", "custom_field_4", "custom_field_5")) {
             v.putNull(f);
         }
-        ObjectNode meta = json.createObjectNode();
-        meta.put("erased_at", now().toString());
-        v.set("metadata", meta);
+        v.putNull("metadata");
+        v.put("erased_at", now().toString());
         if (!"CLOSED".equals(status) && !"DECEASED".equals(status)) {
             v.put("status", "CLOSED");
             v.put("closed_at", now().toString());
             v.put("closure_reason", "ERASED_ON_REQUEST");
+            v.put("status_reason", "Erased on data subject request");
+            v.put("status_changed_at", now().toString());
+            v.put("status_changed_by", truncate(TenantContext.principal(), 64));
         }
         ObjectNode row = rows.update("customer", id, v);
         events.publish("party.customer.updated", "customer", row, Customer.class);

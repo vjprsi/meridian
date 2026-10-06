@@ -6,16 +6,14 @@ import io.meridian.customer.api.generated.model.CustomerSegment;
 import io.meridian.customer.api.generated.model.CustomerSegmentCreate;
 import io.meridian.customer.api.generated.model.CustomerSegmentUpdate;
 import io.meridian.customer.application.SegmentService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * Segments with validated criteria. Contract gap: {@code /evaluate} is declared 204 without a body; it returns
- * 200 with the evaluation summary.
- */
+/** Segments with validated criteria; evaluate returns the assignment summary. */
 @RestController
 public class CustomerSegmentsController implements CustomerSegmentsApi {
     private final SegmentService segments;
@@ -39,8 +37,7 @@ public class CustomerSegmentsController implements CustomerSegmentsApi {
     }
 
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public ResponseEntity customerSegmentsEvaluate(UUID id, String idempotencyKey) {
+    public ResponseEntity<Map<String, Object>> customerSegmentsEvaluate(UUID id, String idempotencyKey) {
         return http.document(idempotencyKey, "segments.evaluate", id, null, HttpStatus.OK, () -> segments.evaluate(id));
     }
 }

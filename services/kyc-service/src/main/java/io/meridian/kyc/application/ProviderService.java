@@ -22,6 +22,7 @@ public class ProviderService {
     static final String TABLE = "kyc_provider";
     private static final Pattern CODE = Pattern.compile("[A-Z][A-Z0-9_]{1,39}");
     private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
+    private static final Pattern VAULT_REF = Pattern.compile("^vault://[A-Za-z0-9._/-]{1,240}$");
 
     private final Rows rows;
     private final CrudEngine crud;
@@ -35,7 +36,7 @@ public class ProviderService {
         this.adapters = adapters;
     }
 
-    /** Normalises and validates client values; derives the credentials vault path (not part of the contract). */
+    /** Normalises and validates client values; secrets are only ever referenced by vault path. */
     public ObjectNode createValues(Object body) {
         ObjectNode v = crud.toColumns(TABLE, body);
         String code = text(v, "code").trim().toUpperCase(Locale.ROOT);
@@ -44,7 +45,6 @@ public class ProviderService {
         }
         v.put("code", code);
         normalise(v);
-        v.put("credentials_ref", "vault://kyc/providers/" + code.toLowerCase(Locale.ROOT));
         if (!v.has("webhook_secret_ref")) {
             v.put("webhook_secret_ref", "vault://kyc/providers/" + code.toLowerCase(Locale.ROOT) + "/webhook");
         }
@@ -57,15 +57,28 @@ public class ProviderService {
     }
 
     /** Validates a PATCH body; the update itself goes through the generic engine. */
-    public void validateUpdate(Object body) {
+    /** Validated, normalised update with optimistic locking (If-Match = row_version). */
+    @Transactional
+    public ObjectNode update(UUID id, Object body, String ifMatch) {
         ObjectNode v = crud.toColumns(TABLE, body);
         if (v.has("code")) {
             throw ApiException.unprocessable("immutable_field", "Provider code cannot be changed");
         }
         normalise(v);
+        int expected = KycSupport.version(ifMatch);
+        return crud.updateRow(TABLE, Map.of("id", id), v, expected).map(kyc::parse)
+                .orElseThrow(() -> rows.find(TABLE, id).isPresent()
+                        ? ApiException.conflict("version_conflict", "If-Match " + expected + " does not match the current version")
+                        : ApiException.notFound("kyc provider", id));
     }
 
     private void normalise(ObjectNode v) {
+        for (String ref : new String[] {"credentials_ref", "webhook_secret_ref"}) {
+            if (v.hasNonNull(ref) && !VAULT_REF.matcher(text(v, ref)).matches()) {
+                throw ApiException.unprocessable("invalid_secret_ref",
+                        ref + " must be a vault reference (vault://path), never the secret itself");
+            }
+        }
         if (v.has("capabilities")) {
             List<String> caps = KycSupport.values(v.get("capabilities")).stream()
                     .map(c -> c.toUpperCase(Locale.ROOT)).distinct().toList();
@@ -77,7 +90,7 @@ public class ProviderService {
                     throw ApiException.unprocessable("invalid_capabilities", "Unknown capability " + c);
                 }
             }
-            v.set("capabilities", kyc.valuesObject(caps));
+            v.set("capabilities", kyc.array(caps));
         }
         if (v.has("countries")) {
             List<String> countries = KycSupport.values(v.get("countries")).stream()
@@ -87,7 +100,7 @@ public class ProviderService {
                     throw ApiException.unprocessable("invalid_countries", "Countries must be ISO 3166 alpha-2 codes");
                 }
             }
-            v.set("countries", kyc.valuesObject(countries));
+            v.set("countries", kyc.array(countries));
         }
         if (v.has("timeout_ms") && (v.get("timeout_ms").asInt() < 100 || v.get("timeout_ms").asInt() > 120_000)) {
             throw ApiException.unprocessable("invalid_timeout", "timeout_ms must be between 100 and 120000");

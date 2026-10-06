@@ -150,7 +150,7 @@ public class CheckService {
         if (score != null) {
             v.put("score", score);
         }
-        v.set("reason_codes", kyc.valuesObject(reasons == null ? List.of() : reasons));
+        v.set("reason_codes", kyc.array(reasons == null ? List.of() : reasons));
         if (summary != null) {
             v.put("result_summary", summary.length() > 500 ? summary.substring(0, 500) : summary);
         }
@@ -190,13 +190,6 @@ public class CheckService {
         JsonNode provider = providers.byCode(providerCode);
         String reference = text(payload, "provider_reference");
         String status = text(payload, "status");
-        if (reference == null || status == null) {
-            throw ApiException.unprocessable("invalid_callback", "payload.provider_reference and payload.status are required");
-        }
-        if (!CALLBACK_STATUSES.contains(status)) {
-            throw ApiException.unprocessable("invalid_callback", "Unsupported result status " + status);
-        }
-        verifySignature(text(provider, "code"), reference, status, text(payload, "signature"));
         ObjectNode check = rows.query("""
                         select row_to_json(t)::text from kyc_check t
                         where t.kyc_provider_id = ? and t.provider_reference = ? for update""",
@@ -213,11 +206,29 @@ public class CheckService {
         kyc.publish("party.kyc_check.completed", TABLE, updated, KycCheck.class);
     }
 
-    /** HMAC-SHA256 over "provider_reference:status" when a webhook secret is configured for the provider. */
-    private void verifySignature(String code, String reference, String status, String signature) {
+    /**
+     * Validates a public provider callback before any tenant data is touched: required fields, result status and the
+     * HMAC-SHA256 signature over "[tenant_id:]provider_reference:status" with the provider's webhook secret
+     * ({@code meridian.kyc.webhook-secrets.<CODE>}, resolved from the vault). Unsigned callbacks are never accepted.
+     */
+    public void verifyCallback(String providerCode, JsonNode payload) {
+        String reference = text(payload, "provider_reference");
+        String status = text(payload, "status");
+        if (reference == null || status == null) {
+            throw ApiException.unprocessable("invalid_callback", "payload.provider_reference and payload.status are required");
+        }
+        if (!CALLBACK_STATUSES.contains(status)) {
+            throw ApiException.unprocessable("invalid_callback", "Unsupported result status " + status);
+        }
+        String tenant = text(payload, "tenant_id");
+        verifySignature(providerCode.toUpperCase(java.util.Locale.ROOT),
+                (tenant == null ? "" : tenant + ":") + reference + ":" + status, text(payload, "signature"));
+    }
+
+    private void verifySignature(String code, String message, String signature) {
         String secret = env.getProperty("meridian.kyc.webhook-secrets." + code);
         if (secret == null || secret.isBlank()) {
-            return;
+            throw new ApiException(401, "callbacks_not_configured", "No webhook secret is configured for provider " + code);
         }
         if (signature == null) {
             throw new ApiException(401, "invalid_signature", "Callback signature is missing");
@@ -225,7 +236,7 @@ public class CheckService {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] expected = mac.doFinal((reference + ":" + status).getBytes(StandardCharsets.UTF_8));
+            byte[] expected = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
             byte[] given;
             try {
                 given = HexFormat.of().parseHex(signature.toLowerCase(java.util.Locale.ROOT));

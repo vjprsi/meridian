@@ -34,34 +34,39 @@ public class ProfileService {
         this.kyc = kyc;
     }
 
+    /** Opens the KYC profile of a customer (one per customer); status starts NOT_STARTED. */
+    @org.springframework.transaction.annotation.Transactional
+    public ObjectNode create(Object body) {
+        ObjectNode v = kyc.columns(TABLE, body);
+        UUID customerId = uuid(v, "customer_id");
+        Optional<ObjectNode> existing = rows.query(
+                "select row_to_json(t)::text from kyc_profile t where t.customer_id = ?", customerId).stream().findFirst();
+        if (existing.isPresent()) {
+            throw ApiException.conflict("profile_exists", "Customer already has KYC profile " + text(existing.get(), "id"));
+        }
+        v.put("status", "NOT_STARTED");
+        ObjectNode row = rows.insert(TABLE, v);
+        kyc.publish("party.kyc_profile.created", TABLE, row, KycProfile.class);
+        return row;
+    }
+
     /**
-     * The contract has no profile create: a profile is provisioned on the first evidence for a customer, with the
-     * client-chosen id. Returns the (locked) profile row.
+     * The (locked) profile that evidence is recorded against; it must exist (POST /v1/kyc/profiles) and belong to the
+     * customer named in the request.
      */
-    public ObjectNode provision(UUID profileId, UUID customerId) {
+    public ObjectNode forCustomer(UUID profileId, UUID customerId) {
         if (profileId == null || customerId == null) {
             throw ApiException.unprocessable("profile_required", "kyc_profile_id and customer_id are required");
         }
-        Optional<ObjectNode> byId = rows.query(
-                "select row_to_json(t)::text from kyc_profile t where t.id = ? for update", profileId).stream().findFirst();
-        if (byId.isPresent()) {
-            if (!customerId.equals(uuid(byId.get(), "customer_id"))) {
-                throw ApiException.unprocessable("profile_customer_mismatch",
-                        "KYC profile " + profileId + " belongs to another customer");
-            }
-            return byId.get();
+        ObjectNode profile = rows.query(
+                "select row_to_json(t)::text from kyc_profile t where t.id = ? for update", profileId).stream().findFirst()
+                .orElseThrow(() -> ApiException.unprocessable("profile_not_found",
+                        "KYC profile " + profileId + " does not exist; open it with POST /v1/kyc/profiles"));
+        if (!customerId.equals(uuid(profile, "customer_id"))) {
+            throw ApiException.unprocessable("profile_customer_mismatch",
+                    "KYC profile " + profileId + " belongs to another customer");
         }
-        Optional<ObjectNode> byCustomer = rows.query(
-                "select row_to_json(t)::text from kyc_profile t where t.customer_id = ?", customerId).stream().findFirst();
-        if (byCustomer.isPresent()) {
-            throw ApiException.conflict("profile_mismatch",
-                    "Customer already has KYC profile " + text(byCustomer.get(), "id"));
-        }
-        ObjectNode v = rows.object();
-        v.put("id", profileId.toString());
-        v.put("customer_id", customerId.toString());
-        v.put("status", "NOT_STARTED");
-        return rows.insert(TABLE, v);
+        return profile;
     }
 
     /** Profile that must already exist (references from request bodies → 422). */

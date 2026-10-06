@@ -8,6 +8,7 @@ import io.meridian.onboarding.api.generated.model.OnboardingJourneyUpdate;
 import io.meridian.onboarding.api.generated.model.OnboardingJourneysRetireRequest;
 import io.meridian.onboarding.api.generated.model.OnboardingJourneysSimulateRequest;
 import io.meridian.onboarding.application.JourneyService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,8 +50,9 @@ public class OnboardingJourneysController implements OnboardingJourneysApi {
     public ResponseEntity<OnboardingJourney> onboardingJourneysRetire(UUID id, String idempotencyKey,
                                                                     OnboardingJourneysRetireRequest body) {
         TenantContext.require();
+        String reason = body == null ? null : body.getReason();
         return actions.run(idempotencyKey, "retire", id, body, OnboardingJourney.class, HttpStatus.OK,
-                () -> journeys.retire(id));
+                () -> journeys.retire(id, reason));
     }
 
     @Override
@@ -60,13 +62,13 @@ public class OnboardingJourneysController implements OnboardingJourneysApi {
                 () -> journeys.newVersion(id));
     }
 
-    /** Contract declares no body (defect); the dry-run result is returned as JSON. */
+    /** Dry run: path, missing fields, risk and decision for the sample data. */
     @Override
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public ResponseEntity onboardingJourneysSimulate(UUID id, String idempotencyKey, OnboardingJourneysSimulateRequest body) {
+    public ResponseEntity<Map<String, Object>> onboardingJourneysSimulate(UUID id, String idempotencyKey,
+                                                                          OnboardingJourneysSimulateRequest body) {
         TenantContext.require();
         ObjectNode req = actions.tree(body);
-        return actions.run(idempotencyKey, "simulate", id, body, ObjectNode.class, HttpStatus.OK,
+        return actions.document(idempotencyKey, "simulate", id, body, HttpStatus.OK,
                 () -> journeys.simulate(id, req.get("sample_data")));
     }
 }
