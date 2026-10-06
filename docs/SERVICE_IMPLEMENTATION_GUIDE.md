@@ -1,0 +1,60 @@
+# Service Implementation Guide
+
+How to turn a scaffolded service into a working one. The reference implementation is
+`services/ledger-service` (posting engine, holds, reversals, 10 integration tests).
+
+## What you get for free
+
+- **Contract:** `generated/openapi/services/<service>.openapi.yaml` → generated interfaces `<pkg>.api.generated.*Api`
+  and models `<pkg>.api.generated.model.*` (snake_case JSON, money as `BigDecimal` serialised as strings).
+- **Generic CRUD:** every `list/get/create/update/delete` operation already works through `CrudEngine`
+  (tenant-scoped via row-level security, keyset paging, filters incl. path params, `ETag`/`If-Match`,
+  idempotent create). Only override a CRUD method when it needs business rules.
+- **Actions:** every other operation (e.g. `POST /{id}/approve`) throws `501 not_implemented` until you
+  override it in the matching `api/<Tag>Controller`.
+- **Schema:** Flyway applies `generated/db/<database>/V001__init.sql` on start (owner role); the service
+  connects as `meridian_app`, so RLS is enforced.
+
+## Layering (hexagonal)
+
+| Package | Contents | Rules |
+| --- | --- | --- |
+| `api` | Controllers implementing generated `*Api` interfaces | Thin: parse request, call application, map response |
+| `application` | `@Service` use cases, `@Transactional` boundaries, outbox events | One public method per business action |
+| `domain` | State machines, rules, value objects | No Spring, no SQL; pure and unit-testable |
+| `infrastructure` | `JdbcClient` SQL beyond generic CRUD, adapters to external providers | Parameterised SQL only |
+
+## Building blocks (from `libs/`)
+
+| Need | Use |
+| --- | --- |
+| Current tenant / user | `TenantContext.require()`, `TenantContext.principal()` |
+| Errors | `throw ApiException.unprocessable("code", "message")` (also `notFound`, `conflict`, `badRequest`); codes are snake_case and stable |
+| Generic row ops | `CrudEngine`: `findOne(table, Map)`, `insert(table, ObjectNode)`, `updateRow(table, keys, values, version)`, `toColumns(table, model)`, `read(json, ModelClass)`, `list(...)` |
+| Idempotent POST | `Idempotency.execute(key, body, ResponseType.class, () -> ...)` |
+| Events | `OutboxWriter.publish("<domain>.<entity>.<verb>", "<table>", id, payloadJsonNode)` inside the transaction; event names must exist in the domain spec `events:` |
+| Other services | `ServiceClient.post("ledger-service", "/v1/journal-entries", body, idemKey)` (propagates tenant/user/token) |
+| IDs / money | `Ids.newId()` (UUIDv7), `Money`, `BigDecimal` with explicit `RoundingMode.HALF_EVEN` |
+
+Request bodies: convert models with `JsonNode req = json.valueToTree(body)` and read snake_case fields; this avoids
+coupling to generated getter names. Responses: `crud.read(rowJson, Model.class)`.
+
+## State changes
+
+- Status changes go through explicit actions (`/activate`, `/suspend`, `/approve`), never through PATCH. When an
+  action exists for a status field, validate allowed transitions in a `domain` state machine and reject others
+  with `409 invalid_transition` (or a more specific code).
+- Maker-checker: approval actions must reject approval by the same principal that created/submitted
+  (`422 four_eyes_violation`) where the spec describes approval.
+- Every state change publishes its domain event via the outbox in the same transaction.
+- Money movements never update balances directly: they post to `ledger-service` (journal entries / holds).
+
+## Tests (required per service)
+
+- Keep the generated `<Name>ApplicationTests` (context + migration).
+- Add `<Name>FlowIT` (see `LedgerPostingIT`): `@SpringBootTest(webEnvironment = RANDOM_PORT, properties =
+  {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})`, `@Import(MeridianTestContainers.class)`,
+  plain `java.net.http.HttpClient` with `X-Tenant-Id` and `Idempotency-Key` headers. Cover: happy path of each
+  main flow, invalid transitions, validation errors, idempotent replay, tenant isolation.
+- Stub other services with `@MockitoBean ServiceClient` (`org.springframework.test.context.bean.override.mockito`).
+- Run: `./gradlew :services:<service>:test`.

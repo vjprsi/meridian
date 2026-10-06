@@ -1,5 +1,6 @@
 package io.meridian.web;
 
+import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.crud.TableCatalog;
 import io.meridian.web.error.ProblemHandler;
@@ -15,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -92,5 +94,11 @@ public class MeridianWebAutoConfiguration {
     @ConditionalOnMissingBean
     CrudEngine crudEngine(JdbcClient jdbc, JsonMapper json, TableCatalog catalog, Idempotency idempotency) {
         return new CrudEngine(jdbc, json, catalog, idempotency);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    ServiceClient serviceClient(JsonMapper json, Environment env) {
+        return new ServiceClient(json, env);
     }
 }

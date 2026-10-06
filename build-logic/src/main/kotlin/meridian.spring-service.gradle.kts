@@ -66,4 +66,6 @@ tasks.named("compileJava") { dependsOn(openApiGenerate) }
 // Flyway migrations come straight from the generated DDL (single source of truth).
 tasks.named<ProcessResources>("processResources") {
     from(svc.database.map { rootProject.layout.projectDirectory.dir("generated/db/$it") }) { into("db/migration") }
+    // Service directory (names -> ports) for ServiceClient.
+    from(rootProject.layout.projectDirectory.file("generated/services.json")) { into("meridian") }
 }
