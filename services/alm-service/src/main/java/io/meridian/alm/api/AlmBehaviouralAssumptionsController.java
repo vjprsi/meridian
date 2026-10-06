@@ -40,8 +40,12 @@ public class AlmBehaviouralAssumptionsController implements AlmBehaviouralAssump
                                                                                     AlmBehaviouralAssumptionUpdate body) {
         TenantContext.require();
         service.checkUpdate(id, body);
-        return crud.update("alm_behavioural_assumption", AlmBehaviouralAssumption.class, body, ifMatch,
-                Crud.params().with("id", id));
+        ResponseEntity<AlmBehaviouralAssumption> updated = crud.update("alm_behavioural_assumption",
+                AlmBehaviouralAssumption.class, body, ifMatch, Crud.params().with("id", id));
+        if (updated.getStatusCode().is2xxSuccessful()) {
+            service.resubmit(id); // reworked while awaiting approval: submit the new content (G11)
+        }
+        return updated;
     }
 
     @Override
