@@ -37,6 +37,37 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.payments.v1
+  payment:
+    # Ledger book and internal accounts (ids in ledger-service); set per environment.
+    ledger-id: ${MERIDIAN_PAYMENT_LEDGER_ID:}
+    bank-bic: MERIGB2LXXX
+    bank-code: MERI
+    bank-name: Meridian Bank
+    gl:
+      clearing: ${MERIDIAN_PAYMENT_GL_CLEARING:}
+      fee-income: ${MERIDIAN_PAYMENT_GL_FEE_INCOME:}
+      direct-debit-clearing: ${MERIDIAN_PAYMENT_GL_DD_CLEARING:}
+    fees:
+      DOMESTIC: 0.00
+      INSTANT: 0.25
+      CROSS_BORDER: 15.00
+    approval:
+      levels:
+        - min-amount: 10000
+          approvals: 1
+        - min-amount: 100000
+          approvals: 2
+      bulk-min-approvals: 1
+      expiry-hours: 72
+    cop:
+      match-threshold: 0.98
+      close-match-threshold: 0.80
+    payee-cooling-off-hours: 24
+    link-base-url: https://pay.meridian.example
+    qr-guid: IO.MERIDIAN.PAY
+    screening-enabled: true
+    limits-enabled: true
+    refund-days: 56
 
 management:
   endpoints:

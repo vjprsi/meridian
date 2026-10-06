@@ -21,6 +21,7 @@ enums:
   PaymentRepairStatus: [OPEN, IN_REPAIR, RESUBMITTED, CANCELLED]
   PaymentApprovalStatus: [PENDING, APPROVED, REJECTED, EXPIRED]
   PayeeStatus: [PENDING_VERIFICATION, ACTIVE, BLOCKED, DELETED]
+  PayeeAliasStatus: [PENDING, ACTIVE, PORTING, DELETED]
   PayeeAliasType: [PHONE, EMAIL, UPI_VPA, PIX_KEY_CPF, PIX_KEY_CNPJ, PIX_KEY_RANDOM, NATIONAL_ID, BUSINESS_ID, USERNAME]
   PayeeVerificationResult: [MATCH, CLOSE_MATCH, NO_MATCH, ACCOUNT_NOT_FOUND, ACCOUNT_CLOSED, NOT_AVAILABLE]
   BulkPaymentStatus: [UPLOADED, VALIDATING, VALIDATED, PENDING_APPROVAL, APPROVED, PROCESSING, COMPLETED,
@@ -71,7 +72,7 @@ services:
           - "customer_id uuid ref=customer idx | Initiating or receiving customer"
           - "debtor_account_id uuid ref=deposit_account idx | Internal source account (outbound / internal)"
           - "debtor_wallet_id uuid ref=wallet | Internal source wallet"
-          - "debtor_ledger_account_id uuid ref=ledger_account | Ledger account debited"
+          - "debtor_ledger_account_id uuid ref=ledger_account ro | Ledger account debited (resolved from the debtor account)"
           - "debtor_name string(140) pii | Debtor (payer) name"
           - "debtor_account_id_type enum:PaymentAccountIdType | Scheme of debtor account identifier"
           - "debtor_account_number string(64) pii | Debtor IBAN / account number / wallet id"
@@ -79,9 +80,9 @@ services:
           - "debtor_agent_clearing_id string(35) | Debtor agent clearing id (sort code, ABA, IFSC)"
           - "debtor_country country | Debtor country"
           - "payee_id uuid fk=payee idx | Saved payee used, if any"
-          - "creditor_name string(140) nn pii | Creditor (payee) name"
-          - "creditor_account_id_type enum:PaymentAccountIdType nn | Scheme of creditor account identifier"
-          - "creditor_account_number string(64) nn pii | Creditor IBAN / account number / wallet id / proxy"
+          - "creditor_name string(140) pii | Creditor (payee) name (required unless payee_id or creditor_account_id is given)"
+          - "creditor_account_id_type enum:PaymentAccountIdType | Scheme of creditor account identifier (required with creditor_account_number)"
+          - "creditor_account_number string(64) pii | Creditor IBAN / account number / wallet id / proxy"
           - "creditor_agent_bic string(11) | Creditor agent BIC"
           - "creditor_agent_clearing_id string(35) | Creditor agent clearing id (sort code, ABA, IFSC)"
           - "creditor_country country | Creditor country"
@@ -100,9 +101,9 @@ services:
           - "fee_amount amount ro | Fee charged to the debtor"
           - "fee_currency currency ro | Fee currency"
           - "charge_bearer enum:ChargeBearer nn default=SHAR | Who bears charges (ISO 20022 ChrgBr)"
-          - "end_to_end_id string(35) nn idx | ISO 20022 end-to-end id (shown to the creditor)"
-          - "uetr uuid idx | SWIFT gpi unique end-to-end transaction reference"
-          - "instruction_id string(35) | Instruction id between instructing parties"
+          - "end_to_end_id string(35) nn idx ro | ISO 20022 end-to-end id (server-generated; shown to the creditor)"
+          - "uetr uuid idx ro | SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4)"
+          - "instruction_id string(35) ro | Instruction id between instructing parties (server-generated)"
           - "transaction_id string(35) ro | Interbank transaction id assigned on submission"
           - "clearing_system_ref string(64) ro | Reference returned by the clearing system"
           - "purpose_code string(4) | ISO 20022 external purpose code"
@@ -112,11 +113,12 @@ services:
           - "reference string(35) | Payer reference shown on statements"
           - "requested_execution_date date | Requested execution date (future-dated payments)"
           - "value_date date ro | Interbank value date"
-          - "rail_id uuid ref=payment_rail idx | Rail chosen by routing"
+          - "rail_id uuid ref=payment_rail idx ro | Rail chosen by routing"
           - "rail_code string(32) ro | Rail code at submission time"
           - "hold_id uuid ref=hold ro | Ledger hold placed on the debtor account"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting on settlement"
           - "screening_result_id uuid ref=screening_result ro | Sanctions screening result"
+          - "limit_check_id uuid ref=limit_check ro | Limits reservation (committed on settlement, released on failure)"
           - "fraud_score rate ro | Fraud score 0..1 at initiation"
           - "rejection_code string(8) ro | ISO 20022 status reason code"
           - "rejection_reason string(255) ro | Human-readable rejection reason"
@@ -125,7 +127,7 @@ services:
           - "request_to_pay_id uuid fk=request_to_pay | Request-to-pay being paid"
           - "original_payment_id uuid fk=payment | Original payment for returns and refunds"
           - "ob_consent_id uuid ref=ob_consent | Open banking consent (PIS)"
-          - "initiated_by string(64) | Principal that initiated the payment"
+          - "initiated_by string(64) ro | Principal that initiated the payment"
           - "submitted_at ts ro | Time submitted to the rail"
           - "accepted_at ts ro | Time accepted by the rail / creditor agent"
           - "settled_at ts ro | Time settled"
@@ -162,6 +164,7 @@ services:
           - "currency currency nn | Currency"
           - "fee_amount amount nn default=0 | Return fee deducted"
           - "return_id string(35) ro | Return identification on the rail"
+          - "journal_entry_id uuid ref=journal_entry ro | Ledger posting moving the funds back"
           - "completed_at ts ro | Completion time"
 
       - name: payment_recall
@@ -185,12 +188,12 @@ services:
         description: Repair queue item for a payment that failed validation, routing or submission
         fr: [PAY-04]
         columns:
-          - "payment_id uuid nn fk=payment idx | Payment to repair"
-          - "status enum:PaymentRepairStatus nn default=OPEN | Status"
-          - "error_code string(32) nn | Error code that sent it to repair"
-          - "error_detail text | Error detail"
+          - "payment_id uuid nn fk=payment idx ro | Payment to repair"
+          - "status enum:PaymentRepairStatus nn default=OPEN ro | Status"
+          - "error_code string(32) nn ro | Error code that sent it to repair"
+          - "error_detail text ro | Error detail"
           - "suggested_fix json ro | Suggested corrections (e.g. BIC from IBAN, name normalisation)"
-          - "corrections json | Corrections applied by the operator"
+          - "corrections json ro | Corrections applied by the operator (set by resubmit)"
           - "assigned_to string(64) idx | Operator"
           - "resubmitted_at ts ro | Time resubmitted"
 
@@ -202,9 +205,12 @@ services:
           - "payment_id uuid fk=payment idx | Payment (or empty when approving a bulk payment)"
           - "bulk_payment_id uuid fk=bulk_payment idx | Bulk payment"
           - "approval_request_id uuid ref=approval_request | Platform approval request"
-          - "approver_level int nn default=1 | Level in the approval matrix"
-          - "required_approvals int nn default=1 | Approvals needed at this level"
-          - "approver_user_id uuid ref=app_user | User who decided"
+          - "approver_level int nn default=1 ro | Level in the approval matrix"
+          - "required_approvals int nn default=1 ro | Approvals needed at this level"
+          - "approver_user_id uuid ref=app_user ro | User who decided last"
+          - "approvals_received int nn default=0 ro | Approvals collected at this level"
+          - "approved_by json[] ro | Principals who approved at this level (distinct, never the initiator)"
+          - "decided_by string(64) ro | Principal that made the final decision"
           - "status enum:PaymentApprovalStatus nn default=PENDING ro | Status"
           - "comment string(500) | Approver comment"
           - "decided_at ts ro | Decision time"
@@ -231,6 +237,7 @@ services:
           - "phone phone pii | Beneficiary phone"
           - "status enum:PayeeStatus nn default=PENDING_VERIFICATION ro | Status"
           - "verification_result enum:PayeeVerificationResult ro | Last Confirmation of Payee result"
+          - "blocked_reason string(255) ro | Reason the payee was blocked"
           - "verified_at ts ro | Last verification time"
           - "trusted bool nn default=false | Trusted payee (skips step-up authentication)"
           - "cooling_off_until ts ro | New payee limit window end"
@@ -251,8 +258,12 @@ services:
           - "is_default bool nn default=true | Default destination for this alias"
           - "registry string(32) | External registry (PIX DICT, UPI, PayNow, national proxy)"
           - "registry_ref string(64) ro | Registration id at the external registry"
-          - "status string(16) nn default=ACTIVE | ACTIVE, PENDING, PORTING, DELETED"
+          - "status enum:PayeeAliasStatus nn default=PENDING ro | Lifecycle status (PENDING until ownership is verified)"
           - "verified_at ts ro | Ownership verification time"
+          - "otp_hash string(64) hide | Hash of the ownership one-time password"
+          - "otp_expires_at ts hide | Expiry of the one-time password"
+          - "otp_attempts int nn default=0 hide | Failed OTP attempts"
+          - "donor_institution string(140) ro | Institution the alias is being ported from"
         unique: [[tenant_id, alias_type, alias_value]]
 
       - name: payee_verification
@@ -267,15 +278,18 @@ services:
           - "account_id_type enum:PaymentAccountIdType nn | Account identifier scheme"
           - "account_number string(64) nn pii | Account checked"
           - "agent_clearing_id string(35) | Clearing id checked"
-          - "result enum:PayeeVerificationResult nn | Outcome"
-          - "matched_name string(140) pii | Name returned on close match"
-          - "provider string(32) nn | Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry)"
-          - "provider_ref string(64) | Provider reference"
+          - "result enum:PayeeVerificationResult nn ro | Outcome"
+          - "match_score rate ro | Name similarity 0..1 (default thresholds MATCH >= 0.98, CLOSE_MATCH >= 0.80)"
+          - "matched_name string(140) pii ro | Name returned on close match"
+          - "provider string(32) nn ro | Scheme / provider (UK CoP, EU VoP, NIBSS name enquiry, ON_US)"
+          - "provider_ref string(64) ro | Provider reference"
 
       - name: bulk_payment
         prefix: blk
         description: A batch of payments (payroll, supplier run) uploaded as a file or via API
         fr: [PAY-01]
+        nested:
+          - "items list:bulk_payment_item | Lines of the batch when created via the API"
         columns:
           - "customer_id uuid nn ref=customer idx | Business customer"
           - "debtor_account_id uuid nn ref=deposit_account | Account debited"
@@ -293,7 +307,10 @@ services:
           - "currency currency nn | Batch currency"
           - "control_sum amount | Control sum declared in the file"
           - "hold_id uuid ref=hold ro | Ledger hold for the whole batch"
+          - "submitted_by string(64) ro | Principal that submitted the batch (cannot approve it)"
           - "submitted_at ts ro | Submission time"
+          - "settled_count int nn default=0 ro | Items settled"
+          - "rejection_reason string(255) ro | Reason when rejected or cancelled"
           - "completed_at ts ro | Completion time"
 
       - name: bulk_payment_item
@@ -301,8 +318,8 @@ services:
         description: One line of a bulk payment
         fr: [PAY-01]
         columns:
-          - "bulk_payment_id uuid nn fk=bulk_payment idx | Batch"
-          - "line_no int nn | Line number in the file"
+          - "bulk_payment_id uuid nn fk=bulk_payment idx ro | Batch"
+          - "line_no int nn ro | Line number in the file (assigned in order)"
           - "creditor_name string(140) nn pii | Beneficiary name"
           - "creditor_account_id_type enum:PaymentAccountIdType nn | Account identifier scheme"
           - "creditor_account_number string(64) nn pii | Beneficiary account"
@@ -310,11 +327,11 @@ services:
           - "creditor_agent_clearing_id string(35) | Beneficiary clearing id"
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
-          - "end_to_end_id string(35) nn | End-to-end id"
+          - "end_to_end_id string(35) | End-to-end id from the file (generated when empty)"
           - "remittance_unstructured string(140) | Remittance information"
           - "status enum:BulkPaymentItemStatus nn default=PENDING ro | Status"
-          - "validation_errors json ro | Validation errors"
-          - "payment_id uuid fk=payment | Payment created for this line"
+          - "validation_errors json[] ro | Validation errors ({field, code, message})"
+          - "payment_id uuid fk=payment ro | Payment created for this line"
         unique: [[bulk_payment_id, line_no]]
 
       - name: payment_mandate
@@ -351,7 +368,7 @@ services:
         fr: [PAY-07]
         columns:
           - "mandate_id uuid nn fk=payment_mandate idx | Mandate"
-          - "payment_id uuid fk=payment | Payment created for the collection"
+          - "payment_id uuid fk=payment ro | Payment created for the collection"
           - "amount amount nn | Amount to collect"
           - "currency currency nn | Currency"
           - "due_date date nn | Due date"
@@ -360,6 +377,7 @@ services:
           - "status enum:DirectDebitCollectionStatus nn default=SCHEDULED ro | Status"
           - "return_reason_code string(8) ro | R-transaction reason"
           - "collected_at ts ro | Collection time"
+          - "failure_reason string(255) ro | Failure reason"
         indexes: [[due_date, status]]
 
       - name: request_to_pay
@@ -392,7 +410,7 @@ services:
           - "merchant_id uuid ref=merchant idx | Owner merchant"
           - "credit_account_id uuid ref=deposit_account | Account credited"
           - "credit_wallet_id uuid ref=wallet | Wallet credited"
-          - "slug string(64) nn uq | Short code used in the URL"
+          - "slug string(64) nn uq ro | Short code used in the URL (server-generated)"
           - "url string(500) nn ro | Public URL"
           - "title string(140) nn | Title shown to payers"
           - "amount amount | Fixed amount (empty = payer enters amount)"
@@ -402,7 +420,7 @@ services:
           - "reusable bool nn default=false | Can be paid many times"
           - "max_payments int | Cap on payments when reusable"
           - "payment_count int nn default=0 ro | Payments received"
-          - "allowed_methods json | Payment methods offered (account, wallet, card, QR)"
+          - "allowed_methods json[] | Payment methods offered (ACCOUNT, WALLET, CARD, QR)"
           - "expires_at ts | Expiry"
           - "status enum:PaymentLinkStatus nn default=ACTIVE ro | Status"
           - "last_payment_id uuid fk=payment ro | Latest payment received"
@@ -418,7 +436,10 @@ services:
           - "credit_account_id uuid ref=deposit_account | Account credited"
           - "credit_wallet_id uuid ref=wallet | Wallet credited"
           - "scheme string(32) nn | EMVCO, PIX, UPI, PAYNOW, PROMPTPAY, DUITNOW, BHARAT_QR, INTERNAL"
-          - "payload text nn ro | Encoded EMVCo TLV payload"
+          - "payload text nn ro | Encoded EMVCo TLV payload (with CRC16-CCITT)"
+          - "merchant_name string(25) nn | Merchant / payee name encoded in the QR (EMVCo tag 59)"
+          - "merchant_city string(15) nn | Merchant city (EMVCo tag 60)"
+          - "country_code country nn | Merchant country (EMVCo tag 58)"
           - "image_uri string(500) ro | Rendered PNG/SVG location"
           - "amount amount | Amount (dynamic QR)"
           - "currency currency nn | Currency"
@@ -435,24 +456,32 @@ services:
         description: Initiate and track payments on any rail. Status follows the PaymentStatus state machine.
         ops: [list, get, create]
         filters: [status, payment_type, direction, channel, customer_id, debtor_account_id, creditor_account_id,
-                  bulk_payment_id, mandate_id, end_to_end_id, uetr, rail_id, requested_execution_date]
+                  bulk_payment_id, mandate_id, end_to_end_id, uetr, rail_id, requested_execution_date, ob_consent_id]
         actions:
-          - "POST /validate | Validate and price a payment without executing it (route, fees, FX, CoP) | payment json nn | none"
-          - "POST /{id}/approve | Approve a payment pending approval | comment string(500)"
+          - "POST /validate | Validate and price a payment without executing it (account checks, route, cut-off, fees, FX, CoP) | payment json nn | object"
+          - "POST /inbound | Book an inbound credit transfer received on a rail (pacs.008) to an internal account | rail_code string(32) nn, rail_message_id uuid, end_to_end_id string(35) nn, uetr uuid, transaction_id string(35), amount amount nn, currency currency nn, debtor_name string(140) nn, debtor_account_number string(64), debtor_agent_bic string(11), creditor_name string(140), creditor_account_number string(64) nn, remittance_unstructured string(140), settlement_date date | payment"
+          - "POST /execute-due | Execute approved payments whose requested execution date has arrived (business-day scheduler) | | object"
+          - "POST /{id}/approve | Approve a payment pending approval (four-eyes; one approval for the current level) | comment string(500)"
           - "POST /{id}/reject | Reject a payment pending approval | reason string(255) nn"
           - "POST /{id}/cancel | Cancel a payment not yet submitted (future-dated or pending) | reason string(255)"
+          - "POST /{id}/execute | Reserve funds and submit an approved payment now | | payment"
+          - "POST /{id}/screening-decision | Apply the compliance decision on a payment held in screening | status string(32) nn, screening_result_id uuid, reason string(255) | payment"
+          - "POST /{id}/status-report | Apply a rail status report (pacs.002 ACCP, ACSP, ACSC or RJCT) for a submitted payment | status string(4) nn, reason_code string(8), reason string(255), clearing_system_ref string(64), rail_message_id uuid, settlement_date date | payment"
           - "POST /{id}/return | Return a settled inbound payment (pacs.004) | reason_code string(8) nn, reason string(255), amount amount | payment_return"
           - "POST /{id}/recall | Request a recall of a submitted payment (camt.056) | reason_code string(8) nn, reason string(255) | payment_recall"
           - "POST /{id}/refund | Refund a settled inbound payment to the payer | amount amount, reason string(255) | payment"
           - "GET /{id}/status-history | Status transitions of the payment | | payment_status_history[]"
-          - "GET /{id}/tracker | End-to-end tracking (SWIFT gpi / rail status) | | none"
-          - "GET /{id}/receipt | Payment receipt / advice as PDF (signed URL) | | none"
+          - "GET /{id}/approvals | Approval levels of the payment | | payment_approval[]"
+          - "GET /{id}/tracker | End-to-end tracking (SWIFT gpi style status timeline, rail, charges, ETA) | | object"
+          - "GET /{id}/receipt | Payment receipt / advice as a PDF document | | application/pdf"
 
       - resource: payment-returns
         path: /v1/payment-returns
         table: payment_return
         ops: [list, get]
         filters: [payment_id, direction, status, reason_code]
+        actions:
+          - "POST /inbound | Book a return received for one of our outbound payments (pacs.004) | original_end_to_end_id string(35) nn, reason_code string(8) nn, amount amount nn, return_id string(35), reason string(255), rail_message_id uuid | payment_return"
 
       - resource: payment-recalls
         path: /v1/payment-recalls
@@ -460,13 +489,15 @@ services:
         ops: [list, get]
         filters: [payment_id, direction, status]
         actions:
+          - "POST /inbound | Register a recall request received from a rail for an inbound payment (camt.056) | original_end_to_end_id string(35) nn, reason_code string(8) nn, reason string(255), requested_by string(64) | payment_recall"
           - "POST /{id}/accept | Accept an inbound recall and return funds (camt.029 positive) | comment string(255) | payment_recall"
           - "POST /{id}/reject | Reject an inbound recall (camt.029 negative) | response_code string(8) nn, response_reason string(255)"
+          - "POST /{id}/resolve | Apply the counterparty answer to an outbound recall (camt.029; funds returned when accepted) | accepted bool nn, response_code string(8), response_reason string(255) | payment_recall"
 
       - resource: payment-repairs
         path: /v1/payment-repairs
         table: payment_repair
-        ops: [list, get, update]
+        ops: [list, get]
         filters: [payment_id, status, error_code, assigned_to]
         actions:
           - "POST /{id}/assign | Assign to an operator | assigned_to string(64) nn"
@@ -491,6 +522,7 @@ services:
           - "POST /{id}/verify | Run Confirmation / Verification of Payee | | payee_verification"
           - "POST /{id}/trust | Mark payee as trusted after step-up authentication | | payee"
           - "POST /{id}/block | Block payments to this payee | reason string(255) nn"
+          - "POST /{id}/unblock | Unblock a blocked payee | reason string(255) | payee"
 
       - resource: payee-aliases
         path: /v1/payee-aliases
@@ -500,7 +532,9 @@ services:
         actions:
           - "POST /resolve | Resolve an alias (phone, email, VPA, PIX key) to a masked payee | alias_type enum:PayeeAliasType nn, alias_value string(128) nn | payee_alias"
           - "POST /{id}/verify-ownership | Confirm alias ownership with an OTP | otp string(10) nn"
-          - "POST /{id}/port | Request portability of an alias from another institution | | payee_alias"
+          - "POST /{id}/resend-otp | Issue a new ownership OTP | | payee_alias"
+          - "POST /{id}/port | Request portability of an alias from another institution | donor_institution string(140) nn | payee_alias"
+          - "POST /{id}/complete-port | Confirm the donor released the alias; it becomes active here | | payee_alias"
 
       - resource: payee-verifications
         path: /v1/payee-verifications
@@ -515,13 +549,14 @@ services:
         ops: [list, get, create]
         filters: [customer_id, debtor_account_id, status, file_format, requested_execution_date]
         actions:
-          - "POST /upload | Upload a pain.001, CSV or NACHA file and create a bulk payment | document_id uuid nn, file_format enum:BulkFileFormat nn, debtor_account_id uuid nn | bulk_payment"
+          - "POST /upload | Upload a pain.001 or CSV file and create a bulk payment | content text nn, file_format enum:BulkFileFormat nn, customer_id uuid nn, debtor_account_id uuid nn, name string(140), currency currency, requested_execution_date date, document_id uuid, batch_booking bool | bulk_payment"
           - "GET /{id}/items | Items of the bulk payment | | bulk_payment_item[]"
           - "POST /{id}/validate | Re-run validation of all items"
           - "POST /{id}/submit | Submit for approval / execution"
-          - "POST /{id}/approve | Approve the bulk payment | comment string(500)"
+          - "POST /{id}/approve | Approve the bulk payment (four-eyes) and execute it | comment string(500)"
+          - "POST /{id}/reject | Reject the submitted bulk payment | reason string(255) nn"
           - "POST /{id}/cancel | Cancel the bulk payment | reason string(255)"
-          - "GET /{id}/report | Execution report (CSV / pain.002) as signed URL | | none"
+          - "GET /{id}/report | Execution report per item (CSV) | | text/csv"
 
       - resource: bulk-payment-items
         path: /v1/bulk-payment-items
@@ -547,6 +582,7 @@ services:
         ops: [list, get, create]
         filters: [mandate_id, status, due_date]
         actions:
+          - "POST /{id}/collect | Present and settle a due collection (pacs.003) | | direct_debit_collection"
           - "POST /{id}/cancel | Cancel a scheduled collection | reason string(255)"
           - "POST /{id}/refund | Refund a collected direct debit (debtor's right to refund) | reason_code string(8) nn | payment_return"
 
@@ -556,7 +592,7 @@ services:
         ops: [list, get, create]
         filters: [requester_customer_id, payer_customer_id, status]
         actions:
-          - "POST /{id}/accept | Payer accepts and pays | debtor_account_id uuid, debtor_wallet_id uuid, amount amount | payment"
+          - "POST /{id}/accept | Payer accepts and pays | debtor_account_id uuid nn, amount amount | payment"
           - "POST /{id}/decline | Payer declines | reason string(255)"
           - "POST /{id}/cancel | Requester cancels | reason string(255)"
 
@@ -564,8 +600,9 @@ services:
         path: /v1/payment-links
         table: payment_link
         ops: [list, get, create, update]
-        filters: [customer_id, merchant_id, status]
+        filters: [customer_id, merchant_id, status, slug]
         actions:
+          - "POST /{id}/pay | Pay through the link from an internal account | debtor_account_id uuid nn, amount amount, payer_name string(140) | payment"
           - "POST /{id}/disable | Disable the link | reason string(255)"
           - "GET /{id}/payments | Payments received through the link | | payment[]"
 
@@ -575,8 +612,8 @@ services:
         ops: [list, get, create]
         filters: [qr_type, merchant_id, customer_id, status, scheme]
         actions:
-          - "POST /decode | Decode a scanned QR payload into payment details | payload string(1024) nn | payment_qr_code"
-          - "POST /{id}/pay | Pay a decoded QR | debtor_account_id uuid, debtor_wallet_id uuid, amount amount | payment"
+          - "POST /decode | Decode and verify a scanned EMVCo QR payload (TLV fields, CRC, matching QR) | payload string(1024) nn | object"
+          - "POST /{id}/pay | Pay a QR code | debtor_account_id uuid nn, amount amount | payment"
           - "POST /{id}/disable | Disable the QR | reason string(255)"
 
     events:
@@ -590,19 +627,39 @@ services:
       - "payments.payment.failed | payment | A payment failed"
       - "payments.payment.cancelled | payment | A payment was cancelled"
       - "payments.payment.received | payment | An inbound payment was credited"
+      - "payments.payment.returned | payment | A payment was returned (pacs.004)"
+      - "payments.payment_approval.decided | payment_approval | An approver approved or rejected a payment approval level"
       - "payments.payment_return.completed | payment_return | A payment return completed"
+      - "payments.payment_recall.requested | payment_recall | We requested a recall of an outbound payment"
       - "payments.payment_recall.received | payment_recall | An inbound recall request was received"
+      - "payments.payment_recall.resolved | payment_recall | A recall was accepted or rejected"
       - "payments.payment_repair.opened | payment_repair | A payment entered the repair queue"
+      - "payments.payment_repair.resolved | payment_repair | A repair item was resubmitted or cancelled"
       - "payments.payee.created | payee | A payee was added"
+      - "payments.payee.blocked | payee | A payee was blocked"
       - "payments.payee.verified | payee_verification | A payee name check completed"
+      - "payments.payee_alias.registered | payee_alias | An alias was registered and is awaiting ownership verification"
+      - "payments.payee_alias.verified | payee_alias | Alias ownership was verified"
+      - "payments.payee_alias.port_requested | payee_alias | Portability of an alias was requested"
+      - "payments.bulk_payment.validated | bulk_payment | A bulk payment was validated"
+      - "payments.bulk_payment.submitted | bulk_payment | A bulk payment was submitted for approval"
+      - "payments.bulk_payment.approved | bulk_payment | A bulk payment was approved and released for execution"
+      - "payments.bulk_payment.cancelled | bulk_payment | A bulk payment was rejected or cancelled"
       - "payments.bulk_payment.completed | bulk_payment | A bulk payment finished processing"
       - "payments.payment_mandate.activated | payment_mandate | A mandate became active"
+      - "payments.payment_mandate.suspended | payment_mandate | A mandate was suspended"
+      - "payments.payment_mandate.resumed | payment_mandate | A suspended mandate was resumed"
       - "payments.payment_mandate.cancelled | payment_mandate | A mandate was cancelled"
       - "payments.direct_debit_collection.collected | direct_debit_collection | A direct debit was collected"
       - "payments.direct_debit_collection.failed | direct_debit_collection | A direct debit failed or was returned"
+      - "payments.direct_debit_collection.cancelled | direct_debit_collection | A scheduled direct debit was cancelled"
       - "payments.request_to_pay.sent | request_to_pay | A request-to-pay was sent"
       - "payments.request_to_pay.paid | request_to_pay | A request-to-pay was paid"
+      - "payments.request_to_pay.declined | request_to_pay | A request-to-pay was declined or cancelled"
       - "payments.payment_link.paid | payment_link | A payment link received a payment"
+      - "payments.payment_link.disabled | payment_link | A payment link was disabled"
+      - "payments.payment_qr_code.created | payment_qr_code | A payment QR code was generated"
+      - "payments.payment_qr_code.paid | payment_qr_code | A payment was made with a QR code"
 
   # ------------------------------------------------------------------ routing-service
   - name: routing-service
@@ -620,17 +677,22 @@ services:
           - "name string(120) nn | Display name"
           - "rail_type enum:RailType nn | Kind of rail"
           - "country country | Country (empty for regional / global rails)"
-          - "currencies json nn | Supported currencies"
+          - "currencies json[] nn | Supported currencies (ISO 4217 codes)"
           - "message_standard string(32) nn | ISO20022, ISO8583, NACHA, BACS, PROPRIETARY"
           - "max_amount amount | Scheme maximum per payment"
           - "settlement_model string(32) nn | RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT"
           - "is_instant bool nn default=false | Real-time rail"
           - "operating_hours json | Opening hours (24x7 or windows)"
           - "holiday_calendar_id uuid ref=holiday_calendar | Calendar used for business days"
-          - "settlement_account_id uuid ref=ledger_account | Ledger settlement account"
-          - "status enum:RailStatus nn default=ACTIVE | Status"
+          - "settlement_account_id uuid ref=ledger_account | Ledger settlement (clearing) account credited for outbound payments"
+          - "cost_per_payment amount nn default=0 | Scheme and sponsor cost per payment (routing cost factor)"
+          - "settlement_minutes int | Typical end-to-end settlement time in minutes"
+          - "participant_bic string(11) | Our BIC / participant id on the rail (instructing agent)"
+          - "status enum:RailStatus nn default=ACTIVE ro | Status (changed by suspend / resume)"
+          - "status_reason string(255) ro | Reason of the last status change"
           - "success_rate_7d rate ro | Success rate over the last 7 days"
           - "p95_latency_ms int ro | p95 end-to-end latency"
+          - "metrics_updated_at ts ro | Time the performance metrics were last recorded"
 
       - name: rail_adapter
         prefix: rad
@@ -644,10 +706,14 @@ services:
           - "participant_id string(35) | Our participant / member id on the rail"
           - "endpoint_url string(500) | Endpoint"
           - "credentials_ref string(255) secret | Vault path of credentials and keys"
+          - "previous_credentials_ref string(255) secret | Previous vault path, valid during the rotation grace period"
+          - "credentials_version int nn default=1 ro | Credentials generation (incremented on rotation)"
+          - "credentials_rotated_at ts ro | Last rotation time"
           - "config json | Adapter-specific configuration"
           - "is_primary bool nn default=true | Primary adapter for the rail"
           - "status enum:RailStatus nn default=ACTIVE | Status"
           - "last_heartbeat_at ts ro | Last successful heartbeat"
+          - "last_test_result json ro | Result of the last connection test"
 
       - name: rail_cutoff
         prefix: rco
@@ -659,7 +725,7 @@ services:
           - "currency currency | Currency (empty = all)"
           - "cutoff_time string(5) nn | Local time HH:MM"
           - "timezone string(64) nn | IANA timezone"
-          - "days_of_week json | Days it applies to"
+          - "days_of_week json[] | Days it applies to (MONDAY..SUNDAY; empty = every business day)"
           - "next_day_rollover bool nn default=true | After cut-off, roll to next business day"
 
       - name: payment_routing_rule
@@ -669,9 +735,9 @@ services:
         columns:
           - "name string(120) nn | Rule name"
           - "priority int nn default=100 | Lower evaluated first"
-          - "conditions json nn | Match conditions (payment_type, currency, country, amount band, priority, customer segment)"
+          - "conditions json nn | Match conditions (payment_types, currencies, countries, min_amount, max_amount, priorities, directions)"
           - "strategy enum:RoutingStrategy nn default=FIXED | Selection strategy among candidate rails"
-          - "candidate_rail_ids json nn | Ordered candidate rails"
+          - "candidate_rail_ids json[] nn | Ordered candidate rails"
           - "fallback_rail_id uuid fk=payment_rail | Rail if candidates are unavailable"
           - "weights json | Weights for BALANCED strategy (cost, speed, success)"
           - "is_active bool nn default=true | Active"
@@ -688,11 +754,14 @@ services:
           - "direction enum:RailMessageDirection nn | Inbound or outbound"
           - "message_type string(32) nn | e.g. pacs.008.001.08, pacs.002, camt.056, pain.001"
           - "message_id string(64) nn idx | Message id (MsgId)"
+          - "end_to_end_id string(35) idx | End-to-end id of the (original) transaction"
           - "payment_id uuid ref=payment idx | Related payment"
           - "rail_settlement_batch_id uuid fk=rail_settlement_batch | Batch, for batch rails"
+          - "replay_of_id uuid fk=rail_message | Message this one replays"
           - "status enum:RailMessageStatus nn | Processing status"
           - "payload_uri string(500) nn | Encrypted payload location (object storage)"
           - "payload_hash string(64) nn | SHA-256 of the payload"
+          - "payload text hide | Raw payload (served only through GET /payload)"
           - "signature_valid bool | Signature verification result"
           - "error text | Error detail"
 
@@ -711,6 +780,7 @@ services:
           - "debit_total amount nn default=0 ro | Sum of debits"
           - "credit_total amount nn default=0 ro | Sum of credits"
           - "net_position amount nn default=0 ro | Net settlement position"
+          - "settlement_file_id uuid ref=rail_message ro | Settlement file generated on close (logical ref: a FK would cycle with rail_message.rail_settlement_batch_id)"
           - "journal_entry_id uuid ref=journal_entry ro | Settlement posting"
           - "closed_at ts ro | Time closed"
           - "settled_at ts ro | Time settled"
@@ -759,7 +829,7 @@ services:
           - "clearing_id string(35) idx | Sort code, ABA routing number, IFSC, ISPB"
           - "name string(140) nn | Institution name"
           - "country country nn | Country"
-          - "reachable_rails json | Rail codes the participant is reachable on"
+          - "reachable_rails json[] | Rail codes the participant is reachable on"
           - "valid_from date | Directory validity start"
           - "valid_to date | Directory validity end"
           - "source string(32) | SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB"
@@ -772,9 +842,11 @@ services:
         filters: [rail_type, country, status, code]
         actions:
           - "POST /{id}/suspend | Suspend a rail (routing falls back) | reason string(255) nn"
-          - "POST /{id}/resume | Resume a suspended rail"
+          - "POST /{id}/resume | Resume a suspended or degraded rail | reason string(255)"
+          - "POST /{id}/metrics | Record observed performance from rail monitoring (DEGRADED below the success threshold) | success_rate_7d rate nn, p95_latency_ms int nn | payment_rail"
           - "GET /{id}/cutoffs | Cut-offs of the rail | | rail_cutoff[]"
-          - "GET /{id}/next-execution | Next possible execution date and time (?payment_type=&currency=) | | none"
+          - "GET /{id}/next-execution?payment_type:enum:PaymentType&currency:currency&at:ts | Next possible execution date and cut-off for a payment type and currency (business calendar aware) | | object"
+          - "POST /{id}/inbound | [public] Inbound rail message (pacs.002, pacs.008, camt.056, pacs.004) pushed by the rail or sponsor bank; HMAC signature in X-Rail-Signature | message_type string(32) nn, payload text nn | rail_message"
 
       - resource: rail-adapters
         path: /v1/rail-adapters
@@ -782,8 +854,8 @@ services:
         ops: [list, get, create, update]
         filters: [payment_rail_id, status, connection_type]
         actions:
-          - "POST /{id}/test-connection | Send a heartbeat / echo to the rail | | none"
-          - "POST /{id}/rotate-credentials | Rotate certificates and keys | | rail_adapter"
+          - "POST /{id}/test-connection | Send a heartbeat / echo to the rail endpoint and report reachability and latency | | object"
+          - "POST /{id}/rotate-credentials | Rotate certificates and keys to a new vault secret reference | credentials_ref string(255) nn, reason string(255) | rail_adapter"
 
       - resource: rail-cutoffs
         path: /v1/rail-cutoffs
@@ -797,16 +869,18 @@ services:
         ops: [list, get, create, update, delete]
         filters: [strategy, is_active]
         actions:
-          - "POST /simulate | Show which rail a payment would take and why | payment json nn | payment_rail"
+          - "POST /simulate | Show which rail a payment would take and why (rules, candidates, scores) | payment json nn | object"
+          - "POST /route | Choose the rail for a payment, with execution date, cut-off and settlement account | payment json nn | object"
 
       - resource: rail-messages
         path: /v1/rail-messages
         table: rail_message
         ops: [list, get]
-        filters: [payment_rail_id, direction, message_type, message_id, payment_id, status]
+        filters: [payment_rail_id, direction, message_type, message_id, payment_id, status, end_to_end_id]
         actions:
-          - "GET /{id}/payload | Decrypted raw payload (requires payments:audit scope) | | none"
-          - "POST /{id}/replay | Re-process an inbound message | reason string(255) nn"
+          - "POST /pacs008 | Build, store and send the outbound pacs.008 FI-to-FI customer credit transfer for a payment | payment_rail_id uuid nn, payment json nn | rail_message"
+          - "GET /{id}/payload | Raw payload (requires payments:audit scope) | | application/xml"
+          - "POST /{id}/replay | Re-process an inbound message | reason string(255) nn | object"
 
       - resource: rail-settlement-batches
         path: /v1/rail-settlement-batches
@@ -815,6 +889,7 @@ services:
         filters: [payment_rail_id, status, settlement_date]
         actions:
           - "POST /{id}/close | Close the batch and generate the settlement file | | rail_settlement_batch"
+          - "POST /{id}/settle | Confirm settlement of the cycle and post the net position to the ledger | | rail_settlement_batch"
           - "GET /{id}/messages | Messages in the batch | | rail_message[]"
 
       - resource: nostro-accounts
@@ -824,7 +899,8 @@ services:
         filters: [account_type, currency, payment_rail_id, is_active]
         actions:
           - "GET /{id}/positions | Liquidity positions over time | | rail_liquidity_position[]"
-          - "POST /{id}/top-up | Request a liquidity top-up transfer | amount amount nn | none"
+          - "POST /{id}/refresh-position | Recompute the intraday position from the ledger balance and open settlement batches | | rail_liquidity_position"
+          - "POST /{id}/top-up | Fund the nostro from the treasury funding account and record the new position | amount amount nn, reason string(255) | rail_liquidity_position"
 
       - resource: liquidity-positions
         path: /v1/liquidity-positions
@@ -838,13 +914,17 @@ services:
         ops: [list, get, create, update]
         filters: [bic, clearing_system, clearing_id, country]
         actions:
-          - "POST /lookup | Look up a bank by BIC, IBAN or clearing id and its reachable rails | bic string(11), iban string(34), clearing_system string(16), clearing_id string(35) | rail_participant"
+          - "POST /lookup | Look up a bank by BIC, IBAN or clearing id and its reachable rails | bic string(11), iban string(34), clearing_system string(16), clearing_id string(35) | object"
 
     events:
       - "payments.payment_rail.status_changed | payment_rail | A rail was suspended, degraded or resumed"
+      - "payments.rail_adapter.credentials_rotated | rail_adapter | Adapter credentials were rotated"
       - "payments.rail_message.received | rail_message | An inbound rail message was received"
+      - "payments.rail_message.sent | rail_message | An outbound rail message was sent"
+      - "payments.rail_settlement_batch.closed | rail_settlement_batch | A settlement batch was closed and its file generated"
       - "payments.rail_settlement_batch.settled | rail_settlement_batch | A settlement cycle settled"
       - "payments.rail_liquidity_position.breached | rail_liquidity_position | Liquidity fell below the minimum"
+      - "payments.nostro_account.topped_up | nostro_account | A nostro account was funded"
 
   # ------------------------------------------------------------------ fx-service
   - name: fx-service
@@ -859,16 +939,22 @@ services:
         fr: [PAY-06, LED-03]
         columns:
           - "customer_id uuid ref=customer idx | Customer (pricing segment)"
+          - "segment string(32) | Customer segment used for margin rules"
+          - "channel enum:PaymentChannel | Channel used for margin rules"
           - "sell_currency currency nn | Currency the customer sells"
           - "buy_currency currency nn | Currency the customer buys"
-          - "sell_amount amount | Amount sold (fix one side)"
-          - "buy_amount amount | Amount bought (fix one side)"
-          - "mid_rate rate nn ro | Market mid rate"
+          - "sell_amount amount | Amount sold (fix one side; computed when buy_amount is fixed)"
+          - "buy_amount amount | Amount bought (fix one side; computed when sell_amount is fixed)"
+          - "mid_rate rate nn ro | Market mid rate (buy units per 1 sell unit)"
           - "customer_rate rate nn ro | Rate offered to the customer"
           - "margin_bps int nn ro | Margin in basis points"
+          - "fx_margin_rule_id uuid fk=fx_margin_rule ro | Margin rule applied"
           - "fee_amount amount nn default=0 ro | Fee"
-          - "fee_currency currency | Fee currency"
-          - "remittance_corridor_id uuid fk=remittance_corridor | Corridor (remittances)"
+          - "fee_currency currency ro | Fee currency"
+          - "remittance_corridor_id uuid fk=remittance_corridor ro | Corridor (remittances)"
+          - "remittance_partner_id uuid fk=remittance_partner ro | Payout partner (remittances)"
+          - "delivery_eta_minutes int ro | Expected delivery time (remittances)"
+          - "total_debit amount ro | Sell amount plus fee"
           - "rate_source string(32) ro | Rate provider"
           - "expires_at ts nn ro | Expiry"
           - "status enum:FxQuoteStatus nn default=ACTIVE ro | Status"
@@ -878,29 +964,30 @@ services:
         description: A booked FX conversion (from an accepted quote)
         fr: [PAY-06, LED-03]
         columns:
-          - "fx_quote_id uuid nn fk=fx_quote uq | Quote accepted"
-          - "payment_id uuid ref=payment idx | Payment funded by the deal"
-          - "side enum:FxSide nn | Buy or sell from the bank's view"
-          - "sell_currency currency nn | Sold currency"
-          - "sell_amount amount nn | Sold amount"
-          - "buy_currency currency nn | Bought currency"
-          - "buy_amount amount nn | Bought amount"
-          - "rate rate nn | Deal rate"
-          - "value_date date nn | Settlement value date"
+          - "fx_quote_id uuid nn fk=fx_quote uq ro | Quote accepted"
+          - "payment_id uuid ref=payment idx ro | Payment funded by the deal"
+          - "side enum:FxSide nn ro | Bank side on the sell currency: BUY (bank buys what the customer sells)"
+          - "sell_currency currency nn ro | Sold currency"
+          - "sell_amount amount nn ro | Sold amount"
+          - "buy_currency currency nn ro | Bought currency"
+          - "buy_amount amount nn ro | Bought amount"
+          - "rate rate nn ro | Deal rate"
+          - "value_date date nn ro | Settlement value date"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "liquidity_provider string(64) | Cover counterparty"
           - "status enum:FxDealStatus nn default=BOOKED ro | Status"
+          - "cancellation_reason string(255) ro | Reason when cancelled"
 
       - name: fx_margin_rule
         prefix: fxm
         description: Margin rules per currency pair, segment and amount band
         fr: [PAY-06, PRC-04]
         columns:
-          - "currency_pair string(7) nn | e.g. USD/EUR (or */EUR)"
+          - "currency_pair string(7) nn | e.g. USD/EUR (or */EUR, USD/*)"
           - "segment string(32) | Customer segment (empty = all)"
           - "channel enum:PaymentChannel | Channel (empty = all)"
-          - "min_amount amount | Amount band start"
-          - "max_amount amount | Amount band end"
+          - "min_amount amount | Amount band start (sell amount)"
+          - "max_amount amount | Amount band end (sell amount)"
           - "margin_bps int nn | Margin in basis points"
           - "min_fee amount | Minimum fee"
           - "priority int nn default=100 | Lower wins"
@@ -914,8 +1001,8 @@ services:
         columns:
           - "name string(140) nn | Partner name"
           - "partner_type string(32) nn | BANK, MTO, WALLET_OPERATOR, AGGREGATOR"
-          - "countries json nn | Payout countries"
-          - "payout_methods json nn | Supported payout methods"
+          - "countries json[] nn | Payout countries"
+          - "payout_methods json[] nn | Supported payout methods"
           - "api_endpoint string(500) | API endpoint"
           - "credentials_ref string(255) secret | Vault path of credentials"
           - "prefunding_account_id uuid ref=nostro_account | Prefunded account at the partner"
@@ -937,10 +1024,12 @@ services:
           - "min_amount amount nn default=0 | Minimum send amount"
           - "max_amount amount nn | Maximum send amount"
           - "fixed_fee amount nn default=0 | Fixed fee"
-          - "percent_fee rate nn default=0 | Percentage fee"
-          - "required_fields json | Beneficiary fields required by the destination"
+          - "percent_fee rate nn default=0 | Percentage fee (0.01 = 1%)"
+          - "margin_bps int | Corridor FX margin in basis points (overrides margin rules)"
+          - "required_fields json[] | Beneficiary fields required by the destination"
           - "delivery_eta_minutes int | Typical delivery time"
-          - "status enum:CorridorStatus nn default=ACTIVE | Status"
+          - "status enum:CorridorStatus nn default=ACTIVE ro | Status"
+          - "status_reason string(255) ro | Reason of the last status change"
         unique: [[tenant_id, source_country, destination_country, source_currency, destination_currency, payout_method]]
 
     apis:
@@ -958,6 +1047,7 @@ services:
         ops: [list, get]
         filters: [payment_id, status, sell_currency, buy_currency, value_date]
         actions:
+          - "POST /{id}/settle | Settle the deal: post both currency legs to the ledger | | fx_deal"
           - "POST /{id}/cancel | Cancel a deal before settlement | reason string(255) nn"
       - resource: fx-margin-rules
         path: /v1/fx/margin-rules
@@ -975,11 +1065,14 @@ services:
         ops: [list, get, create, update]
         filters: [source_country, destination_country, payout_method, status, remittance_partner_id]
         actions:
-          - "POST /{id}/quote | Price a remittance in this corridor | send_amount amount, receive_amount amount, customer_id uuid | fx_quote"
+          - "POST /{id}/quote | Price a remittance in this corridor (fees, FX, partner, delivery time) | send_amount amount, receive_amount amount, customer_id uuid | fx_quote"
           - "POST /{id}/suspend | Suspend the corridor | reason string(255) nn"
+          - "POST /{id}/resume | Resume a suspended corridor | reason string(255)"
 
     events:
       - "payments.fx_quote.created | fx_quote | An FX quote was issued"
+      - "payments.fx_quote.cancelled | fx_quote | An FX quote was cancelled"
       - "payments.fx_deal.booked | fx_deal | An FX deal was booked"
       - "payments.fx_deal.settled | fx_deal | An FX deal settled"
+      - "payments.fx_deal.cancelled | fx_deal | An FX deal was cancelled"
       - "payments.remittance_corridor.status_changed | remittance_corridor | A corridor was suspended or resumed"
