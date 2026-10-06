@@ -6,6 +6,8 @@ import static io.meridian.deposit.infrastructure.Rows.decOr0;
 import static io.meridian.deposit.infrastructure.Rows.str;
 import static io.meridian.deposit.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.deposit.domain.Currencies;
@@ -13,6 +15,8 @@ import io.meridian.deposit.domain.Lifecycle;
 import io.meridian.deposit.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +35,14 @@ public class OverdraftService {
     private final Events events;
     private final FeeService fees;
 
-    public OverdraftService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events, FeeService fees) {
+    private final Approvals approvals;
+
+    /** Approval resource type for overdraft facility credit approvals in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "overdraft_facility";
+
+    public OverdraftService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events, FeeService fees,
+                            Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
@@ -64,7 +75,36 @@ public class OverdraftService {
             throw ApiException.conflict("facility_exists", "The account already has an open overdraft facility");
         }
         v.put("status", "PENDING_APPROVAL");
-        return rows.insert("overdraft_facility", v);
+        ObjectNode row = rows.insert("overdraft_facility", v);
+        requestApproval(row, acc);
+        return row;
+    }
+
+    /** Central maker-checker: the credit officer decides in the workflow inbox; routed by the limit amount. */
+    private void requestApproval(ObjectNode f, JsonNode acc) {
+        UUID id = uuid(f, "id");
+        BigDecimal limit = dec(f, "limit_amount");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("deposit_account_id", str(f, "deposit_account_id"));
+        payload.put("account_number", str(acc, "account_number"));
+        payload.put("overdraft_type", str(f, "overdraft_type"));
+        payload.put("limit_amount", limit.toPlainString());
+        payload.put("currency", str(f, "currency"));
+        payload.put("interest_rate", str(f, "interest_rate"));
+        payload.put("starts_on", str(f, "starts_on"));
+        payload.put("expires_on", str(f, "expires_on"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Overdraft " + limit.toPlainString() + " " + str(f, "currency") + " on account " + str(acc, "account_number"),
+                payload).withAmount(limit, str(f, "currency")), "request:" + id + ":" + limit.toPlainString());
+    }
+
+    /** True while the facility still awaits approval with the requested limit unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, BigDecimal limit) {
+        return rows.find("overdraft_facility", id)
+                .filter(f -> "PENDING_APPROVAL".equals(str(f, "status")))
+                .filter(f -> limit == null || limit.compareTo(decOr0(f, "limit_amount")) == 0)
+                .isPresent();
     }
 
     private void validateLimit(JsonNode acc, BigDecimal limit) {
@@ -105,6 +145,7 @@ public class OverdraftService {
                     "Overdraft arrangement fee", "arrangement:" + id);
         }
         events.publish("accounts.overdraft_facility.approved", "overdraft_facility", approved);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approved;
     }
 
@@ -122,7 +163,9 @@ public class OverdraftService {
         if ("PENDING_APPROVAL".equals(str(f, "status"))) {
             ObjectNode v = rows.object();
             v.put("status", "CANCELLED");
-            return rows.update("overdraft_facility", id, v);
+            ObjectNode cancelled = rows.update("overdraft_facility", id, v);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, reason == null ? "cancelled" : reason);
+            return cancelled;
         }
         return withdrawLimit(f, "CANCELLED", reason);
     }
@@ -181,7 +224,12 @@ public class OverdraftService {
             rows.update(AccountSupport.TABLE, uuid(acc, "id"), a);
             v.put("utilised_amount", utilised.toPlainString());
         }
-        return rows.update("overdraft_facility", id, v);
+        ObjectNode row = rows.update("overdraft_facility", id, v);
+        if ("PENDING_APPROVAL".equals(status)) {
+            // the open request is for the old limit (its decision is ignored); approval is asked for the new one
+            requestApproval(row, acc);
+        }
+        return row;
     }
 
     private BigDecimal utilisation(UUID ledgerAccount) {

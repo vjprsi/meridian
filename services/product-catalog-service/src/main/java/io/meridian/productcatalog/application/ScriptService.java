@@ -1,5 +1,7 @@
 package io.meridian.productcatalog.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -30,15 +32,19 @@ public class ScriptService {
     static final String SCRIPT = "product_script";
     static final Set<String> CODE_FIELDS = Set.of("source_code", "language", "entrypoint", "hook", "max_fuel",
             "max_memory_mb", "timeout_ms", "name");
+    /** Approval resource type for product scripts in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "product_script";
 
     private final CatalogStore store;
     private final CrudEngine crud;
     private final VersionContentService content;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
     public ScriptService(CatalogStore store, CrudEngine crud, VersionContentService content, OutboxWriter outbox,
-                         JsonMapper json) {
+                         JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.content = content;
@@ -119,6 +125,16 @@ public class ScriptService {
         return store.update(SCRIPT, id, values).toString();
     }
 
+    /** True while the script is PENDING_APPROVAL for the same submission (module hash and submission time). */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String wasmSha256, String submittedAt) {
+        return store.find(SCRIPT, id)
+                .filter(s -> "PENDING_APPROVAL".equals(s.path("status").asString()))
+                .filter(s -> wasmSha256 == null || wasmSha256.equals(s.path("wasm_sha256").asString(null)))
+                .filter(s -> Submissions.sameInstant(submittedAt, s.path("submitted_at").asString(null)))
+                .isPresent();
+    }
+
     /** Validates a test invocation against the compiled module; the result is appended to the report. */
     @Transactional
     public Map<String, Object> test(UUID id, Map<String, Object> inputs) {
@@ -161,7 +177,20 @@ public class ScriptService {
         values.putNull("approved_at");
         values.putNull("rejection_reason");
         values.set("validation_report", store.toNumericNode(report));
-        return store.update(SCRIPT, id, values).toString();
+        JsonNode row = store.update(SCRIPT, id, values);
+        // Central maker-checker: the checker decides in the workflow inbox; ProductScriptApprovalHandler applies it.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("product_version_id", row.path("product_version_id").asString(null));
+        payload.put("name", row.path("name").asString(null));
+        payload.put("hook", row.path("hook").asString(null));
+        payload.put("language", row.path("language").asString(null));
+        payload.put("wasm_sha256", row.path("wasm_sha256").asString(null));
+        payload.put("submitted_at", row.path("submitted_at").asString(null));
+        payload.put("comment", comment);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
+                "Product script " + row.path("name").asString("") + " (" + row.path("hook").asString("") + ")", payload),
+                "submit:" + id + ":" + row.path("wasm_sha256").asString("") + ":" + row.path("submitted_at").asString(""));
+        return row.toString();
     }
 
     @Transactional
@@ -182,6 +211,7 @@ public class ScriptService {
         }
         JsonNode row = store.update(SCRIPT, id, values);
         outbox.publish("product.product_script.activated", SCRIPT, id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row.toString();
     }
 
@@ -198,6 +228,7 @@ public class ScriptService {
         values.put("rejection_reason", reason);
         JsonNode row = store.update(SCRIPT, id, values);
         outbox.publish("product.product_script.rejected", SCRIPT, id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row.toString();
     }
 
@@ -211,7 +242,11 @@ public class ScriptService {
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("deprecation_reason", reason);
-        return store.update(SCRIPT, id, values).toString();
+        JsonNode row = store.update(SCRIPT, id, values);
+        if ("PENDING_APPROVAL".equals(s.get("status").asString())) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "deprecated");
+        }
+        return row.toString();
     }
 
     /** The stored module hash must still match the source (no edits since compile). */
