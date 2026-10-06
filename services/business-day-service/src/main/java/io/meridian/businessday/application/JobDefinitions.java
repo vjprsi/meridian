@@ -95,6 +95,15 @@ public class JobDefinitions {
         if (code != null && JsonValues.strings(values.get("depends_on")).contains(code)) {
             throw ApiException.unprocessable("self_dependency", "Job " + code + " cannot depend on itself");
         }
+        if (values.path("is_active").asBoolean(true)) {
+            JsonNode params = values.get("parameters");
+            for (String p : JobTemplates.pathParameters(JsonValues.text(values, "http_path"))) {
+                if (params == null || !params.isObject() || !params.hasNonNull(p)) {
+                    throw ApiException.unprocessable("missing_parameter", "Job " + code + " calls "
+                            + JsonValues.text(values, "http_path") + ": set parameters." + p + " before activating it");
+                }
+            }
+        }
     }
 
     /**
@@ -129,9 +138,16 @@ public class JobDefinitions {
                 .toList();
     }
 
+    /**
+     * Execution graph of a set of definitions, restricted from the tenant's full graph so that dependencies through
+     * jobs outside the set (other cycles, inactive jobs) keep their ordering.
+     */
     public JobGraph graphOf(List<Definition> defs) {
         Set<String> codes = defs.stream().map(Definition::code).collect(Collectors.toSet());
-        return JobGraph.of(defs.stream().map(Definition::job).toList()).restrictTo(codes);
+        Map<String, JobGraph.Job> full = new LinkedHashMap<>();
+        all().forEach(d -> full.put(d.code(), d.job()));
+        defs.forEach(d -> full.put(d.code(), d.job()));
+        return JobGraph.of(full.values()).restrictTo(codes);
     }
 
     /** Graph view for the console: nodes with level, edges, execution levels and validation findings. */

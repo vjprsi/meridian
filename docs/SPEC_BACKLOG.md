@@ -15,7 +15,17 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
 | G5 | Missing statuses/events found during implementation (CHANGES_REQUESTED, CANCELLED, PENDING_APPROVAL, reinstate, archive, legal hold, invoice void/overdue, cell/branding events) | Add enum values / events in the domain specs | Open |
 | G6 | Shared enums (e.g. `RunStatus`) defined in one domain file but used everywhere | Move cross-domain enums to `spec/domains/_shared.yaml` | Open |
 | G7 | Platform-global reference tables (fx_rate, holiday_calendar ownership) RLS semantics unclear | Decide global vs tenant-override model; add `tenant: false` + override tables | Open |
-| G8 | Scheduled jobs cannot enumerate tenants under RLS (workaround: tenants seen in idempotency_key) | Business-day-service drives per-tenant jobs; services expose job endpoints; or a tenant registry fed by `platform.tenant.*` events | Open |
+| G8 | Scheduled jobs cannot enumerate tenants under RLS (workaround: tenants seen in idempotency_key) | Business-day-service drives per-tenant jobs; services expose job endpoints; or a tenant registry fed by `platform.tenant.*` events | Done (business-day-service, see note) |
+
+**G8 note.** business-day-service ships a versioned *standard EOD job pack* (`eod/standard-pack.json`, 53 jobs in banking
+order, checked against `generated/routes.json` and the per-service OpenAPI by `StandardJobPackTest`), installed per tenant
+with `POST /v1/operations/eod-jobs/install-standard-pack` (idempotent upgrade; tenant-defined jobs never overwritten).
+A cross-tenant trigger (`eod_sweep`, `eod_trigger_policy`) lists ACTIVE tenants from tenant-service with the service token
+and starts EOD per legal entity once its local cut-off has passed (optional auto-roll after a fully successful EOD):
+scheduler `meridian.business-day.auto-eod.enabled` (off by default) or operator `POST /v1/operations/eod-sweeps/run`
+(`meridian:admin`). Remaining: ledger EOD needs a tenant-wide endpoint (pack job `LEDGER_EOD` needs `parameters.ledger_id`),
+no tenant EOD endpoints yet for reconciliation runs, fee/billing charging or GL period close; most domain EOD endpoints
+are tenant-wide, not per legal entity; the generator cannot express operator-only reads of global tables.
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Done ([public]) |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
 | G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | Open |
@@ -42,7 +52,7 @@ duplicate resource names and ambiguous paths are now hard validation errors; wri
 | Area | Open item |
 |---|---|
 | Cross-cutting | Four-eyes is checked locally by principal everywhere; move to workflow-service approvals (G11). |
-| Cross-cutting | EOD / scan / expiry endpoints exist per tenant but nothing schedules them yet: business-day-service must drive them with S2S tokens (G8). |
+| Cross-cutting | ~~EOD / scan / expiry endpoints exist per tenant but nothing schedules them yet~~ — done: standard EOD job pack + cross-tenant trigger in business-day-service (G8 note). |
 | Cross-cutting | Simulated adapters only: credit bureau, e-signature, billers, interop switch, regulator gateway, data-share transport, HSM. |
 | Cross-cutting | Large jobs (disbursement batches, commission payouts, exports) run synchronously or in-memory; move to Temporal workflows. |
 | Cross-cutting | Report/export outputs stored inline; archive via document-service. Shared helpers duplicated in reporting services: move to libs. |

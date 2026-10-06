@@ -1,0 +1,1129 @@
+{
+  "pack_code": "MERIDIAN_STANDARD_EOD",
+  "version": "2026.10.1",
+  "description": "Standard end-of-day job pack: every domain's per-tenant EOD, scan and expiry endpoint in banking order (cut-off and expiries -> postings -> accruals -> delinquency -> collections -> fees/dormancy -> ledger snapshot / GL -> treasury and liquidity -> reporting, statements, notifications). Derived from spec/domains/*.yaml; verified against generated/routes.json by StandardJobPackTest.",
+  "stages": [
+    "CUT_OFF",
+    "POSTINGS",
+    "ACCRUALS",
+    "DELINQUENCY",
+    "COLLECTIONS",
+    "FEES",
+    "LEDGER",
+    "TREASURY",
+    "REPORTING"
+  ],
+  "jobs": [
+    {
+      "code": "CARD_AUTH_EXPIRY",
+      "name": "Expire stale card authorisations and release their holds",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "card-authorization-service",
+      "http_method": "POST",
+      "http_path": "/v1/card-authorizations/expire-stale",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "WALLET_TXN_EXPIRY",
+      "name": "Expire unconfirmed wallet transactions and release their holds",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "wallet-service",
+      "http_method": "POST",
+      "http_path": "/v1/wallet-transactions/expire-pending",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "INTEROP_TRANSFER_EXPIRY",
+      "name": "Abort expired interoperability transfers and quotes",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "interop-service",
+      "http_method": "POST",
+      "http_path": "/v1/interop-transfers/expire",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "LIMIT_RESERVATION_EXPIRY",
+      "name": "Release expired limit reservations",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "limits-service",
+      "http_method": "POST",
+      "http_path": "/v1/risk/limits/checks/expire-reservations",
+      "body_template": {},
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "OPENBANKING_CONSENT_EXPIRY",
+      "name": "Expire open banking consents and sessions",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "openbanking-service",
+      "http_method": "POST",
+      "http_path": "/v1/open-banking/consents/expire-due",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "USSD_SESSION_EXPIRY",
+      "name": "Time out idle USSD sessions",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "channel-service",
+      "http_method": "POST",
+      "http_path": "/v1/ussd-sessions/expire",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "CARD_EXPIRY_SCAN",
+      "name": "Card expiry scan (renewal notices, expire cards)",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "card-service",
+      "http_method": "POST",
+      "http_path": "/v1/cards/expiry-scan?as_of={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "CARD_DISPUTE_DEADLINES",
+      "name": "Card dispute stage deadlines",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "card-dispute-service",
+      "http_method": "POST",
+      "http_path": "/v1/card-disputes/deadline-scan?as_of={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "LOAN_ORIGINATION_EXPIRY",
+      "name": "Expire lapsed loan offers, envelopes and stale applications",
+      "stage": "CUT_OFF",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-origination-service",
+      "http_method": "POST",
+      "http_path": "/v1/loan-applications/eod/expire?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "PAYMENT_EXECUTE_DUE",
+      "name": "Execute payments due on the business date (payments cut-off)",
+      "stage": "CUT_OFF",
+      "job_type": "PAYMENT_EXECUTION",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "payment-service",
+      "http_method": "POST",
+      "http_path": "/v1/payments/execute-due",
+      "depends_on": [],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "DEP_PRODUCT_CHANGES",
+      "name": "Apply scheduled deposit product changes",
+      "stage": "CUT_OFF",
+      "job_type": "CUSTOM",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/product-changes?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 10
+    },
+    {
+      "code": "DEP_STANDING_ORDERS",
+      "name": "Execute standing orders",
+      "stage": "POSTINGS",
+      "job_type": "STANDING_ORDERS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/standing-orders?business_date={business_date}",
+      "depends_on": [
+        "PAYMENT_EXECUTE_DUE"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "DEP_SWEEPS",
+      "name": "Evaluate account sweep rules",
+      "stage": "POSTINGS",
+      "job_type": "SWEEP",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/sweeps?business_date={business_date}",
+      "depends_on": [
+        "DEP_STANDING_ORDERS"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "DEP_POT_RULES",
+      "name": "Run scheduled savings pot rules",
+      "stage": "POSTINGS",
+      "job_type": "SWEEP",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/pot-rules?business_date={business_date}",
+      "depends_on": [
+        "DEP_STANDING_ORDERS"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "DEP_TERM_MATURITIES",
+      "name": "Term deposit maturities (payout or rollover)",
+      "stage": "POSTINGS",
+      "job_type": "TERM_DEPOSIT_MATURITY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/maturities?business_date={business_date}",
+      "depends_on": [
+        "DEP_PRODUCT_CHANGES"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "LOAN_INSTALLMENTS_DUE",
+      "name": "Instalments falling due / overdue with late fees",
+      "stage": "POSTINGS",
+      "job_type": "INSTALMENT_DUE",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-service",
+      "http_method": "POST",
+      "http_path": "/v1/loans/eod/installments-due?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "LOAN_AUTO_DEBIT",
+      "name": "Collect due loan amounts from repayment accounts",
+      "stage": "POSTINGS",
+      "job_type": "PAYMENT_EXECUTION",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-service",
+      "http_method": "POST",
+      "http_path": "/v1/loans/eod/auto-debit?business_date={business_date}",
+      "depends_on": [
+        "LOAN_INSTALLMENTS_DUE",
+        "DEP_STANDING_ORDERS",
+        "DEP_SWEEPS"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "RWD_POINTS_CONFIRMATION",
+      "name": "Confirm pending points and cashback",
+      "stage": "POSTINGS",
+      "job_type": "LOYALTY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "rewards-service",
+      "http_method": "POST",
+      "http_path": "/v1/rewards/eod-runs/points-confirmation?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "RWD_CASHBACK_PAYOUT",
+      "name": "Pay confirmed cashback through the ledger",
+      "stage": "POSTINGS",
+      "job_type": "LOYALTY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "rewards-service",
+      "http_method": "POST",
+      "http_path": "/v1/rewards/eod-runs/cashback-payout?business_date={business_date}",
+      "depends_on": [
+        "RWD_POINTS_CONFIRMATION"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "TRY_MATURITIES",
+      "name": "Mature or roll over money market deals",
+      "stage": "POSTINGS",
+      "job_type": "TREASURY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "treasury-deal-service",
+      "http_method": "POST",
+      "http_path": "/v1/treasury/eod-runs/maturities?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 20
+    },
+    {
+      "code": "DEP_INTEREST_ACCRUAL",
+      "name": "Deposit interest accrual and capitalisation",
+      "stage": "ACCRUALS",
+      "job_type": "INTEREST_ACCRUAL",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/accrue?business_date={business_date}",
+      "depends_on": [
+        "DEP_STANDING_ORDERS",
+        "DEP_SWEEPS",
+        "DEP_POT_RULES",
+        "DEP_TERM_MATURITIES",
+        "LOAN_AUTO_DEBIT",
+        "RWD_CASHBACK_PAYOUT",
+        "CARD_AUTH_EXPIRY"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 120,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 30
+    },
+    {
+      "code": "LOAN_INTEREST_ACCRUAL",
+      "name": "Loan interest and penalty accrual",
+      "stage": "ACCRUALS",
+      "job_type": "LOAN_ACCRUAL",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-service",
+      "http_method": "POST",
+      "http_path": "/v1/loans/eod/accrue?business_date={business_date}",
+      "depends_on": [
+        "LOAN_AUTO_DEBIT"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 120,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 30
+    },
+    {
+      "code": "TRY_ACCRUALS",
+      "name": "Money market and coupon accruals",
+      "stage": "ACCRUALS",
+      "job_type": "INTEREST_ACCRUAL",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "treasury-deal-service",
+      "http_method": "POST",
+      "http_path": "/v1/treasury/eod-runs/accruals?business_date={business_date}",
+      "depends_on": [
+        "TRY_MATURITIES"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 30
+    },
+    {
+      "code": "LOAN_DELINQUENCY",
+      "name": "Days past due, delinquency buckets and ECL stage hints",
+      "stage": "DELINQUENCY",
+      "job_type": "DELINQUENCY_AGEING",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-service",
+      "http_method": "POST",
+      "http_path": "/v1/loans/eod/delinquency?business_date={business_date}",
+      "depends_on": [
+        "LOAN_INTEREST_ACCRUAL",
+        "LOAN_AUTO_DEBIT"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 40
+    },
+    {
+      "code": "CREDIT_LINE_STATEMENTS",
+      "name": "Close credit line / card statement cycles",
+      "stage": "DELINQUENCY",
+      "job_type": "CARD_STATEMENT_CYCLE",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "loan-service",
+      "http_method": "POST",
+      "http_path": "/v1/credit-lines/eod/statements?business_date={business_date}",
+      "depends_on": [
+        "LOAN_INTEREST_ACCRUAL"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 40
+    },
+    {
+      "code": "COLLATERAL_MONITOR",
+      "name": "Collateral LTV, insurance expiry and revaluation due",
+      "stage": "DELINQUENCY",
+      "job_type": "MONITORING",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "collateral-service",
+      "http_method": "POST",
+      "http_path": "/v1/collaterals/eod/monitor?business_date={business_date}",
+      "depends_on": [
+        "LOAN_DELINQUENCY"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 40
+    },
+    {
+      "code": "COLLECTIONS_STRATEGY_RUN",
+      "name": "Collections cases and strategy steps",
+      "stage": "COLLECTIONS",
+      "job_type": "COLLECTIONS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "collections-service",
+      "http_method": "POST",
+      "http_path": "/v1/collections/cases/eod/strategy-run?business_date={business_date}",
+      "depends_on": [
+        "LOAN_DELINQUENCY",
+        "CREDIT_LINE_STATEMENTS"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 120,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 50
+    },
+    {
+      "code": "DEP_DORMANCY",
+      "name": "Deposit dormancy scan",
+      "stage": "FEES",
+      "job_type": "DORMANCY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "deposit-service",
+      "http_method": "POST",
+      "http_path": "/v1/deposit-accounts/eod/dormancy?business_date={business_date}",
+      "depends_on": [
+        "DEP_INTEREST_ACCRUAL"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 60
+    },
+    {
+      "code": "WALLET_DORMANCY",
+      "name": "Wallet dormancy scan",
+      "stage": "FEES",
+      "job_type": "DORMANCY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "wallet-service",
+      "http_method": "POST",
+      "http_path": "/v1/wallets/eod/dormancy?business_date={business_date}",
+      "depends_on": [
+        "WALLET_TXN_EXPIRY"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 60
+    },
+    {
+      "code": "LEDGER_EOD",
+      "name": "Ledger end of day: expire holds, balance snapshots",
+      "stage": "LEDGER",
+      "job_type": "BALANCE_SNAPSHOT",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "ledger-service",
+      "http_method": "POST",
+      "http_path": "/v1/ledgers/{parameters.ledger_id}/eod",
+      "body_template": {
+        "business_date": "{business_date}"
+      },
+      "depends_on": [
+        "DEP_INTEREST_ACCRUAL",
+        "LOAN_INTEREST_ACCRUAL",
+        "LOAN_DELINQUENCY",
+        "CREDIT_LINE_STATEMENTS",
+        "COLLECTIONS_STRATEGY_RUN",
+        "TRY_ACCRUALS",
+        "DEP_DORMANCY",
+        "WALLET_DORMANCY",
+        "WALLET_TXN_EXPIRY",
+        "INTEROP_TRANSFER_EXPIRY",
+        "PAYMENT_EXECUTE_DUE"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_STOP",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": false,
+      "required_parameters": [
+        "ledger_id"
+      ],
+      "sequence": 70
+    },
+    {
+      "code": "GL_ECL_PROVISION",
+      "name": "Month-end ECL provisioning",
+      "stage": "LEDGER",
+      "job_type": "ECL_PROVISION",
+      "cycle_types": [
+        "EOM"
+      ],
+      "owning_service": "gl-service",
+      "http_method": "POST",
+      "http_path": "/v1/gl/ecl-provisions/calculate",
+      "body_template": {
+        "legal_entity_id": "{legal_entity_id}",
+        "reporting_date": "{business_date}",
+        "provision_expense_gl_account_id": "{parameters.provision_expense_gl_account_id}",
+        "allowance_gl_account_id": "{parameters.allowance_gl_account_id}"
+      },
+      "depends_on": [
+        "LEDGER_EOD",
+        "LOAN_DELINQUENCY"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 70
+    },
+    {
+      "code": "TRY_MARK_TO_MARKET",
+      "name": "Revalue FX deals and securities holdings",
+      "stage": "TREASURY",
+      "job_type": "FX_REVALUATION",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "treasury-deal-service",
+      "http_method": "POST",
+      "http_path": "/v1/treasury/eod-runs/mark-to-market?business_date={business_date}",
+      "depends_on": [
+        "TRY_ACCRUALS",
+        "LEDGER_EOD"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 80
+    },
+    {
+      "code": "TRY_LIMIT_UTILISATION",
+      "name": "Expire treasury limits and rebuild utilisation",
+      "stage": "TREASURY",
+      "job_type": "TREASURY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "treasury-deal-service",
+      "http_method": "POST",
+      "http_path": "/v1/treasury/eod-runs/limit-utilisation?business_date={business_date}",
+      "depends_on": [
+        "TRY_MARK_TO_MARKET"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 80
+    },
+    {
+      "code": "LIQ_POSITION_SNAPSHOT",
+      "name": "Snapshot actual cash positions",
+      "stage": "TREASURY",
+      "job_type": "LIQUIDITY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "liquidity-service",
+      "http_method": "POST",
+      "http_path": "/v1/treasury/liquidity/eod-runs/position-snapshot?business_date={business_date}",
+      "depends_on": [
+        "LEDGER_EOD",
+        "TRY_MATURITIES",
+        "PAYMENT_EXECUTE_DUE",
+        "DEP_TERM_MATURITIES",
+        "TRY_MARK_TO_MARKET"
+      ],
+      "is_critical": true,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 80
+    },
+    {
+      "code": "STATEMENT_CYCLE",
+      "name": "Generate and deliver account statements",
+      "stage": "REPORTING",
+      "job_type": "STATEMENTS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "statement-service",
+      "http_method": "POST",
+      "http_path": "/v1/statements/cycle?business_date={business_date}",
+      "depends_on": [
+        "LEDGER_EOD",
+        "DEP_INTEREST_ACCRUAL"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 180,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "REG_REPORT_RUN_DUE",
+      "name": "Run due regulatory report schedules",
+      "stage": "REPORTING",
+      "job_type": "REGULATORY_REPORTS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "regulatory-reporting-service",
+      "http_method": "POST",
+      "http_path": "/v1/reporting/schedules/run-due?business_date={business_date}",
+      "depends_on": [
+        "LEDGER_EOD",
+        "LIQ_POSITION_SNAPSHOT",
+        "TRY_MARK_TO_MARKET",
+        "GL_ECL_PROVISION"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 180,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "REG_SUBMISSION_DEADLINES",
+      "name": "Regulatory submission deadline alerts",
+      "stage": "REPORTING",
+      "job_type": "REGULATORY_REPORTS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "regulatory-reporting-service",
+      "http_method": "POST",
+      "http_path": "/v1/reporting/submissions/deadline-alerts?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "ANALYTICS_DATA_SHARES",
+      "name": "Deliver due data shares",
+      "stage": "REPORTING",
+      "job_type": "ANALYTICS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "analytics-service",
+      "http_method": "POST",
+      "http_path": "/v1/analytics/data-shares/deliver?business_date={business_date}",
+      "depends_on": [
+        "REG_REPORT_RUN_DUE"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "AI_MODEL_MONITOR",
+      "name": "AI model monitoring",
+      "stage": "REPORTING",
+      "job_type": "MONITORING",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "ai-platform-service",
+      "http_method": "POST",
+      "http_path": "/v1/ai/deployments/monitor?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "AGENT_PERFORMANCE",
+      "name": "Agent and outlet daily KPIs",
+      "stage": "REPORTING",
+      "job_type": "ANALYTICS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "agent-network-service",
+      "http_method": "POST",
+      "http_path": "/v1/agents/eod/performance?business_date={business_date}",
+      "depends_on": [
+        "WALLET_TXN_EXPIRY"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "RWD_POINTS_EXPIRY",
+      "name": "Expire loyalty points lots",
+      "stage": "REPORTING",
+      "job_type": "LOYALTY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "rewards-service",
+      "http_method": "POST",
+      "http_path": "/v1/rewards/eod-runs/points-expiry?business_date={business_date}",
+      "depends_on": [
+        "RWD_POINTS_CONFIRMATION"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "RWD_TIER_REQUALIFICATION",
+      "name": "Loyalty tier requalification",
+      "stage": "REPORTING",
+      "job_type": "LOYALTY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "rewards-service",
+      "http_method": "POST",
+      "http_path": "/v1/rewards/eod-runs/tier-requalification?business_date={business_date}",
+      "depends_on": [
+        "RWD_POINTS_EXPIRY"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "RWD_REFERRAL_EXPIRY",
+      "name": "Expire referrals past their deadline",
+      "stage": "REPORTING",
+      "job_type": "LOYALTY",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "rewards-service",
+      "http_method": "POST",
+      "http_path": "/v1/rewards/eod-runs/referral-expiry?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "CAMPAIGN_LIFECYCLE",
+      "name": "Launch due campaigns and complete ended ones",
+      "stage": "REPORTING",
+      "job_type": "ENGAGEMENT",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "campaign-service",
+      "http_method": "POST",
+      "http_path": "/v1/campaign-job-runs/lifecycle?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "CAMPAIGN_METRICS_ROLLUP",
+      "name": "Campaign metrics roll-up",
+      "stage": "REPORTING",
+      "job_type": "ANALYTICS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "campaign-service",
+      "http_method": "POST",
+      "http_path": "/v1/campaign-job-runs/metrics-rollup?business_date={business_date}",
+      "depends_on": [
+        "CAMPAIGN_LIFECYCLE"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "CAMPAIGN_OFFER_EXPIRY",
+      "name": "Expire campaign offers and assignments",
+      "stage": "REPORTING",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "campaign-service",
+      "http_method": "POST",
+      "http_path": "/v1/campaign-job-runs/offer-expiry?business_date={business_date}",
+      "depends_on": [
+        "CAMPAIGN_LIFECYCLE"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "INSIGHTS_RECURRING_DETECTION",
+      "name": "Detect recurring payments",
+      "stage": "REPORTING",
+      "job_type": "ANALYTICS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "insights-service",
+      "http_method": "POST",
+      "http_path": "/v1/insights/job-runs/recurring-detection?business_date={business_date}",
+      "depends_on": [
+        "LEDGER_EOD",
+        "PAYMENT_EXECUTE_DUE"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "INSIGHTS_GENERATION",
+      "name": "Generate customer insights",
+      "stage": "REPORTING",
+      "job_type": "ENGAGEMENT",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "insights-service",
+      "http_method": "POST",
+      "http_path": "/v1/insights/job-runs/insight-generation?business_date={business_date}",
+      "depends_on": [
+        "INSIGHTS_RECURRING_DETECTION"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "INSIGHTS_BUDGET_ROLLOVER",
+      "name": "Open next budget periods",
+      "stage": "REPORTING",
+      "job_type": "ENGAGEMENT",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "insights-service",
+      "http_method": "POST",
+      "http_path": "/v1/insights/job-runs/budget-rollover?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "INSIGHTS_EXPIRY",
+      "name": "Expire insight cards",
+      "stage": "REPORTING",
+      "job_type": "EXPIRY_SCAN",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "insights-service",
+      "http_method": "POST",
+      "http_path": "/v1/insights/job-runs/insight-expiry?business_date={business_date}",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "CRM_SLA_CHECK",
+      "name": "Service case SLA breaches",
+      "stage": "REPORTING",
+      "job_type": "MONITORING",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "crm-service",
+      "http_method": "POST",
+      "http_path": "/v1/servicing/cases/sla-check",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "CRM_COMPLAINT_DEADLINES",
+      "name": "Complaint regulatory deadlines",
+      "stage": "REPORTING",
+      "job_type": "MONITORING",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "crm-service",
+      "http_method": "POST",
+      "http_path": "/v1/servicing/complaints/deadline-check",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    },
+    {
+      "code": "INBOX_ANNOUNCEMENTS_REFRESH",
+      "name": "Publish due announcements, expire ended ones",
+      "stage": "REPORTING",
+      "job_type": "NOTIFICATIONS",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "inbox-service",
+      "http_method": "POST",
+      "http_path": "/v1/inbox/announcements/refresh-status",
+      "depends_on": [],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 90
+    }
+  ]
+}
