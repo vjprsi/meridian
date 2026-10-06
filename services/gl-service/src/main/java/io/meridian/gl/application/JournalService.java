@@ -1,5 +1,7 @@
 package io.meridian.gl.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.common.id.Ids;
@@ -45,12 +47,17 @@ public class JournalService {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public JournalService(GlStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    /** Approval resource type for manual GL journals in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "gl_journal";
+
+    public JournalService(GlStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
         this.json = json;
+        this.approvals = approvals;
     }
 
     /** Maker step: records a balanced manual journal awaiting approval (request = GlJournalCreate with lines). */
@@ -75,7 +82,74 @@ public class JournalService {
         validateAccounts(le, lines);
 
         ObjectNode v = crud.toColumns("gl_journal", req);
-        return withLines(insert(v, lines));
+        String row = insert(v, lines);
+        requestApproval(json.readTree(row));
+        return withLines(row);
+    }
+
+    /**
+     * Central maker-checker: the checker decides in the workflow inbox and GlJournalApprovalHandler applies it. The
+     * payload carries the per-currency totals and a checksum of the lines (fingerprint); single-currency journals
+     * carry their amount so approval policies can route by threshold.
+     */
+    private void requestApproval(JsonNode journal) {
+        if (!approvals.centralised()) {
+            return;
+        }
+        UUID id = UUID.fromString(journal.get("id").asString());
+        List<JournalLine> lines = loadLines(id);
+        Map<String, BigDecimal> debits = new java.util.TreeMap<>();
+        for (JournalLine l : lines) {
+            if (l.direction() == JournalLine.Direction.DEBIT) {
+                debits.merge(l.currency(), l.amount(), BigDecimal::add);
+            }
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("legal_entity_id", Fields.text(journal, "legal_entity_id"));
+        payload.put("accounting_period_id", Fields.text(journal, "accounting_period_id"));
+        payload.put("journal_type", Fields.text(journal, "journal_type"));
+        payload.put("value_date", Fields.text(journal, "value_date"));
+        payload.put("description", Fields.text(journal, "description"));
+        payload.put("line_count", lines.size());
+        Map<String, String> totals = new LinkedHashMap<>();
+        debits.forEach((ccy, sum) -> totals.put(ccy, sum.toPlainString()));
+        payload.put("debit_totals", totals);
+        payload.put("checksum", checksum(lines));
+        ApprovalSpec spec = ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "GL journal " + Fields.text(journal, "journal_type") + " " + Fields.text(journal, "value_date")
+                        + (debits.size() == 1 ? " " + debits.values().iterator().next().toPlainString() + " "
+                        + debits.keySet().iterator().next() : ""), payload);
+        if (debits.size() == 1) {
+            var only = debits.entrySet().iterator().next();
+            spec = spec.withAmount(only.getValue(), only.getKey());
+        }
+        approvals.request(spec, "journal:" + id);
+    }
+
+    /** True while a manual journal awaits its (single) approval with the submitted lines (checksum) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String checksum) {
+        return store.find("gl_journal", id)
+                .filter(j -> !SYSTEM_TYPES.contains(j.path("journal_type").asString()))
+                .filter(j -> store.row("select row_to_json(a)::text from gl_journal_approval a where a.gl_journal_id = ?",
+                        id).isEmpty())
+                .filter(j -> checksum == null || checksum.equals(checksum(loadLines(id))))
+                .isPresent();
+    }
+
+    private static String checksum(List<JournalLine> lines) {
+        StringBuilder sb = new StringBuilder();
+        for (JournalLine l : lines) {
+            sb.append(l.glAccountId()).append('|').append(l.direction()).append('|')
+                    .append(l.amount().stripTrailingZeros().toPlainString()).append('|').append(l.currency()).append('|')
+                    .append(l.baseAmount().stripTrailingZeros().toPlainString()).append('\n');
+        }
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**
@@ -104,6 +178,7 @@ public class JournalService {
         publishPosted(id, store.require("gl_journal", id).toString(), comment);
         outbox.publish("ledger.gl_journal.approved", "gl_journal_approval",
                 UUID.fromString(approval.get("id").asString()), approval);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approval.toString();
     }
 

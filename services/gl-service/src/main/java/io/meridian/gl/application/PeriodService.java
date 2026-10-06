@@ -1,5 +1,7 @@
 package io.meridian.gl.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -40,13 +42,19 @@ public class PeriodService {
     private final JournalService journals;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public PeriodService(GlStore store, CrudEngine crud, JournalService journals, OutboxWriter outbox, JsonMapper json) {
+    /** Approval resource type for accounting period closes in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "accounting_period_close";
+
+    public PeriodService(GlStore store, CrudEngine crud, JournalService journals, OutboxWriter outbox, JsonMapper json,
+                         Approvals approvals) {
         this.store = store;
         this.crud = crud;
         this.journals = journals;
         this.outbox = outbox;
         this.json = json;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -156,6 +164,19 @@ public class PeriodService {
         if (failed == 0) {
             store.update("update accounting_period set status = ?, closed_by = ?, closed_at = now(), approved_by = null, "
                     + "updated_by = ? where id = ?", to.name(), TenantContext.principal(), TenantContext.principal(), id);
+            // Central maker-checker: the checker decides in the workflow inbox; AccountingPeriodCloseApprovalHandler
+            // applies it. The close run id is the fingerprint (a reopen + new close makes the request stale).
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("legal_entity_id", le.toString());
+            payload.put("period_type", period.get("period_type").asString());
+            payload.put("start_date", start.toString());
+            payload.put("end_date", end.toString());
+            payload.put("close_run_id", runId.toString());
+            payload.put("warnings", warnings);
+            payload.put("checklist", checklist);
+            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve_close",
+                    "Close " + period.get("period_type").asString() + " period " + start + ".." + end, payload),
+                    "close:" + id + ":" + runId);
         }
         outbox.publish("ledger.period_close_run.completed", "period_close_run", runId, json.readTree(runRow));
         return runRow;
@@ -185,7 +206,20 @@ public class PeriodService {
             payload.put("approval_comment", comment);
         }
         outbox.publish("ledger.accounting_period.closed", T, id, payload);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row.toString();
+    }
+
+    /** True while the period is SOFT_CLOSED by the close run of the approval request (fingerprint) awaiting its checker. */
+    @Transactional(readOnly = true)
+    public boolean awaitsCloseApproval(UUID id, String closeRunId) {
+        return store.find(T, id)
+                .filter(p -> PeriodStatus.SOFT_CLOSED.name().equals(p.path("status").asString()))
+                .filter(p -> closeRunId == null || store.row("""
+                        select row_to_json(r)::text from period_close_run r where r.accounting_period_id = ?
+                        order by r.id desc limit 1""", id)
+                        .filter(r -> closeRunId.equals(r.path("id").asString())).isPresent())
+                .isPresent();
     }
 
     @Transactional
@@ -212,6 +246,9 @@ public class PeriodService {
         payload.put("reopen_reason", reason);
         payload.put("previous_status", period.get("status").asString());
         outbox.publish("ledger.accounting_period.reopened", T, id, payload);
+        if (PeriodStatus.SOFT_CLOSED.name().equals(period.get("status").asString())) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "reopened directly");
+        }
         return row.toString();
     }
 

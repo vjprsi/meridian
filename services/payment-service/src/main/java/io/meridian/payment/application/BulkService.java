@@ -47,9 +47,12 @@ public class BulkService {
     private final LedgerClient ledger;
     private final PaymentProperties props;
     private final TransactionTemplate tx;
+    private final PaymentApprovalRequests central;
 
     public BulkService(Rows rows, Events events, PaymentProcessor processor, PaymentHooks hooks,
-                       CoreBankingClient core, LedgerClient ledger, PaymentProperties props, TransactionTemplate tx) {
+                       CoreBankingClient core, LedgerClient ledger, PaymentProperties props, TransactionTemplate tx,
+                       PaymentApprovalRequests central) {
+        this.central = central;
         this.rows = rows;
         this.events = events;
         this.processor = processor;
@@ -316,6 +319,8 @@ public class BulkService {
             c.put("submitted_at", rows.now().toString());
             ObjectNode updated = rows.update(TABLE, bulkId, c);
             events.publish("payments.bulk_payment.submitted", TABLE, updated);
+            // Central maker-checker: checkers decide in the workflow inbox; BulkPaymentApprovalHandler applies it.
+            central.requestBulk(updated);
             return updated;
         });
     }
@@ -449,6 +454,7 @@ public class BulkService {
             }
             rows.execute("update payment_approval set status = 'REJECTED', decided_at = now(), comment = ? "
                     + "where bulk_payment_id = ? and status = 'PENDING'", PaymentProcessor.truncate(reason, 500), bulkId);
+            central.closed(PaymentApprovalRequests.BULK, bulkId, "rejected directly");
             return rejectLocked(bulkId, reason);
         });
     }
@@ -468,6 +474,9 @@ public class BulkService {
             c.put("rejection_reason", PaymentProcessor.truncate(reason == null ? "Cancelled" : reason, 255));
             ObjectNode r = rows.update(TABLE, bulkId, c);
             events.publish("payments.bulk_payment.cancelled", TABLE, r);
+            if ("PENDING_APPROVAL".equals(str(b, "status"))) {
+                central.closed(PaymentApprovalRequests.BULK, bulkId, "bulk payment cancelled");
+            }
             return r;
         });
     }
