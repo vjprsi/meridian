@@ -44,6 +44,9 @@ enums:
   DisclosureType: [TERMS_AND_CONDITIONS, KEY_FACTS, FEE_SCHEDULE, RATE_SHEET, PRIVACY_NOTICE, PRE_CONTRACT, OTHER]
   DecisionHitPolicy: [UNIQUE, FIRST, PRIORITY, ANY, COLLECT, RULE_ORDER, OUTPUT_ORDER]
   DecisionTableStatus: [DRAFT, PENDING_APPROVAL, PUBLISHED, RETIRED]
+  DecisionTableVersionStatus: [DRAFT, PENDING_APPROVAL, APPROVED, PUBLISHED, REJECTED, RETIRED]
+  DecisionAggregation: [NONE, SUM, MIN, MAX, COUNT]
+  MigrationPolicy: [PIN, MIGRATE_ON_RENEWAL, FORCE_MIGRATE]
   DecisionTablePurpose: [PRICING, ELIGIBILITY, FEE, LIMIT, ROUTING, RISK, CUSTOM]
 
 services:
@@ -65,7 +68,7 @@ services:
           - "family enum:ProductFamily nn | Product family the template creates"
           - "description text | What the template is for"
           - "default_definition json nn | Default parameter set (interest, fees, limits, rules)"
-          - "editable_fields json nn | Paths of parameters a product manager may change"
+          - "editable_fields json[] nn | Paths of parameters a product manager may change"
           - "is_system bool nn default=false | Shipped by the platform (read-only to tenants)"
           - "is_active bool nn default=true | Available in Product Studio"
 
@@ -85,8 +88,8 @@ services:
           - "current_version_id uuid ro | Currently published version"
           - "short_description string(500) | One-line description for channels"
           - "long_description text | Full marketing description"
-          - "available_channels json | ProductChannel values where it can be sold"
-          - "available_countries json | ISO 3166 countries where it can be sold"
+          - "available_channels json[] | ProductChannel values where it can be sold"
+          - "available_countries json[] | ISO 3166 countries where it can be sold"
           - "launch_date date | Planned launch"
           - "retire_date date | Date it stops being sold"
           - "is_sellable bool nn default=false | New sales allowed"
@@ -99,17 +102,20 @@ services:
         fr: [PRD-01, PRD-03, LIM-02]
         columns:
           - "product_id uuid nn fk=product idx | Product"
-          - "version_no int nn | Sequential version number"
+          - "version_no int nn ro | Sequential version number (server-assigned per product)"
           - "status enum:ProductVersionStatus nn default=DRAFT ro | Approval lifecycle"
           - "effective_from ts | When new sales start using this version"
           - "effective_to ts | When it stops applying to new sales"
           - "definition json nn | Full resolved snapshot of all parameters at publish time"
           - "change_summary text | What changed compared to the previous version"
-          - "migration_policy string(32) nn default=PIN | PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE"
+          - "migration_policy enum:MigrationPolicy nn default=PIN | PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE"
           - "submitted_by string(64) ro | Maker"
           - "submitted_at ts ro | Submission time"
           - "approved_by string(64) ro | Checker"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the version"
+          - "rejected_at ts ro | Rejection time"
+          - "rejection_reason string(500) ro | Why the checker rejected the version"
           - "published_at ts ro | Publication time"
           - "approval_request_id uuid ref=approval_request | Workflow approval request"
           - "checksum string(64) ro | SHA-256 of the definition, for tamper evidence"
@@ -127,7 +133,7 @@ services:
           - "value_json json | Structured value"
           - "min_value string(64) | Lower bound for numeric values"
           - "max_value string(64) | Upper bound for numeric values"
-          - "allowed_values json | Allowed values for ENUM type"
+          - "allowed_values json[] | Allowed values for ENUM type"
           - "is_overridable bool nn default=false | Can be overridden per account (with approval)"
           - "description string(500) | Meaning of the parameter"
         unique: [[product_version_id, param_key]]
@@ -341,15 +347,20 @@ services:
           - "hook enum:ScriptHook nn | Lifecycle hook it runs at"
           - "language enum:ScriptLanguage nn | Source language compiled to WASM"
           - "source_code text | Source code (kept for review and audit)"
-          - "wasm_module_uri string(500) nn ro | Location of the compiled module"
-          - "wasm_sha256 string(64) nn ro | Hash of the compiled module"
+          - "wasm_module_uri string(500) ro | Location of the compiled module (empty until compiled)"
+          - "wasm_sha256 string(64) ro | Hash of the compiled module (empty until compiled)"
           - "entrypoint string(64) nn default=run | Exported function name"
           - "max_fuel bigint nn default=10000000 | Instruction budget per call"
           - "max_memory_mb int nn default=16 | Memory limit"
           - "timeout_ms int nn default=50 | Wall-clock limit per call"
           - "status enum:ScriptStatus nn default=DRAFT ro | Status"
           - "validation_report json ro | Static checks and test results"
+          - "submitted_by string(64) ro | Maker"
+          - "submitted_at ts ro | Submission time"
           - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "rejection_reason string(500) ro | Why the checker rejected the script"
+          - "deprecation_reason string(255) ro | Why the script was deprecated"
         unique: [[product_version_id, hook, name]]
 
       - name: product_simulation
@@ -362,7 +373,7 @@ services:
           - "horizon_months int nn default=60 | Simulated period"
           - "scenario json nn | Inputs: opening balance, deposits, spend pattern, rate path, events"
           - "status enum:RunStatus nn default=QUEUED ro | Run status"
-          - "results json ro | Outputs: balances, interest, fees, tax, schedule per period"
+          - "results json[] ro | Outputs per period: balances, interest, fees, tax, schedule"
           - "summary json ro | Totals: interest earned/paid, fees, APR/AER/EIR"
           - "started_at ts ro | Start"
           - "finished_at ts ro | End"
@@ -449,8 +460,8 @@ services:
           - "POST /{id}/clone | Clone a product with its current definition | code string(64) nn, name string(160) nn"
           - "POST /{id}/suspend | Stop new sales temporarily | reason string(255) nn"
           - "POST /{id}/retire | Retire a product (no new sales; existing accounts continue) | retire_date date nn, reason string(255)"
-          - "GET /{id}/eligibility-check | Check whether a customer is eligible (?customer_id=) | | none"
-          - "POST /{id}/quote | Price the product for a customer and amount/term | customer_id uuid, amount amount, term_months int, channel enum:ProductChannel | none"
+          - "GET /{id}/eligibility-check?customer_id:uuid&age:int&date_of_birth:date&residency_country:country&nationality:country&kyc_tier:int&segment:enum:ProductSegment&income:amount&credit_score:int&existing_products:string(500)&customer_type:string(32)&channel:enum:ProductChannel&as_of:date | Check whether an applicant profile is eligible (existing_products = comma-separated product codes) | | object"
+          - "POST /{id}/quote | Price the product for a customer and amount/term | customer_id uuid, amount amount, term_months int, channel enum:ProductChannel, applicant json | object"
       - resource: product-versions
         path: /v1/product-versions
         table: product_version
@@ -462,7 +473,7 @@ services:
           - "POST /{id}/reject | Reject a submitted version | reason string(500) nn"
           - "POST /{id}/publish | Publish an approved version | effective_from ts"
           - "POST /{id}/new-draft | Start a new draft version from this one | | product_version"
-          - "GET /{id}/diff | Differences against another version (?against=) | | none"
+          - "GET /{id}/diff?against:uuid! | Differences from another version to this one | | object"
           - "POST /{id}/migrate-accounts | Migrate accounts pinned to an older version to this one | from_version_id uuid nn, effective_date date nn"
           - "GET /{id}/parameters | Parameters of the version | | product_parameter[]"
           - "GET /{id}/interest-rates | Interest configurations of the version | | interest_rate_config[]"
@@ -481,7 +492,7 @@ services:
         filters: [product_version_id, rate_kind, rate_type]
         actions:
           - "GET /{id}/tiers | Tiers of a rate configuration | | interest_rate_tier[]"
-          - "POST /{id}/effective-rate | Compute the effective rate for a balance and date | balance amount nn, as_of date | none"
+          - "POST /{id}/effective-rate | Compute the effective rate for a balance and date | balance amount nn, as_of date | object"
       - resource: interest-rate-tiers
         path: /v1/interest-rate-tiers
         table: interest_rate_tier
@@ -493,7 +504,7 @@ services:
         ops: [list, get, create, update]
         filters: [currency, source, is_active]
         actions:
-          - "GET /{id}/values | Published values (?from=&to=) | | rate_index_value[]"
+          - "GET /{id}/values?from:date&to:date | Published values in a date range | | rate_index_value[]"
           - "POST /{id}/values | Publish a new index value | value_date date nn, rate rate nn, source_ref string(128) | rate_index_value"
       - resource: fee-definitions
         path: /v1/fee-definitions
@@ -503,7 +514,7 @@ services:
         actions:
           - "GET /{id}/tiers | Tiers of a fee | | fee_tier[]"
           - "GET /{id}/waiver-rules | Waiver rules of a fee | | fee_waiver_rule[]"
-          - "POST /{id}/calculate | Calculate the fee for an amount (dry run) | base_amount amount nn, occurrence_no int, customer_id uuid | none"
+          - "POST /{id}/calculate | Calculate the fee for an amount (dry run) | base_amount amount nn, occurrence_no int, customer_id uuid, context json | object"
       - resource: fee-tiers
         path: /v1/fee-tiers
         table: fee_tier
@@ -548,9 +559,10 @@ services:
         filters: [product_version_id, hook, status, language]
         actions:
           - "POST /{id}/compile | Compile the source to WASM and run static checks"
-          - "POST /{id}/test | Run the script against test inputs in the sandbox | inputs json nn | none"
+          - "POST /{id}/test | Run the script against test inputs in the sandbox | inputs json nn | object"
           - "POST /{id}/submit | Submit for approval (maker) | comment string(500)"
           - "POST /{id}/approve | Approve and activate (checker) | comment string(500)"
+          - "POST /{id}/reject | Reject a submitted script (checker) | reason string(500) nn"
           - "POST /{id}/deprecate | Deprecate a script | reason string(255) nn"
       - resource: product-simulations
         path: /v1/product-simulations
@@ -559,7 +571,7 @@ services:
         filters: [product_version_id, status]
         actions:
           - "POST /{id}/cancel | Cancel a running simulation"
-          - "GET /{id}/export | Download simulation results as CSV | | none"
+          - "GET /{id}/export | Download simulation results as CSV | | text/csv"
       - resource: promotional-rates
         path: /v1/promotional-rates
         table: promotional_rate
@@ -590,9 +602,11 @@ services:
       - "product.product_version.approved | product_version | A version was approved"
       - "product.product_version.rejected | product_version | A version was rejected"
       - "product.product_version.published | product_version | A version was published and is used for new sales"
+      - "product.product_version.migration_requested | product_version | Migration of accounts pinned to an older version onto this version was requested"
       - "product.rate_index_value.published | rate_index_value | A new benchmark rate value was published (triggers repricing)"
       - "product.interest_rate_config.changed | interest_rate_config | An interest rate changed (triggers customer notices)"
       - "product.product_script.activated | product_script | A script was approved and activated"
+      - "product.product_script.rejected | product_script | A submitted script was rejected"
       - "product.product_simulation.completed | product_simulation | A simulation finished"
       - "product.promotional_rate.started | promotional_rate | A promotion started"
       - "product.promotional_rate.ended | promotional_rate | A promotion ended or was cancelled"
@@ -623,18 +637,22 @@ services:
         fr: [PRD-04, LIM-02]
         columns:
           - "decision_table_id uuid nn fk=decision_table idx | Decision table"
-          - "version_no int nn | Version number"
+          - "version_no int nn ro | Version number (server-assigned per decision table)"
           - "hit_policy enum:DecisionHitPolicy nn default=FIRST | DMN hit policy"
-          - "inputs json nn | Input columns: name, type, expression"
-          - "outputs json nn | Output columns: name, type, default"
-          - "rules json nn | Rule rows: input entries, output entries, annotation"
+          - "aggregation enum:DecisionAggregation nn default=NONE | COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise"
+          - "inputs json[] nn | Input columns: name, type, expression"
+          - "outputs json[] nn | Output columns: name, type, default"
+          - "rules json[] nn | Rule rows: inputs (entries), outputs (entries), annotation, priority"
           - "dmn_xml text | Equivalent DMN 1.5 XML for import/export"
-          - "status enum:DecisionTableStatus nn default=DRAFT ro | Status"
+          - "status enum:DecisionTableVersionStatus nn default=DRAFT ro | Status (APPROVED = approved, waiting for effective_from)"
           - "effective_from ts | Start"
           - "effective_to ts | End"
           - "submitted_by string(64) ro | Maker"
+          - "submitted_at ts ro | Submission time"
           - "approved_by string(64) ro | Checker"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the version"
+          - "rejection_reason string(500) ro | Why the checker rejected the version"
           - "checksum string(64) ro | SHA-256 of the content"
         unique: [[decision_table_id, version_no]]
 
@@ -691,11 +709,11 @@ services:
         ops: [list, get, create, update]
         filters: [decision_table_id, status]
         actions:
-          - "POST /{id}/test | Evaluate a draft version against test cases | test_cases json nn | none"
+          - "POST /{id}/test | Evaluate a version against test cases (name, inputs, expected, expected_error) | test_cases json[] nn | object"
           - "POST /{id}/submit | Submit for approval (maker) | comment string(500)"
-          - "POST /{id}/approve | Approve and publish (checker) | comment string(500)"
+          - "POST /{id}/approve | Approve (checker): published at once, or APPROVED until effective_from | comment string(500)"
           - "POST /{id}/reject | Reject | reason string(500) nn"
-          - "GET /{id}/export-dmn | Export as DMN 1.5 XML | | none"
+          - "GET /{id}/export-dmn | Export as DMN 1.5 XML | | application/xml"
       - resource: rule-evaluations
         path: /v1/rule-evaluations
         table: rule_evaluation_log
@@ -710,6 +728,8 @@ services:
           - "POST /{id}/accept | Accept a quote (locks the price for origination)"
 
     events:
+      - "product.decision_table_version.approved | decision_table_version | A decision table version was approved for a future effective date"
       - "product.decision_table_version.published | decision_table_version | A decision table version was published"
+      - "product.decision_table_version.rejected | decision_table_version | A submitted decision table version was rejected"
       - "product.product_price_quote.created | product_price_quote | A price quote was issued"
       - "product.product_price_quote.accepted | product_price_quote | A price quote was accepted"

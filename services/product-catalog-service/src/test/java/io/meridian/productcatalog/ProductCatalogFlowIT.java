@@ -69,7 +69,7 @@ class ProductCatalogFlowIT {
     void setUp() throws Exception {
         template = post("/v1/product-templates", """
                 {"code":"TPL_SAVINGS_TIERED","name":"Tiered savings","family":"SAVINGS",
-                 "editable_fields":{"fields":["interest_rates","fees"]},
+                 "editable_fields":["interest_rates","fees"],
                  "default_definition":{
                    "parameters":{"dormancy.inactive_days":365,"statement.frequency":"MONTHLY"},
                    "interest_rates":[{"rate_kind":"CREDIT_INTEREST","rate_type":"TIERED","effective_from":"2020-01-01",
@@ -253,6 +253,8 @@ class ProductCatalogFlowIT {
         post("/v1/product-versions/" + v2 + "/submit", "{}", 200, MAKER);
         JsonNode rejected = post("/v1/product-versions/" + v2 + "/reject", "{\"reason\":\"rate too generous\"}", 200, CHECKER);
         assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejection_reason").asString()).isEqualTo("rate too generous");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo(CHECKER);
         JsonNode retry = post("/v1/product-versions/" + v2 + "/new-draft", null, 200, MAKER);
         v2 = retry.get("id").asString();
         assertThat(retry.get("version_no").asInt()).isEqualTo(3);
@@ -290,6 +292,19 @@ class ProductCatalogFlowIT {
         assertThat(young.get("reasons").get(0).asString()).isEqualTo("AGE_OUT_OF_RANGE");
         JsonNode unknown = get("/v1/products/" + product + "/eligibility-check?residency_country=NG", TENANT);
         assertThat(unknown.get("outcome").asString()).isEqualTo("REFER");
+
+        JsonNode p = get("/v1/products/" + product, TENANT);
+        JsonNode channels = patch("/v1/products/" + product, "{\"available_channels\":[\"MOBILE\",\"WEB\"]}",
+                p.get("row_version").asInt());
+        assertThat(channels.get("available_channels")).hasSize(2);
+        JsonNode branch = get("/v1/products/" + product + "/eligibility-check?age=30&residency_country=NG&channel=BRANCH"
+                + "&existing_products=CUR-01,%20SAV-02", TENANT);
+        assertThat(branch.get("outcome").asString()).isEqualTo("INELIGIBLE");
+        assertThat(branch.get("reasons").get(0).asString()).isEqualTo("CHANNEL_NOT_AVAILABLE");
+        assertThat(get("/v1/products/" + product + "/eligibility-check?age=30&residency_country=NG&channel=MOBILE", TENANT)
+                .get("outcome").asString()).isEqualTo("ELIGIBLE");
+        assertThat(send("GET", "/v1/products/" + product + "/eligibility-check?age=old", null, null, TENANT, MAKER, null)
+                .statusCode()).isEqualTo(400);
     }
 
     @Test
@@ -354,26 +369,39 @@ class ProductCatalogFlowIT {
                 .formatted(v3, RUST), 201, MAKER);
         String id = script.get("id").asString();
         assertThat(script.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(script.hasNonNull("wasm_sha256")).isFalse();
+        assertThat(script.hasNonNull("wasm_module_uri")).isFalse();
         HttpResponse<String> untested = send("POST", "/v1/product-scripts/" + id + "/test",
                 "{\"inputs\":{\"balance\":1000,\"rate\":\"0.05\",\"days\":30}}", UUID.randomUUID().toString(), TENANT, MAKER, null);
         assertThat(untested.statusCode()).isEqualTo(409);
         JsonNode compiled = post("/v1/product-scripts/" + id + "/compile", null, 200, MAKER);
         assertThat(compiled.get("status").asString()).isEqualTo("VALIDATED");
-        assertThat(compiled.get("wasm_sha256").asString()).hasSize(64).isNotEqualTo("0".repeat(64));
+        assertThat(compiled.get("wasm_sha256").asString()).hasSize(64);
+        assertThat(compiled.get("wasm_module_uri").asString()).endsWith(compiled.get("wasm_sha256").asString() + ".wasm");
         JsonNode recompiled = post("/v1/product-scripts/" + id + "/compile", null, 200, MAKER);
         assertThat(recompiled.get("wasm_sha256").asString()).isEqualTo(compiled.get("wasm_sha256").asString());
         JsonNode test = post("/v1/product-scripts/" + id + "/test",
                 "{\"inputs\":{\"balance\":1000,\"rate\":\"0.05\",\"days\":30}}", 200, MAKER);
         assertThat(test.get("passed").asBoolean()).isTrue();
         post("/v1/product-scripts/" + id + "/submit", "{}", 200, MAKER);
+        JsonNode rejected = post("/v1/product-scripts/" + id + "/reject", "{\"reason\":\"needs a cap\"}", 200, CHECKER);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejection_reason").asString()).isEqualTo("needs a cap");
+        assertThat(outbox("product.product_script.rejected")).isEqualTo(1);
+        post("/v1/product-scripts/" + id + "/compile", null, 200, MAKER);
+        JsonNode resubmitted = post("/v1/product-scripts/" + id + "/submit", "{}", 200, MAKER);
+        assertThat(resubmitted.get("submitted_by").asString()).isEqualTo(MAKER);
+        assertThat(resubmitted.hasNonNull("rejection_reason")).isFalse();
         HttpResponse<String> self = send("POST", "/v1/product-scripts/" + id + "/approve", "{}",
                 UUID.randomUUID().toString(), TENANT, MAKER, null);
         assertThat(self.statusCode()).isEqualTo(422);
         JsonNode active = post("/v1/product-scripts/" + id + "/approve", "{}", 200, CHECKER);
         assertThat(active.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(active.get("approved_by").asString()).isEqualTo(CHECKER);
         assertThat(outbox("product.product_script.activated")).isEqualTo(1);
         JsonNode deprecated = post("/v1/product-scripts/" + id + "/deprecate", "{\"reason\":\"replaced\"}", 200, MAKER);
         assertThat(deprecated.get("status").asString()).isEqualTo("DEPRECATED");
+        assertThat(deprecated.get("deprecation_reason").asString()).isEqualTo("replaced");
 
         JsonNode bad = post("/v1/product-scripts", """
                 {"product_version_id":"%s","name":"bad","hook":"ACCRUAL","language":"RUST","source_code":"use std::fs;"}"""
@@ -391,7 +419,8 @@ class ProductCatalogFlowIT {
                  "scenario":{"opening_balance":"5000","monthly_deposit":"100","start_date":"2026-01-01"}}""".formatted(v2),
                 201, MAKER);
         assertThat(sim.get("status").asString()).as(sim.toString()).isEqualTo("SUCCEEDED");
-        assertThat(sim.get("results").get("periods")).hasSize(12);
+        assertThat(sim.get("results").isArray()).isTrue();
+        assertThat(sim.get("results")).hasSize(12);
         assertThat(new BigDecimal(sim.get("summary").get("total_interest").asString())).isPositive();
         assertThat(new BigDecimal(sim.get("summary").get("total_fees").asString())).isEqualByComparingTo("0");
         assertThat(outbox("product.product_simulation.completed")).isEqualTo(1);

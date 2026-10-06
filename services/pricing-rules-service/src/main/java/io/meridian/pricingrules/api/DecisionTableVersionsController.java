@@ -12,6 +12,7 @@ import io.meridian.pricingrules.api.generated.model.DecisionTableVersionsTestReq
 import io.meridian.pricingrules.application.DecisionTableService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -78,18 +79,18 @@ public class DecisionTableVersionsController implements DecisionTableVersionsApi
     }
 
     @Override
-    public ResponseEntity<Void> decisionTableVersionsTest(UUID id, String idempotencyKey,
-                                                          DecisionTableVersionsTestRequest body) {
+    public ResponseEntity<Map<String, Object>> decisionTableVersionsTest(UUID id, String idempotencyKey,
+                                                                         DecisionTableVersionsTestRequest body) {
         TenantContext.require();
         JsonNode req = tree(body);
-        return ApiSupport.asVoid(idempotency.execute(idempotencyKey, ApiSupport.idemRequest("test", id, body), String.class,
-                () -> ResponseEntity.ok(service.test(id, req.get("test_cases")).toString())));
+        return ApiSupport.result(idempotency, json, idempotencyKey, ApiSupport.idemRequest("test", id, body),
+                () -> service.test(id, req.get("test_cases")));
     }
 
     @Override
-    public ResponseEntity<Void> decisionTableVersionsExportDmn(UUID id) {
+    public ResponseEntity<String> decisionTableVersionsExportDmn(UUID id) {
         TenantContext.require();
-        return ApiSupport.document(HttpStatus.OK, MediaType.APPLICATION_XML, service.exportDmn(id));
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML).body(service.exportDmn(id));
     }
 
     private ResponseEntity<DecisionTableVersion> action(String op, UUID id, String key, Object body, Supplier<String> run) {

@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -76,10 +75,8 @@ public class SimulationService {
         ObjectNode done = json.createObjectNode();
         try {
             SimulationEngine.Result r = SimulationEngine.run(p, scenario);
-            Map<String, Object> results = new LinkedHashMap<>();
-            results.put("periods", r.periods());
             done.put("status", Lifecycles.SIMULATION.apply("RUNNING", "succeed"));
-            done.set("results", store.toNode(results));
+            done.set("results", store.toNode(r.periods()));
             done.set("summary", store.toNode(r.summary()));
         } catch (ApiException e) {
             done.put("status", Lifecycles.SIMULATION.apply("RUNNING", "fail"));
@@ -107,7 +104,7 @@ public class SimulationService {
             throw ApiException.conflict("no_results", "Simulation " + id + " is " + s.get("status").asString()
                     + " and has no results to export");
         }
-        JsonNode periods = s.path("results").path("periods");
+        JsonNode periods = s.path("results");
         StringBuilder csv = new StringBuilder();
         List<String> cols = new ArrayList<>();
         if (!periods.isEmpty()) {

@@ -7,12 +7,14 @@ import io.meridian.productcatalog.api.generated.model.ProductScriptCreate;
 import io.meridian.productcatalog.api.generated.model.ProductScriptUpdate;
 import io.meridian.productcatalog.api.generated.model.ProductScriptsApproveRequest;
 import io.meridian.productcatalog.api.generated.model.ProductScriptsDeprecateRequest;
+import io.meridian.productcatalog.api.generated.model.ProductScriptsRejectRequest;
 import io.meridian.productcatalog.api.generated.model.ProductScriptsSubmitRequest;
 import io.meridian.productcatalog.api.generated.model.ProductScriptsTestRequest;
 import io.meridian.productcatalog.application.ScriptService;
 import io.meridian.productcatalog.infrastructure.CatalogStore;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -58,12 +60,12 @@ public class ProductScriptsController implements ProductScriptsApi {
     }
 
     @Override
-    public ResponseEntity<Void> productScriptsTest(UUID id, String idempotencyKey, ProductScriptsTestRequest body) {
+    public ResponseEntity<Map<String, Object>> productScriptsTest(UUID id, String idempotencyKey,
+                                                                  ProductScriptsTestRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        return ApiSupport.asVoid(idempotency.execute(idempotencyKey, ApiSupport.idem(json, "script-test", id, body),
-                String.class, () -> ResponseEntity.ok(store.toNode(
-                        scripts.test(id, req.hasNonNull("inputs") ? CatalogStore.toMap(req.get("inputs")) : null)).toString())));
+        Map<String, Object> inputs = body.getInputs() == null ? null : CatalogStore.toMap(json.valueToTree(body.getInputs()));
+        return ApiSupport.result(idempotency, json, idempotencyKey, ApiSupport.idem(json, "script-test", id, body),
+                () -> store.toNode(scripts.test(id, inputs)));
     }
 
     @Override
@@ -76,6 +78,12 @@ public class ProductScriptsController implements ProductScriptsApi {
     public ResponseEntity<ProductScript> productScriptsApprove(UUID id, String idempotencyKey, ProductScriptsApproveRequest body) {
         JsonNode req = tree(body);
         return action("approve", id, idempotencyKey, body, () -> scripts.approve(id, ApiSupport.text(req, "comment")));
+    }
+
+    @Override
+    public ResponseEntity<ProductScript> productScriptsReject(UUID id, String idempotencyKey, ProductScriptsRejectRequest body) {
+        JsonNode req = tree(body);
+        return action("reject", id, idempotencyKey, body, () -> scripts.reject(id, ApiSupport.text(req, "reason")));
     }
 
     @Override

@@ -49,8 +49,8 @@ public class ProductSimulationsController implements ProductSimulationsApi {
     }
 
     @Override
-    public ResponseEntity<Void> productSimulationsExport(UUID id) {
+    public ResponseEntity<String> productSimulationsExport(UUID id) {
         TenantContext.require();
-        return ApiSupport.document(new MediaType("text", "csv"), simulations.exportCsv(id));
+        return ResponseEntity.ok().contentType(new MediaType("text", "csv")).body(simulations.exportCsv(id));
     }
 }

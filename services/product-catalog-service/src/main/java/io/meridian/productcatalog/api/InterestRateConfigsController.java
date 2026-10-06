@@ -12,12 +12,10 @@ import io.meridian.productcatalog.infrastructure.CatalogStore;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Interest-rate configurations (guarded content), their tiers and the effective-rate calculation. */
@@ -64,13 +62,10 @@ public class InterestRateConfigsController implements InterestRateConfigsApi {
     }
 
     @Override
-    public ResponseEntity<Void> interestRateConfigsEffectiveRate(UUID id, String idempotencyKey,
-                                                                 InterestRateConfigsEffectiveRateRequest body) {
+    public ResponseEntity<Map<String, Object>> interestRateConfigsEffectiveRate(UUID id, String idempotencyKey,
+            InterestRateConfigsEffectiveRateRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        BigDecimal balance = new BigDecimal(req.get("balance").asString());
-        LocalDate asOf = req.hasNonNull("as_of") ? LocalDate.parse(req.get("as_of").asString()) : null;
-        return ApiSupport.asVoid(idempotency.execute(idempotencyKey, ApiSupport.idem(json, "effective-rate", id, body),
-                String.class, () -> ResponseEntity.ok(store.toNode(pricing.effectiveRate(id, balance, asOf)).toString())));
+        return ApiSupport.result(idempotency, json, idempotencyKey, ApiSupport.idem(json, "effective-rate", id, body),
+                () -> store.toNode(pricing.effectiveRate(id, body.getBalance(), body.getAsOf())));
     }
 }

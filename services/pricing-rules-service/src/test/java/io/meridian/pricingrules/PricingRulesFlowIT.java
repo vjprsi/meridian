@@ -54,13 +54,13 @@ class PricingRulesFlowIT {
     String evaluationId;
 
     static final String GRID = """
-            {"decision_table_id":"%s","version_no":1,"hit_policy":"FIRST",
-             "inputs":{"columns":[{"name":"credit_score","type":"number"},{"name":"segment","type":"string"}]},
-             "outputs":{"columns":[{"name":"rate","type":"number","default":"0.25"},{"name":"tier","type":"string"}]},
-             "rules":{"rows":[
+            {"decision_table_id":"%s","hit_policy":"FIRST",
+             "inputs":[{"name":"credit_score","type":"number"},{"name":"segment","type":"string"}],
+             "outputs":[{"name":"rate","type":"number","default":"0.25"},{"name":"tier","type":"string"}],
+             "rules":[
                {"inputs":["[700..850]","-"],"outputs":["0.05","\\"PRIME\\""],"annotation":"prime"},
                {"inputs":["[600..700)","\\"RETAIL\\",\\"SME\\""],"outputs":["0.09","\\"NEAR_PRIME\\""]},
-               {"inputs":["< 600","-"],"outputs":["0.18","\\"SUBPRIME\\""]}]}}""";
+               {"inputs":["< 600","-"],"outputs":["0.18","\\"SUBPRIME\\""]}]}""";
 
     @BeforeAll
     void setUp() throws Exception {
@@ -73,10 +73,10 @@ class PricingRulesFlowIT {
     @Order(1)
     void invalidDefinitionIsRejectedWithFieldErrors() throws Exception {
         HttpResponse<String> r = send("POST", "/v1/decision-table-versions", """
-                {"decision_table_id":"%s","version_no":1,"hit_policy":"FIRST",
-                 "inputs":{"columns":[{"name":"score","type":"number"}]},
-                 "outputs":{"columns":[{"name":"rate","type":"number"}]},
-                 "rules":{"rows":[{"inputs":["[900..100]"],"outputs":["abc"]}]}}""".formatted(table),
+                {"decision_table_id":"%s","hit_policy":"FIRST",
+                 "inputs":[{"name":"score","type":"number"}],
+                 "outputs":[{"name":"rate","type":"number"}],
+                 "rules":[{"inputs":["[900..100]"],"outputs":["abc"]}]}""".formatted(table),
                 UUID.randomUUID().toString(), TENANT, MAKER);
         assertThat(r.statusCode()).as(r.body()).isEqualTo(422);
         JsonNode p = json.readTree(r.body());
@@ -97,10 +97,10 @@ class PricingRulesFlowIT {
         assertThat(patched.get("row_version").asInt()).isEqualTo(v.get("row_version").asInt() + 1);
 
         JsonNode report = post("/v1/decision-table-versions/" + version + "/test", """
-                {"test_cases":{"cases":[
+                {"test_cases":[
                   {"name":"prime","inputs":{"credit_score":720,"segment":"RETAIL"},"expected":{"rate":"0.05","tier":"PRIME"}},
                   {"name":"corporate falls to default","inputs":{"credit_score":650,"segment":"CORPORATE"},"expected":{"rate":"0.25"}},
-                  {"name":"wrong expectation","inputs":{"credit_score":500,"segment":"SME"},"expected":{"rate":"0.10"}}]}}""",
+                  {"name":"wrong expectation","inputs":{"credit_score":500,"segment":"SME"},"expected":{"rate":"0.10"}}]}""",
                 200, MAKER);
         assertThat(report.get("total").asInt()).isEqualTo(3);
         assertThat(report.get("passed").asInt()).isEqualTo(2);
@@ -178,7 +178,7 @@ class PricingRulesFlowIT {
 
     @Test
     @Order(6)
-    void newVersionSupersedesAndRejectReturnsToDraft() throws Exception {
+    void newVersionSupersedesAndRejectedVersionIsReworked() throws Exception {
         JsonNode v2 = post("/v1/decision-table-versions", GRID.formatted(table).replace("0.05", "0.045"), 201, MAKER);
         assertThat(v2.get("version_no").asInt()).isEqualTo(2);
         String v2id = v2.get("id").asString();
@@ -187,7 +187,9 @@ class PricingRulesFlowIT {
                 UUID.randomUUID().toString(), TENANT, CHECKER);
         assertThat(noReason.statusCode()).isIn(400, 422);
         JsonNode rejected = post("/v1/decision-table-versions/" + v2id + "/reject", "{\"reason\":\"rate too low\"}", 200, CHECKER);
-        assertThat(rejected.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejection_reason").asString()).isEqualTo("rate too low");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo(CHECKER);
         post("/v1/decision-table-versions/" + v2id + "/submit", "{}", 200, MAKER);
         post("/v1/decision-table-versions/" + v2id + "/approve", "{}", 200, CHECKER);
         assertThat(get("/v1/decision-table-versions/" + version, TENANT).get("status").asString()).isEqualTo("RETIRED");
@@ -209,7 +211,7 @@ class PricingRulesFlowIT {
         assertThat(imported.get("status").asString()).isEqualTo("DRAFT");
         JsonNode versions = get("/v1/decision-tables/" + imported.get("id").asString() + "/versions", TENANT).get("data");
         assertThat(versions).hasSize(1);
-        assertThat(versions.get(0).get("rules").get("rows")).hasSize(3);
+        assertThat(versions.get(0).get("rules")).hasSize(3);
 
         HttpResponse<String> bad = send("POST", "/v1/decision-tables/import-dmn",
                 "{\"code\":\"X\",\"dmn_xml\":\"<not-dmn>\"}", UUID.randomUUID().toString(), TENANT, MAKER);
@@ -248,6 +250,29 @@ class PricingRulesFlowIT {
         HttpResponse<String> eval = send("POST", "/v1/decision-tables/" + table + "/evaluate",
                 "{\"inputs\":{\"credit_score\":700}}", UUID.randomUUID().toString(), OTHER_TENANT, MAKER);
         assertThat(eval.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    @Order(10)
+    void futureDatedApprovalWaitsUntilEffective() throws Exception {
+        String grid = GRID.formatted(table).replace("0.05", "0.04").replace("\"hit_policy\":\"FIRST\",",
+                "\"hit_policy\":\"FIRST\",\"effective_from\":\"" + OffsetDateTime.now().plusSeconds(4) + "\",");
+        String v3 = post("/v1/decision-table-versions", grid, 201, MAKER).get("id").asString();
+        post("/v1/decision-table-versions/" + v3 + "/submit", "{}", 200, MAKER);
+        JsonNode approved = post("/v1/decision-table-versions/" + v3 + "/approve", "{}", 200, CHECKER);
+        assertThat(approved.get("status").asString()).isEqualTo("APPROVED");
+        assertThat(outboxCount("product.decision_table_version.approved")).isEqualTo(1);
+        assertThat(get("/v1/decision-tables/" + table, TENANT).get("status").asString()).isEqualTo("PUBLISHED");
+        JsonNode before = post("/v1/decision-tables/" + table + "/evaluate", "{\"inputs\":{\"credit_score\":800}}", 200, MAKER);
+        assertThat(new BigDecimal(before.get("outputs").get("rate").asString())).isEqualByComparingTo("0.045");
+
+        while (OffsetDateTime.parse(approved.get("effective_from").asString()).isAfter(OffsetDateTime.now())) {
+            Thread.sleep(250);
+        }
+        JsonNode after = post("/v1/decision-tables/" + table + "/evaluate", "{\"inputs\":{\"credit_score\":800}}", 200, MAKER);
+        assertThat(new BigDecimal(after.get("outputs").get("rate").asString())).isEqualByComparingTo("0.04");
+        assertThat(get("/v1/decision-table-versions/" + v3, TENANT).get("status").asString()).isEqualTo("PUBLISHED");
+        assertThat(get("/v1/decision-tables/" + table, TENANT).get("current_version_id").asString()).isEqualTo(v3);
     }
 
     // ------------------------------------------------------------------ helpers

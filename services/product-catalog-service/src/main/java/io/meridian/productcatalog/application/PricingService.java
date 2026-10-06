@@ -523,15 +523,10 @@ public class PricingService {
     /** Channel availability: product.available_channels (if set) and product_availability rows (if any). */
     boolean channelAvailable(JsonNode product, String channel) {
         JsonNode chans = product.get("available_channels");
-        if (chans != null && chans.isObject() && !chans.isEmpty()) {
-            JsonNode list = chans.has("channels") ? chans.get("channels") : chans.get("values");
+        if (chans != null && chans.isArray() && !chans.isEmpty()) {
             boolean listed = false;
-            if (list != null && list.isArray()) {
-                for (JsonNode c : list) {
-                    listed |= channel.equals(c.asString());
-                }
-            } else {
-                listed = chans.path(channel).asBoolean(false);
+            for (JsonNode c : chans) {
+                listed |= channel.equals(c.asString());
             }
             if (!listed) {
                 return false;

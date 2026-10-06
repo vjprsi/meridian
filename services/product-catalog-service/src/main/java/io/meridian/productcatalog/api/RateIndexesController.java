@@ -12,7 +12,6 @@ import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,23 +49,13 @@ public class RateIndexesController implements RateIndexesApi {
 
     /** {@code GET /v1/rate-indexes/{id}/values?from=&to=} newest first. */
     @Override
-    public ResponseEntity<RateIndexValuePage> rateIndexesValues(UUID id, Integer limit, String cursor) {
+    public ResponseEntity<RateIndexValuePage> rateIndexesValues(UUID id, LocalDate from, LocalDate to, Integer limit,
+                                                                String cursor) {
         TenantContext.require();
         store.require("rate_index", id);
-        LocalDate from = date("from");
-        LocalDate to = date("to");
         if (from != null && to != null && to.isBefore(from)) {
             throw ApiException.badRequest("invalid_range", "to is before from");
         }
         return ResponseEntity.ok(json.convertValue(store.indexValues(id, from, to, limit, cursor), RateIndexValuePage.class));
-    }
-
-    private static LocalDate date(String name) {
-        String v = ApiSupport.param(name);
-        try {
-            return v == null ? null : LocalDate.parse(v);
-        } catch (DateTimeParseException e) {
-            throw ApiException.badRequest("invalid_date", name + " must be an ISO date");
-        }
     }
 }

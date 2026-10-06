@@ -2,37 +2,29 @@ package io.meridian.pricingrules.api;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.web.RequestIdFilter;
+import io.meridian.web.idempotency.Idempotency;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Small helpers shared by the controllers. */
 final class ApiSupport {
     private ApiSupport() {}
 
-    /**
-     * The contract declares several result-returning operations as 204/no-content ({@code ResponseEntity<Void>}).
-     * We still return the computed document: JSON (or XML) text with an explicit content type.
-     */
+    /** Runs an idempotent action whose response is a computed JSON object (contract type {@code object}). */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> document(HttpStatus status, MediaType type, String body) {
-        return (ResponseEntity) ResponseEntity.status(status).contentType(type).body(body);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> asVoid(ResponseEntity<String> r) {
-        ResponseEntity.BodyBuilder b = ResponseEntity.status(r.getStatusCode()).contentType(MediaType.APPLICATION_JSON);
-        String replayed = r.getHeaders().getFirst("Idempotent-Replayed");
-        if (replayed != null) {
-            b.header("Idempotent-Replayed", replayed);
-        }
-        return (ResponseEntity) b.body(r.getBody());
+    static ResponseEntity<Map<String, Object>> result(Idempotency idempotency, JsonMapper json, String key, Object request,
+                                                      Supplier<JsonNode> run) {
+        ResponseEntity r = idempotency.execute(key, request, Map.class,
+                () -> ResponseEntity.ok(json.convertValue(run.get(), Map.class)));
+        return r;
     }
 
     /** A request descriptor for idempotency hashing that includes the operation and target id. */

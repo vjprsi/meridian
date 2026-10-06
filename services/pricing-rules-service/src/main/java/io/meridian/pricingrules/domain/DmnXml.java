@@ -35,7 +35,7 @@ public final class DmnXml {
 
     /** Result of an import: decision name/id plus the table in stored JSON form. */
     public record Imported(String decisionId, String decisionName, String hitPolicy, String aggregation,
-                           Map<String, Object> inputs, Map<String, Object> outputs, Map<String, Object> rules) {}
+                           List<Object> inputs, List<Object> outputs, List<Object> rules) {}
 
     public static Imported parse(String xml) {
         if (xml == null || xml.isBlank()) {
@@ -114,18 +114,10 @@ public final class DmnXml {
             }
             rows.add(r);
         }
-        Map<String, Object> inputs = new LinkedHashMap<>();
-        inputs.put("columns", inCols);
-        Map<String, Object> outputs = new LinkedHashMap<>();
-        outputs.put("columns", outCols);
-        if (aggregation != null && !aggregation.isBlank()) {
-            outputs.put("aggregation", aggregation.trim().toUpperCase(Locale.ROOT));
-        }
-        Map<String, Object> rules = new LinkedHashMap<>();
-        rules.put("rows", rows);
+        aggregation = aggregation == null || aggregation.isBlank() ? "NONE" : aggregation.trim().toUpperCase(Locale.ROOT);
         // Validate now so an import never stores an unusable table.
-        DecisionTableModel.parse(hitPolicy, null, inputs, outputs, rules);
-        return new Imported(attr(decision, "id"), attr(decision, "name"), hitPolicy, aggregation, inputs, outputs, rules);
+        DecisionTableModel.parse(hitPolicy, aggregation, inCols, outCols, rows);
+        return new Imported(attr(decision, "id"), attr(decision, "name"), hitPolicy, aggregation, inCols, outCols, rows);
     }
 
     /** Writes a DMN 1.5 document for the table. Deterministic for a given table. */
