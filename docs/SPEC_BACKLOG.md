@@ -126,6 +126,11 @@ fields, server-generated application_number). Remaining gaps:
 - AUTO_APPROVE without a legal entity (neither on the application nor the journey) is downgraded to REFER
   (`LEGAL_ENTITY_REQUIRED`).
 
+## Observed in live e2e (2026-10-07)
+
+- Deposit accounts of a KE tenant get GB IBANs (`GB..MERI..`, BIC MERIGB2LXXX): account numbering country/bank code
+  should come from the legal entity / country pack, not a platform default.
+
 ## Agent channel (follow-up of customer channel)
 
 web/agent-app (offline PWA) calls domain APIs directly with a staff-like token: needs the same treatment as customers:
