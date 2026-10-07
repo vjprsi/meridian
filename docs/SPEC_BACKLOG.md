@@ -133,11 +133,15 @@ fields, server-generated application_number). Remaining gaps:
 
 ## Agent channel (follow-up of customer channel)
 
-web/agent-app (offline PWA) calls domain APIs directly with a staff-like token: needs the same treatment as customers:
-agent identity (agent_id claim / "agent of signed-in user"), an agent-channel BFF scoping every call to the agent's
-own outlets, tills, float and customers it serves, device binding with a signing key for offline batches
-(payload_signature today is a digest only), idempotency keys on float requests and offline batches, larger offline
-batch payloads, typed quote/balance responses, a gateway health endpoint.
+Done (2026-10-07): `agent-channel-service` (/v1/agent, scope channels:agent, agent_id claim, Keycloak client
+meridian-agent-app), object-level authorization with denial audit/events, server-rebuilt bodies, device binding
+(ES256/Ed25519 public keys, signed offline batches, X-Agent-Device-Proof as an alternative to step-up),
+idempotency_key stored on agent_float_request and onboarding_offline_batch, web/agent-app on /v1/agent only.
+Remaining: larger offline batch payloads (upload target instead of a 500-character data: URI), typed quote and
+commission-summary responses, a gateway health endpoint, device attestation (Play Integrity / App Attest) and a
+server-verifiable PIN-unlock proof, a reference filter on agent transactions, mid-shift till counts, write access for
+super-agents over their sub-agents (today read-only), Ed25519 in the app once WebCrypto support is universal, and
+gateway stripping of dev headers (X-Agent-Id, X-Auth-Time) in front of JWT-mode services.
 
 ## Resume point (paused 2026-10-07)
 

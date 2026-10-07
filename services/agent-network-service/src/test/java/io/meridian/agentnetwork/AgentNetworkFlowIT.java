@@ -190,6 +190,11 @@ class AgentNetworkFlowIT {
                 "ops1", 422, "funding_proof_required");
         String topUp = post("/v1/agent-float-requests", floatRequest("TOP_UP", superAgent, null, superFloat, "100000", "BNK-001"),
                 "ops1", 201).get("id").asString();
+        // the create's Idempotency-Key is stored: a client that lost the response finds the request again
+        String topUpKey = get("/v1/agent-float-requests/" + topUp).get("idempotency_key").asString();
+        assertThat(topUpKey).isNotBlank();
+        assertThat(get("/v1/agent-float-requests?idempotency_key=" + java.net.URLEncoder.encode(topUpKey,
+                java.nio.charset.StandardCharsets.UTF_8)).get("data").get(0).get("id").asString()).isEqualTo(topUp);
         post("/v1/agent-float-requests/" + topUp + "/approve", "{}", "ops1", 422, "four_eyes_violation");
         JsonNode done = post("/v1/agent-float-requests/" + topUp + "/approve", "{\"comment\":\"Deposit seen\"}", "ops2", 200);
         assertThat(done.get("status").asString()).isEqualTo("COMPLETED");

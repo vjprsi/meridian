@@ -14,9 +14,14 @@ Clients:
                           openid/profile; tokens carry customer_id and tenant_id from user attributes (admin-managed,
                           not editable by the user) and auth_time / acr for step-up; password grant for local testing
                           (password-grant tokens carry no auth_time, so step-up operations refuse them)
+  meridian-agent-app      public, authorization code + PKCE (agent outlet app); only channels:agent plus
+                          openid/profile; tokens carry agent_id and tenant_id from admin-only user attributes and
+                          auth_time / acr (money movement needs a recent login or a device proof)
 Users:
   ops.admin       staff demo user (console)
   demo.customer   customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant
+  demo.agent      agent demo user (agent-app, Meridian#Agent2026); set its agent_id attribute to an ACTIVE agent of the
+                  demo tenant
 The staff tenant_id claim is a hardcoded claim for the local demo tenant (multi-tenant staff users come from the
 identity service in later steps). Run after tools/generate.py.
 """
@@ -29,6 +34,12 @@ DEMO_TENANT = "0199a000-0000-7000-8000-00000000000a"
 # Users -> demo.customer -> Attributes) to an existing customer of the demo tenant.
 DEMO_CUSTOMER = "0199a000-0000-7000-8000-0000000c0001"
 CUSTOMER_WEB_ORIGINS = ["http://localhost:13300"]
+# Demo agent bound to the demo agent user (agent-network-service agent id). Change the user's agent_id attribute
+# (Users -> demo.agent -> Attributes; admin-only) to an ACTIVE agent of the demo tenant.
+DEMO_AGENT = "0199a000-0000-7000-8000-0000000a0001"
+AGENT_APP_ORIGINS = ["http://localhost:13400"]
+CUSTOMER_SCOPE = "channels:customer"
+AGENT_SCOPE = "channels:agent"
 
 
 def attribute_mapper(name: str, attribute: str) -> dict:
@@ -62,6 +73,7 @@ def user_profile() -> dict:
             {"name": "lastName", "displayName": "${lastName}", "multivalued": False, "permissions": rw,
              "required": {"roles": ["user"]}, "validations": person},
             admin_only_attribute("customer_id", "Customer id"),
+            admin_only_attribute("agent_id", "Agent id"),
             admin_only_attribute("tenant_id", "Tenant id"),
         ],
         "groups": [{"name": "user-metadata", "displayHeader": "User metadata",
@@ -71,7 +83,13 @@ def user_profile() -> dict:
 
 def main():
     manifest = json.loads((ROOT / "generated" / "services.json").read_text(encoding="utf-8"))
-    customer_scopes = sorted({s["scope"] for s in manifest if s.get("scope")})
+    channel_scopes = sorted({s["scope"] for s in manifest if s.get("scope")})
+    # Each channel client gets exactly its own channel scope: customers channels:customer, agents channels:agent.
+    customer_scopes = [s for s in channel_scopes if s == CUSTOMER_SCOPE]
+    agent_scopes = [s for s in channel_scopes if s == AGENT_SCOPE]
+    unknown = [s for s in channel_scopes if s not in (CUSTOMER_SCOPE, AGENT_SCOPE)]
+    if unknown:
+        raise SystemExit(f"channel scope(s) {unknown} have no client; add one in tools/keycloak_realm.py")
     customer_domains = {s["domain"] for s in manifest if s.get("scope")}
     domains = sorted({s["domain"] for s in manifest} - customer_domains)
     scope_names = [f"{d}:{a}" for d in domains for a in ("read", "write", "*")] + ["meridian:admin"]
@@ -80,7 +98,7 @@ def main():
     privileged = ["cards:pan_reveal", "cards:vault_admin"]
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
-              for n in scope_names + ["meridian:internal"] + customer_scopes + privileged]
+              for n in scope_names + ["meridian:internal"] + channel_scopes + privileged]
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
@@ -101,6 +119,10 @@ def main():
          "config": {"user.attribute": "username", "claim.name": "preferred_username", "jsonType.label": "String",
                     "access.token.claim": "true", "id.token.claim": "true", "userinfo.token.claim": "true"}},
     ]
+    # Agent tokens: the agent from the admin-managed agent_id attribute (never editable by the user), the tenant, and
+    # auth_time / acr / sub / preferred_username like customer tokens (no customer_id mapper).
+    agent_mappers = [attribute_mapper("agent_id", "agent_id")] + [m for m in customer_mappers
+                                                                  if m["name"] != "customer_id"]
     read_scopes = [n for n in scope_names if n.endswith(":read")]
     realm = {
         "realm": "meridian",
@@ -139,6 +161,15 @@ def main():
              "protocolMappers": customer_mappers,
              "defaultClientScopes": ["profile", "email", "web-origins"] + customer_scopes,
              "optionalClientScopes": []},
+            {"clientId": "meridian-agent-app", "name": "Meridian agent outlet app", "publicClient": True,
+             "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
+             "directAccessGrantsEnabled": True,           # local testing only (scripts obtaining an agent token)
+             "fullScopeAllowed": False,
+             "redirectUris": [o + "/*" for o in AGENT_APP_ORIGINS], "webOrigins": AGENT_APP_ORIGINS,
+             "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
+             "protocolMappers": agent_mappers,
+             "defaultClientScopes": ["profile", "email", "web-origins"] + agent_scopes,
+             "optionalClientScopes": []},
         ],
         "users": [
             {"username": "ops.admin", "enabled": True, "email": "ops.admin@meridian.local", "emailVerified": True,
@@ -148,13 +179,17 @@ def main():
              "emailVerified": True, "firstName": "Demo", "lastName": "Customer",
              "attributes": {"customer_id": [DEMO_CUSTOMER], "tenant_id": [DEMO_TENANT]},
              "credentials": [{"type": "password", "value": "Meridian#Customer2026", "temporary": False}]},
+            {"username": "demo.agent", "enabled": True, "email": "demo.agent@meridian.local",
+             "emailVerified": True, "firstName": "Demo", "lastName": "Agent",
+             "attributes": {"agent_id": [DEMO_AGENT], "tenant_id": [DEMO_TENANT]},
+             "credentials": [{"type": "password", "value": "Meridian#Agent2026", "temporary": False}]},
         ],
     }
     out = ROOT / "infra" / "local" / "keycloak" / "meridian-realm.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(realm, indent=2), encoding="utf-8", newline="\n")
-    print(f"realm with {len(scope_names)} staff scopes, {len(customer_scopes)} customer scope(s), 4 clients, "
-          f"2 users -> {out.relative_to(ROOT)}")
+    print(f"realm with {len(scope_names)} staff scopes, {len(channel_scopes)} channel scope(s), "
+          f"{len(realm['clients'])} clients, {len(realm['users'])} users -> {out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

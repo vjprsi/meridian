@@ -3,14 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  ApiError, idem, onboarding, problemOf, unwrap, type OnboardingApplication, type OnboardingJourney, type OnboardingStep,
+  ApiError, api, idem, problemOf, unwrap, type OnboardingApplication, type OnboardingJourney, type OnboardingStep,
 } from "@/api/client";
 import { OpOutcome } from "@/components/receipt";
 import { Badge, Button, Card, Field, Input, Notice, PageTitle, ProblemBox, Row, Select, Spinner } from "@/components/ui";
+import { useSession } from "@/components/providers";
 import { useProfile } from "@/lib/agent-context";
 import { isMsisdn, toMsisdn } from "@/lib/config";
 import { useConnectivity } from "@/lib/connectivity";
-import { deviceSerial } from "@/lib/device";
 import { docTypeOf, uploadDocument } from "@/lib/documents";
 import { useT } from "@/lib/i18n";
 import { compressPhoto } from "@/lib/image";
@@ -25,20 +25,22 @@ type Details = Record<string, string>;
 interface StepDef { code: string; type: string; fields?: string[] }
 
 /**
- * Assisted onboarding. Online: create the application on a published journey that allows the AGENT channel
- * (onboardingApplicationsCreate), store the ID photo (document-service), then walk the server-driven steps
- * (onboardingApplicationsNextStep / Steps) filling each step's fields from what was captured, and submit
- * (onboardingApplicationsSubmit). Offline: the capture is queued and synced as an offline batch
- * (onboardingOfflineBatchesCreate); the photo is uploaded once the application exists.
+ * Assisted onboarding through the agent channel. Online: create the application on a published journey that allows
+ * the AGENT channel (agentMeApplicationsCreate; channel and agent set server-side), store the ID photo
+ * (agentMeApplicationsDocuments*), then walk the server-driven steps (agentMeApplicationsNextStep / AddSteps) filling
+ * each step's fields from what was captured, and submit (agentMeApplicationsSubmit). Offline: the capture is queued
+ * as an offline batch signed with this device's key (agentMeOfflineBatchesCreate); the photo is uploaded once the
+ * application exists.
  */
 export default function OnboardingPage() {
   const t = useT();
   const p = useProfile();
+  const { session } = useSession();
   const offline = useConnectivity() === "offline";
   const journeys = useQuery({
     queryKey: ["journeys"],
     staleTime: 10 * 60_000,
-    queryFn: async () => unwrap(await onboarding.GET("/v1/onboarding/journeys", { params: { query: { status: "PUBLISHED", limit: 100 } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/onboarding/journeys", { params: { query: { limit: 100 } } })).data,
   });
   const [journeyId, setJourneyId] = useState("");
   const [d, setD] = useState<Details>({ id_type: "NATIONAL_ID", gender: "FEMALE" });
@@ -83,28 +85,34 @@ export default function OnboardingPage() {
     setBusy(true);
     try {
       if (offline) {
+        if (!p!.deviceId || !session) { setProblem({ title: t("offline"), detail: t("deviceNotRegistered") }); return; }
         const clientRef = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
         const capturedAt = new Date().toISOString();
-        const request = await buildOfflineBatch(clientRef, p!.agentId, p!.deviceId ?? deviceSerial(), capturedAt, {
-          onboarding_journey_id: journey.id, phone, ...(d.email ? { email: d.email } : {}), collected_data: collected,
-        });
         const attachment = photo ? { contentType: "image/jpeg", fileName: `id-${clientRef}.jpg`, documentType: docTypeOf(d.id_type),
           base64: toB64(new Uint8Array(await photo.arrayBuffer())) } : undefined;
-        setQueued(await submit("ONBOARDING", {
-          request, attachment,
-          display: { client_ref: clientRef, Customer: `${d.first_name} ${d.last_name}`, Phone: phone, Journey: journey.name },
-        }, { offline: true }));
+        const display = { client_ref: clientRef, Customer: `${d.first_name} ${d.last_name}`, Phone: phone, Journey: journey.name };
+        const application = { onboarding_journey_id: journey.id, phone, ...(d.email ? { email: d.email } : {}), collected_data: collected };
+        // The batch is signed with the device key over the record's own Idempotency-Key, once, at capture: every
+        // replay sends the same signed body.
+        setQueued(await submit("ONBOARDING", { request: {}, attachment, display }, {
+          offline: true,
+          prepare: async (idempotencyKey) => ({
+            request: await buildOfflineBatch({ clientRef, tenantId: session.tenantId, agentId: p!.agentId,
+              deviceId: p!.deviceId!, capturedAt, idempotencyKey, application }),
+            attachment, display,
+          }),
+        }));
         return;
       }
       const number = `AGT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-      const created = unwrap(await onboarding.POST("/v1/onboarding/applications", {
+      const created = unwrap(await api.POST("/v1/agent/onboarding/applications", {
         params: { header: idem(`onb-${number}`) },
-        body: { application_number: number, onboarding_journey_id: journey.id, channel: "AGENT", agent_id: p!.agentId,
-          phone, email: d.email || undefined, collected_data: collected, device_fingerprint: p!.deviceId ?? deviceSerial() },
+        body: { onboarding_journey_id: journey.id, phone, email: d.email || undefined, collected_data: collected,
+          agent_device_id: p!.deviceId ?? undefined },
       }));
       let documentId: string | undefined;
       if (photo) {
-        const doc = await uploadDocument({ ownerType: "ONBOARDING_APPLICATION", ownerId: created.id,
+        const doc = await uploadDocument({ applicationId: created.id,
           bytes: new Uint8Array(await photo.arrayBuffer()), contentType: "image/jpeg", fileName: `id-${number}.jpg`,
           documentType: docTypeOf(d.id_type), keyPrefix: `onb-${number}`, documentNumber: d.id_number });
         documentId = doc.id;
@@ -193,7 +201,8 @@ function StepRunner({ journey, application, details, documentId, onNew }:
 
   async function next() {
     try {
-      setStep(unwrap(await onboarding.GET("/v1/onboarding/applications/{id}/next-step", { params: { path: { id: application.id } } })));
+      setStep(unwrap(await api.GET("/v1/agent/onboarding/applications/{application_id}/next-step", {
+        params: { path: { application_id: application.id } } })));
     } catch (x) {
       if (x instanceof ApiError && x.problem.status === 404) { setStep(null); setDone(true); } else setProblem(problemOf(x));
     }
@@ -214,8 +223,8 @@ function StepRunner({ journey, application, details, documentId, onNew }:
       for (const f of def?.fields ?? []) input[f] = values[f];
       if (step.step_type === "DOCUMENT_CAPTURE" && documentId) Object.assign(input, { document_id: documentId, document_type: values.document_type });
       if (step.step_type === "TERMS_ACCEPTANCE") input.accepted = true;
-      const r = unwrap(await onboarding.POST("/v1/onboarding/applications/{id}/steps/{step_code}", {
-        params: { path: { id: application.id, step_code: step.step_code }, header: idem() }, body: { input } }));
+      const r = unwrap(await api.POST("/v1/agent/onboarding/applications/{application_id}/steps/{step_code}", {
+        params: { path: { application_id: application.id, step_code: step.step_code }, header: idem() }, body: { input } }));
       if (r.status === "FAILED") setProblem({ title: `${step.step_code}: FAILED`, detail: r.error ?? undefined });
       else await next();
     } catch (x) {
@@ -236,8 +245,8 @@ function StepRunner({ journey, application, details, documentId, onNew }:
     setBusy(true);
     setProblem(null);
     try {
-      setFinal(unwrap(await onboarding.POST("/v1/onboarding/applications/{id}/submit", {
-        params: { path: { id: application.id }, header: idem(`onb-submit-${application.id}`) } })));
+      setFinal(unwrap(await api.POST("/v1/agent/onboarding/applications/{application_id}/submit", {
+        params: { path: { application_id: application.id }, header: idem(`onb-submit-${application.id}`) } })));
     } catch (x) {
       setProblem(problemOf(x));
     } finally {

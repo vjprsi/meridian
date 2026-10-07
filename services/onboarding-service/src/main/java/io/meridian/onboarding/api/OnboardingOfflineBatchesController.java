@@ -26,7 +26,7 @@ public class OnboardingOfflineBatchesController implements OnboardingOfflineBatc
                                                                                OnboardingOfflineBatchCreate body) {
         TenantContext.require();
         return actions.run(idempotencyKey, "create", null, body, OnboardingOfflineBatch.class, HttpStatus.CREATED,
-                () -> batches.create(body));
+                () -> batches.create(body, idempotencyKey));
     }
 
     @Override

@@ -44,8 +44,20 @@ public class OfflineBatchService {
 
     @Transactional
     public ObjectNode create(Object body) {
+        return create(body, null);
+    }
+
+    /**
+     * Receives and processes a batch; {@code idempotencyKey} (the create request's Idempotency-Key) is stored so the
+     * device can find the batch after a lost response (list filter idempotency_key).
+     */
+    @Transactional
+    public ObjectNode create(Object body, String idempotencyKey) {
         ObjectNode v = crud.toColumns(T, body);
-        v.remove(List.of("status", "result", "processed_at"));
+        v.remove(List.of("status", "result", "processed_at", "idempotency_key"));
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            v.put("idempotency_key", idempotencyKey);
+        }
         OffsetDateTime from = Events.ts(v, "captured_from");
         OffsetDateTime to = Events.ts(v, "captured_to");
         if (from != null && to != null && from.isAfter(to)) {

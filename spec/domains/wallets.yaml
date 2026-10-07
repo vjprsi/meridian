@@ -547,6 +547,8 @@ services:
           - "completed_at ts ro | Execution time"
           - "rejection_reason string(255) ro | Rejection or cancellation reason"
           - "failure_reason string(255) ro | Execution failure reason"
+          - "idempotency_key string(128) ro | Idempotency-Key of the create request (lets a client reconcile an unknown outcome)"
+        unique: [[tenant_id, idempotency_key]]
 
       - name: agent_till
         prefix: atl
@@ -686,7 +688,7 @@ services:
         path: /v1/agent-float-requests
         table: agent_float_request
         ops: [list, get, create]
-        filters: [request_type, requesting_agent_id, source_agent_id, status]
+        filters: [request_type, requesting_agent_id, source_agent_id, status, idempotency_key]
         actions:
           - "POST /{id}/approve | Approve (checker differs from the maker) and execute the float movement in wallet-service | comment string(500)"
           - "POST /{id}/reject | Reject the request | reason string(255) nn"

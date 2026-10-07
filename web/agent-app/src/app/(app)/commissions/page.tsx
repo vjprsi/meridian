@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { commission, problemOf, unwrap } from "@/api/client";
+import { api, problemOf, unwrap } from "@/api/client";
 import { Badge, Button, Card, DateTime, Field, Input, Money, Notice, PageTitle, ProblemBox, Row } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
 import { useT } from "@/lib/i18n";
@@ -25,16 +25,16 @@ export default function CommissionsPage() {
   const summary = useQuery({
     queryKey: ["commission-summary", p?.agentId, from, to],
     enabled: live && !!p,
-    queryFn: async () => unwrap(await commission.GET("/v1/commission-earnings/summary", {
-      params: { query: { beneficiary_agent_id: p!.agentId, from, to } } })) as { groups?: Group[] },
+    queryFn: async () => unwrap(await api.GET("/v1/agent/commissions/summary", {
+      params: { query: { from, to } } })) as { groups?: Group[] },
   });
 
   const lines = useInfiniteQuery({
     queryKey: ["commission-earnings", p?.agentId],
     enabled: live && !!p,
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => unwrap(await commission.GET("/v1/commission-earnings", {
-      params: { query: { beneficiary_agent_id: p!.agentId, limit: 25, cursor: pageParam } } })),
+    queryFn: async ({ pageParam }) => unwrap(await api.GET("/v1/agent/commissions", {
+      params: { query: { limit: 25, cursor: pageParam } } })),
     getNextPageParam: (last) => (last.has_more ? last.next_cursor ?? undefined : undefined),
   });
 

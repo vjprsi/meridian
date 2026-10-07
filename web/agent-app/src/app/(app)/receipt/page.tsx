@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { biller, problemOf, unwrap, wallet } from "@/api/client";
+import { api, problemOf, unwrap } from "@/api/client";
 import { ReceiptView, receiptText } from "@/components/receipt";
 import { Button, Notice, PageTitle, ProblemBox, Spinner } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
@@ -30,9 +30,11 @@ function Receipt() {
     staleTime: Infinity,
     queryFn: async () => {
       if (kind === "bill") {
-        return unwrap(await biller.GET("/v1/bill-payments/{id}/receipt", { params: { path: { id } }, parseAs: "text" })) as string;
+        return unwrap(await api.GET("/v1/agent/bill-payments/{bill_payment_id}/receipt", {
+          params: { path: { bill_payment_id: id } }, parseAs: "text" })) as string;
       }
-      return unwrap(await wallet.GET("/v1/wallet-transactions/{id}/receipt", { params: { path: { id } }, parseAs: "text" })) as string;
+      return unwrap(await api.GET("/v1/agent/transactions/{transaction_id}/receipt", {
+        params: { path: { transaction_id: id } }, parseAs: "text" })) as string;
     },
   });
 

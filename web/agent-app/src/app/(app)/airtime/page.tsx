@@ -53,8 +53,8 @@ export default function AirtimePage() {
     setBusy(true);
     try {
       setResult(await submit("AIRTIME", {
-        request: { biller_id: b.id, biller_product_id: productId || undefined, payer_wallet_id: p!.floatWalletId,
-          channel: "AGENT_APP", target_msisdn: msisdn, amount, currency: p!.currency },
+        // paid from the agent's float wallet; payer, currency and channel are set by the agent channel
+        request: { biller_id: b.id, biller_product_id: productId || undefined, target_msisdn: msisdn, amount },
         amount, currency: p!.currency,
         display: { Network: b.name, Phone: msisdn },
       }, { pin: pin || undefined, offline }));

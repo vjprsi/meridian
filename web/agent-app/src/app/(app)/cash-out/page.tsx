@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, type FormEvent } from "react";
-import { idem, newKey, problemOf, unwrap, wallet, type Quote, type Wallet, type WalletTransaction } from "@/api/client";
+import { api, idem, newKey, problemOf, unwrap, type AgentCustomerLookup, type Quote, type WalletTransaction } from "@/api/client";
 import { Scanner, canScan } from "@/components/scanner";
 import { Badge, Button, Card, DateTime, Field, Input, LinkButton, Money, Notice, PageTitle, PinInput, ProblemBox, Row, cx } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
@@ -13,9 +13,9 @@ import type { Problem } from "@/lib/outbox/types";
 
 /**
  * Cash-out needs live verification and is never queued offline. The customer's funds are held when the cash-out is
- * created (walletTransactionsCashOut) and captured only when the customer confirms with the wallet PIN, or with the
- * OTP sent to their phone when the wallet has no PIN (walletTransactionsConfirm). A pending cash-out started by
- * the customer can be found by its reference (typed or scanned).
+ * created (agentMeCashOutCreate) and captured only when the customer confirms with the wallet PIN, or with the
+ * OTP sent to their phone when the wallet has no PIN (agentMeCashOutConfirm). A pending cash-out at this agent can
+ * be found by its reference (typed or scanned) among the agent's pending cash-outs.
  */
 export default function CashOutPage() {
   const t = useT();
@@ -60,7 +60,7 @@ function NewCashOut({ onCreated }: { onCreated: (t: WalletTransaction) => void }
   const p = useProfile()!;
   const [who, setWho] = useState("");
   const [amount, setAmount] = useState("");
-  const [customer, setCustomer] = useState<Wallet | null>(null);
+  const [customer, setCustomer] = useState<AgentCustomerLookup | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [key, setKey] = useState(newKey());
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -74,11 +74,11 @@ function NewCashOut({ onCreated }: { onCreated: (t: WalletTransaction) => void }
     try {
       const phone = toMsisdn(who);
       const query = /^\+?\d{7,15}$/.test(who.replace(/\s/g, "")) && isMsisdn(phone) && !/^[A-Z]/i.test(who)
-        ? { msisdn: phone, currency: p.currency } : { wallet_number: who.trim(), currency: p.currency };
-      const w = unwrap(await wallet.GET("/v1/wallets/lookup", { params: { query } }));
+        ? { msisdn: phone } : { wallet_number: who.trim() };
+      const w = unwrap(await api.GET("/v1/agent/customer-wallets/lookup", { params: { query } }));
       setCustomer(w);
-      setQuote(unwrap(await wallet.POST("/v1/wallet-transactions/quote", { params: { header: idem() }, body: {
-        txn_type: "CASH_OUT", amount, currency: p.currency, payer_wallet_id: w.id, payee_wallet_id: p.floatWalletId ?? undefined, channel: "AGENT_APP",
+      setQuote(unwrap(await api.POST("/v1/agent/transactions/quote", { params: { header: idem() }, body: {
+        txn_type: "CASH_OUT", amount, payer_wallet_id: w.wallet_id ?? undefined,
       } })) as unknown as Quote);
       setKey(newKey());
     } catch (x) {
@@ -93,9 +93,8 @@ function NewCashOut({ onCreated }: { onCreated: (t: WalletTransaction) => void }
     setProblem(null);
     try {
       // One key per review: a double tap or a retry after a lost response cannot create a second hold.
-      onCreated(unwrap(await wallet.POST("/v1/wallet-transactions/cash-out", { params: { header: idem(key) }, body: {
-        agent_wallet_id: p.floatWalletId!, agent_outlet_id: p.outletId ?? undefined, payer_wallet_id: customer!.id,
-        amount, currency: p.currency, channel: "AGENT_APP",
+      onCreated(unwrap(await api.POST("/v1/agent/cash-out", { params: { header: idem(key) }, body: {
+        agent_outlet_id: p.outletId ?? undefined, payer_wallet_id: customer!.wallet_id!, amount,
       } })));
     } catch (x) {
       setProblem(problemOf(x));
@@ -109,7 +108,7 @@ function NewCashOut({ onCreated }: { onCreated: (t: WalletTransaction) => void }
       <div className="flex flex-col gap-4">
         <Card>
           <dl>
-            <Row label={t("customer")}>{customer.display_name}<br /><span className="text-sm text-muted">{customer.msisdn ?? customer.wallet_number}</span></Row>
+            <Row label={t("customer")}>{customer.display_name_masked}<br /><span className="text-sm text-muted">{customer.msisdn_masked}</span></Row>
             <Row label={t("amount")}><Money amount={amount} currency={p.currency} /></Row>
             <Row label={t("fee")}><Money amount={quote.fee_amount} currency={p.currency} /></Row>
             <Row label={t("total")}><Money amount={quote.total_debit_amount} currency={p.currency} /></Row>
@@ -150,7 +149,9 @@ function FindByCode({ onFound }: { onFound: (t: WalletTransaction) => void }) {
     setBusy(true);
     setProblem(null);
     try {
-      const rows = unwrap(await wallet.GET("/v1/wallet-transactions", { params: { query: { reference: ref.trim(), txn_type: "CASH_OUT", limit: 5 } } })).data;
+      const rows = unwrap(await api.GET("/v1/agent/transactions", { params: { query: {
+        txn_type: "CASH_OUT", status: "PENDING_CONFIRMATION", limit: 200 } } })).data
+        .filter((x) => x.reference.toUpperCase() === ref.trim().toUpperCase());
       if (rows.length === 0) setProblem({ title: t("nothing"), detail: ref });
       else onFound(rows[0]);
     } catch (x) {
@@ -193,13 +194,13 @@ function ConfirmCashOut({ txn, onChange, onNew }: { txn: WalletTransaction; onCh
     const value = secret;
     setSecret(""); // the customer's PIN leaves memory as soon as it is sent
     try {
-      onChange(unwrap(await wallet.POST("/v1/wallet-transactions/{id}/confirm", {
-        params: { path: { id: txn.id }, header: idem() },
+      onChange(unwrap(await api.POST("/v1/agent/cash-out/{transaction_id}/confirm", {
+        params: { path: { transaction_id: txn.id }, header: idem() },
         body: method === "OTP" ? { otp: value } : { pin: value },
       })));
     } catch (x) {
       setProblem(problemOf(x));
-      const fresh = await wallet.GET("/v1/wallet-transactions/{id}", { params: { path: { id: txn.id } } });
+      const fresh = await api.GET("/v1/agent/transactions/{transaction_id}", { params: { path: { transaction_id: txn.id } } });
       if (fresh.data) onChange(fresh.data);
     } finally {
       setBusy(false);
@@ -209,8 +210,8 @@ function ConfirmCashOut({ txn, onChange, onNew }: { txn: WalletTransaction; onCh
   async function cancel() {
     setBusy(true);
     try {
-      onChange(unwrap(await wallet.POST("/v1/wallet-transactions/{id}/cancel", {
-        params: { path: { id: txn.id }, header: idem() }, body: { reason: "Cancelled at agent outlet" } })));
+      onChange(unwrap(await api.POST("/v1/agent/cash-out/{transaction_id}/cancel", {
+        params: { path: { transaction_id: txn.id }, header: idem() }, body: { reason: "Cancelled at agent outlet" } })));
     } catch (x) {
       setProblem(problemOf(x));
     } finally {

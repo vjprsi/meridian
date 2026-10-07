@@ -3,6 +3,16 @@ import { expect, test, type BrowserContext, type Page, type Route } from "@playw
 const AGENT = "0199b000-0000-7000-8000-0000000000a1";
 const FLOAT = "0199b000-0000-7000-8000-0000000000f1";
 const OUTLET = "0199b000-0000-7000-8000-0000000000c1";
+const DEVICE = "0199b000-0000-7000-8000-0000000000d1";
+const TENANT = "0199a000-0000-7000-8000-00000000000a";
+
+/** Verifies an ES256 (P1363, base64url) device signature with the registered SPKI public key (base64). */
+async function verifyEs256(publicKeyB64: string, signatureB64Url: string, text: string): Promise<boolean> {
+  const key = await crypto.subtle.importKey("spki", Buffer.from(publicKeyB64, "base64"), { name: "ECDSA", namedCurve: "P-256" },
+    false, ["verify"]);
+  return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, Buffer.from(signatureB64Url, "base64url"),
+    new TextEncoder().encode(text));
+}
 const TS = "2026-10-06T08:00:00Z";
 const base = { created_at: TS, updated_at: TS, row_version: 1 };
 const page1 = <T,>(data: T[]) => ({ data, has_more: false, next_cursor: null });
@@ -12,34 +22,45 @@ const json = (route: Route, body: unknown, status = 200, headers: Record<string,
 /** Visible element by test id (Next keeps previously visited routes mounted but hidden). */
 const vis = (page: Page, id: string) => page.locator(`[data-testid="${id}"]:visible`);
 
-interface Captured { url: string; key: string | null; body: Record<string, unknown> }
+interface Captured { url: string; key: string | null; body: Record<string, unknown>; proof?: string; headers?: Record<string, string> }
 
-/** Mocks just enough of the platform API for sign-in, setup, home and a cash-in. */
-async function mockApi(context: BrowserContext, cashIns: Captured[]) {
+/**
+ * Mocks just enough of the agent channel (/v1/agent only: the app never calls a domain service) for sign-in, setup
+ * with device registration, home and a cash-in. Any other /v1 path answers 404 and is recorded.
+ */
+async function mockApi(context: BrowserContext, cashIns: Captured[], devices: Captured[], strays: string[]) {
   // context.route also sees requests the service worker makes (reference-data cache).
   await context.route("**/v1/**", async (route) => {
     const req = route.request();
     const u = new URL(req.url());
     const p = u.pathname;
-    if (p === "/v1/agents") {
-      return json(route, page1([{ ...base, id: AGENT, agent_code: "AG-001", agent_level: "AGENT", legal_name: "Duka la Amani",
-        trading_name: "Amani Shop", contact_msisdn: "+254700000100", currency: "KES", status: "ACTIVE", float_wallet_id: FLOAT }]));
+    if (!p.startsWith("/v1/agent/")) strays.push(`${req.method()} ${p}`);
+    if (p === "/v1/agent/me") {
+      return json(route, { ...base, id: AGENT, agent_code: "AG-001", agent_level: "AGENT", legal_name: "Duka la Amani",
+        trading_name: "Amani Shop", contact_msisdn: "+254700000100", currency: "KES", status: "ACTIVE", float_wallet_id: FLOAT });
     }
-    if (p === `/v1/agents/${AGENT}/outlets`) {
+    if (p === "/v1/agent/me/outlets") {
       return json(route, page1([{ ...base, id: OUTLET, agent_id: AGENT, outlet_code: "OUT-1", name: "Amani Main", country: "KE", status: "ACTIVE" }]));
     }
-    if (p === "/v1/agent-devices" && req.method() === "GET") return json(route, page1([]));
-    if (p === "/v1/agent-devices" && req.method() === "POST") {
-      return json(route, { ...base, id: "0199b000-0000-7000-8000-0000000000d1", agent_id: AGENT, device_type: "SMARTPHONE", serial_number: "PWA", status: "ACTIVE" }, 201);
+    if (p === "/v1/agent/devices" && req.method() === "POST") {
+      const body = req.postDataJSON() as Record<string, unknown>;
+      devices.push({ url: p, key: req.headers()["idempotency-key"] ?? null, body, headers: req.headers() });
+      return json(route, { ...base, id: "0199b000-0000-7000-8000-0000000000k1", agent_id: AGENT, agent_device_id: DEVICE,
+        agent_outlet_id: OUTLET, key_algorithm: body.key_algorithm, public_key: body.public_key, key_fingerprint: "ab".repeat(32),
+        status: "ACTIVE" });
     }
-    if (p === `/v1/wallets/${FLOAT}/balance`) {
+    if (p === "/v1/agent/me/float-balance") {
       return json(route, { ...base, id: FLOAT, ledger_account_id: FLOAT, currency: "KES", posted_debits: "0", posted_credits: "50000",
         posted_balance: "50000", pending_debits: "0", pending_credits: "0", available_balance: "50000", account_version: 1 });
     }
-    if (p === `/v1/wallets/${FLOAT}`) return json(route, { ...base, id: FLOAT, has_pin: false, wallet_type: "AGENT", status: "ACTIVE" });
-    if (p === "/v1/wallet-transactions/cash-in") {
+    if (p === "/v1/agent/me/float-wallet") return json(route, { ...base, id: FLOAT, has_pin: false, wallet_type: "AGENT", status: "ACTIVE" });
+    if (p === `/v1/agent/devices/${DEVICE}`) {
+      return json(route, { ...base, id: DEVICE, agent_id: AGENT, device_type: "SMARTPHONE", serial_number: "PWA", status: "ACTIVE" });
+    }
+    if (p === "/v1/agent/cash-in") {
       const body = req.postDataJSON() as Record<string, unknown>;
-      cashIns.push({ url: p, key: req.headers()["idempotency-key"] ?? null, body });
+      cashIns.push({ url: p, key: req.headers()["idempotency-key"] ?? null, body, proof: req.headers()["x-agent-device-proof"],
+        headers: req.headers() });
       const replay = cashIns.filter((c) => c.key === req.headers()["idempotency-key"]).length > 1;
       return json(route, { ...base, id: "0199b000-0000-7000-8000-0000000000e1", reference: "WT-0001", txn_type: "CASH_IN",
         status: "COMPLETED", amount: body.amount, currency: "KES", fee_amount: "0", tax_amount: "0", commission_amount: "0" },
@@ -62,19 +83,27 @@ async function shellCached(page: Page) {
 test.describe("offline mode", () => {
   test("captures a cash-in offline, refuses cash-out, then syncs it with its Idempotency-Key", async ({ page, context }) => {
     const cashIns: Captured[] = [];
-    await mockApi(context, cashIns);
+    const devices: Captured[] = [];
+    const strays: string[] = [];
+    await mockApi(context, cashIns, devices, strays);
 
     await page.goto("/login");
     await shellCached(page);
     await page.getByRole("button", { name: /dev mode/i }).click();
     await expect(page).toHaveURL(/\/setup/);
-    await page.getByRole("button", { name: /Amani Shop/ }).click();
+    // the agent comes from the sign-in (/v1/agent/me): only the outlet is chosen
     await page.getByRole("button", { name: /Amani Main/ }).click();
     const pins = page.locator('input[type="password"]');
     await pins.nth(0).fill("135790");
     await pins.nth(1).fill("135790");
     await page.getByRole("button", { name: /^Continue$/ }).click();
     await expect(page).toHaveURL(/\/$/);
+    // device binding: the public half of a WebCrypto P-256 key pair was registered at setup
+    expect(devices).toHaveLength(1);
+    expect(devices[0].body).toMatchObject({ agent_outlet_id: OUTLET, key_algorithm: "ES256" });
+    expect(devices[0].headers?.["x-agent-id"]).toBeTruthy();
+    const publicKey = String(devices[0].body.public_key);
+    expect(Buffer.from(publicKey, "base64").length).toBe(91);   // SubjectPublicKeyInfo of a P-256 key
     await expect(vis(page, "float-balance")).toContainText("50,000");
     await expect(vis(page, "connectivity")).toHaveAttribute("data-state", "online");
     // Let the router prefetch the visible links (the service worker keeps those payloads for offline navigation).
@@ -126,8 +155,19 @@ test.describe("offline mode", () => {
     await expect(vis(page, "outbox-list")).toContainText("SYNCED");
     expect(cashIns).toHaveLength(1);
     expect(cashIns[0].key).toMatch(/^agentapp-[0-9a-f-]{36}$/);
-    expect(cashIns[0].body).toMatchObject({ payee_msisdn: "+254712345678", amount: "150", currency: "KES", channel: "AGENT_APP" });
+    // the agent channel sets the float wallet, currency and channel itself: the app sends only what the agent typed
+    expect(cashIns[0].body).toMatchObject({ payee_msisdn: "+254712345678", amount: "150", agent_outlet_id: OUTLET });
     expect(cashIns[0].body).not.toHaveProperty("pin");
+    expect(cashIns[0].body).not.toHaveProperty("agent_wallet_id");
+    // the replayed money operation carries a device proof signed by the registered key
+    const proof = cashIns[0].proof ?? "";
+    const [v, device, ts, sig] = proof.split(".");
+    expect(v).toBe("v1");
+    expect(device).toBe(DEVICE);
+    const text = ["MERIDIAN-AGENT-DEVICE-PROOF-V1", `tenant=${TENANT}`, `agent=${AGENT}`, `device=${DEVICE}`, "method=POST",
+      "path=/v1/agent/cash-in", `idempotency_key=${cashIns[0].key}`, `timestamp=${ts}`].join("\n");
+    expect(await verifyEs256(publicKey, sig, text)).toBe(true);
+    expect(strays).toEqual([]);
   });
 });
 
