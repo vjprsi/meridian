@@ -112,6 +112,14 @@ public class MeridianWebAutoConfiguration {
         return new ServiceClient(json, env);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.time.BusinessDates businessDates(ServiceClient client, Environment env) {
+        return new io.meridian.web.time.BusinessDates(client, env.getProperty("spring.application.name", "unknown"),
+                !"clock".equalsIgnoreCase(env.getProperty("meridian.business-date.source", "business-day-service")),
+                java.time.Duration.ofSeconds(env.getProperty("meridian.business-date.cache-seconds", Long.class, 30L)));
+    }
+
     /** Per-tenant ledger routing from config-service (namespace {@code ledger}); see {@link io.meridian.web.config.TenantSettings}. */
     @Bean
     @ConditionalOnMissingBean

@@ -103,6 +103,14 @@ Lessons from the rollout (all 63 services):
   sub-microsecond digits, so a raw JVM timestamp can read back in the future and break effective-date checks.
 - Store and compare timestamps in UTC; business dates come from business-day-service, not the wall clock.
 
+### Business date
+
+"Today" for value dates, due dates and accruals is the business date from business-day-service, not the UTC
+calendar date: inject `io.meridian.web.time.BusinessDates` and call `today(legalEntityId, fallback)` when the
+record has a legal entity, else `today(fallback)` (tenant-wide, used when all entities agree). Pass the service's own
+clock as the fallback so tests keep controlling dates. Timestamps stay `Clocks.now()`. Adopted in payment-service
+and deposit-service; others to follow when they touch date logic.
+
 ## Tests (required per service)
 
 - Keep the generated `<Name>ApplicationTests` (context + migration).

@@ -33,8 +33,10 @@ public class Rows {
     private final JdbcClient jdbc;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;
@@ -90,8 +92,9 @@ public class Rows {
         return jdbc.sql("select now()").query(OffsetDateTime.class).single();
     }
 
+    /** The tenant's business date (business-day-service), else the database's calendar date. */
     public LocalDate today() {
-        return jdbc.sql("select current_date").query(LocalDate.class).single();
+        return businessDates.today(() -> jdbc.sql("select current_date").query(LocalDate.class).single());
     }
 
     /** Inserts a row with a server-generated id (unless given) and returns it. */

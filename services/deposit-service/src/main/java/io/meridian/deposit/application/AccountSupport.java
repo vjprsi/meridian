@@ -31,7 +31,11 @@ public class AccountSupport {
     private final Events events;
     private final Clock clock;
 
-    public AccountSupport(Rows rows, LedgerPort ledger, Events events, Clock clock) {
+    private final io.meridian.web.time.BusinessDates businessDates;
+
+    public AccountSupport(Rows rows, LedgerPort ledger, Events events, Clock clock,
+                          io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.rows = rows;
         this.ledger = ledger;
         this.events = events;
@@ -55,8 +59,9 @@ public class AccountSupport {
                 field + " " + id + " does not reference an existing deposit account"));
     }
 
+    /** The tenant's business date (business-day-service), else this service's clock. */
     public LocalDate today() {
-        return LocalDate.now(clock);
+        return businessDates.today(() -> LocalDate.now(clock));
     }
 
     public OffsetDateTime now() {
