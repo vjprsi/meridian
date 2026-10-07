@@ -1123,7 +1123,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:read
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -1186,8 +1186,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
-      x-required-scope: operations:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
       x-crud: true
       x-crud-list: true
@@ -1199,7 +1199,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:read
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -1223,8 +1223,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
-      x-required-scope: operations:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
       x-crud: true
       x-crud-get: true
@@ -1237,7 +1237,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -1266,8 +1266,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
   /v1/operations/eod-runs:
     get:
@@ -4823,9 +4823,11 @@ components:
           scopes:
             operations:read: 'Read Operations: Batch, Files, Search and Archive'
             operations:write: 'Change Operations: Batch, Files, Search and Archive'
+            platform:operator: Platform operator (operator tenant or service only)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
             operations:read: 'Read Operations: Batch, Files, Search and Archive'
             operations:write: 'Change Operations: Batch, Files, Search and Archive'
+            platform:operator: Platform operator (operator tenant or service only)

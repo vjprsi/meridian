@@ -252,7 +252,12 @@ API: /v1/account-rate-overrides · Requirements: PRC-04, PRD-03
 | reason | varchar(500) | no |  | reason | Justification |
 | valid_from | date | no |  | valid_from | Start |
 | valid_to | date | yes |  | valid_to | End |
-| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval |
+| status | varchar(40) (RateOverrideStatus) | no |  | status (read-only) | Only ACTIVE (approved) overrides apply to interest |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved (four-eyes: never the maker) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the override was rejected |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1358,6 +1363,8 @@ API: /v1/card-vault · Requirements: CRD-07
 | last4 | varchar(4) | yes |  | last4 (read-only) | Last four digits |
 | pin_set | boolean | no |  | pin_set (read-only) | A PIN is stored |
 | pin_try_count | integer | no |  | pin_try_count (read-only) | Consecutive wrong PIN attempts |
+| cvv_fail_count | integer | no |  | cvv_fail_count (read-only) | Consecutive wrong CVV2 attempts (card-testing guard) |
+| cvv_blocked_at | timestamptz | yes |  | cvv_blocked_at (read-only) | CVV2 checks blocked after too many failures (reset by a correct CVV2 is not possible while blocked) |
 | is_active | boolean | no |  | is_active (read-only) | False once superseded by a reissue |
 | last_detokenized_at | timestamptz | yes |  | last_detokenized_at (read-only) | Last detokenisation time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -10044,6 +10051,9 @@ API: /v1/users/{user_id}/mfa-factors · Requirements: ADM-02
 | is_primary | boolean | no |  | is_primary (read-only) | Default factor |
 | status | varchar(40) (MfaFactorStatus) | no |  | status (read-only) | Status (changed by /verify) |
 | last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last successful use |
+| failed_attempts | integer | no |  | failed_attempts (read-only) | Consecutive failed verifications (lockout after the limit) |
+| locked_until | timestamptz | yes |  | locked_until (read-only) | Verification locked until this time after too many failures |
+| last_used_step | integer | yes |  | last_used_step (read-only) | TOTP time step last accepted (a code is never accepted twice) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

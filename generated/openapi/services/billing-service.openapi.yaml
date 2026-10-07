@@ -118,7 +118,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -145,8 +145,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
       x-crud: true
       x-crud-create: true
@@ -195,7 +195,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id005
       - $ref: '#/components/parameters/IfMatch'
@@ -225,8 +225,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
       x-crud: true
       x-crud-update: true
@@ -238,7 +238,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -267,8 +267,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
   /v1/billing/price-plans/{id}/retire:
     post:
@@ -278,7 +278,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -313,8 +313,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
   /v1/billing/subscriptions:
     get:
@@ -2636,9 +2636,11 @@ components:
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:operator: Platform operator (operator tenant or service only)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:operator: Platform operator (operator tenant or service only)

@@ -133,6 +133,8 @@ CREATE TABLE card_data_vault (
   last4                        varchar(4),
   pin_set                      boolean NOT NULL DEFAULT false,
   pin_try_count                integer NOT NULL DEFAULT 0,
+  cvv_fail_count               integer NOT NULL DEFAULT 0,
+  cvv_blocked_at               timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
   last_detokenized_at          timestamptz,
   custom_field_1               varchar(500),
@@ -162,6 +164,8 @@ COMMENT ON COLUMN card_data_vault.bin IS 'BIN (first 6-8 digits; not sensitive)'
 COMMENT ON COLUMN card_data_vault.last4 IS 'Last four digits';
 COMMENT ON COLUMN card_data_vault.pin_set IS 'A PIN is stored';
 COMMENT ON COLUMN card_data_vault.pin_try_count IS 'Consecutive wrong PIN attempts';
+COMMENT ON COLUMN card_data_vault.cvv_fail_count IS 'Consecutive wrong CVV2 attempts (card-testing guard)';
+COMMENT ON COLUMN card_data_vault.cvv_blocked_at IS 'CVV2 checks blocked after too many failures (reset by a correct CVV2 is not possible while blocked)';
 COMMENT ON COLUMN card_data_vault.is_active IS 'False once superseded by a reissue';
 COMMENT ON COLUMN card_data_vault.last_detokenized_at IS 'Last detokenisation time';
 COMMENT ON COLUMN card_data_vault.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';

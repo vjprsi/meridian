@@ -966,6 +966,18 @@ components:
           format: int32
           description: Consecutive wrong PIN attempts
           readOnly: true
+        cvv_fail_count:
+          type: integer
+          format: int32
+          description: Consecutive wrong CVV2 attempts (card-testing guard)
+          readOnly: true
+        cvv_blocked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: CVV2 checks blocked after too many failures (reset by a correct CVV2 is not possible while blocked)
+          readOnly: true
         is_active:
           type: boolean
           description: False once superseded by a reissue
@@ -1042,6 +1054,7 @@ components:
       - dek_key_id
       - pin_set
       - pin_try_count
+      - cvv_fail_count
       - is_active
     CardDataVaultCreate:
       type: object

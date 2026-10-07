@@ -438,6 +438,11 @@ CREATE TABLE account_rate_override (
   reason                       varchar(500) NOT NULL,
   valid_from                   date NOT NULL,
   valid_to                     date,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'ACTIVE', 'REJECTED')),
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
   approval_request_id          uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -460,7 +465,12 @@ COMMENT ON COLUMN account_rate_override.rate_adjustment IS 'Adjustment to the pr
 COMMENT ON COLUMN account_rate_override.reason IS 'Justification';
 COMMENT ON COLUMN account_rate_override.valid_from IS 'Start';
 COMMENT ON COLUMN account_rate_override.valid_to IS 'End';
-COMMENT ON COLUMN account_rate_override.approval_request_id IS 'Approval';
+COMMENT ON COLUMN account_rate_override.status IS 'Only ACTIVE (approved) overrides apply to interest';
+COMMENT ON COLUMN account_rate_override.approved_by IS 'Checker who approved (four-eyes: never the maker)';
+COMMENT ON COLUMN account_rate_override.approved_at IS 'Approval time';
+COMMENT ON COLUMN account_rate_override.rejected_by IS 'Checker who rejected';
+COMMENT ON COLUMN account_rate_override.rejection_reason IS 'Why the override was rejected';
+COMMENT ON COLUMN account_rate_override.approval_request_id IS 'Central approval request (workflow-service)';
 COMMENT ON COLUMN account_rate_override.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN account_rate_override.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN account_rate_override.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

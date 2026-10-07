@@ -53610,6 +53610,25 @@ components:
           format: date-time
           description: Last successful use
           readOnly: true
+        failed_attempts:
+          type: integer
+          format: int32
+          description: Consecutive failed verifications (lockout after the limit)
+          readOnly: true
+        locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification locked until this time after too many failures
+          readOnly: true
+        last_used_step:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: TOTP time step last accepted (a code is never accepted twice)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -53659,6 +53678,7 @@ components:
       - factor_type
       - is_primary
       - status
+      - failed_attempts
     CustomFieldDefinition:
       type: object
       description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation,

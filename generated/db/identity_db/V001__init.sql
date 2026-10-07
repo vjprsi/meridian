@@ -754,6 +754,9 @@ CREATE TABLE mfa_factor (
   is_primary                   boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_VERIFICATION' CHECK (status IN ('PENDING_VERIFICATION', 'ACTIVE', 'DISABLED')),
   last_used_at                 timestamptz,
+  failed_attempts              integer NOT NULL DEFAULT 0,
+  locked_until                 timestamptz,
+  last_used_step               integer,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -778,6 +781,9 @@ COMMENT ON COLUMN mfa_factor.destination IS 'Phone or email for OTP factors [PII
 COMMENT ON COLUMN mfa_factor.is_primary IS 'Default factor';
 COMMENT ON COLUMN mfa_factor.status IS 'Status (changed by /verify)';
 COMMENT ON COLUMN mfa_factor.last_used_at IS 'Last successful use';
+COMMENT ON COLUMN mfa_factor.failed_attempts IS 'Consecutive failed verifications (lockout after the limit)';
+COMMENT ON COLUMN mfa_factor.locked_until IS 'Verification locked until this time after too many failures';
+COMMENT ON COLUMN mfa_factor.last_used_step IS 'TOTP time step last accepted (a code is never accepted twice)';
 COMMENT ON COLUMN mfa_factor.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN mfa_factor.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN mfa_factor.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

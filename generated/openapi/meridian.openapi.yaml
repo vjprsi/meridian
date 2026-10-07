@@ -4497,6 +4497,14 @@ paths:
         schema:
           type: string
           maxLength: 40
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -4691,6 +4699,100 @@ paths:
       x-table: account_rate_override
       x-crud: true
       x-crud-delete: true
+  /v1/account-rate-overrides/{id}/approve:
+    post:
+      operationId: accountRateOverridesApprove
+      summary: Approve the rate override (a checker other than the maker)
+      tags:
+      - Account Rate Overrides
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRateOverride'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRateOverridesApproveRequest'
+      x-requirements:
+      - PRC-04
+      - PRD-03
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-required-scope: accounts:write
+      x-table: account_rate_override
+  /v1/account-rate-overrides/{id}/reject:
+    post:
+      operationId: accountRateOverridesReject
+      summary: Reject the rate override
+      tags:
+      - Account Rate Overrides
+      security:
+      - oauth2:
+        - accounts:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRateOverride'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRateOverridesRejectRequest'
+      x-requirements:
+      - PRC-04
+      - PRD-03
+      x-service: deposit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("accounts:write")'
+      x-required-scope: accounts:write
+      x-table: account_rate_override
   /v1/interest-accruals:
     get:
       operationId: interestAccrualsList
@@ -26079,7 +26181,7 @@ paths:
       - Spend Categories
       security:
       - oauth2:
-        - engagement:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -26106,8 +26208,8 @@ paths:
       x-requirements:
       - ENG-03
       x-service: insights-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: spend_category
       x-crud: true
       x-crud-create: true
@@ -26156,7 +26258,7 @@ paths:
       - Spend Categories
       security:
       - oauth2:
-        - engagement:write
+        - platform:operator
       parameters:
       - *id043
       - $ref: '#/components/parameters/IfMatch'
@@ -26186,8 +26288,8 @@ paths:
       x-requirements:
       - ENG-03
       x-service: insights-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: spend_category
       x-crud: true
       x-crud-update: true
@@ -53057,7 +53159,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:read
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -53120,8 +53222,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
-      x-required-scope: operations:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
       x-crud: true
       x-crud-list: true
@@ -53133,7 +53235,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:read
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -53157,8 +53259,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
-      x-required-scope: operations:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
       x-crud: true
       x-crud-get: true
@@ -53171,7 +53273,7 @@ paths:
       - Eod Sweeps
       security:
       - oauth2:
-        - operations:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -53200,8 +53302,8 @@ paths:
       x-requirements:
       - OPS-01
       x-service: business-day-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: eod_sweep
   /v1/operations/eod-runs:
     get:
@@ -74142,7 +74244,7 @@ paths:
       - Rail Participants
       security:
       - oauth2:
-        - payments:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -74170,8 +74272,8 @@ paths:
       - PAY-02
       - PAY-04
       x-service: routing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: rail_participant
       x-crud: true
       x-crud-create: true
@@ -74221,7 +74323,7 @@ paths:
       - Rail Participants
       security:
       - oauth2:
-        - payments:write
+        - platform:operator
       parameters:
       - *id162
       - $ref: '#/components/parameters/IfMatch'
@@ -74252,8 +74354,8 @@ paths:
       - PAY-02
       - PAY-04
       x-service: routing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: rail_participant
       x-crud: true
       x-crud-update: true
@@ -74265,7 +74367,7 @@ paths:
       - Rail Participants
       security:
       - oauth2:
-        - payments:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -74297,8 +74399,8 @@ paths:
       - PAY-02
       - PAY-04
       x-service: routing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: rail_participant
   /v1/fx/quotes:
     get:
@@ -75548,7 +75650,7 @@ paths:
       - Cells
       security:
       - oauth2:
-        - platform:read
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -75621,8 +75723,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
-      x-required-scope: platform:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: cell
       x-crud: true
       x-crud-list: true
@@ -75633,7 +75735,7 @@ paths:
       - Cells
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -75660,8 +75762,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: cell
       x-crud: true
       x-crud-create: true
@@ -75673,7 +75775,7 @@ paths:
       - Cells
       security:
       - oauth2:
-        - platform:read
+        - platform:operator
       parameters:
       - &id167
         name: id
@@ -75698,8 +75800,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
-      x-required-scope: platform:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: cell
       x-crud: true
       x-crud-get: true
@@ -75710,7 +75812,7 @@ paths:
       - Cells
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id167
       - $ref: '#/components/parameters/IfMatch'
@@ -75740,8 +75842,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: cell
       x-crud: true
       x-crud-update: true
@@ -75753,7 +75855,7 @@ paths:
       - Cells
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -75788,8 +75890,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: cell
   /v1/platform/tenants:
     get:
@@ -75799,7 +75901,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:read
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -75885,8 +75987,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
-      x-required-scope: platform:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
       x-crud: true
       x-crud-list: true
@@ -75897,7 +75999,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -75924,8 +76026,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
       x-crud: true
       x-crud-create: true
@@ -75937,7 +76039,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:read
+        - platform:operator
       parameters:
       - &id168
         name: id
@@ -75962,8 +76064,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
-      x-required-scope: platform:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
       x-crud: true
       x-crud-get: true
@@ -75974,7 +76076,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id168
       - $ref: '#/components/parameters/IfMatch'
@@ -76004,8 +76106,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
       x-crud: true
       x-crud-update: true
@@ -76017,7 +76119,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76046,8 +76148,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/{id}/suspend:
     post:
@@ -76057,7 +76159,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76092,8 +76194,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/{id}/reinstate:
     post:
@@ -76103,7 +76205,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76138,8 +76240,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/{id}/migrate:
     post:
@@ -76149,7 +76251,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76184,8 +76286,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/{id}/placements:
     get:
@@ -76195,7 +76297,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:read
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76221,8 +76323,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
-      x-required-scope: platform:read
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/provision-from-template:
     post:
@@ -76233,7 +76335,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -76262,8 +76364,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/platform/tenants/{id}/apply-starter-pack:
     post:
@@ -76274,7 +76376,7 @@ paths:
       - Tenants
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -76309,8 +76411,8 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: tenant
   /v1/starter-pack-runs:
     get:
@@ -82476,7 +82578,7 @@ paths:
       - Country Packs
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -82512,8 +82614,8 @@ paths:
       - ADM-04
       - REG-01
       x-service: config-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: country_pack
   /v1/config/installed-country-packs:
     get:
@@ -83116,7 +83218,7 @@ paths:
       - Currencies
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -83144,8 +83246,8 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: currency
       x-crud: true
       x-crud-create: true
@@ -83195,7 +83297,7 @@ paths:
       - Currencies
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id197
       - $ref: '#/components/parameters/IfMatch'
@@ -83226,8 +83328,8 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: currency
       x-crud: true
       x-crud-update: true
@@ -83360,7 +83462,7 @@ paths:
       - Countries
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id198
       - $ref: '#/components/parameters/IfMatch'
@@ -83390,8 +83492,8 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: country
       x-crud: true
       x-crud-update: true
@@ -83464,7 +83566,7 @@ paths:
       - Languages
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -83491,8 +83593,8 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: language
       x-crud: true
       x-crud-create: true
@@ -83541,7 +83643,7 @@ paths:
       - Languages
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id199
       - $ref: '#/components/parameters/IfMatch'
@@ -83571,8 +83673,8 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: language
       x-crud: true
       x-crud-update: true
@@ -83663,7 +83765,7 @@ paths:
       - Holiday Calendars
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -83691,8 +83793,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday_calendar
       x-crud: true
       x-crud-create: true
@@ -83742,7 +83844,7 @@ paths:
       - Holiday Calendars
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id200
       - $ref: '#/components/parameters/IfMatch'
@@ -83773,8 +83875,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday_calendar
       x-crud: true
       x-crud-update: true
@@ -83880,7 +83982,7 @@ paths:
       - Holiday Calendars
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -83918,8 +84020,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday_calendar
   /v1/reference/holidays:
     get:
@@ -84007,7 +84109,7 @@ paths:
       - Holidays
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -84035,8 +84137,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday
       x-crud: true
       x-crud-create: true
@@ -84086,7 +84188,7 @@ paths:
       - Holidays
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id201
       - $ref: '#/components/parameters/IfMatch'
@@ -84117,8 +84219,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday
       x-crud: true
       x-crud-update: true
@@ -84129,7 +84231,7 @@ paths:
       - Holidays
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters: *id202
       responses:
         '204':
@@ -84144,8 +84246,8 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: holiday
       x-crud: true
       x-crud-delete: true
@@ -84219,7 +84321,7 @@ paths:
       - Fx Rate Sources
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -84247,8 +84349,8 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: fx_rate_source
       x-crud: true
       x-crud-create: true
@@ -84298,7 +84400,7 @@ paths:
       - Fx Rate Sources
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id203
       - $ref: '#/components/parameters/IfMatch'
@@ -84329,8 +84431,8 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: fx_rate_source
       x-crud: true
       x-crud-update: true
@@ -84773,7 +84875,7 @@ paths:
       - Banks
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -84805,8 +84907,8 @@ paths:
       - ADM-04
       - PAY-02
       x-service: reference-data-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: bank_directory
   /v1/reference/mcc-codes:
     get:
@@ -91316,7 +91418,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -91343,8 +91445,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
       x-crud: true
       x-crud-create: true
@@ -91393,7 +91495,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - *id222
       - $ref: '#/components/parameters/IfMatch'
@@ -91423,8 +91525,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
       x-crud: true
       x-crud-update: true
@@ -91436,7 +91538,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -91465,8 +91567,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
   /v1/billing/price-plans/{id}/retire:
     post:
@@ -91476,7 +91578,7 @@ paths:
       - Price Plans
       security:
       - oauth2:
-        - platform:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -91511,8 +91613,8 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: price_plan
   /v1/billing/subscriptions:
     get:
@@ -111828,7 +111930,7 @@ paths:
       - Sanctions Lists
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -111856,8 +111958,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list
       x-crud: true
       x-crud-create: true
@@ -111907,7 +112009,7 @@ paths:
       - Sanctions Lists
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - *id286
       - $ref: '#/components/parameters/IfMatch'
@@ -111938,8 +112040,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list
       x-crud: true
       x-crud-update: true
@@ -111952,7 +112054,7 @@ paths:
       - Sanctions Lists
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -111988,8 +112090,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list
   /v1/risk/sanctions/lists/{id}/entries:
     get:
@@ -112037,7 +112139,7 @@ paths:
       - Sanctions Lists
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - name: id
         in: path
@@ -112075,8 +112177,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list
   /v1/risk/sanctions/list-entries:
     get:
@@ -112169,7 +112271,7 @@ paths:
       - Sanctions List Entries
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -112197,8 +112299,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list_entry
       x-crud: true
       x-crud-create: true
@@ -112248,7 +112350,7 @@ paths:
       - Sanctions List Entries
       security:
       - oauth2:
-        - risk:write
+        - platform:operator
       parameters:
       - *id287
       - $ref: '#/components/parameters/IfMatch'
@@ -112279,8 +112381,8 @@ paths:
       - FRM-03
       - ONB-03
       x-service: sanctions-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
-      x-required-scope: meridian:admin
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
       x-table: sanctions_list_entry
       x-crud: true
       x-crud-update: true
@@ -144261,6 +144363,20 @@ components:
       required:
       - data
       - has_more
+    AccountRateOverridesApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    AccountRateOverridesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     FeeChargesRefundRequest:
       type: object
       properties:
@@ -146282,12 +146398,49 @@ components:
           - 'null'
           format: date
           description: End
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - REJECTED
+          description: Only ACTIVE (approved) overrides apply to interest
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Checker who approved (four-eyes: never the maker)'
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the override was rejected
+          readOnly: true
         approval_request_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Approval
+          description: Central approval request (workflow-service)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -146327,6 +146480,7 @@ components:
       - rate_kind
       - reason
       - valid_from
+      - status
     AccountRateOverrideCreate:
       type: object
       properties:
@@ -146362,10 +146516,6 @@ components:
           type: string
           format: date
           description: End
-        approval_request_id:
-          type: string
-          format: uuid
-          description: Approval
         custom_field_1:
           type: string
           maxLength: 500
@@ -146426,10 +146576,6 @@ components:
           type: string
           format: date
           description: End
-        approval_request_id:
-          type: string
-          format: uuid
-          description: Approval
         custom_field_1:
           type: string
           maxLength: 500
@@ -155265,6 +155411,18 @@ components:
           format: int32
           description: Consecutive wrong PIN attempts
           readOnly: true
+        cvv_fail_count:
+          type: integer
+          format: int32
+          description: Consecutive wrong CVV2 attempts (card-testing guard)
+          readOnly: true
+        cvv_blocked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: CVV2 checks blocked after too many failures (reset by a correct CVV2 is not possible while blocked)
+          readOnly: true
         is_active:
           type: boolean
           description: False once superseded by a reissue
@@ -155341,6 +155499,7 @@ components:
       - dek_key_id
       - pin_set
       - pin_try_count
+      - cvv_fail_count
       - is_active
     CardDataVaultCreate:
       type: object
@@ -233358,6 +233517,25 @@ components:
           format: date-time
           description: Last successful use
           readOnly: true
+        failed_attempts:
+          type: integer
+          format: int32
+          description: Consecutive failed verifications (lockout after the limit)
+          readOnly: true
+        locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification locked until this time after too many failures
+          readOnly: true
+        last_used_step:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: TOTP time step last accepted (a code is never accepted twice)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -233407,6 +233585,7 @@ components:
       - factor_type
       - is_primary
       - status
+      - failed_attempts
     MfaFactorCreate:
       type: object
       properties:
@@ -290631,6 +290810,7 @@ components:
             channels:agent: Customer and Agent Channels (signed-in agent)
             engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
             engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+            platform:operator: Platform operator (operator tenant or service only)
             ledger:read: Read Ledger and Accounting
             ledger:write: Change Ledger and Accounting
             lending:read: Read Lending and Collections
@@ -290669,6 +290849,7 @@ components:
             channels:agent: Customer and Agent Channels (signed-in agent)
             engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
             engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+            platform:operator: Platform operator (operator tenant or service only)
             ledger:read: Read Ledger and Accounting
             ledger:write: Change Ledger and Accounting
             lending:read: Read Lending and Collections

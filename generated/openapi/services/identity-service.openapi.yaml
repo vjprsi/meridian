@@ -5567,6 +5567,25 @@ components:
           format: date-time
           description: Last successful use
           readOnly: true
+        failed_attempts:
+          type: integer
+          format: int32
+          description: Consecutive failed verifications (lockout after the limit)
+          readOnly: true
+        locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification locked until this time after too many failures
+          readOnly: true
+        last_used_step:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: TOTP time step last accepted (a code is never accepted twice)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -5616,6 +5635,7 @@ components:
       - factor_type
       - is_primary
       - status
+      - failed_attempts
     MfaFactorCreate:
       type: object
       properties:
@@ -7122,9 +7142,11 @@ components:
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:operator: Platform operator (operator tenant or service only)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:operator: Platform operator (operator tenant or service only)
