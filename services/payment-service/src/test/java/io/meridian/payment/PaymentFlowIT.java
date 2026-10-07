@@ -839,6 +839,39 @@ class PaymentFlowIT {
                  "amount":"%s","currency":"GBP","remittance_unstructured":"Invoice 42"}""".formatted(a, name, iban, amount);
     }
 
+    @Test
+    @Order(30)
+    void concurrentDuplicateInboundCreditsBookOnceAndNotProvidedNeverDedupes() throws Exception {
+        java.math.BigDecimal before = bank.balance(b);
+        java.util.List<Integer> codes = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            java.util.List<java.util.concurrent.Future<?>> fs = new java.util.ArrayList<>();
+            for (int i = 0; i < 6; i++) {
+                fs.add(pool.submit(() -> {
+                    go.await();
+                    codes.add(send("POST", "/v1/payments/inbound", inbound("INB-RACE", "10.00", B_IBAN),
+                            UUID.randomUUID().toString(), "rail:FPS", TENANT).statusCode());
+                    return null;
+                }));
+            }
+            go.countDown();
+            for (var f : fs) {
+                f.get();
+            }
+        }
+        assertThat(codes).allMatch(c -> c == 200 || c == 409);
+        long booked = TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "select count(*) from payment where direction = 'INBOUND' and end_to_end_id = 'INB-RACE'")
+                .query(Long.class).single());
+        assertThat(booked).as("SEC-28: one credit for concurrent redeliveries").isEqualTo(1L);
+        assertThat(bank.balance(b).subtract(before)).isEqualByComparingTo("10.00");
+        // distinct credits that share NOTPROVIDED and the amount are two payments
+        post("/v1/payments/inbound", inbound("NOTPROVIDED", "7.00", B_IBAN), "rail:FPS", 200);
+        post("/v1/payments/inbound", inbound("NOTPROVIDED", "7.00", B_IBAN), "rail:FPS", 200);
+        assertThat(bank.balance(b).subtract(before)).isEqualByComparingTo("24.00");
+    }
+
     private String inbound(String e2e, String amount, String creditorIban) {
         return """
                 {"rail_code":"FPS","end_to_end_id":"%s","amount":"%s","currency":"GBP","debtor_name":"Dave Payer",

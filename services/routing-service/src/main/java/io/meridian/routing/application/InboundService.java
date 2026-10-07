@@ -41,11 +41,14 @@ public class InboundService {
     private final RoutingProperties props;
     private final TransactionTemplate tx;
     private final io.meridian.web.callback.CallbackVerifier callbacks;
+    private final io.meridian.web.tenancy.AdvisoryLocks locks;
 
     public InboundService(Rows rows, Events events, Downstream downstream, SettlementService settlement,
                           RoutingProperties props, TransactionTemplate tx,
-                          io.meridian.web.callback.CallbackVerifier callbacks) {
+                          io.meridian.web.callback.CallbackVerifier callbacks,
+                          io.meridian.web.tenancy.AdvisoryLocks locks) {
         this.callbacks = callbacks;
+        this.locks = locks;
         this.rows = rows;
         this.events = events;
         this.downstream = downstream;
@@ -106,16 +109,20 @@ public class InboundService {
                     + " does not match the payload (" + parsed.type() + ")");
         }
         String msgId = parsed.messageId() == null ? "NOID-" + BankCodes.sha256(payload).substring(0, 32) : parsed.messageId();
-        Optional<ObjectNode> dup = rows.queryOne("""
-                select row_to_json(t)::text from rail_message t where payment_rail_id = ? and direction = 'INBOUND'
-                and message_id = ? and replay_of_id is null and status = 'PARSED' order by created_at limit 1""",
-                railId, msgId);
-        if (dup.isPresent()) {
-            return dup.get();
-        }
-        UUID id = Ids.newId();
-        Outcome o = process(id, rail, parsed);
-        return store(id, rail, parsed, msgId, payload, o, null);
+        // SEC-28: concurrent deliveries of one message (several replicas) are serialised, so the duplicate check and
+        // the processing cannot interleave and credit twice
+        return locks.withLock("rail-in:" + railId + ":" + msgId, java.time.Duration.ofSeconds(25), () -> {
+            Optional<ObjectNode> dup = rows.queryOne("""
+                    select row_to_json(t)::text from rail_message t where payment_rail_id = ? and direction = 'INBOUND'
+                    and message_id = ? and replay_of_id is null and status = 'PARSED' order by created_at limit 1""",
+                    railId, msgId);
+            if (dup.isPresent()) {
+                return dup.get();
+            }
+            UUID id = Ids.newId();
+            Outcome o = process(id, rail, parsed);
+            return store(id, rail, parsed, msgId, payload, o, null);
+        });
     }
 
     /** Re-processes a stored inbound message; downstream calls are keyed by the original message, so applied steps dedupe. */

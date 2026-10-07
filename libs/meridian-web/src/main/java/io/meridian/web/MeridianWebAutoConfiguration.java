@@ -161,6 +161,13 @@ public class MeridianWebAutoConfiguration {
         return new MeridianJsonCustomizer();
     }
 
+    /** Session advisory locks across replicas (SEC-28). */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.tenancy.AdvisoryLocks advisoryLocks(DataSource dataSource) {
+        return new io.meridian.web.tenancy.AdvisoryLocks(dataSource);
+    }
+
     @Bean
     @ConditionalOnMissingBean
     TableCatalog tableCatalog(JdbcClient jdbc) {
