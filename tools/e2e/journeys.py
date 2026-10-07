@@ -745,6 +745,7 @@ def journey_b(j: Journey):
         "remittance_unstructured": "Rent October"})
     pid = pay["id"]
     j.shared["payment_b"] = pid
+    j.step("fraud-service: payment scored and allowed before release", fraud_cleared, api, pid)
     final = j.step("payment: transfer reaches a final state", lambda: wait_for(
         "transfer settled", lambda: (lambda x: x if x["status"] in ("SETTLED", "COMPLETED") else
                                      (fail(f"payment {x['status']}: {_short(x)}") if x["status"] in ("REJECTED", "FAILED", "CANCELLED") else None))(
@@ -781,6 +782,19 @@ def journey_b(j: Journey):
     j.final = {"payment": pid, "status": final["status"], "amina_balance": str(x[2]), "brian_balance": str(y[2])}
 
 
+def fraud_cleared(api: Api, pid: str) -> str:
+    """payment-service scores every payment in fraud-service before release (S14). A fresh tenant's default policy
+    allows normal amounts; a cold fraud-service may exceed the scoring budget, which holds amounts at or above the
+    fail-closed threshold: score again with the same key (fraud-service replays a completed evaluation)."""
+    x = api.get(f"/v1/payments/{pid}")
+    if x.get("status") == "ON_HOLD" and x.get("fraud_degraded"):
+        x = api.post(f"/v1/payments/{pid}/fraud-rescore", {})
+    if x.get("fraud_decision") in ("REVIEW", "BLOCK", "STEP_UP") or x.get("status") == "ON_HOLD":
+        fail(f"fraud {x.get('fraud_decision')} ({x.get('status')}): {_short(x)}")
+    return (f"fraud {x.get('fraud_decision')} score {x.get('fraud_score')}"
+            + (" (scoring unavailable, failed open)" if x.get("fraud_degraded") else ""))
+
+
 def payment_until(api: Api, pid: str, states: tuple, timeout=30) -> dict:
     terminal = {"SETTLED", "COMPLETED", "REJECTED", "FAILED", "CANCELLED", "RETURNED"}
 
@@ -809,6 +823,7 @@ def journey_c(j: Journey):
     a0, b0 = balances(api, a), balances(api, b)
     big = j.step("payment: maker initiates 20000 transfer (threshold 10000)", transfer, "20000.00", "Car deposit")
     pid = big["id"]
+    j.step("fraud-service: payment scored and allowed before release", fraud_cleared, api, pid)
     j.step("payment: PENDING_APPROVAL (funds are reserved only once approved)", lambda: (lambda x, bal: f"{x['status']}, available {bal[0]}"
            if bal[2] == a0[2] else fail(f"balance moved before approval: {bal} (before {a0})"))(
         payment_until(api, pid, ("PENDING_APPROVAL",)), balances(api, a)))

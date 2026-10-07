@@ -7,19 +7,22 @@ import java.util.Set;
 
 /**
  * ISO 20022-aligned payment state machine. INITIATED → SCREENING → PENDING_APPROVAL → APPROVED → SUBMITTED →
- * ACCEPTED → SETTLED, with IN_REPAIR for repairable validation failures and REJECTED / RETURNED / FAILED / CANCELLED
- * as outcomes. Internal (book) transfers settle straight from APPROVED.
+ * ACCEPTED → SETTLED, with IN_REPAIR for repairable validation failures, ON_HOLD for payments held for fraud review
+ * (released to PENDING_APPROVAL / APPROVED or rejected) and REJECTED / RETURNED / FAILED / CANCELLED as outcomes.
+ * Internal (book) transfers settle straight from APPROVED.
  */
 public final class PaymentLifecycle {
     public enum Status { INITIATED, SCREENING, PENDING_APPROVAL, APPROVED, SUBMITTED, ACCEPTED, SETTLED, REJECTED,
-        RETURNED, FAILED, CANCELLED, IN_REPAIR }
+        RETURNED, FAILED, CANCELLED, IN_REPAIR, ON_HOLD }
 
     private static final Map<Status, Set<Status>> NEXT = Map.ofEntries(
             Map.entry(Status.INITIATED, EnumSet.of(Status.SCREENING, Status.IN_REPAIR, Status.PENDING_APPROVAL,
-                    Status.APPROVED, Status.REJECTED, Status.CANCELLED, Status.FAILED, Status.SETTLED)),
+                    Status.APPROVED, Status.REJECTED, Status.CANCELLED, Status.FAILED, Status.SETTLED, Status.ON_HOLD)),
             Map.entry(Status.IN_REPAIR, EnumSet.of(Status.INITIATED, Status.CANCELLED)),
             Map.entry(Status.SCREENING, EnumSet.of(Status.PENDING_APPROVAL, Status.APPROVED, Status.REJECTED,
-                    Status.CANCELLED, Status.SETTLED, Status.FAILED)),
+                    Status.CANCELLED, Status.SETTLED, Status.FAILED, Status.ON_HOLD)),
+            Map.entry(Status.ON_HOLD, EnumSet.of(Status.PENDING_APPROVAL, Status.APPROVED, Status.REJECTED,
+                    Status.CANCELLED)),
             Map.entry(Status.PENDING_APPROVAL, EnumSet.of(Status.APPROVED, Status.REJECTED, Status.CANCELLED)),
             Map.entry(Status.APPROVED, EnumSet.of(Status.SUBMITTED, Status.SETTLED, Status.REJECTED, Status.CANCELLED,
                     Status.FAILED)),
@@ -33,7 +36,7 @@ public final class PaymentLifecycle {
 
     /** Statuses in which the payment can still be cancelled by the customer or an operator. */
     public static final Set<Status> CANCELLABLE = EnumSet.of(Status.INITIATED, Status.SCREENING,
-            Status.PENDING_APPROVAL, Status.APPROVED, Status.IN_REPAIR);
+            Status.PENDING_APPROVAL, Status.APPROVED, Status.IN_REPAIR, Status.ON_HOLD);
 
     public static final Set<Status> FINAL = EnumSet.of(Status.SETTLED, Status.REJECTED, Status.RETURNED,
             Status.FAILED, Status.CANCELLED);
@@ -61,6 +64,7 @@ public final class PaymentLifecycle {
             case FAILED -> "payments.payment.failed";
             case CANCELLED -> "payments.payment.cancelled";
             case RETURNED -> "payments.payment.returned";
+            case ON_HOLD -> "payments.payment.held";
             case SCREENING, IN_REPAIR -> null;
         });
     }
@@ -77,6 +81,8 @@ public final class PaymentLifecycle {
         public static final String REQUESTED_BY_CUSTOMER = "CUST";
         public static final String DUPLICATE = "DUPL";
         public static final String NARRATIVE = "NARR";
+        /** Fraudulent origin (fraud review hold, fraud block, confirmed fraud). */
+        public static final String FRAUD = "FRAD";
 
         private Reason() {}
     }

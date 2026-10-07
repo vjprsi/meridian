@@ -39,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * payment-service end to end over HTTP against PostgreSQL 18 (RLS enforced). Every downstream service (ledger,
- * deposit, customer, routing, sanctions, limits, notification, fx) is the stateful {@link FakeBank} behind a mocked
+ * deposit, customer, routing, sanctions, limits, fraud, notification, fx) is the stateful {@link FakeBank} behind a mocked
  * {@link ServiceClient}; ledger postings are asserted on the fake's balances and journal entries.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -48,7 +48,8 @@ import tools.jackson.databind.json.JsonMapper;
         "meridian.payment.gl.clearing=0199b000-0000-7000-8000-0000000000c1",
         "meridian.payment.gl.fee-income=0199b000-0000-7000-8000-0000000000c2",
         "meridian.payment.gl.direct-debit-clearing=0199b000-0000-7000-8000-0000000000c3",
-        "meridian.payment.fees.DOMESTIC=1.50"})
+        "meridian.payment.fees.DOMESTIC=1.50", "meridian.payment.fraud.timeout-ms=1000",
+        "meridian.payment.fraud.channel-fail-closed-amount.MOBILE=0"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -125,6 +126,21 @@ class PaymentFlowIT {
         assertThat(bank.pending(a)).isEqualByComparingTo("0");
         assertThat(bank.calls("sanctions-service", "/")).isEmpty();
         assertThat(bank.calls("limits-service", "/v1/risk/limits/checks/")).anyMatch(cl -> cl.path().endsWith("/commit"));
+        // internal transfers are fraud-scored too (ALLOW: nothing else changes)
+        FakeBank.Call scored = bank.calls("fraud-service", "/v1/risk/fraud/scores/evaluate").getLast();
+        assertThat(scored.key()).isEqualTo("pay-fraud:" + p.get("id").asString());
+        assertThat(scored.body().get("subject_type").asString()).isEqualTo("PAYMENT");
+        assertThat(scored.body().get("subject_id").asString()).isEqualTo(p.get("id").asString());
+        assertThat(scored.body().get("channel").asString()).isEqualTo("WEB");
+        assertThat(scored.body().get("customer_id").asString()).isEqualTo(ALICE.toString());
+        assertThat(scored.body().get("account_id").asString()).isEqualTo(bank.ledgerAccount(a).toString());
+        assertThat(scored.body().get("context").get("beneficiary_account").asString()).isEqualTo(B_IBAN);
+        assertThat(scored.body().get("context").get("debtor_account_id").asString()).isEqualTo(a.toString());
+        assertThat(scored.body().toString()).doesNotContain("Bob Jones");
+        assertThat(p.get("fraud_decision").asString()).isEqualTo("ALLOW");
+        assertThat(p.get("fraud_score_id").asString()).isNotBlank();
+        assertThat(new BigDecimal(p.get("fraud_score").asString())).isEqualByComparingTo("0.12");
+        assertThat(p.get("fraud_degraded").asBoolean()).isFalse();
 
         HttpResponse<String> replay = send("POST", "/v1/payments", body, key, "maker", TENANT);
         assertThat(replay.statusCode()).isEqualTo(201);
@@ -139,6 +155,7 @@ class PaymentFlowIT {
         assertThat(tracker.get("stage").asString()).isEqualTo("COMPLETED");
         assertThat(tracker.get("gpi_status").asString()).isEqualTo("ACCC");
         assertThat(tracker.get("timeline")).hasSize(3);
+        assertThat(tracker.get("fraud").get("decision").asString()).isEqualTo("ALLOW");
 
         HttpResponse<byte[]> pdf = http.send(HttpRequest.newBuilder(URI.create(url("/v1/payments/" + id + "/receipt")))
                 .header("X-Tenant-Id", TENANT).header("Accept", "application/pdf").GET().build(), HttpResponse.BodyHandlers.ofByteArray());
@@ -161,6 +178,13 @@ class PaymentFlowIT {
         assertThat(p.get("transaction_id").asString()).startsWith("TX");
         assertThat(bank.pending(a)).isEqualByComparingTo("101.50");
         assertThat(bank.calls("sanctions-service", "/v1/risk/sanctions/screenings/screen-payment")).isNotEmpty();
+        // scored after sanctions screening, before funds reservation
+        int screenedAt = bank.calls.indexOf(bank.calls("sanctions-service", "/").getLast());
+        int scoredAt = bank.calls.indexOf(bank.calls("fraud-service", "/").getLast());
+        int heldAt = bank.calls.indexOf(bank.calls("ledger-service", "/v1/holds").getLast());
+        assertThat(scoredAt).isGreaterThan(screenedAt).isLessThan(heldAt);
+        assertThat(bank.calls("fraud-service", "/").getLast().body().get("subject_id").asString()).isEqualTo(id);
+        assertThat(bank.calls("fraud-service", "/").getLast().body().get("counterparty_country").asString()).isEqualTo("GB");
         FakeBank.Call pacs = bank.calls("routing-service", "/v1/rail-messages/pacs008").getLast();
         assertThat(pacs.body().get("payment").get("end_to_end_id").asString()).isEqualTo(p.get("end_to_end_id").asString());
         assertThat(pacs.body().get("payment").get("creditor_account_number").asString()).isEqualTo(EXT_IBAN);
@@ -772,6 +796,235 @@ class PaymentFlowIT {
                  "amount":"%s","currency":"GBP","fx_quote_id":"%s",
                  "instructed_currency":"%s","charge_bearer":"SHAR","remittance_unstructured":"Invoice 7"}"""
                 .formatted(a, EXT_IBAN, amount, quote, instructedCurrency);
+    }
+
+    // ------------------------------------------------------------------ S14 fraud scoring before release
+
+    @Autowired
+    io.meridian.payment.infrastructure.FraudAlertListener fraudAlerts;
+
+    @Value("${spring.kafka.bootstrap-servers}")
+    String kafkaBootstrap;
+
+    @Test
+    @Order(21)
+    void fraudReviewHoldsThePaymentUntilTheAlertIsResolved() throws Exception {
+        int holdsBefore = bank.calls("ledger-service", "/v1/holds").size();
+        int limitsBefore = bank.calls("limits-service", "/v1/risk/limits/checks").size();
+        JsonNode held = post("/v1/payments", outbound(FakeBank.FRAUD_REVIEW_AMOUNT, "Quinn Mule", EXT_IBAN), "maker", 201);
+        String id = held.get("id").asString();
+        assertThat(held.get("status").asString()).isEqualTo("ON_HOLD");
+        assertThat(held.get("hold_reason").asString()).isEqualTo("FRAUD_REVIEW");
+        assertThat(held.get("fraud_decision").asString()).isEqualTo("REVIEW");
+        assertThat(new BigDecimal(held.get("fraud_score").asString())).isEqualByComparingTo("0.712");
+        String alertId = held.get("fraud_alert_id").asString();
+        assertThat(alertId).isNotBlank();
+        // nothing reserved while held: no ledger hold, no limits reservation
+        assertThat(bank.calls("ledger-service", "/v1/holds")).hasSize(holdsBefore);
+        assertThat(bank.calls("limits-service", "/v1/risk/limits/checks")).hasSize(limitsBefore);
+        JsonNode tracker = get("/v1/payments/" + id + "/tracker");
+        assertThat(tracker.get("stage").asString()).isEqualTo("UNDER_REVIEW");
+        assertThat(tracker.get("fraud").get("decision").asString()).isEqualTo("REVIEW");
+        assertThat(tracker.get("fraud").get("alert_id").asString()).isEqualTo(alertId);
+        assertThat(tracker.get("timeline").toString()).contains("ON_HOLD").contains("FRAD").contains("FRAUD_REVIEW");
+        // a held payment cannot be executed or rescored (it was scored), and only its own alert decides
+        post("/v1/payments/" + id + "/execute", null, "ops", 409);
+        assertThat(postRaw("/v1/payments/" + id + "/fraud-rescore", null, "ops", 409).get("code").asString())
+                .isEqualTo("fraud_already_scored");
+        assertThat(postRaw("/v1/payments/" + id + "/fraud-review-decision", "{\"decision\":\"RELEASE\",\"fraud_alert_id\":\""
+                + UUID.randomUUID() + "\"}", "ops", 409).get("code").asString()).isEqualTo("fraud_alert_mismatch");
+
+        // fraud-service publishes risk.fraud_alert.resolved (FALSE_POSITIVE): the payment is released and continues
+        java.util.Properties kp = new java.util.Properties();
+        kp.put("bootstrap.servers", kafkaBootstrap);
+        kp.put("key.serializer", org.apache.kafka.common.serialization.StringSerializer.class.getName());
+        kp.put("value.serializer", org.apache.kafka.common.serialization.StringSerializer.class.getName());
+        String alert = json.writeValueAsString(json.createObjectNode().put("id", alertId).put("subject_type", "PAYMENT")
+                .put("subject_id", id).put("status", "FALSE_POSITIVE").put("resolution", "Customer confirmed the payee")
+                .put("resolved_by", "analyst-7"));
+        try (var producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(kp)) {
+            var rec = new org.apache.kafka.clients.producer.ProducerRecord<String, String>("meridian.risk.v1", alertId, alert);
+            rec.headers().add("ce_type", "risk.fraud_alert.resolved".getBytes(StandardCharsets.UTF_8));
+            rec.headers().add("ce_tenantid", TENANT.getBytes(StandardCharsets.UTF_8));
+            rec.headers().add("ce_id", UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8));
+            producer.send(rec).get();
+        }
+        JsonNode released = awaitStatus(id, "SUBMITTED");
+        assertThat(released.hasNonNull("hold_reason")).isFalse();
+        assertThat(released.hasNonNull("hold_id")).isTrue();
+        assertThat(get("/v1/payments/" + id + "/status-history").toString())
+                .contains("Fraud review released the payment").contains("analyst-7");
+        // redelivery of the same outcome changes nothing
+        assertThat(fraudAlerts.apply(UUID.fromString(TENANT), json.readTree(alert))).isEmpty();
+        assertThat(get("/v1/payments/" + id).get("status").asString()).isEqualTo("SUBMITTED");
+
+        // CONFIRMED_FRAUD rejects a held payment without postings; alerts of other subjects are ignored
+        JsonNode second = post("/v1/payments", outbound(FakeBank.FRAUD_REVIEW_AMOUNT, "Rita Mule", EXT_IBAN), "maker", 201);
+        assertThat(second.get("status").asString()).isEqualTo("ON_HOLD");
+        assertThat(fraudAlerts.apply(UUID.fromString(TENANT), json.createObjectNode().put("subject_type", "WALLET_TRANSACTION")
+                .put("subject_id", second.get("id").asString()).put("status", "CONFIRMED_FRAUD"))).isEmpty();
+        assertThat(fraudAlerts.apply(UUID.fromString(TENANT), json.createObjectNode()
+                .put("id", second.get("fraud_alert_id").asString()).put("subject_type", "PAYMENT")
+                .put("subject_id", second.get("id").asString()).put("status", "CONFIRMED_FRAUD")
+                .put("typology", "AUTHORISED_PUSH_PAYMENT_SCAM"))).contains("REJECTED");
+        JsonNode rejected = get("/v1/payments/" + second.get("id").asString());
+        assertThat(rejected.get("rejection_code").asString()).isEqualTo("FRAD");
+        assertThat(rejected.get("rejection_reason").asString()).startsWith("FRAUD_CONFIRMED");
+        assertThat(bank.calls("ledger-service", "/v1/holds").stream()
+                .filter(c -> ("pay-hold:" + second.get("id").asString()).equals(c.key()))).isEmpty();
+
+        // an analyst can also decide through the API, and a held payment can be cancelled
+        JsonNode third = post("/v1/payments", outbound(FakeBank.FRAUD_REVIEW_AMOUNT, "Sam Mule", EXT_IBAN), "maker", 201);
+        assertThat(post("/v1/payments/" + third.get("id").asString() + "/fraud-review-decision",
+                "{\"decision\":\"REJECT\",\"reason\":\"Mule account\"}", "fraud-analyst", 200).get("status").asString())
+                .isEqualTo("REJECTED");
+        JsonNode fourth = post("/v1/payments", outbound(FakeBank.FRAUD_REVIEW_AMOUNT, "Tom Mule", EXT_IBAN), "maker", 201);
+        assertThat(post("/v1/payments/" + fourth.get("id").asString() + "/cancel", "{\"reason\":\"customer withdrew\"}",
+                "maker", 200).get("status").asString()).isEqualTo("CANCELLED");
+        post("/v1/payments/" + fourth.get("id").asString() + "/fraud-review-decision", "{\"decision\":\"RELEASE\"}", "ops", 409);
+    }
+
+    @Test
+    @Order(22)
+    void fraudBlockRejectsWithoutPostings() throws Exception {
+        int holdsBefore = bank.calls("ledger-service", "/").size();
+        BigDecimal balance = bank.balance(a);
+        BigDecimal pending = bank.pending(a);
+        JsonNode blocked = post("/v1/payments", outbound(FakeBank.FRAUD_BLOCK_AMOUNT, "Uma Fraudster", EXT_IBAN), "maker", 201);
+        assertThat(blocked.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(blocked.get("rejection_code").asString()).isEqualTo("FRAD");
+        assertThat(blocked.get("rejection_reason").asString()).startsWith("FRAUD_BLOCKED");
+        assertThat(blocked.get("fraud_decision").asString()).isEqualTo("BLOCK");
+        assertThat(blocked.hasNonNull("hold_id")).isFalse();
+        assertThat(bank.calls("ledger-service", "/")).hasSize(holdsBefore);
+        assertThat(bank.balance(a)).isEqualByComparingTo(balance);
+        assertThat(bank.pending(a)).isEqualByComparingTo(pending);
+        // the internal (book transfer) path is blocked the same way
+        JsonNode internal = post("/v1/payments", """
+                {"payment_type":"INTERNAL_TRANSFER","direction":"INTERNAL","channel":"MOBILE","debtor_account_id":"%s",
+                 "creditor_account_id":"%s","amount":"%s","currency":"GBP"}""".formatted(a, c, FakeBank.FRAUD_BLOCK_AMOUNT), "maker", 201);
+        assertThat(internal.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(internal.hasNonNull("journal_entry_id")).isFalse();
+        assertThat(bank.calls("ledger-service", "/")).hasSize(holdsBefore);
+        post("/v1/payments/" + internal.get("id").asString() + "/fraud-review-decision", "{\"decision\":\"RELEASE\"}", "ops", 409);
+    }
+
+    @Test
+    @Order(23)
+    void unavailableScoringFailsOpenBelowAndClosedAboveTheThreshold() throws Exception {
+        bank.fraudDown = true;
+        try {
+            // below the fail-closed amount (1000): continues, degraded decision recorded
+            JsonNode open = post("/v1/payments", outbound("50.00", "Vera Open", EXT_IBAN), "maker", 201);
+            assertThat(open.get("status").asString()).isEqualTo("SUBMITTED");
+            assertThat(open.get("fraud_degraded").asBoolean()).isTrue();
+            assertThat(open.get("fraud_decision").asString()).isEqualTo("ALLOW");
+            assertThat(open.hasNonNull("fraud_score_id")).isFalse();
+            assertThat(get("/v1/payments/" + open.get("id").asString() + "/status-history").toString())
+                    .contains("Fraud scoring unavailable (UNAVAILABLE); failed open");
+            // at or above it: held for review (fail-closed)
+            JsonNode closed = post("/v1/payments", outbound("1500.00", "Will Closed", EXT_IBAN), "maker", 201);
+            assertThat(closed.get("status").asString()).isEqualTo("ON_HOLD");
+            assertThat(closed.get("hold_reason").asString()).isEqualTo("FRAUD_REVIEW");
+            assertThat(closed.get("fraud_degraded").asBoolean()).isTrue();
+            assertThat(closed.get("fraud_decision").asString()).isEqualTo("REVIEW");
+            // per-channel policy: MOBILE fails closed from 0
+            JsonNode mobile = post("/v1/payments", outbound("5.00", "Xena Mobile", EXT_IBAN).replace("\"WEB\"", "\"MOBILE\""),
+                    "maker", 201);
+            assertThat(mobile.get("status").asString()).isEqualTo("ON_HOLD");
+            // still down: rescoring keeps the hold
+            assertThat(post("/v1/payments/" + closed.get("id").asString() + "/fraud-rescore", null, "ops", 200)
+                    .get("status").asString()).isEqualTo("ON_HOLD");
+            bank.fraudDown = false;
+            JsonNode rescored = post("/v1/payments/" + closed.get("id").asString() + "/fraud-rescore", null, "ops", 200);
+            assertThat(rescored.get("status").asString()).isEqualTo("SUBMITTED");
+            assertThat(rescored.get("fraud_degraded").asBoolean()).isFalse();
+            assertThat(rescored.get("fraud_decision").asString()).isEqualTo("ALLOW");
+            List<FakeBank.Call> calls = bank.calls("fraud-service", "/").stream()
+                    .filter(cl -> cl.body().path("subject_id").asString("").equals(closed.get("id").asString())).toList();
+            assertThat(calls).hasSize(3).allMatch(cl -> cl.key().equals("pay-fraud:" + closed.get("id").asString()));
+        } finally {
+            bank.fraudDown = false;
+        }
+        List<String> types = TenantContext.callAs(UUID.fromString(TENANT), "test", () ->
+                jdbc.sql("select distinct event_type from outbox").query(String.class).list());
+        assertThat(types).contains("payments.payment.held", "payments.payment.released", "payments.payment.fraud_degraded");
+    }
+
+    @Test
+    @Order(24)
+    void timedOutEvaluationIsReplayedWithTheSameKeyOnRetry() throws Exception {
+        bank.fraudDelayMs = 2500;
+        JsonNode held;
+        try {
+            held = post("/v1/payments", outbound("2500.00", "Yuri Slow", EXT_IBAN), "maker", 201);
+        } finally {
+            bank.fraudDelayMs = 0;
+        }
+        String id = held.get("id").asString();
+        assertThat(held.get("status").asString()).isEqualTo("ON_HOLD");
+        assertThat(held.get("fraud_degraded").asBoolean()).isTrue();
+        assertThat(get("/v1/payments/" + id + "/status-history").toString()).contains("(TIMEOUT); failed closed");
+        // fraud-service did score it; the retry replays that evaluation (same key) instead of scoring twice
+        JsonNode rescored = post("/v1/payments/" + id + "/fraud-rescore", null, "ops", 200);
+        assertThat(rescored.get("status").asString()).isEqualTo("SUBMITTED");
+        List<FakeBank.Call> calls = bank.calls("fraud-service", "/").stream()
+                .filter(cl -> cl.body().path("subject_id").asString("").equals(id)).toList();
+        assertThat(calls).hasSize(2);
+        assertThat(calls.get(0).key()).isEqualTo(calls.get(1).key()).isEqualTo("pay-fraud:" + id);
+        assertThat(rescored.get("fraud_score_id").asString()).isNotBlank();
+    }
+
+    @Test
+    @Order(25)
+    void bulkItemsAreScoredIndividually() throws Exception {
+        String csv = "creditor_name,creditor_account_number,amount,currency,end_to_end_id,remittance\n"
+                + "Zed Ok," + EXT_IBAN + ",20.00,GBP,FRB-1,Invoice\n"
+                + "Zed Review," + EXT_IBAN + "," + FakeBank.FRAUD_REVIEW_AMOUNT + ",GBP,FRB-2,Invoice\n"
+                + "Zed Block," + EXT_IBAN + "," + FakeBank.FRAUD_BLOCK_AMOUNT + ",GBP,FRB-3,Invoice\n";
+        JsonNode bulk = post("/v1/bulk-payments/upload", json.writeValueAsString(json.createObjectNode()
+                .put("content", csv).put("file_format", "CSV").put("customer_id", ALICE.toString())
+                .put("debtor_account_id", a.toString()).put("name", "Suppliers")), "maker", 201);
+        String id = bulk.get("id").asString();
+        post("/v1/bulk-payments/" + id + "/submit", null, "maker", 200);
+        BigDecimal pendingBefore = bank.pending(a);
+        int scoredBefore = bank.calls("fraud-service", "/").size();
+        assertThat(post("/v1/bulk-payments/" + id + "/approve", "{}", "checker1", 200).get("status").asString())
+                .isEqualTo("PROCESSING");
+        List<FakeBank.Call> scored = bank.calls("fraud-service", "/").subList(scoredBefore, bank.calls("fraud-service", "/").size());
+        assertThat(scored).hasSize(3);
+        assertThat(scored.stream().map(cl -> cl.body().get("subject_id").asString()).distinct()).hasSize(3);
+        assertThat(scored).allMatch(cl -> cl.body().get("context").get("bulk_payment_id").asString().equals(id));
+
+        java.util.Map<String, JsonNode> byE2e = new java.util.HashMap<>();
+        get("/v1/payments?bulk_payment_id=" + id).get("data").forEach(p -> byE2e.put(p.get("end_to_end_id").asString(), p));
+        assertThat(byE2e.get("FRB-1").get("status").asString()).isEqualTo("SUBMITTED");
+        assertThat(byE2e.get("FRB-2").get("status").asString()).isEqualTo("ON_HOLD");
+        assertThat(byE2e.get("FRB-3").get("status").asString()).isEqualTo("REJECTED");
+        assertThat(get("/v1/bulk-payments/" + id).get("status").asString()).isEqualTo("PROCESSING");
+
+        // the held item is released by its review and executes on the bulk's batch hold, without new approvals
+        JsonNode released = post("/v1/payments/" + byE2e.get("FRB-2").get("id").asString() + "/fraud-review-decision",
+                "{\"decision\":\"RELEASE\",\"reason\":\"Known supplier\"}", "fraud-analyst", 200);
+        assertThat(released.get("status").asString()).isEqualTo("SUBMITTED");
+        for (String e2e : List.of("FRB-1", "FRB-2")) {
+            post("/v1/payments/" + byE2e.get(e2e).get("id").asString() + "/status-report", "{\"status\":\"ACSC\"}", "rail", 200);
+        }
+        JsonNode done = get("/v1/bulk-payments/" + id);
+        assertThat(done.get("status").asString()).isEqualTo("PARTIALLY_COMPLETED");
+        assertThat(done.get("settled_count").asInt()).isEqualTo(2);
+        assertThat(bank.pending(a)).isEqualByComparingTo(pendingBefore);
+    }
+
+    private JsonNode awaitStatus(String id, String status) throws Exception {
+        long deadline = System.currentTimeMillis() + 60_000;
+        JsonNode p = get("/v1/payments/" + id);
+        while (!status.equals(p.get("status").asString()) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(250);
+            p = get("/v1/payments/" + id);
+        }
+        assertThat(p.get("status").asString()).as(p.toString()).isEqualTo(status);
+        return p;
     }
 
     // ------------------------------------------------------------------ SEC-06 concurrent returns / refunds

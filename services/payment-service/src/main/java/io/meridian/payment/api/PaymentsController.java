@@ -10,6 +10,7 @@ import io.meridian.payment.api.generated.model.PaymentReturn;
 import io.meridian.payment.api.generated.model.PaymentStatusHistoryPage;
 import io.meridian.payment.api.generated.model.PaymentsApproveRequest;
 import io.meridian.payment.api.generated.model.PaymentsCancelRequest;
+import io.meridian.payment.api.generated.model.PaymentsFraudReviewDecisionRequest;
 import io.meridian.payment.api.generated.model.PaymentsInboundRequest;
 import io.meridian.payment.api.generated.model.PaymentsRecallRequest;
 import io.meridian.payment.api.generated.model.PaymentsRefundRequest;
@@ -106,6 +107,20 @@ public class PaymentsController implements PaymentsApi {
         return actions.action(idempotencyKey, id, "screening-decision", body, Payment.class,
                 () -> processor.screeningDecision(id, Actions.text(req, "status"), Actions.uuid(req, "screening_result_id"),
                         Actions.text(req, "reason")));
+    }
+
+    @Override
+    public ResponseEntity<Payment> paymentsFraudReviewDecision(UUID id, String idempotencyKey,
+                                                               PaymentsFraudReviewDecisionRequest body) {
+        JsonNode req = actions.tree(body);
+        return actions.action(idempotencyKey, id, "fraud-review-decision", body, Payment.class,
+                () -> processor.fraudReviewDecision(id, Actions.text(req, "decision"), Actions.uuid(req, "fraud_alert_id"),
+                        Actions.text(req, "reason")));
+    }
+
+    @Override
+    public ResponseEntity<Payment> paymentsFraudRescore(UUID id, String idempotencyKey) {
+        return actions.action(idempotencyKey, id, "fraud-rescore", null, Payment.class, () -> processor.fraudRescore(id));
     }
 
     @Override

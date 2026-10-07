@@ -101,11 +101,11 @@ public class ActionAudit {
         }
     }
 
-    private static HttpServletRequest request() {
+    static HttpServletRequest request() {
         return RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a ? a.getRequest() : null;
     }
 
-    private static String clientIp(HttpServletRequest req) {
+    static String clientIp(HttpServletRequest req) {
         String fwd = req.getHeader("X-Forwarded-For");
         // SEC-16: the edge gateway overwrites X-Forwarded-For; take the right-most hop (left entries are client-chosen)
         String[] hops = fwd == null ? new String[0] : fwd.split(",");

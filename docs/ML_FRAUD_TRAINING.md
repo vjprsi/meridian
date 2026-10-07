@@ -172,4 +172,7 @@ fraud-service picks every step up through the deployment events (or `POST /model
 - The beneficiary key hashes account numbers with plain SHA-256 (no secret); treat stored keys as pseudonymous, not
   anonymous.
 - ai-platform lists are read in pages of 200 (newest models and deployments).
-- payment-service does not call fraud-service today; payments feed features but are not scored.
+- payment-service scores every outbound and internal payment before release (subject PAYMENT, key
+  `pay-fraud:<payment id>`; see SERVICE_IMPLEMENTATION_GUIDE "Fraud scoring of payments"). The request carries the raw
+  beneficiary account + BIC in `context` (needed for the beneficiary key and BENEFICIARY_ACCOUNT lists), and
+  fraud-service stores the request context in `fraud_score.features`: that column holds account numbers in clear.

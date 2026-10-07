@@ -300,6 +300,11 @@ class CustomerChannelFlowIT {
         assertThat(transfer.path("payment_type").asString()).isEqualTo("INTERNAL_TRANSFER");
         assertThat(transfer.path("currency").asString()).isEqualTo("KES");
         assertThat(transfer.path("debtor_name").asString()).isEqualTo("Customer 0");
+        // session context for payment-service's fraud scoring is set server-side and never echoed to the customer
+        JsonNode sent = bank.lastWrite(PAY, "/v1/payments").body();
+        assertThat(sent.path("risk_context").path("ip_address").asString("")).isNotBlank();
+        assertThat(sent.path("risk_context").path("user_agent").asString("")).isNotBlank();
+        assertThat(transfer.has("risk_context")).isFalse();
         JsonNode toPayee = post(A, "/v1/me/payments", """
                 {"kind":"PAYEE","from_account_id":"%s","payee_id":"%s","amount":"7.50","channel":"MOBILE",
                  "creditor_account_number":"666"}""".formatted(account[0], payee[0]));

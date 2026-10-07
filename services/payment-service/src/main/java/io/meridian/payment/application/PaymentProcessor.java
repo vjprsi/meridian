@@ -17,6 +17,7 @@ import io.meridian.payment.domain.Iban;
 import io.meridian.payment.domain.PaymentLifecycle;
 import io.meridian.payment.domain.PaymentLifecycle.Reason;
 import io.meridian.payment.infrastructure.CoreBankingClient;
+import io.meridian.payment.infrastructure.FraudClient;
 import io.meridian.payment.infrastructure.LedgerClient;
 import io.meridian.payment.infrastructure.RiskClient;
 import io.meridian.payment.infrastructure.RoutingClient;
@@ -40,7 +41,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Payment orchestration (a synchronous saga with persisted steps): validate and enrich, route (cut-off and execution
- * date), sanctions screening, limits reservation, business approvals, funds reservation as a ledger hold, FX deal,
+ * date), sanctions screening, fraud scoring (ALLOW continues, REVIEW holds ON_HOLD until the fraud alert is resolved,
+ * BLOCK rejects; unavailable scoring fails open or closed by channel and amount), limits reservation, business approvals, funds reservation as a ledger hold, FX deal,
  * submission to the rail (pacs.008) or immediate book transfer, settlement by capturing the hold into a journal
  * entry. Each step commits its own state change with status history and events; remote calls carry deterministic
  * idempotency keys so any step can be retried. Repairable enrichment failures open a repair item.
@@ -54,7 +56,15 @@ public class PaymentProcessor {
     /** Options for payments created by other flows (bulk, direct debit, request-to-pay, links, QR, refunds). */
     public record Options(boolean skipApproval, UUID sharedHoldId, String endToEndId, boolean skipScreening) {
         public static final Options DEFAULT = new Options(false, null, null, false);
+
+        /** Options to continue a stored payment (after a review hold): bulk items keep skipping business approval. */
+        static Options continuing(ObjectNode p) {
+            return new Options(p.hasNonNull("bulk_payment_id"), null, null, false);
+        }
     }
+
+    /** Hold reason of payments held for fraud review. */
+    public static final String FRAUD_REVIEW = "FRAUD_REVIEW";
 
     private final Rows rows;
     private final io.meridian.web.tenancy.AdvisoryLocks locks;
@@ -69,11 +79,13 @@ public class PaymentProcessor {
     private final TransactionTemplate tx;
     private final ApprovalMatrix matrix;
     private final PaymentApprovalRequests central;
+    private final FraudClient fraud;
 
     public PaymentProcessor(Rows rows, PaymentRecords records, Events events, LedgerClient ledger,
                             CoreBankingClient core, RoutingClient routing, RiskClient risk, PaymentProperties props,
                             PaymentHooks hooks, TransactionTemplate tx, PaymentApprovalRequests central,
-                            io.meridian.web.tenancy.AdvisoryLocks locks) {
+                            io.meridian.web.tenancy.AdvisoryLocks locks, FraudClient fraud) {
+        this.fraud = fraud;
         this.locks = locks;
         this.central = central;
         this.rows = rows;
@@ -185,7 +197,8 @@ public class PaymentProcessor {
         for (String ro : List.of("status", "debtor_ledger_account_id", "end_to_end_id", "uetr", "instruction_id",
                 "transaction_id", "clearing_system_ref", "settlement_amount", "settlement_currency", "fx_rate",
                 "fee_amount", "fee_currency", "value_date", "rail_id", "rail_code", "hold_id", "journal_entry_id",
-                "screening_result_id", "limit_check_id", "fraud_score", "rejection_code", "rejection_reason",
+                "screening_result_id", "limit_check_id", "fraud_score", "fraud_score_id", "fraud_decision",
+                "fraud_alert_id", "fraud_degraded", "hold_reason", "rejection_code", "rejection_reason",
                 "initiated_by", "submitted_at", "accepted_at", "settled_at", "idempotency_key")) {
             v.remove(ro);
         }
@@ -546,12 +559,26 @@ public class PaymentProcessor {
         }
     }
 
-    /** Limits reservation and approval decision (or the inbound credit). */
+    /** Fraud scoring, then limits reservation and approval decision (or the inbound credit). */
     ObjectNode afterScreening(UUID id, Options options) {
         ObjectNode p = records.get(id);
         if ("INBOUND".equals(str(p, "direction"))) {
             return creditInbound(id);
         }
+        if (props.fraud().enabled() && !p.hasNonNull("fraud_decision")) {
+            ObjectNode scored = fraudCheck(id);
+            String outcome = str(scored, "_fraud");
+            scored.remove("_fraud");
+            if (!"CONTINUE".equals(outcome)) {
+                return scored;
+            }
+        }
+        return afterFraud(id, options);
+    }
+
+    /** Limits reservation and approval decision of a payment cleared by screening and fraud scoring. */
+    ObjectNode afterFraud(UUID id, Options options) {
+        ObjectNode p = records.get(id);
         int minimumLevels = 0;
         if (props.limitsEnabled() && p.hasNonNull("customer_id") && !p.hasNonNull("limit_check_id")) {
             ObjectNode check = rows.object();
@@ -596,6 +623,232 @@ public class PaymentProcessor {
         }
         inTx(() -> records.transition(records.lock(id), "APPROVED", null, "Approval not required", null, null));
         return executeIfDue(id, options);
+    }
+
+    // ================================================================== fraud scoring
+
+    /**
+     * Scores the payment in fraud-service (idempotency key {@code pay-fraud:<id>}, so a retry replays a completed
+     * evaluation) and applies the decision; the returned row carries a transient {@code _fraud} = CONTINUE | HOLD | STOP.
+     */
+    private ObjectNode fraudCheck(UUID id) {
+        ObjectNode p = records.get(id);
+        FraudClient.Result r = fraud.evaluate(fraudRequest(p), fraudKey(id), props.fraud().timeoutMs());
+        return inTx(() -> applyFraud(records.lock(id), r));
+    }
+
+    static String fraudKey(UUID id) {
+        return "pay-fraud:" + id;
+    }
+
+    /**
+     * Evaluate request (subject PAYMENT): parties as fraud-service keys them (payee id, else beneficiary account + BIC,
+     * which fraud-service hashes into its beneficiary key; no names), amount, channel and the channel's session context.
+     */
+    ObjectNode fraudRequest(ObjectNode p) {
+        ObjectNode b = rows.object();
+        b.put("subject_type", "PAYMENT");
+        b.put("subject_id", str(p, "id"));
+        putIf(b, "customer_id", str(p, "customer_id"));
+        putIf(b, "account_id", str(p, "debtor_ledger_account_id"));
+        b.put("amount", dec(p, "amount").toPlainString());
+        b.put("currency", str(p, "currency"));
+        b.put("channel", riskChannel(str(p, "channel")));
+        putIf(b, "counterparty_country", str(p, "creditor_country"));
+        b.put("correlation_id", str(p, "end_to_end_id"));
+        JsonNode session = p.path("risk_context");
+        for (String f : List.of("device_fingerprint", "ip_address", "ip_country", "session_id")) {
+            String v = session.path(f).asString(null);
+            if (v != null && !v.isBlank()) {
+                b.put(f, truncate(v, 128));
+            }
+        }
+        if (session.path("device").isObject()) {
+            b.set("device", session.get("device"));
+        }
+        ObjectNode c = b.putObject("context");
+        c.put("payment_type", str(p, "payment_type"));
+        c.put("direction", str(p, "direction"));
+        c.put("payment_channel", str(p, "channel"));
+        putIf(c, "debtor_account_id", str(p, "debtor_account_id"));
+        putIf(c, "payee_id", str(p, "payee_id"));
+        putIf(c, "beneficiary_account", str(p, "creditor_account_number"));
+        putIf(c, "beneficiary_bic", str(p, "creditor_agent_bic"));
+        putIf(c, "creditor_account_id", str(p, "creditor_account_id"));
+        putIf(c, "merchant_id", str(p, "creditor_merchant_id"));
+        putIf(c, "bulk_payment_id", str(p, "bulk_payment_id"));
+        putIf(c, "purpose_code", str(p, "purpose_code"));
+        putIf(c, "category_purpose", str(p, "category_purpose"));
+        putIf(c, "instructed_currency", str(p, "instructed_currency"));
+        putIf(c, "requested_execution_date", str(p, "requested_execution_date"));
+        putIf(c, "user_agent", truncate(session.path("user_agent").asString(null), 255));
+        return b;
+    }
+
+    private static void putIf(ObjectNode n, String f, String v) {
+        if (v != null) {
+            n.put(f, v);
+        }
+    }
+
+    /**
+     * Applies an evaluation to the locked payment (INITIATED, SCREENING or ON_HOLD): records score, decision and alert;
+     * REVIEW holds ON_HOLD (reason FRAUD_REVIEW), BLOCK rejects (FRAD, before any funds reservation or posting).
+     * Unavailable scoring is recorded as degraded with a status history row and {@code payments.payment.fraud_degraded};
+     * the fallback holds for review at or above the channel's fail-closed amount and continues below it.
+     */
+    private ObjectNode applyFraud(ObjectNode locked, FraudClient.Result r) {
+        UUID id = UUID.fromString(str(locked, "id"));
+        String status = str(locked, "status");
+        if (!Set.of("INITIATED", "SCREENING", "ON_HOLD").contains(status)) {
+            locked.put("_fraud", "STOP"); // cancelled meanwhile
+            return locked;
+        }
+        PaymentProperties.Fraud cfg = props.fraud();
+        ObjectNode changes = rows.object();
+        String decision;
+        String detail;
+        if (!r.available()) {
+            boolean closed = cfg.failClosed(str(locked, "channel"), dec(locked, "amount"));
+            decision = closed ? "REVIEW" : "ALLOW";
+            changes.put("fraud_degraded", true);
+            detail = "Fraud scoring unavailable (" + r.degradedReason() + "); " + (closed
+                    ? "failed closed, held for review (amount at or above " + threshold(cfg, locked) + ")"
+                    : "failed open (amount below " + threshold(cfg, locked) + ")");
+        } else {
+            decision = switch (r.decision()) {
+                case "BLOCK", "REVIEW", "ALLOW" -> r.decision();
+                case "STEP_UP" -> "ALLOW".equals(cfg.stepUpAction()) ? "ALLOW" : "REVIEW";
+                default -> "REVIEW";
+            };
+            changes.put("fraud_degraded", false);
+            detail = "Fraud score " + (r.score() == null ? "?" : r.score()) + " " + r.decision()
+                    + (r.reasonCodes() == null || r.reasonCodes().isEmpty() ? "" : " (" + r.reasonCodes() + ")");
+            if (r.score() != null) {
+                changes.put("fraud_score", BigDecimal.valueOf(r.score()).movePointLeft(3).toPlainString());
+            }
+            if (r.scoreId() != null) {
+                changes.put("fraud_score_id", r.scoreId().toString());
+            }
+            if (r.alertId() != null) {
+                changes.put("fraud_alert_id", r.alertId().toString());
+            }
+        }
+        changes.put("fraud_decision", r.available() && Set.of("ALLOW", "STEP_UP", "REVIEW", "BLOCK").contains(r.decision())
+                ? r.decision() : decision);
+        ObjectNode out;
+        String outcome;
+        switch (decision) {
+            case "BLOCK" -> {
+                out = rejectLocked(locked, Reason.FRAUD, truncate("FRAUD_BLOCKED: " + detail, 255), changes);
+                outcome = "STOP";
+            }
+            case "REVIEW" -> {
+                changes.put("hold_reason", FRAUD_REVIEW);
+                if ("ON_HOLD".equals(status)) {
+                    out = records.update(id, changes);
+                    records.history(id, status, status, Reason.FRAUD, truncate("FRAUD_REVIEW: " + detail, 255), null);
+                } else {
+                    out = records.transition(locked, "ON_HOLD", Reason.FRAUD, truncate("FRAUD_REVIEW: " + detail, 255),
+                            changes, null);
+                }
+                outcome = "HOLD";
+            }
+            default -> {
+                if ("ON_HOLD".equals(status)) {
+                    changes.putNull("hold_reason");
+                }
+                out = records.update(id, changes);
+                if (!r.available() || "ON_HOLD".equals(status)) {
+                    records.history(id, status, status, null, truncate(detail, 255), null);
+                }
+                outcome = "CONTINUE";
+            }
+        }
+        if (!r.available()) {
+            events.publish("payments.payment.fraud_degraded", PaymentRecords.TABLE, out);
+        }
+        out.put("_fraud", outcome);
+        return out;
+    }
+
+    private static String threshold(PaymentProperties.Fraud cfg, ObjectNode p) {
+        String channel = str(p, "channel");
+        BigDecimal t = channel == null ? cfg.failClosedAmount()
+                : cfg.channelFailClosedAmount().getOrDefault(channel, cfg.failClosedAmount());
+        return t.toPlainString() + " " + str(p, "currency");
+    }
+
+    /**
+     * Releases (RELEASE) or rejects (REJECT) a payment ON_HOLD for fraud review: the fraud alert's resolution
+     * (FALSE_POSITIVE / CLOSED or CONFIRMED_FRAUD) or an analyst decision. A released payment continues with limits,
+     * approvals and execution; a rejected one is REJECTED with FRAD (no funds were reserved).
+     */
+    public ObjectNode fraudReviewDecision(UUID id, String decision, UUID alertId, String reason) {
+        if (!"RELEASE".equals(decision) && !"REJECT".equals(decision)) {
+            throw ApiException.unprocessable("invalid_fraud_decision", "decision must be RELEASE or REJECT");
+        }
+        ObjectNode current = records.get(id);
+        requireFraudHold(current);
+        if (alertId != null && current.hasNonNull("fraud_alert_id") && !alertId.equals(uuid(current, "fraud_alert_id"))) {
+            throw ApiException.conflict("fraud_alert_mismatch", "The payment is held for fraud alert "
+                    + str(current, "fraud_alert_id"));
+        }
+        if ("REJECT".equals(decision)) {
+            return inTx(() -> {
+                ObjectNode locked = records.lock(id);
+                requireFraudHold(locked);
+                return rejectLocked(locked, Reason.FRAUD, truncate("FRAUD_CONFIRMED: "
+                        + (reason == null ? "fraud confirmed by review" : reason), 255), rows.object().putNull("hold_reason"));
+            });
+        }
+        ObjectNode released = inTx(() -> {
+            ObjectNode locked = records.lock(id);
+            requireFraudHold(locked);
+            ObjectNode out = records.update(id, rows.object().putNull("hold_reason"));
+            records.history(id, "ON_HOLD", "ON_HOLD", null, truncate("Fraud review released the payment"
+                    + (reason == null ? "" : ": " + reason), 255), null);
+            events.publish("payments.payment.released", PaymentRecords.TABLE, out);
+            return out;
+        });
+        return afterFraud(id, Options.continuing(released));
+    }
+
+    /**
+     * Scores again a payment held because fraud scoring was unavailable, with the same idempotency key (fraud-service
+     * replays an evaluation it completed). ALLOW continues, REVIEW stays held (now with the alert), BLOCK rejects;
+     * still unavailable keeps the hold.
+     */
+    public ObjectNode fraudRescore(UUID id) {
+        ObjectNode current = records.get(id);
+        requireFraudHold(current);
+        if (!bool(current, "fraud_degraded")) {
+            throw ApiException.conflict("fraud_already_scored",
+                    "The payment was scored and is held for review; resolve its fraud alert instead");
+        }
+        FraudClient.Result r = fraud.evaluate(fraudRequest(current), fraudKey(id), props.fraud().timeoutMs());
+        ObjectNode scored = inTx(() -> {
+            ObjectNode locked = records.lock(id);
+            requireFraudHold(locked);
+            if (!r.available()) {
+                // still unavailable: keep the hold whatever the amount (it was held fail-closed)
+                records.history(id, "ON_HOLD", "ON_HOLD", Reason.FRAUD, truncate("Fraud re-scoring unavailable ("
+                        + r.degradedReason() + "); payment stays on hold", 255), null);
+                events.publish("payments.payment.fraud_degraded", PaymentRecords.TABLE, locked);
+                return locked.put("_fraud", "HOLD");
+            }
+            return applyFraud(locked, r);
+        });
+        String outcome = str(scored, "_fraud");
+        scored.remove("_fraud");
+        return "CONTINUE".equals(outcome) ? afterFraud(id, Options.continuing(scored)) : scored;
+    }
+
+    private static void requireFraudHold(ObjectNode p) {
+        if (!"ON_HOLD".equals(str(p, "status")) || !FRAUD_REVIEW.equals(str(p, "hold_reason"))) {
+            throw ApiException.conflict("invalid_transition", "Payment is not held for fraud review (status "
+                    + str(p, "status") + ")");
+        }
     }
 
     /** Creates the approval levels of a payment or a bulk payment. */
@@ -1077,7 +1330,8 @@ public class PaymentProcessor {
     /** Cancels a payment not yet submitted; releases funds and pending approvals. */
     public ObjectNode cancel(UUID id, String reason) {
         return inTx(() -> {
-            ObjectNode p = records.lockIn(id, Set.of("INITIATED", "SCREENING", "PENDING_APPROVAL", "APPROVED", "IN_REPAIR"),
+            ObjectNode p = records.lockIn(id, Set.of("INITIATED", "SCREENING", "PENDING_APPROVAL", "APPROVED", "IN_REPAIR",
+                            "ON_HOLD"),
                     "cancel");
             releaseFunds(p, reason);
             rows.execute("update payment_approval set status = 'REJECTED', comment = 'Payment cancelled', decided_at = now() "

@@ -69,6 +69,15 @@ meridian:
     screening-enabled: true
     limits-enabled: true
     refund-days: 56
+    fraud:
+      enabled: true                    # score outbound and internal payments in fraud-service before release
+      timeout-ms: 2000                 # evaluation budget; slower = unavailable
+      fail-closed-amount: 1000         # scoring unavailable: hold for review at or above (payment currency), continue below
+      # channel-fail-closed-amount:    # per channel override of fail-closed-amount, e.g. BULK_FILE: 0, OPEN_BANKING: 500
+      step-up-action: REVIEW           # STEP_UP decision: REVIEW (hold) or ALLOW
+      alert-consumer-enabled: true     # risk.fraud_alert.resolved releases / rejects held payments
+      alert-topic: meridian.risk.v1
+      alert-group: payment-service-fraud-alerts
 
 management:
   endpoints:

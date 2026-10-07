@@ -22,7 +22,12 @@ import tools.jackson.databind.node.ObjectNode;
  * Stateful stand-in for every service payment-service calls through the mocked ServiceClient: ledger-service
  * (balances in normal-balance terms, holds with partial capture and event history, idempotent journal entries,
  * reversals), deposit-service accounts, customer-service names, routing-service (route, pacs.008, rails, bank
- * directory), sanctions screening, limits reservations, notifications and fx-service. Every call is recorded.
+ * directory), sanctions screening, limits reservations, fraud scoring, notifications and fx-service. Every call is
+ * recorded.
+ *
+ * <p>Fraud scoring answers ALLOW (score 120) unless the amount is {@link #FRAUD_REVIEW_AMOUNT} (REVIEW, with an alert)
+ * or {@link #FRAUD_BLOCK_AMOUNT} (BLOCK); like fraud-service, a repeated idempotency key replays the stored evaluation.
+ * {@link #fraudDown} fails the call (502); {@link #fraudDelayMs} stores the evaluation, then answers late.
  */
 public class FakeBank {
     public record Call(String service, String method, String path, JsonNode body, String key) {}
@@ -48,6 +53,11 @@ public class FakeBank {
     private final Map<UUID, UUID> reversed = new HashMap<>();
     public final List<Call> calls = Collections.synchronizedList(new ArrayList<>());
     public volatile boolean routingDown;
+    public static final String FRAUD_REVIEW_AMOUNT = "66.60";
+    public static final String FRAUD_BLOCK_AMOUNT = "66.66";
+    public volatile boolean fraudDown;
+    public volatile long fraudDelayMs;
+    private final Map<String, ObjectNode> fraudByKey = new HashMap<>();
 
     public FakeBank(JsonMapper json) {
         this.json = json;
@@ -126,7 +136,63 @@ public class FakeBank {
 
     // ------------------------------------------------------------------ ServiceClient surface
 
-    public synchronized JsonNode post(String service, String path, Object body, String key) {
+    public JsonNode post(String service, String path, Object body, String key) {
+        if ("fraud-service".equals(service)) {
+            JsonNode b = body == null ? json.createObjectNode() : json.valueToTree(body);
+            calls.add(new Call(service, "POST", path, b, key));
+            return fraud(path, b, key);
+        }
+        return postLocked(service, path, body, key);
+    }
+
+    /** fraud-service evaluate; not synchronized so a slow answer does not block the other fakes. */
+    private JsonNode fraud(String path, JsonNode b, String key) {
+        if (!path.equals("/v1/risk/fraud/scores/evaluate")) {
+            throw new IllegalArgumentException("unexpected fraud POST " + path);
+        }
+        if (fraudDown) {
+            throw new ApiException(502, "upstream_error", "fraud-service is not reachable");
+        }
+        ObjectNode r;
+        synchronized (fraudByKey) {
+            ObjectNode stored = fraudByKey.get(key);
+            if (stored != null) {
+                r = stored.deepCopy().put("replayed", true);
+            } else {
+                BigDecimal amount = new BigDecimal(b.path("amount").asString("0"));
+                String decision = amount.compareTo(new BigDecimal(FRAUD_BLOCK_AMOUNT)) == 0 ? "BLOCK"
+                        : amount.compareTo(new BigDecimal(FRAUD_REVIEW_AMOUNT)) == 0 ? "REVIEW" : "ALLOW";
+                r = json.createObjectNode();
+                r.put("fraud_score_id", UUID.randomUUID().toString());
+                r.put("subject_type", b.path("subject_type").asString());
+                r.put("subject_id", b.path("subject_id").asString());
+                r.put("decision", decision);
+                r.put("step_up_required", false);
+                r.put("score", switch (decision) { case "BLOCK" -> 910; case "REVIEW" -> 712; default -> 120; });
+                r.putArray("reason_codes").add("ALLOW".equals(decision) ? "LOW_RISK" : "NEW_PAYEE");
+                if (!"ALLOW".equals(decision)) {
+                    r.put("fraud_alert_id", UUID.randomUUID().toString());
+                } else {
+                    r.putNull("fraud_alert_id");
+                }
+                r.put("degraded", false);
+                r.put("replayed", false);
+                fraudByKey.put(key, r.deepCopy());
+            }
+        }
+        long delay = fraudDelayMs;
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ApiException(502, "upstream_error", "interrupted");
+            }
+        }
+        return r;
+    }
+
+    private synchronized JsonNode postLocked(String service, String path, Object body, String key) {
         JsonNode b = body == null ? json.createObjectNode() : json.valueToTree(body);
         calls.add(new Call(service, "POST", path, b, key));
         return switch (service) {

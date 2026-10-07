@@ -29,6 +29,9 @@ import tools.jackson.databind.node.ObjectNode;
 public class PaymentService {
     private static final String PAYMENTS = "payment-service";
     private static final Set<String> CHANNELS = Set.of("WEB", "MOBILE");
+    /** Fraud-control internals of a payment never shown to the customer (scores, alert, session context). */
+    static final Set<String> RISK_INTERNAL = Set.of("fraud_score", "fraud_score_id", "fraud_decision", "fraud_alert_id",
+            "fraud_degraded", "risk_context", "screening_result_id", "limit_check_id");
 
     private final Downstream down;
     private final Ownership own;
@@ -99,13 +102,23 @@ public class PaymentService {
         if (accountId != null) {
             own.account(accountId, Access.VIEW, "myPaymentsList");
         }
-        return down.page(down.get(PAYMENTS, "/v1/payments", Query.of("customer_id", me())
+        ObjectNode page = down.page(down.get(PAYMENTS, "/v1/payments", Query.of("customer_id", me())
                         .with("debtor_account_id", accountId).with("status", status).paging(limit, cursor)),
                 r -> mine(r, "customer_id"));
+        page.path("data").forEach(PaymentService::forCustomer);
+        return page;
     }
 
     public JsonNode payment(UUID id) {
-        return own.payment(id, "myPaymentsGet");
+        return forCustomer(own.payment(id, "myPaymentsGet"));
+    }
+
+    /** Strips fraud-control internals (a customer must not learn scores or how a payment was assessed). */
+    static JsonNode forCustomer(JsonNode payment) {
+        if (payment instanceof ObjectNode o) {
+            RISK_INTERNAL.forEach(o::remove);
+        }
+        return payment;
     }
 
     public ServiceClient.Download receipt(UUID id) {
@@ -123,10 +136,39 @@ public class PaymentService {
         String action = "myPaymentsCreate";
         ObjectNode payment = build(req, action);
         stepUp.require(action, "ACCOUNT", payment.path("debtor_account_id").asString());
+        ObjectNode session = riskContext();
+        if (!session.isEmpty()) {
+            payment.set("risk_context", session);
+        }
         JsonNode created = down.post(PAYMENTS, "/v1/payments", payment, key, "create");
         audit.succeeded(action, "ACCOUNT", payment.path("debtor_account_id").asString(),
                 created.path("id").asString(null));
-        return created;
+        return forCustomer(created);
+    }
+
+    /**
+     * Session context for payment-service's fraud scoring, taken server-side from the request: client IP (right-most
+     * X-Forwarded-For hop, SEC-16), the app's device fingerprint header and the user agent.
+     */
+    ObjectNode riskContext() {
+        ObjectNode c = down.json().createObjectNode();
+        jakarta.servlet.http.HttpServletRequest req = ActionAudit.request();
+        if (req == null) {
+            return c;
+        }
+        String ip = ActionAudit.clientIp(req);
+        if (ip != null) {
+            c.put("ip_address", ip);
+        }
+        String device = req.getHeader("X-Device-Fingerprint");
+        if (device != null && device.matches("[A-Za-z0-9._:+/=-]{8,128}")) {
+            c.put("device_fingerprint", device);
+        }
+        String ua = req.getHeader("User-Agent");
+        if (ua != null && !ua.isBlank()) {
+            c.put("user_agent", ua.length() > 255 ? ua.substring(0, 255) : ua);
+        }
+        return c;
     }
 
     /** The payment as payment-service gets it; nothing identifying or routing comes from the client unchecked. */

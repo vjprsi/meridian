@@ -127,7 +127,7 @@ public class PaymentQueries {
         return rows.get("payment", id);
     }
 
-    /** End-to-end tracker (SWIFT gpi style): status timeline, rail, charges, approvals, returns and recalls. */
+    /** End-to-end tracker (SWIFT gpi style): status timeline, rail, charges, fraud decision, approvals, returns, recalls. */
     public ObjectNode tracker(UUID id) {
         ObjectNode p = rows.get("payment", id);
         ObjectNode out = rows.object();
@@ -142,6 +142,7 @@ public class PaymentQueries {
         out.put("stage", switch (status) {
             case "INITIATED", "SCREENING", "IN_REPAIR" -> "PROCESSING";
             case "PENDING_APPROVAL" -> "AWAITING_APPROVAL";
+            case "ON_HOLD" -> "UNDER_REVIEW";
             case "APPROVED" -> "SCHEDULED";
             case "SUBMITTED" -> "IN_TRANSIT";
             case "ACCEPTED" -> "CREDITOR_AGENT";
@@ -165,6 +166,11 @@ public class PaymentQueries {
                         .put("reason_code", str(h, "reason_code"))
                         .put("reason", str(h, "reason"))
                         .put("actor", str(h, "actor")));
+        ObjectNode fraud = out.putObject("fraud");
+        for (String f : List.of("fraud_decision", "fraud_score", "fraud_score_id", "fraud_alert_id", "fraud_degraded",
+                "hold_reason")) {
+            fraud.set(f.startsWith("fraud_") ? f.substring(6) : f, p.get(f));
+        }
         out.set("approvals", approvals.levels(id));
         ArrayNode returns = out.putArray("returns");
         rows.query("select row_to_json(t)::text from payment_return t where payment_id = ? order by created_at", id).forEach(returns::add);

@@ -11,7 +11,8 @@ enums:
                 REQUEST_TO_PAY, BILL_PAYMENT, QR_PAYMENT, LINK_PAYMENT, REFUND, RETURN]
   PaymentDirection: [OUTBOUND, INBOUND, INTERNAL]
   PaymentStatus: [INITIATED, SCREENING, PENDING_APPROVAL, APPROVED, SUBMITTED, ACCEPTED, SETTLED,
-                  REJECTED, RETURNED, FAILED, CANCELLED, IN_REPAIR]
+                  REJECTED, RETURNED, FAILED, CANCELLED, IN_REPAIR, ON_HOLD]
+  PaymentFraudDecision: [ALLOW, STEP_UP, REVIEW, BLOCK]
   PaymentPriority: [NORMAL, HIGH, URGENT]
   PaymentChannel: [API, MOBILE, WEB, BRANCH, USSD, AGENT, BULK_FILE, OPEN_BANKING, SCHEDULER, INBOUND_RAIL]
   ChargeBearer: [DEBT, CRED, SHAR, SLEV]
@@ -119,7 +120,13 @@ services:
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting on settlement"
           - "screening_result_id uuid ref=screening_result ro | Sanctions screening result"
           - "limit_check_id uuid ref=limit_check ro | Limits reservation (committed on settlement, released on failure)"
-          - "fraud_score rate ro | Fraud score 0..1 at initiation"
+          - "fraud_score rate ro | Fraud score 0..1 (fraud-service score / 1000) before release"
+          - "fraud_score_id uuid ref=fraud_score ro | fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>)"
+          - "fraud_decision enum:PaymentFraudDecision ro | Fraud decision applied: fraud-service's, or the fail-open / fail-closed fallback when scoring was unavailable"
+          - "fraud_alert_id uuid ref=fraud_alert ro | Fraud alert whose resolution releases or rejects a payment held for review"
+          - "fraud_degraded bool nn default=false ro | Fraud scoring timed out or was unavailable; the configured fallback decided"
+          - "hold_reason string(32) ro | Why the payment is ON_HOLD (FRAUD_REVIEW)"
+          - "risk_context json pii | Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent)"
           - "rejection_code string(8) ro | ISO 20022 status reason code"
           - "rejection_reason string(255) ro | Human-readable rejection reason"
           - "bulk_payment_id uuid fk=bulk_payment idx | Parent bulk payment"
@@ -466,6 +473,8 @@ services:
           - "POST /{id}/cancel | Cancel a payment not yet submitted (future-dated or pending) | reason string(255)"
           - "POST /{id}/execute | Reserve funds and submit an approved payment now | | payment"
           - "POST /{id}/screening-decision | Apply the compliance decision on a payment held in screening | status string(32) nn, screening_result_id uuid, reason string(255) | payment"
+          - "POST /{id}/fraud-review-decision | Release (RELEASE) or reject (REJECT) a payment ON_HOLD for fraud review; applied automatically when its fraud alert is resolved | decision string(16) nn, fraud_alert_id uuid, reason string(255) | payment"
+          - "POST /{id}/fraud-rescore | Score again a payment held because fraud scoring was unavailable (same idempotency key, so fraud-service replays an evaluation it completed) | | payment"
           - "POST /{id}/status-report | Apply a rail status report (pacs.002 ACCP, ACSP, ACSC or RJCT) for a submitted payment | status string(4) nn, reason_code string(8), reason string(255), clearing_system_ref string(64), rail_message_id uuid, settlement_date date | payment"
           - "POST /{id}/return | Return a settled inbound payment (pacs.004) | reason_code string(8) nn, reason string(255), amount amount | payment_return"
           - "POST /{id}/recall | Request a recall of a submitted payment (camt.056) | reason_code string(8) nn, reason string(255) | payment_recall"
@@ -628,6 +637,9 @@ services:
       - "payments.payment.cancelled | payment | A payment was cancelled"
       - "payments.payment.received | payment | An inbound payment was credited"
       - "payments.payment.returned | payment | A payment was returned (pacs.004)"
+      - "payments.payment.held | payment | A payment was put ON_HOLD for fraud review"
+      - "payments.payment.released | payment | A payment held for fraud review was released and continues"
+      - "payments.payment.fraud_degraded | payment | Fraud scoring was unavailable; the fail-open / fail-closed fallback decided"
       - "payments.payment_approval.decided | payment_approval | An approver approved or rejected a payment approval level"
       - "payments.payment_return.completed | payment_return | A payment return completed"
       - "payments.payment_recall.requested | payment_recall | We requested a recall of an outbound payment"

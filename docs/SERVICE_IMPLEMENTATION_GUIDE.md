@@ -425,6 +425,33 @@ retraining loop. Rules for any service doing the same:
   `feature_set`); consumers of domain events de-duplicate on `ce_id` in the same statement as their writes.
 - Reload on `reporting.model_deployment.*` events with a per-instance consumer group (every replica must reload).
 
+## Fraud scoring of payments (payment-service -> fraud-service)
+
+Every outbound and internal payment (single, bulk item, refund, request-to-pay, link and QR payments; inbound credits
+excluded) is scored after validation and sanctions screening and before limits, approvals and funds reservation:
+
+- Request: `POST /v1/risk/fraud/scores/evaluate`, `subject_type PAYMENT`, `subject_id` = payment id, Idempotency-Key
+  `pay-fraud:<payment id>` (a retry replays the stored evaluation), `customer_id`, `account_id` (debtor ledger
+  account), amount / currency, `channel` (RiskChannel mapping of the payment channel), `counterparty_country`, the
+  channel session from `payment.risk_context` (`device_fingerprint`, `ip_address`, `ip_country`, `session_id`; set
+  server-side by customer-channel-service) and `context` keyed as fraud-service's feature store expects
+  (`debtor_account_id`, `payee_id`, `beneficiary_account` + `beneficiary_bic`, `merchant_id`, `bulk_payment_id`, ...;
+  no names). Budget `meridian.payment.fraud.timeout-ms` (2000).
+- ALLOW continues unchanged. REVIEW (and STEP_UP, `step-up-action: REVIEW`) moves the payment to `ON_HOLD`
+  (`hold_reason FRAUD_REVIEW`, history reason code `FRAD`, event `payments.payment.held`) with `fraud_alert_id`.
+  BLOCK rejects it (`rejection_code FRAD`, `rejection_reason FRAUD_BLOCKED: ...`) before any hold or posting.
+- `risk.fraud_alert.resolved` of a PAYMENT alert (FraudAlertListener, topic `meridian.risk.v1`) releases the hold
+  (FALSE_POSITIVE, CLOSED: `payments.payment.released`, then limits / approvals / execution; bulk items keep skipping
+  business approval and use the batch hold) or rejects it (CONFIRMED_FRAUD: `FRAUD_CONFIRMED`). Analysts can do the same
+  with `POST /v1/payments/{id}/fraud-review-decision` (RELEASE / REJECT).
+- Unavailable scoring (timeout, error, fraud-service `fallback: true`): `fraud_degraded = true`, a status-history row
+  and `payments.payment.fraud_degraded`; the payment is held for review (fail-closed) at or above
+  `fail-closed-amount` (1000, per channel `channel-fail-closed-amount.<CHANNEL>`) and continues below it (fail-open).
+  `POST /v1/payments/{id}/fraud-rescore` scores a degraded hold again with the same key.
+- The payment keeps `fraud_score` (0..1), `fraud_score_id`, `fraud_decision`, `fraud_alert_id`, `fraud_degraded`; the
+  tracker shows them under `fraud` (stage `UNDER_REVIEW` while held). customer-channel-service strips them from
+  customer responses.
+
 ## Tests (required per service)
 
 - Keep the generated `<Name>ApplicationTests` (context + migration).

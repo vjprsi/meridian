@@ -24,12 +24,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param screeningEnabled call sanctions screening for non-internal payments
  * @param limitsEnabled   reserve limits for customer payments
  * @param refundDays      debtor's right-to-refund window for direct debits (SEPA Core: 8 weeks)
+ * @param fraud           fraud scoring of outbound and internal payments before release (fraud-service)
  */
 @ConfigurationProperties(prefix = "meridian.payment")
 public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, String bankName, Gl gl,
                                 Map<String, BigDecimal> fees, Approval approval, Cop cop, Otp otp,
                                 Integer payeeCoolingOffHours, String linkBaseUrl, String qrGuid,
-                                Boolean screeningEnabled, Boolean limitsEnabled, Integer refundDays) {
+                                Boolean screeningEnabled, Boolean limitsEnabled, Integer refundDays, Fraud fraud) {
 
     public PaymentProperties {
         bankBic = bankBic == null ? "MERIGB2LXXX" : bankBic;
@@ -46,6 +47,7 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         screeningEnabled = screeningEnabled == null || screeningEnabled;
         limitsEnabled = limitsEnabled == null || limitsEnabled;
         refundDays = refundDays == null ? 56 : refundDays;
+        fraud = fraud == null ? new Fraud(null, null, null, null, null, null) : fraud;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -95,6 +97,38 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         public Otp {
             ttlMinutes = ttlMinutes == null ? 10 : ttlMinutes;
             maxAttempts = maxAttempts == null ? 5 : maxAttempts;
+        }
+    }
+
+    /**
+     * Fraud scoring (POST /v1/risk/fraud/scores/evaluate, subject PAYMENT) after sanctions screening and before limits,
+     * approvals and funds reservation.
+     *
+     * @param enabled            score payments (inbound credits are never scored)
+     * @param timeoutMs          time budget of the evaluation; a slower answer counts as unavailable
+     * @param failClosedAmount   when scoring is unavailable, a payment of at least this amount (payment currency) is
+     *                           held for review (fail-closed); a smaller one continues (fail-open). 0 = always closed
+     * @param channelFailClosedAmount per payment channel override of {@code failClosedAmount} (e.g. BULK_FILE: 0)
+     * @param stepUpAction       what a STEP_UP decision does to a payment that cannot step up any more: REVIEW (hold,
+     *                           default) or ALLOW
+     * @param alertConsumerEnabled apply {@code risk.fraud_alert.resolved} of PAYMENT alerts to held payments
+     */
+    public record Fraud(Boolean enabled, Integer timeoutMs, BigDecimal failClosedAmount,
+                        Map<String, BigDecimal> channelFailClosedAmount, String stepUpAction, Boolean alertConsumerEnabled) {
+        public Fraud {
+            enabled = enabled == null || enabled;
+            timeoutMs = timeoutMs == null ? 2000 : timeoutMs;
+            failClosedAmount = failClosedAmount == null ? new BigDecimal("1000") : failClosedAmount;
+            channelFailClosedAmount = channelFailClosedAmount == null ? Map.of() : Map.copyOf(channelFailClosedAmount);
+            stepUpAction = stepUpAction == null ? "REVIEW" : stepUpAction;
+            alertConsumerEnabled = alertConsumerEnabled == null || alertConsumerEnabled;
+        }
+
+        /** Fail-closed (hold for review) when scoring is unavailable for this channel and amount. */
+        public boolean failClosed(String channel, BigDecimal amount) {
+            BigDecimal threshold = channel == null ? failClosedAmount
+                    : channelFailClosedAmount.getOrDefault(channel, failClosedAmount);
+            return amount != null && amount.compareTo(threshold) >= 0;
         }
     }
 }
