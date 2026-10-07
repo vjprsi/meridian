@@ -206,7 +206,13 @@ public class SearchService {
             }
             if (parent instanceof ObjectNode o && o.hasNonNull(parts[parts.length - 1])) {
                 JsonNode v = o.get(parts[parts.length - 1]);
-                o.put(parts[parts.length - 1], v.isValueNode() ? SearchText.mask(v.asString()) : "****");
+                if (v.isArray()) {
+                    ArrayNode a = json.createArrayNode();
+                    v.forEach(e -> a.add(e.isValueNode() ? SearchText.mask(e.asString()) : "****"));
+                    o.set(parts[parts.length - 1], a);
+                } else {
+                    o.put(parts[parts.length - 1], v.isValueNode() ? SearchText.mask(v.asString()) : "****");
+                }
             }
         }
         return copy;

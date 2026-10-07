@@ -136,7 +136,8 @@ public class IndexService {
                 throw ApiException.conflict("index_retired", "The " + type + " index is retired");
             }
             docs.journal(type, entityId, delete ? "DELETE" : "UPSERT", document, eventId, version, occurredAt);
-            apply(index, index.get("physical_index").asString(), type, entityId, document, delete, eventId, version, occurredAt);
+            boolean applied = apply(index, index.get("physical_index").asString(), type, entityId, document, delete, eventId,
+                    version, occurredAt);
             buildingTarget(UUID.fromString(index.get("id").asString())).ifPresent(target ->
                     apply(index, target, type, entityId, document, delete, eventId, version, occurredAt));
             rows.update("update search_index set last_indexed_at = now() where id = ?", UUID.fromString(index.get("id").asString()));
@@ -145,19 +146,21 @@ public class IndexService {
             out.put("entity_id", entityId);
             out.put("operation", delete ? "DELETE" : "UPSERT");
             out.put("physical_index", index.get("physical_index").asString());
+            out.put("applied", applied);
             return out;
         });
     }
 
-    void apply(JsonNode index, String physical, String type, String entityId, JsonNode document, boolean delete,
-               String eventId, Long version, OffsetDateTime occurredAt) {
+    /** Applies one change to a physical index; false when it was stale (an equal or newer version is indexed). */
+    boolean apply(JsonNode index, String physical, String type, String entityId, JsonNode document, boolean delete,
+                  String eventId, Long version, OffsetDateTime occurredAt) {
         if (delete) {
             docs.delete(physical, entityId, version);
-            return;
+            return true;
         }
         List<SearchText.Field> fields = SearchText.fields(index.get("searchable_fields"));
-        docs.upsert(physical, type, entityId, SearchText.title(document, fields), document,
-                SearchText.weightedText(document, fields), eventId, version, occurredAt);
+        return docs.upsert(physical, type, entityId, SearchText.title(document, fields), document,
+                SearchText.weightedText(document, fields), eventId, version, occurredAt) > 0;
     }
 
     /** The physical index a running full reindex is building, if any. */

@@ -45,11 +45,14 @@ public class DocumentStore {
                 .query(UUID.class).single();
     }
 
-    /** Upserts a document unless the stored one carries a newer source version (out-of-order events). */
-    public void upsert(String physicalIndex, String entityType, String entityId, String title, JsonNode body,
+    /**
+     * Upserts a document unless the stored one carries a newer source version (out-of-order events). Returns the
+     * number of rows written (0 = stale, ignored).
+     */
+    public int upsert(String physicalIndex, String entityType, String entityId, String title, JsonNode body,
                        String[] weighted, String eventId, Long version, OffsetDateTime occurredAt) {
         String all = String.join(" ", weighted).trim();
-        jdbc.sql("""
+        return jdbc.sql("""
                 insert into search_document as d (tenant_id, physical_index, entity_type, entity_id, title, body, search_text,
                        text_a, text_b, text_c, source_event_id, source_version, occurred_at, indexed_at, created_by, updated_by)
                 values (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, now(), ?, ?)
@@ -66,11 +69,19 @@ public class DocumentStore {
                 .update();
     }
 
-    public void delete(String physicalIndex, String entityId, Long version) {
-        jdbc.sql("""
+    public int delete(String physicalIndex, String entityId, Long version) {
+        return jdbc.sql("""
                 delete from search_document where physical_index = ? and entity_id = ?
                   and (cast(? as bigint) is null or source_version is null or source_version <= cast(? as bigint))""")
                 .params(physicalIndex, entityId, version, version).update();
+    }
+
+    /** Highest source version at which the entity was deleted (tombstone in the journal), if any. */
+    public Long lastDeletedVersion(String entityType, String entityId) {
+        return jdbc.sql("""
+                select max(source_version) from search_ingest_log
+                where entity_type = ? and entity_id = ? and operation = 'DELETE'""")
+                .params(entityType, entityId).query(Long.class).optional().orElse(null);
     }
 
     public int dropIndex(String physicalIndex) {
