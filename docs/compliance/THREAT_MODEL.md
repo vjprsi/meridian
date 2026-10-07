@@ -73,7 +73,7 @@ card authorisation, (7) audit trail.
 | T | Replay / duplicate delivery | Consumers idempotent by `ce_id`; audit `source_event_id` unique; outbox written in the business transaction | - |
 | R | Event history lost | Audit-service consumes every `meridian.*.v1` topic into a hash chain | Outbox rows deleted after relay (no replay window for unplanned failover) |
 | I | Personal data in events and their retention | Contact events carry masked value + hash; OTPs redacted (SEC-10); fraud pseudonyms | Most events carry the full entity representation incl. personal data (GAP-07 / GAP-09) |
-| D | Consumer lag (audit, search, fraud features) | Lag metrics for search (`meridian.search.indexer.lag`) | No lag alerting (GAP-10) |
+| D | Consumer lag (audit, search, fraud features) | Lag metrics (Kafka consumer `records_lag_max`, `meridian.search.indexer.lag`, outbox backlog) with alert rules (`infra/observability`) | Alerting stack not deployed (GAP-10 residual) |
 | E | - | - | - |
 
 ## B5 Databases and RLS
@@ -110,7 +110,7 @@ card authorisation, (7) audit trail.
 | I | Staff bulk data access (PAN reveal, exports) | Exact `cards:pan_reveal` + step-up + access log; audit / DSAR exports under four-eyes | Reads of personal data via operator APIs not audited (GAP-07) |
 | D | Destructive infra change | tofu `deletion_protection` in prod; PDBs | Manual Helm deploys (GAP-05) |
 | E | kubectl / DB superuser access | EKS private endpoint option (`eks_public_endpoint`), IRSA | No documented privileged-access process (GAP-24); MFA at IdP not enforced (GAP-13) |
-| E | Supply chain (dependency / image / CI) | Pinned versions, CI checks | No SCA, signing, SBOM, CODEOWNERS (GAP-04) |
+| E | Supply chain (dependency / image / CI) | Pinned versions, CI checks, SBOM + Trivy SCA, image scan, cosign signatures + SBOM attestations, CODEOWNERS, Dependabot | No admission-time signature verification; branch protection not evidenced (GAP-04 residual) |
 
 ## B8 Offline agent devices
 

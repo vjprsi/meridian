@@ -38,7 +38,7 @@ applicable unless stated; exclusions are justified inline.
 | 5.18 Access rights | Yes | JIT elevation with approval and expiry; session revocation | Partial | GAP-13 (periodic review) |
 | 5.19 Information security in supplier relationships | Yes | No supplier register | Gap | GAP-28, GAP-24 |
 | 5.20 Addressing security within supplier agreements | Yes | Callback signature v2 spec to providers (`docs/SERVICE_IMPLEMENTATION_GUIDE.md`); no contract clauses | Gap | GAP-24 |
-| 5.21 Managing security in the ICT supply chain | Yes | Gradle version catalog; no SCA / SBOM / signing | Gap | GAP-04 |
+| 5.21 Managing security in the ICT supply chain | Yes | Gradle version catalog; CycloneDX SBOMs (Gradle + npm), Trivy SCA, Dependabot, cosign-signed images with SBOM attestations (`ci.yml`) | Partial | GAP-04 residual (admission-time verification) |
 | 5.22 Monitoring, review and change of supplier services | Yes | Not in place | Gap | GAP-24 |
 | 5.23 Information security for use of cloud services | Yes | Tofu modules: KMS CMK with rotation, private subnets, EKS secrets encryption, IRSA, flow logs | Partial | GAP-24 (cloud policy), GAP-23 |
 | 5.24 Incident management planning and preparation | Yes | Severity matrix and runbooks ([RUNBOOKS.md](../operations/RUNBOOKS.md)) | Partial | GAP-24 (IR plan), GAP-06 |
@@ -49,7 +49,7 @@ applicable unless stated; exclusions are justified inline.
 | 5.29 Information security during disruption | Yes | Security controls identical in standby cells (same chart); break-glass actions audited | Partial | GAP-11 |
 | 5.30 ICT readiness for business continuity | Yes | Cells, region pairs, failover runbook ([BCP_DR.md](../operations/BCP_DR.md)) | Partial | GAP-11 |
 | 5.31 Legal, statutory, regulatory and contractual requirements | Yes | Regulatory packs, AML retention blocker, PCI scope ([PCI_DSS_SCOPE.md](PCI_DSS_SCOPE.md)), DPIA ([DATA_PROTECTION.md](DATA_PROTECTION.md)) | Partial | GAP-24 (legal register) |
-| 5.32 Intellectual property rights | Yes | Third-party licence inventory not produced | Gap | GAP-04 (SBOM) |
+| 5.32 Intellectual property rights | Yes | Licence data per component in the CycloneDX SBOMs (CI artifact `sbom`); no licence policy review yet | Partial | Proposed (licence policy) |
 | 5.33 Protection of records | Yes | Append-only tables (`immutable: true`, trigger), audit retention policies (10 y default), archive manifests with WORM retain-until | Partial | GAP-07, GAP-08 |
 | 5.34 Privacy and protection of PII | Yes | [DATA_PROTECTION.md](DATA_PROTECTION.md): consents, DSAR, erasure, pseudonymisation | Partial | GAP-08, GAP-09 |
 | 5.35 Independent review of information security | Yes | Internal static review only | Gap | GAP-25 |
@@ -98,11 +98,11 @@ apply to Meridian's own premises and are organisational.
 | 8.1 User endpoint devices | Yes | Staff laptops (MDM TBD); agent app device binding with ES256 / Ed25519 keys, signed offline batches, `X-Agent-Device-Proof` | Partial | GAP-18, GAP-24 |
 | 8.2 Privileged access rights | Yes | `platform:operator` limited to operator tenant (SEC-15); `meridian:admin` does not imply it; privileged roles via JIT elevation and four-eyes; cell `/offline` break-glass audited | Partial | GAP-16, GAP-22 |
 | 8.3 Information access restriction | Yes | RLS per tenant, scopes, object-level authorization in all four channel BFFs, operator-only global tables | Implemented | |
-| 8.4 Access to source code | Yes | GitHub repository; branch protection / CODEOWNERS not evidenced | Gap | GAP-04 |
+| 8.4 Access to source code | Yes | GitHub repository; `.github/CODEOWNERS` per area (placeholder teams); branch protection not evidenced | Partial | GAP-04 residual |
 | 8.5 Secure authentication | Yes | OIDC auth code + PKCE (S256), no password grant for staff apps; audience validation; step-up (`auth_time` / `acr` within 5 min) for money movement, approvals, vault reveal; TOTP with lockout (SEC-25); customer PIN PBKDF2 | Partial | GAP-13 (MFA enforced at IdP) |
 | 8.6 Capacity management | Yes | HPA / PDB; ledger benchmark; pool sizing | Partial | GAP-12, GAP-10 |
 | 8.7 Protection against malware | Yes | File-gateway scanning of inbound files; read-only container root FS; document virus-scan status | Partial | GAP-04 (image scanning); document fields do not check scan status ([SPEC_BACKLOG customer channel](../SPEC_BACKLOG.md#customer-channel-security-critical-in-progress)) |
-| 8.8 Management of technical vulnerabilities | Yes | Static security review with remediation tracking | Partial | GAP-04, GAP-25 |
+| 8.8 Management of technical vulnerabilities | Yes | Static security review with remediation tracking; Semgrep, Trivy (dependencies, images) and gitleaks in CI; Dependabot | Partial | GAP-25; no patch SLA defined |
 | 8.9 Configuration management | Yes | Generated Helm chart diffed in CI; IaC in OpenTofu with locked providers; per-tenant config in config-service with approvals | Implemented | GAP-05 |
 | 8.10 Information deletion | Yes | DSAR erasure (customer-service), purge requests with certificates, idempotency TTL | Partial | GAP-08, GAP-27 |
 | 8.11 Data masking | Yes | Masked contact values in search, masked customer lookup in agent channel, card `last4` / tokens only outside the vault, fraud pseudonyms, OTP redaction (SEC-10), ISO 8583 `raw_message` sanitised | Partial | GAP-07, GAP-09 |
@@ -110,7 +110,7 @@ apply to Meridian's own premises and are organisational.
 | 8.13 Information backup | Yes | Aurora automated backups (35 d prod / 7 d other), S3 versioning + object lock, cross-region replicas | Partial | Restore tests not yet run ([BCP_DR.md](../operations/BCP_DR.md)) |
 | 8.14 Redundancy of information processing facilities | Yes | 3-AZ cells, warm standby cell per region pair, Route 53 failover | Partial | GAP-11 |
 | 8.15 Logging | Yes | Audit chain of domain events, channel action logs, vault access log, EKS audit logs, VPC flow logs | Partial | GAP-06, GAP-07 |
-| 8.16 Monitoring activities | Yes | OTLP metrics and traces to a collector; router / EOD / search metrics | Partial | GAP-10 |
+| 8.16 Monitoring activities | Yes | OTLP metrics and traces; Prometheus endpoint, SLO / saturation / security alert rules and dashboards (`infra/observability`) | Partial | GAP-10 residual (stack and paging not deployed) |
 | 8.17 Clock synchronization | Yes | AWS Time Sync (inherited); application uses `Clocks.now()` (microsecond, DB clock where it matters, e.g. OTP cooldown SEC-16) | Inherited / Implemented | |
 | 8.18 Use of privileged utility programs | Yes | `kubectl exec` / DB superuser access not governed in repo | Gap | GAP-22, GAP-24 |
 | 8.19 Installation of software on operational systems | Yes | Immutable images, read-only root FS, no package manager use at runtime | Partial | GAP-04 (signature verification at admission) |
@@ -146,7 +146,7 @@ Mixed rows (for example "Inherited / Gap") are counted by their first status; re
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
 | GAP-24 | ISMS clauses 4-10, policy set, HR, supplier management, physical (offices) | TBD (CISO) | Proposed |
-| GAP-04 | Supply chain and SDLC scanning, source code access controls | TBD (DevSecOps) | Proposed |
+| GAP-04 | Residual: branch protection evidence, admission-time signature verification, IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
 | GAP-06 / GAP-10 | Logging and monitoring | TBD (SecOps / SRE) | PLT-OBSERVABILITY |
 | GAP-08 / GAP-27 | Information deletion across services | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes), [resume point](../SPEC_BACKLOG.md#resume-point-paused-2026-10-07) |
 | GAP-09 | Field-level encryption / masking of `pii` columns | TBD (Platform) | Proposed |

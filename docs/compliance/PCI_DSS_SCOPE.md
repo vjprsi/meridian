@@ -87,7 +87,7 @@ CVV2 not retained after production.
 | 4 | Strong cryptography in transit | TLS to Aurora / MSK; HMAC-signed callbacks; ingress TLS per values; **cluster-internal HTTP between services is plain** | Partial | Proposed (mTLS / mesh inside the CDE) |
 | 5 | Malware protection | Immutable read-only containers; no anti-malware on nodes defined | Partial | GAP-04 (image scanning); node anti-malware / EKS GuardDuty runtime TBD |
 | 6.2 | Bespoke software developed securely | Conventions, security review, regression tests per finding | Partial | GAP-04 |
-| 6.3 | Vulnerabilities identified and patched | No SCA / image scanning, no patch SLA | Gap | GAP-04 |
+| 6.3 | Vulnerabilities identified and patched | SBOM-based SCA and image scanning in CI (fixable CRITICAL blocks), Dependabot; no patch SLA yet | Partial | GAP-04 residual (patch SLA) |
 | 6.4 | Public-facing web apps protected | No WAF; CSP / frame headers on staff apps (SEC-22, no script-src yet) | Gap | GAP-17 |
 | 6.5 | Change management | CI gates; no deploy pipeline or separation of duties on deploys | Partial | GAP-05 |
 | 7 | Restrict access by need to know | Exact scopes `cards:pan_reveal` / `cards:vault_admin`, service-only lookup / verify, `allowed-clients` | Partial | GAP-16, GAP-13 (role reviews, 7.2.4) |
@@ -95,7 +95,7 @@ CVV2 not retained after production.
 | 9 | Physical access | AWS | Inherited | |
 | 10.2 | Audit logs | `card_vault_access_log` (who, purpose, caller service from token, success / denied); audit chain of card events; EKS audit logs | Partial | GAP-06, GAP-20 |
 | 10.3 / 10.5 | Log protection and retention (12 months, 3 online) | Audit tables append-only; no central log store or retention for application logs | Gap | GAP-06, GAP-07 |
-| 10.4 / 10.7 | Log review; failure of controls detected | No daily review process or alerting | Gap | GAP-06, GAP-10 |
+| 10.4 / 10.7 | Log review; failure of controls detected | Alert rules for control failures (EOD, audit consumer lag, outbox, scrape targets) defined; no log review process, alerting stack not deployed | Gap | GAP-06, GAP-10 residual |
 | 11.3 | Vulnerability scans (internal, ASV external) | None | Gap | GAP-04, GAP-25 |
 | 11.4 | Penetration testing incl. segmentation | Planned ([PEN_TEST_SCOPE.md](PEN_TEST_SCOPE.md)) | Gap | GAP-25 |
 | 11.5 | Change / intrusion detection | Audit chain, ledger hash verification; no FIM / IDS | Gap | GAP-06 |
@@ -128,7 +128,7 @@ CVV2 not retained after production.
 | GAP-01 | Real HSM / KMS, dual control, master key rotation | TBD (Cards platform) | [SPEC_BACKLOG Wave B - Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-02 | CDE segmentation (namespace, network, DB, KMS, identity, no public vault route) | TBD (Platform / Cards) | [SECURITY_REVIEW SEC-11](../SECURITY_REVIEW.md#remediation-status); proposed |
 | GAP-03 | CVV2 and reversible PIN stored in the vault | TBD (Cards) | [SECURITY_REVIEW SEC-11](../SECURITY_REVIEW.md#findings) |
-| GAP-04 | Vulnerability management and secure SDLC tooling | TBD (DevSecOps) | Proposed |
+| GAP-04 | Residual: patch SLA, admission-time signature verification, branch protection evidence | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
 | GAP-06 / GAP-07 | Central logging, log retention, audit integrity checks | TBD (SecOps) | Proposed |
 | GAP-13 | MFA for all CDE access, access reviews | TBD (IAM) | Proposed |
 | GAP-16 | Per-service identity for CDE callers | TBD (Platform) | [SPEC_BACKLOG wave A](../SPEC_BACKLOG.md#cross-cutting-items-raised-in-wave-a-open) |

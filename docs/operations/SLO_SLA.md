@@ -1,33 +1,40 @@
 # Service level objectives and agreements
 
-Last reviewed: 2026-10-07 · Owner: TBD (SRE lead), with domain owners per journey · Status: **targets defined, not yet
-measured in production** - no dashboards or alert rules exist in the repo (GAP-10)
+Last reviewed: 2026-10-07 · Owner: TBD (SRE lead), with domain owners per journey · Status: **targets defined and
+instrumented; dashboards and alert rules in the repo (`infra/observability`); not yet measured in production** - no
+Prometheus / Alertmanager is deployed and paging is not wired (GAP-10 residual)
 
 ## 1. Telemetry available today
 
 | Source | What exists | Where |
 |---|---|---|
-| Spring Boot / Micrometer (every service) | `http.server.requests` (tags `method`, `uri` = route template, `status`, `outcome`, `exception`), `hikaricp.connections.*`, `jvm.*`, `process.*`, Spring Kafka listener / client metrics, Spring Boot health groups (liveness / readiness) | `spring-boot-starter-actuator` + `spring-boot-starter-opentelemetry` (`build-logic/.../meridian.spring-service.gradle.kts`); exported via OTLP to `global.otel.endpoint` (`MANAGEMENT_OTLP_METRICS_EXPORT_URL`) with resource attributes `service.name`, `meridian.cell`, `cloud.region` |
+| Spring Boot / Micrometer (every service, edge gateway, cell router) | `http.server.requests` (tags `method`, `uri` = route template, `status`, `outcome`, `exception`, `cell`) **with percentile histograms and SLO buckets** 25 ms ... 5 s, `hikaricp.connections.*` (acquire / usage histograms), `jvm.*`, `process.*`, Spring Kafka listener / client metrics (`kafka_consumer_fetch_manager_records_lag_max`), health groups | `micrometer-registry-prometheus` in the build-logic conventions (`meridian.spring-service`, `meridian.boot-app`): `GET /actuator/prometheus` on the service port (no token; NetworkPolicy limits callers), on the **management port** for the edge gateway (18001 locally, 9090 in Helm) and the router (18101). Defaults in `libs/meridian-web/.../metrics/MetricsDefaults.java` (lowest precedence). Also exported via OTLP (`MANAGEMENT_OTLP_METRICS_EXPORT_URL`) with **base unit seconds**, so both pipelines produce the same names (`http_server_requests_seconds_*`; verified against the otel-lgtm Prometheus); `job` = service name in both |
 | Traces | OTLP traces, sampling `global.otel.samplingProbability` (0.1 in the chart) | `infra/helm/meridian/templates/config.yaml` |
 | Cell router | `meridian.router.requests{cell,outcome}`, `meridian.router.upstream{cell,outcome}` (timer), `meridian.router.failover.requests{from_cell,to_cell}`, `meridian.router.cell.healthy{cell}`, `meridian.router.cell.serving{cell}`, `meridian.router.placement.lookups{result}`, `meridian.router.placement.invalidations` | `platform/cell-router` (Prometheus registry on the management port) |
 | business-day-service | `meridian.eod.sweep.runs{trigger,status}`, `meridian.eod.sweep.duration{trigger,status}`, `meridian.eod.sweep.skipped{trigger}`, `meridian.eod.trigger.decisions{decision}` | `EodTriggerService` |
 | search-service | `meridian.search.indexer.lag` (timer, event time -> indexed), `meridian.search.indexer.last_lag_ms` (gauge), `meridian.search.indexer.events{outcome,kind}` | `EventIndexer` |
+| payment-service (J1) | `meridian.payments.initiations{outcome=accepted\|failed\|rejected\|error, status, reason, path}` (counter), `meridian.payments.initiation.duration{outcome}` (timer, histogram) | `PaymentProcessor.initiate` |
+| ledger-service (J3) | `meridian.ledger.posting.duration{path=single\|batch, outcome=posted\|replayed\|rejected\|error}` (timer incl. commit, histogram) | `JournalEntriesController` |
+| card-authorization-service (J2) | `meridian.cards.authorization.duration{message_type, decision, stand_in}` (timer, histogram) | `CardAuthorizationsController` |
+| business-day-service (J5) | `meridian.eod.sweep.last.success.timestamp` (gauge, epoch seconds); sweep timer now with histogram and SLO buckets 1 min ... 8 h | `EodTriggerService` |
+| channels (J4) | `meridian.auth.step_up.challenges{channel, reason=stale_auth\|weak_auth\|device_proof_invalid}` | `StepUp` in the four channel BFFs |
+| identity-service (J4) | `meridian.identity.mfa.verifications{outcome=verified\|invalid_code\|factor_locked\|...}` | `MfaService.verify` |
+| workflow-service | `meridian.workflow.approvals.pending`, `meridian.workflow.approvals.oldest.age` (seconds; all tenants, refreshed by the sweep) | `SweepService.Job` |
+| every service with an outbox | `meridian.outbox.backlog`, `meridian.outbox.oldest.age` (read at scrape time), `meridian.outbox.relayed`, `meridian.outbox.relay.failures` | `libs/meridian-events` `OutboxRelay` |
+| Keycloak (J4, local stack) | `keycloak_user_events_total{event, error}` with `--metrics-enabled --event-metrics-user-enabled` (management port 9000) | `infra/local/compose.yaml`; the realm also needs the `metrics-listener` event listener (not yet in `tools/keycloak_realm.py`) |
 | Domain events (business SLIs) | e.g. `payments.payment.*` (incl. `held`, `fraud_degraded`), `operations.eod_run.completed/failed`, `ledger.recon_eod.completed` (auto-match rate), `platform.audit_chain.broken` | AsyncAPI `generated/asyncapi/meridian.asyncapi.yaml` |
 | AWS | Aurora (`DatabaseConnections`, `AuroraGlobalDBReplicationLag`, CPU), MSK (`SumOffsetLag`, `MaxOffsetLag`), MSK Replicator `ReplicationLatency`, S3 `ReplicationLatency`, Route 53 health checks; alarm `global_db_lag` in `infra/tofu/modules/region` | CloudWatch |
 
-Known telemetry gaps (GAP-10):
+Remaining telemetry gaps (GAP-10 residual):
 
-- Domain services have **no Prometheus registry**; the chart's optional `ServiceMonitor` (`/actuator/prometheus`) only
-  works for the router. Use the OTel collector's Prometheus exporter / remote write for service metrics, or add
-  `micrometer-registry-prometheus` to the service convention plugin.
-- No histogram buckets are configured, so p99 latency cannot be computed from `http.server.requests`. Add per
-  environment: `management.metrics.distribution.percentiles-histogram.http.server.requests=true` and
-  `management.metrics.distribution.slo.http.server.requests=50ms,100ms,250ms,500ms,1s,2s`.
-- No business counters (payments by final status, card auth decisions / stand-in, ledger postings); derive from events
-  or add Micrometer counters in payment-service, card-authorization-service and ledger-service.
-- After OTLP -> Prometheus translation the latency metric is typically `http_server_requests_milliseconds_*` (Micrometer
-  OTLP base unit) or `http_server_requests_seconds_*` (Prometheus registry): check the collector and adapt the queries
-  below.
+- Nothing scrapes in a real environment yet: Prometheus (or Amazon Managed Prometheus), Alertmanager and the OTel
+  collector are not deployed by `infra/tofu` or the chart; the chart only ships `ServiceMonitor`s
+  (`global.serviceMonitor.enabled`), `PrometheusRule`s and dashboard ConfigMaps (`observability.*`), all off by default.
+- J1b (payment completion within 60 s) and J8 (reconciliation auto-match) are still event-derived; no metric yet.
+- The `cell` label is the metric tag `cell` (`meridian.cell.id`, `local` when unset); "deliberate 503" answers
+  (`tenant_read_only`, `cell_read_only`) cannot be told apart from other 503s by the HTTP metric and count as bad.
+- Bucket bounds differ in text form between the pipelines (`le="1.0"` from the Prometheus registry, `le="1"` from OTLP
+  translation); the generated rules match both. `_max` gauges differ too (`_seconds_max` vs `_max_seconds`).
 
 ## 2. Critical journeys, SLIs and SLOs
 
@@ -54,24 +61,42 @@ deliberate (`tenant_read_only`, `cell_read_only` during announced maintenance).
   post-incident review accepts the risk.
 - A single SEV1 consuming > 50 % of a budget triggers a mandatory review ([RUNBOOKS.md section 12](RUNBOOKS.md#12-post-incident-review)).
 
-## 4. Alert rules (to implement)
+## 4. Alert rules and dashboards (implemented as code)
 
-Multi-window burn-rate alerts (Google SRE workbook) for every availability SLO, using the metric names above
-(Prometheus syntax after OTLP translation; adapt units):
+Generated by `python tools/observability.py` from this document's SLOs into `infra/observability` (checked in CI with
+`--check` and `promtool check rules`; edit the generator, not the output):
+
+| Artefact | Content |
+|---|---|
+| `prometheus/rules/meridian-slo.rules.yml` | Recording rules `meridian:slo_errors:ratio_rate{5m,30m,1h,2h,6h,1d,3d}{journey,sli,cell}` for J1 / J2 / J3 availability and latency (valid = non-4xx) and J6 (router `upstream_timeout` / `upstream_unreachable`); per SLI four multi-window burn-rate alerts: 14.4x 1h/5m and 6x 6h/30m (page), 3x 1d/2h and 1x 3d/6h (ticket) |
+| `prometheus/rules/meridian-journeys.rules.yml` | J2 p99 > 250 ms (page), stand-in > 5 %, J1 initiation server errors > 1 %, J5 sweep failed (page) / no successful sweep for 26 h (page), J4 step-up spike (5x yesterday), MFA failures, IdP login failure ratio, J6 cell unhealthy (page), J7 search lag, approval older than 24 h |
+| `prometheus/rules/meridian-saturation.rules.yml` | Target down, 5xx ratio per service, DB pool pending (page) / timeouts (page) / > 90 % used, Kafka consumer lag > 10k, audit consumer lag > 50k for 1 h (page), outbox events older than 60 s (ticket) / 300 s (page), relay failures, JVM heap > 90 % |
+| `grafana/dashboards/*.json` | Platform overview (RED + JVM, `cell` / `job` variables), Journey SLOs (SLI, budget left, burn rates; J4 login / step-up / MFA; J5 / J7 freshness), Payments, Ledger, Card authorisation, EOD and operations (incl. approval queue), Kafka and outbox, Database pools |
+
+Wiring: locally `infra/local/compose.yaml` mounts the dashboards (Grafana folder "Meridian", http://localhost:13000)
+and rules (Prometheus UI http://localhost:19090) into the otel-lgtm container (`infra/observability/local/`); in
+Kubernetes set `observability.prometheusRule.enabled` (plus `observability.prometheusRule.labels` matching the
+Prometheus `ruleSelector`) and `observability.dashboards.enabled` (Grafana sidecar label `grafana_dashboard: "1"`).
+Severity `page` / `ticket` labels and a `runbook` annotation are on every alert; Alertmanager routes are still to be
+defined (GAP-10 residual).
+
+The burn-rate pattern used for every SLI (example J1 availability, budget 0.05 %):
 
 ```yaml
-# J1 payment initiation: page when burning > 14.4x budget over 1 h (and 5 m), or > 6x over 6 h (and 30 m)
-- alert: PaymentInitiationErrorBudgetBurnFast
+- record: meridian:slo_errors:ratio_rate1h
+  labels: {journey: J1, sli: availability}
   expr: |
-    (sum(rate(http_server_requests_milliseconds_count{service_name="payment-service",uri="/v1/payments",method="POST",status=~"5.."}[1h]))
-      / sum(rate(http_server_requests_milliseconds_count{service_name="payment-service",uri="/v1/payments",method="POST"}[1h]))) > (14.4 * 0.0005)
-    and
-    (sum(rate(http_server_requests_milliseconds_count{service_name="payment-service",uri="/v1/payments",method="POST",status=~"5.."}[5m]))
-      / sum(rate(http_server_requests_milliseconds_count{service_name="payment-service",uri="/v1/payments",method="POST"}[5m]))) > (14.4 * 0.0005)
-  labels: {severity: page, journey: J1}
-# J2 card auth latency (needs histogram buckets, section 1)
-- alert: CardAuthP99High
-  expr: histogram_quantile(0.99, sum by (le) (rate(http_server_requests_milliseconds_bucket{service_name="card-authorization-service",uri="/v1/card-authorizations"}[5m]))) > 250
+    sum by (cell) (rate(http_server_requests_seconds_count{job=~"payment-service|customer-channel-service|business-channel-service",
+      uri=~"/v1/payments|/v1/me/payments|/v1/business/payments/.+/submit",method="POST",status=~"5.."}[1h]))
+    / sum by (cell) (rate(http_server_requests_seconds_count{...same selector...,status!~"4.."}[1h]))
+- alert: J1PaymentInitiationAvailabilityBurnFast
+  expr: |
+    meridian:slo_errors:ratio_rate1h{journey="J1",sli="availability"} > (14.4 * 0.0005)
+    and meridian:slo_errors:ratio_rate5m{journey="J1",sli="availability"} > (14.4 * 0.0005)
+  for: 2m
+  labels: {severity: page, journey: J1, sli: availability}
+- alert: J2CardAuthP99High
+  expr: histogram_quantile(0.99, sum by (le, cell) (rate(http_server_requests_seconds_bucket{job="card-authorization-service",uri="/v1/card-authorizations"}[5m]))) > 0.25
   for: 5m
   labels: {severity: page, journey: J2}
 ```
@@ -104,14 +129,13 @@ Multi-window burn-rate alerts (Google SRE workbook) for every availability SLO, 
 | RTO / RPO | See [BCP_DR.md](BCP_DR.md) |
 | Exclusions | Announced maintenance (READ_ONLY windows, tenant moves), tenant-side IdP / network, third-party rails and schemes, force majeure |
 | Service credits | TBD (commercial) |
-| Reporting | Monthly SLO report per tenant from the monitoring stack (GAP-10) |
+| Reporting | Monthly SLO report per tenant from the monitoring stack (dashboards exist; stack not deployed, GAP-10 residual) |
 
 ## Open gaps
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-10 | Prometheus registry / collector export, histogram buckets, dashboards, alert rules, paging | TBD (SRE) | `spec/plan.yaml` PLT-OBSERVABILITY |
-| - | Business counters (payment outcomes, card auth decisions and stand-in, ledger postings) | TBD (Payments / Cards / Ledger) | Proposed |
+| GAP-10 | Residual: deploy Prometheus / Alertmanager / collector per cell, Alertmanager routes and paging, on-call; J1b / J8 metrics; Keycloak realm `metrics-listener` | TBD (SRE) | `spec/plan.yaml` PLT-OBSERVABILITY (In progress) |
 | GAP-06 | Logs for SLO investigations (no central logging) | TBD (SecOps) | Proposed |
 | - | 10,000 TPS per cell load test (S22 exit) | TBD (Performance) | `spec/plan.yaml` S22; [PERFORMANCE.md](../PERFORMANCE.md) |
 | GAP-12 | Connection budget limits horizontal scaling | TBD (Platform) | [SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget) |
