@@ -266,11 +266,7 @@ public final class UssdEngine {
             return false;
         }
         if (n.inputValidation() != null && !n.inputValidation().isBlank()) {
-            try {
-                return Pattern.compile(n.inputValidation()).matcher(in).matches();
-            } catch (PatternSyntaxException e) {
-                return false;
-            }
+            return io.meridian.common.text.SafeRegex.matches(n.inputValidation(), in); // SEC-30
         }
         return true;
     }

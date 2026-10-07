@@ -23,7 +23,7 @@ public final class MatchRules {
             String p = pattern.trim().toUpperCase(Locale.ROOT);
             return switch (matchType == null ? "CONTAINS" : matchType) {
                 case "PREFIX" -> d.startsWith(p);
-                case "REGEX" -> Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(raw).find();
+                case "REGEX" -> io.meridian.common.text.SafeRegex.find(pattern, Pattern.CASE_INSENSITIVE, raw);
                 default -> d.contains(p);
             };
         }

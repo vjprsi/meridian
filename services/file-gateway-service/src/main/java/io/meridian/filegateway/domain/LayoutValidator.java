@@ -143,11 +143,8 @@ public final class LayoutValidator {
             p.add("field " + f.path("name").asString("?") + " has unknown type " + type);
         }
         if (f.hasNonNull("pattern")) {
-            try {
-                Pattern.compile(f.get("pattern").asString());
-            } catch (PatternSyntaxException e) {
-                p.add("field " + f.path("name").asString("?") + " has an invalid pattern");
-            }
+            io.meridian.common.text.SafeRegex.problem(f.get("pattern").asString())
+                    .ifPresent(why -> p.add("field " + f.path("name").asString("?") + " has an invalid pattern: " + why));
         }
     }
 

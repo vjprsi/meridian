@@ -25,7 +25,7 @@ public final class ReferenceValidator {
             return Optional.of("The account reference is required");
         }
         String ref = reference.trim();
-        if (regex != null && !regex.isBlank() && !Pattern.compile(regex).matcher(ref).matches()) {
+        if (regex != null && !regex.isBlank() && !io.meridian.common.text.SafeRegex.matches(regex, ref)) {
             return Optional.of("The account reference does not have the expected format");
         }
         String algo = checksum == null ? "NONE" : checksum;
@@ -44,14 +44,9 @@ public final class ReferenceValidator {
         return ok ? Optional.empty() : Optional.of("The account reference check digit is wrong");
     }
 
-    /** True when the pattern is a valid Java regular expression. */
+    /** True when the pattern is a valid, safe regular expression (SEC-30: no nested quantifiers, bounded length). */
     public static boolean compiles(String regex) {
-        try {
-            Pattern.compile(regex);
-            return true;
-        } catch (PatternSyntaxException e) {
-            return false;
-        }
+        return io.meridian.common.text.SafeRegex.problem(regex).isEmpty();
     }
 
     public static boolean luhn(String digits) {

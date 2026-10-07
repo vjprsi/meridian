@@ -80,12 +80,11 @@ public final class JsonSchemaValidator {
                 errors.add(err(path, "max_length", "must have at most " + s.get("maxLength").asInt() + " characters"));
             }
             if (s.has("pattern")) {
-                try {
-                    if (!Pattern.compile(s.get("pattern").asString()).matcher(str).find()) {
-                        errors.add(err(path, "pattern", "must match " + s.get("pattern").asString()));
-                    }
-                } catch (PatternSyntaxException e) {
-                    errors.add(err(path, "invalid_schema", "pattern is not a valid regular expression"));
+                String rx = s.get("pattern").asString();
+                if (io.meridian.common.text.SafeRegex.problem(rx).isPresent()) {
+                    errors.add(err(path, "invalid_schema", "pattern is not allowed: " + io.meridian.common.text.SafeRegex.problem(rx).get()));
+                } else if (!io.meridian.common.text.SafeRegex.find(rx, 0, str)) {
+                    errors.add(err(path, "pattern", "must match " + rx));
                 }
             }
         }
