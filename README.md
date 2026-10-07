@@ -355,3 +355,18 @@ marks a cell OFFLINE the router sends its tenants to their standby cell.
   failover for the routers); example `infra/tofu/envs/prod-eu1` (`tofu init -backend=false && tofu validate`).
 - Design, RPO statement, failover runbook with RTO budget and deployment models (shared, dedicated, self-hosted):
   [docs/MULTI_REGION.md](docs/MULTI_REGION.md).
+
+## Compliance & operations
+
+GA hardening and certification pack (roadmap S22). Every control is mapped to evidence in this repository; missing
+controls are listed as gaps with owners in the [gap register](docs/compliance/README.md#gap-register).
+
+- Compliance: [SOC 2 control matrix](docs/compliance/SOC2_CONTROL_MATRIX.md),
+  [ISO/IEC 27001:2022 Annex A statement of applicability](docs/compliance/ISO27001_ANNEX_A.md),
+  [PCI DSS v4.0.1 scope](docs/compliance/PCI_DSS_SCOPE.md), [data protection](docs/compliance/DATA_PROTECTION.md),
+  [threat model](docs/compliance/THREAT_MODEL.md), [pen test scope](docs/compliance/PEN_TEST_SCOPE.md).
+- Operations: [runbooks](docs/operations/RUNBOOKS.md) (deploy / rollback, key rotation, incidents, EOD, stuck
+  payments, reconciliation, Kafka lag, DB connections, failover, severity matrix),
+  [SLOs and SLA](docs/operations/SLO_SLA.md), [business continuity and DR](docs/operations/BCP_DR.md).
+- Engineering evidence: [security review](docs/SECURITY_REVIEW.md), [multi-region design](docs/MULTI_REGION.md),
+  [performance results](docs/PERFORMANCE.md).

@@ -21,6 +21,7 @@ Important: the `pii` marker is **documentation only** today; it does not encrypt
 | document-service | `document.document_number`, `generated_document.data`; stored files in S3 (ID scans, contracts, statements, DSAR packages) | All | ID images |
 | identity-service | `app_user` (e-mail, first / last name, phone), `mfa_factor.destination`, sessions (unmarked: IP / user agent) | Staff of tenant banks and Meridian | |
 | payment-service | `payment` (debtor / creditor name, account numbers, creditor address, `risk_context` with device fingerprint, IP, IP country, session id), `payee` (name, account number, address, e-mail, phone), `payee_alias`, `payee_verification`, `bulk_payment_item`, `payment_mandate`, `request_to_pay.payer_alias_value` | Customers and counterparties (third parties) | Financial data |
+| ledger-service | Payment references on append-only `journal_entry` / `ledger_entry` (RECON-REAL-REFS): `counterparty_name` (clear), counterparty account only as tenant-keyed HMAC `counterparty_account_hash` + last 4 (unmarked in spec) | Counterparties of payments | Immutable: cannot be erased, only retained / archived (accounting record keeping) |
 | fraud-service | Identifiers only as tenant-keyed pseudonyms (`psn:`, `h1:`); device registry keeps the SDK fingerprint as sent (unmarked) | Customers, counterparties | Profiling (automated decisions: ALLOW / REVIEW / BLOCK) |
 | sanctions-service, transaction-monitoring, case-management | `screening_request` (full name, date of birth, identifiers); alerts and SAR cases (unmarked narrative fields) | Customers, counterparties | Criminal-offence-related data (SARs) |
 | wallet-service, agent-network, merchant, biller, channel, disbursement, interop | MSISDNs, payee names, bank-link account numbers, agent / merchant tax ids and contacts, USSD sessions, SMS bodies, beneficiary national ids | Wallet holders, agents, merchants, beneficiaries | |
@@ -99,6 +100,7 @@ retention, search journal. A complete DSAR today needs a manual per-service expo
 |---|---|---|
 | Tenant-keyed HMAC pseudonyms (`psn:` in context, `h1:` lists, `acct:h1:` / `msisdn:h1:` feature keys) | fraud-service, before rules, features and storage; payment-service sends `beneficiary_account_digest` only | `meridian.fraud.pseudonym-key` (required secret), per tenant `HMAC(secret, "meridian-fraud-pseudonym/v1|" + tenant)` |
 | Contact lookup hash (`customer_contact.lookup_hash`, masked value) | customer-service and search-service; events carry only masked value + hash | `MERIDIAN_CONTACT_LOOKUP_KEY` shared by both; **not guarded or injected for customer-service** (GAP-14) |
+| Counterparty account hash (`counterparty_account_hash`, `h1:` + last 4) | ledger-service and reconciliation-service (payment references on postings) | `meridian.refs.counterparty-key` (required secret, Helm `counterparty-key` in both services) |
 | Identifier hash (`customer_identifier.value_hash`, hidden) | customer-service duplicate detection | `MERIDIAN_CUSTOMER_SECRET_KEY` (GAP-14) |
 | Card tokens and keyed PAN fingerprint | card services | card-vault master key (GAP-01) |
 | Masked customer lookup | agent channel (logged, rate-limited) | - |
@@ -149,7 +151,8 @@ separate operational incident reporting.
    - large-scale profiling for insights, campaigns and rewards;
    - AI copilots in CRM / AML / disputes processing free-text case data (`copilot_session.prompt / output`);
    - offline agent devices holding queued customer data and ID photos (SEC-23, GAP-18);
-   - cross-border replication (section 6).
+   - cross-border replication (section 6);
+   - counterparty names kept in clear on immutable ledger entries (accounting retention vs. erasure requests).
 4. **Risks to individuals**: unauthorised access across tenants or customers (mitigated by RLS and BOLA controls),
    wrongful blocking of payments, discrimination in credit / fraud models, excessive retention (GAP-08), incomplete
    erasure (GAP-08), audit copies of personal data (GAP-07).

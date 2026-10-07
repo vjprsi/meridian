@@ -59,6 +59,7 @@ weakening. After updating a Secret: `kubectl -n $NS rollout restart deploy/<serv
 | Callback HMAC secrets | `MERIDIAN_ROUTING_CALLBACK_SECRET`, `MERIDIAN_CARDS_CALLBACK_SECRET`, `MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET`, `MERIDIAN_ESIGN_CALLBACK_SECRET`, `MERIDIAN_CARDS_AUTH_JIT_SECRET` | Only one secret is accepted at a time: callbacks signed with the old secret fail during the cut-over (providers retry with a new nonce) | Agree a cut-over minute with the provider; update Secret; restart the service; provider switches; watch callback 401 rate. Prefer per-rail / per-provider secrets (`callback-secrets.<CODE>`) so one provider rotates alone |
 | Link signing keys | `MERIDIAN_FILES_SIGNING_KEY`, `MERIDIAN_STATEMENT_DOWNLOAD_SECRET`, `MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY` | Outstanding download links become invalid (short TTL) | Rotate any time; announce to ops that open links must be re-issued |
 | OTP / token keys | `MERIDIAN_CARDS_TOKENS_OTP_KEY`, `MERIDIAN_CARDS_TOKENS_PAYLOAD_KEY`, `MERIDIAN_CARDS_THREEDS_OTP_KEY`, `MERIDIAN_CARDS_THREEDS_CAVV_KEY`, `MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET`, `MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET` | In-flight OTPs / resume tokens / CAVVs fail verification | Rotate in a low-traffic window; applicants re-request codes |
+| Counterparty reference key | `MERIDIAN_REFS_COUNTERPARTY_KEY` (Secrets of ledger-service and reconciliation-service, key `counterparty-key`; same value in both) | `counterparty_account_hash` on append-only journal / ledger entries cannot be recomputed: entries posted before the rotation stop matching counterparty-account rules | Rotate only on compromise; update both services together; expect lower auto-match on older open items until they clear |
 | Webhook endpoint signing secrets (per endpoint) | stored encrypted in webhook-service | None: old secret valid 24 h | `POST /v1/webhook-endpoints/{id}/rotate-secret` (tenant or developer portal) |
 | Webhook encryption key | `MERIDIAN_WEBHOOKS_KEY` | Stored endpoint secrets become unreadable | **Do not rotate** until a re-encryption job exists **[gap: GAP-21]**; on compromise rotate every endpoint secret right after |
 | MFA seed key | `MERIDIAN_IDENTITY_MFA_SEED_KEY` | Encrypted TOTP seeds become unreadable | **Do not rotate** without re-encryption **[gap: GAP-21]**; on compromise rotate and force TOTP re-enrolment of all staff |
@@ -166,8 +167,10 @@ processed / failed, auto-match rate, breaks raised. Production metrics: `GET /v1
 matches (`docs/PERFORMANCE.md`).
 
 1. Auto-match rate below 98 % for a source: check whether the file arrived complete (`/v1/reconciliation/files`), rule
-   set changes, or missing references on postings (known: payment-service postings carry no UETR / counterparty yet,
-   [SPEC_BACKLOG](../SPEC_BACKLOG.md#wave-b-results-and-open-items)).
+   set changes, or postings without payment references (`external_refs` on journal entries - UETR, end-to-end id,
+   batch id, counterparty - sent by payment, card-clearing, wallet and deposit services since RECON-REAL-REFS).
+   Settlement postings book on the capture day, so rail settlement lags must fit the rules' date windows
+   ([SPEC_BACKLOG](../SPEC_BACKLOG.md#wave-b-results-and-open-items)).
 2. Work exceptions: `GET /v1/reconciliation/exceptions?status=OPEN`; assign (`/{id}/assign`), accept suggestions
    (`/{id}/accept-suggestion`), or resolve with a note (`/{id}/resolve`).
 3. Postings to fix a break go through `/v1/reconciliation/adjustments` and need approval by a different user
