@@ -1,0 +1,68 @@
+# customer-channel-service (Customer Channels). Defaults target the local stack in infra/local; override with env vars in
+# other environments (e.g. SPRING_DATASOURCE_URL, MERIDIAN_SECURITY_MODE=jwt).
+server:
+  port: 9164
+  shutdown: graceful
+
+spring:
+  application:
+    name: customer-channel-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:15432/customer_channel_db?currentSchema=customer_channel
+    username: meridian_app
+    password: meridian_app
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    user: meridian
+    password: meridian
+    schemas: customer_channel
+    default-schema: customer_channel
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:15180/realms/meridian
+
+meridian:
+  security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
+  events:
+    topic: meridian.channels.v1
+  channels:
+    step-up-max-age: PT5M     # money movement / security changes need an authentication at most this old
+    step-up-acr: []           # e.g. [gold] to also require a strong acr from the identity provider
+  # JWT mode: the channel never forwards a customer's token; it calls the domain services with this service identity
+  # for the customer's tenant (required, else customer requests fail with 503 service_identity_not_configured).
+  # service-auth:
+  #   token-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/token
+  #   client-id: meridian-service
+  #   client-secret: meridian-service-secret
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: customer-channel-service
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:14318/v1/metrics
+  tracing:
+    sampling:
+      probability: 1.0

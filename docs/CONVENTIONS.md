@@ -111,7 +111,13 @@ API surface rules (checked by the generator): resource names are unique platform
 `/v1/campaigns/{campaign_id}/variants`.
 
 Authorisation is generated: every operation requires `<domain>:read` or `<domain>:write`; writes to
-platform-global tables (`tenant: false`) require `meridian:admin` (platform operators only).
+platform-global tables (`tenant: false`) require `meridian:admin` (platform operators only). A domain may declare one
+scope for all its operations instead (`scope: channels:customer` in `channels.yaml`, the customer channel): only that
+exact scope satisfies it (no `<domain>:*` / `meridian:admin` shortcut) and `tools/keycloak_realm.py` grants it to
+customer clients only.
+
+Action paths: `"GET / | ..."` addresses the resource path itself (`/v1/me/cards`); an action path made only of path
+parameters (`/{card_id}`) is named by verb (`<resource>List` / `Get` / `Create` / `Replace` / `Update` / `Delete`).
 
 Rule of thumb: an action whose purpose is to compute, preview, simulate, test, export or download something must
 declare `object`, a MIME type or a table — never `none`.

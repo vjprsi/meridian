@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { rewards, unwrap } from "@/api/client";
+import { me, unwrap } from "@/api/client";
 import { useCustomerId } from "@/api/me";
 import type { PointsAccount } from "@/api/types";
 import { Async, Badge, Card, DateTime, Empty, Money, PageHeader, Summary } from "@/components/ui";
@@ -12,13 +12,11 @@ export default function Rewards() {
   const c = useCustomerId();
   const accounts = useQuery({
     queryKey: ["points-accounts", c], enabled: !!c,
-    queryFn: async () => unwrap(await rewards.GET("/v1/rewards/points-accounts", { params: { query: { customer_id: c, limit: 20 } } }))
-      .data.filter((a) => a.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/rewards/points-accounts", { params: { query: { limit: 20 } } })).data,
   });
   const cashback = useQuery({
     queryKey: ["cashback", c], enabled: !!c,
-    queryFn: async () => unwrap(await rewards.GET("/v1/rewards/cashback", { params: { query: { customer_id: c, limit: 20 } } }))
-      .data.filter((x) => x.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/rewards/cashback", { params: { query: { limit: 20 } } })).data,
   });
 
   return (
@@ -59,7 +57,7 @@ function PointsCard({ account }: { account: PointsAccount }) {
   const { intl } = useI18n();
   const entries = useQuery({
     queryKey: ["points-entries", account.id],
-    queryFn: async () => unwrap(await rewards.GET("/v1/rewards/points-accounts/{id}/entries", { params: { path: { id: account.id! }, query: { limit: 15 } } })).data,
+    queryFn: async () => unwrap(await me.GET("/v1/me/rewards/points-accounts/{points_account_id}/entries", { params: { path: { points_account_id: account.id! }, query: { limit: 15 } } })).data,
   });
   const n = (v?: number | null) => (v ?? 0).toLocaleString(intl);
   return (

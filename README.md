@@ -112,18 +112,42 @@ installable PWA (app-shell caching only, never account data), WCAG 2.2 AA, Engli
 cd web/customer-web
 npm install
 npm run dev          # or: npm run build && npm start
-npm run gen:api      # regenerate typed clients for the 14 services it calls
+npm run gen:api      # regenerate typed clients (customer channel + sign-up services)
 npm run test:e2e     # Playwright smoke with a mocked/absent backend (uses the local Chrome)
 ```
 
-- Sign in with Keycloak (client `NEXT_PUBLIC_OIDC_CLIENT_ID`, token must carry `customer_id`) or in dev mode by
-  picking a tenant and customer on `/login`. Every call is filtered to that customer.
+- Sign in with Keycloak (public PKCE client `meridian-customer-web`; demo user `demo.customer` /
+  `Meridian#Customer2026`, set its `customer_id` attribute to a customer of the demo tenant) or in dev mode by picking a
+  tenant and customer on `/login`.
+- Every signed-in screen calls only the customer channel `/v1/me/*` (`customer-channel-service`, see below); sign-up
+  still uses the onboarding services before a customer exists.
 - Screens: sign-up (journey-driven onboarding, document upload, KYC status), home, account detail with transactions and
   statements, transfers / payees / domestic payments (validate, step-up, Idempotency-Key, receipt), standing orders,
   cards (freeze, channel controls, limits, lost/stolen), loans (schedule, repay), insights and budgets, rewards, secure
-  inbox, profile & security (contacts with OTP, notification preferences, devices).
-- The platform has no customer-scoped ("me") API or customer identity yet; scoping is client-side only. The precise
-  gap list is in `web/customer-web/README.md`.
+  inbox, profile & security (contacts with OTP, notification preferences, devices). Remaining gaps:
+  `web/customer-web/README.md`.
+
+## Customer channel (/v1/me)
+
+Customers never call the domain services. `customer-channel-service` (domain `channels`, scope `channels:customer`)
+is the experience API behind `/v1/me/*`; the 60+ domain services keep their operator APIs.
+
+- Identity: a customer token carries scope `channels:customer` and a `customer_id` claim (Keycloak client
+  `meridian-customer-web`: admin-managed user attributes `customer_id` / `tenant_id`, plus `auth_time` / `acr`). It has
+  no domain scope, so every operator endpoint refuses it (403 `insufficient_scope`); `/v1/me` accepts nothing else.
+  `libs/meridian-web` binds it as `CustomerContext` (dev mode: `X-Customer-Id`, `X-Auth-Time`).
+- Calls downstream use the channel's service identity for the customer's tenant (`meridian.service-auth.*` required in
+  JWT mode) with `X-On-Behalf-Of-Customer`; the customer's token is never forwarded.
+- Object-level authorization on every reference (accounts: owner or ACTIVE holder with `can_view` / `can_transact`;
+  cards, loans, wallets, payments, payees, budgets, insights, threads, KYC: `customer_id`; notifications: recipient;
+  documents: owner; standing orders and statements: their account). Not theirs = 404, audited in `customer_action`
+  and published as `channels.customer_action.denied`.
+- Bodies are rebuilt server-side (customer, debtor account and currency, creditor details from the payee, sender /
+  opener types, document owner, KYC status are never taken from the client); downstream Idempotency-Keys are derived
+  per customer.
+- Step-up: payments, standing orders (create, resume), loan repayment, payee add / trust, card unfreeze and limits,
+  new contact points and device revocation need `auth_time` within `meridian.channels.step-up-max-age` (5 min; optional
+  `step-up-acr`), else 401 `step_up_required` with `WWW-Authenticate: Bearer error="insufficient_user_authentication"`.
 
 ## Agent app (PWA, works offline)
 

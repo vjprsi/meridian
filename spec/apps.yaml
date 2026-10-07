@@ -93,24 +93,31 @@ apps:
       - name: Login with passkey or password + MFA
         priority: P0
         apis: [customerCredentialsPasskeys, mfaFactorsVerify]
+      # signed-in screens use the customer channel (/v1/me, customer-channel-service) only
       - name: Accounts overview
         priority: P0
-        apis: [depositAccountsList, depositAccountsBalance, walletsList, cardsList, loansList]
+        apis: [myAccountsList, myAccountsHoldings, myAccountsBalance, myWalletsList, myCardsList, myLoansList]
       - name: Transaction search and export
-        apis: [depositAccountsTransactions, statementsCreate, statementsDownload]
+        apis: [myAccountsTransactions, myAccountsAddStatements, myAccountsStatementsDownload]
       - name: Payments and transfers
         priority: P0
-        apis: [payeesList, payeesCreate, paymentsCreate, paymentsList, standingOrdersCreate]
+        apis: [myPayeesList, myPayeesCreate, myPaymentsValidate, myPaymentsCreate, myPaymentsList, myPaymentsReceipt,
+               myStandingOrdersCreate]
       - name: Statements, certificates and letters
-        apis: [statementsList, taxCertificatesList, depositAccountsConfirmationLetter]
+        apis: [myAccountsStatements, taxCertificatesList, myAccountsConfirmationLetter]
       - name: Cards management
-        apis: [cardsList, cardsFreeze, cardControlsUpdate, cardsReplace]
+        apis: [myCardsList, myCardsFreeze, myCardsUnfreeze, myCardsChannels, myCardsReplaceLimits, myCardsReportLost]
       - name: Loans and credit
-        apis: [loansList, loansSchedule, loansRepay, creditLinesGet]
+        apis: [myLoansList, myLoansSchedule, myLoansRepay, creditLinesGet]
+      - name: Insights, budgets and rewards
+        apis: [myInsightsSpending, myInsightsCards, myBudgetsList, myBudgetsCreate, myRewardsPointsAccounts]
+      - name: Secure inbox and notifications
+        apis: [myThreadsList, myThreadsCreate, myThreadsMessages, myThreadsAddMessages, myNotificationsList]
       - name: Third-party access (open banking)
         apis: [obConsentsList, obConsentsRevoke, obConsentsAccessLog]
       - name: Settings and security
-        apis: [customersGet, customersUpdate, customerDevicesList, notificationPreferencesUpdate]
+        apis: [myProfileGet, myProfileUpdate, myContactsList, myDevicesList, myDevicesRevoke,
+               myNotificationPreferencesReplace, myKycProfile, myActivityList]
 
   # ======================================================================= business portal
   - id: business-portal

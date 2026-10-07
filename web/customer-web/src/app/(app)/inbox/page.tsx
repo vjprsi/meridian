@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { idem, inbox, notifications, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { useCustomerId } from "@/api/me";
 import { Async, Badge, Button, Card, DateTime, Empty, ErrorBanner, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
 import { useT } from "@/lib/i18n";
@@ -18,26 +18,25 @@ export default function Inbox() {
   const router = useRouter();
   const threads = useQuery({
     queryKey: ["threads", c], enabled: !!c,
-    queryFn: async () => unwrap(await inbox.GET("/v1/inbox/threads", { params: { query: { customer_id: c, limit: 50 } } }))
-      .data.filter((x) => x.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/inbox/threads", { params: { query: { limit: 50 } } })).data,
   });
   const notes = useQuery({
     queryKey: ["notifications", c], enabled: !!c,
-    queryFn: async () => unwrap(await notifications.GET("/v1/notifications", {
-      params: { query: { recipient_type: "CUSTOMER", recipient_id: c, channel: "IN_APP", limit: 30 } } }))
-      .data.filter((n) => n.recipient_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/notifications", {
+      params: { query: { channel: "IN_APP", limit: 30 } } })).data,
   });
   const markRead = useMutation({
-    mutationFn: async (id: string) => unwrap(await notifications.POST("/v1/notifications/{id}/mark-read", { params: { path: { id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/notifications/{notification_id}/mark-read", {
+      params: { path: { notification_id: id }, header: idem() } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", c] }),
   });
 
   const [form, setForm] = useState({ subject: "", topic: "GENERAL", message: "" });
   const [err, setErr] = useState<Record<string, string>>({});
   const create = useMutation({
-    mutationFn: async () => unwrap(await inbox.POST("/v1/inbox/threads", {
+    mutationFn: async () => unwrap(await me.POST("/v1/me/inbox/threads", {
       params: { header: idem() },
-      body: { customer_id: c, subject: form.subject.trim(), topic: form.topic, opened_by: "CUSTOMER", initial_message: form.message.trim() },
+      body: { subject: form.subject.trim(), topic: form.topic, initial_message: form.message.trim() },
     })),
     onSuccess: (th) => { qc.invalidateQueries({ queryKey: ["threads", c] }); router.push(`/inbox/${th.id}`); },
   });

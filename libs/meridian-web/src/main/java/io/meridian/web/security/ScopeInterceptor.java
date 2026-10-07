@@ -17,7 +17,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 /**
  * Enforces {@link RequiredScope} (found on the generated interface method) against the token's scopes.
  * Accepts the exact scope, the domain wildcard {@code <domain>:*}, {@code <domain>:write} for reads, or
- * {@code meridian:admin}. Dev mode (no tokens) skips the check.
+ * {@code meridian:admin}. The customer scope ({@link CustomerContext#CUSTOMER_SCOPE}) is only satisfied by itself.
+ * Dev mode (no tokens) skips the check.
  */
 public class ScopeInterceptor implements HandlerInterceptor {
     private final MeridianProperties props;
@@ -35,15 +36,24 @@ public class ScopeInterceptor implements HandlerInterceptor {
         if (required == null) {
             return true;
         }
-        Set<String> granted = scopes(SecurityContextHolder.getContext().getAuthentication());
         String need = required.value();
-        String domain = need.substring(0, need.indexOf(':'));
-        boolean ok = granted.contains(need) || granted.contains(domain + ":*") || granted.contains("meridian:admin")
-                || (need.endsWith(":read") && granted.contains(domain + ":write"));
-        if (!ok) {
+        if (!permits(scopes(SecurityContextHolder.getContext().getAuthentication()), need)) {
             throw new ApiException(403, "insufficient_scope", "This operation requires scope " + need);
         }
         return true;
+    }
+
+    /**
+     * Whether granted scopes satisfy {@code need}. Customer endpoints take customer tokens only (no wildcard / admin
+     * shortcut); every other endpoint needs a domain scope, which customer tokens never carry, so they are refused.
+     */
+    static boolean permits(Set<String> granted, String need) {
+        if (CustomerContext.CUSTOMER_SCOPE.equals(need)) {
+            return granted.contains(need);
+        }
+        String domain = need.substring(0, need.indexOf(':'));
+        return granted.contains(need) || granted.contains(domain + ":*") || granted.contains("meridian:admin")
+                || (need.endsWith(":read") && granted.contains(domain + ":write"));
     }
 
     static Set<String> scopes(Authentication auth) {

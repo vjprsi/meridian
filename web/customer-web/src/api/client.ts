@@ -1,20 +1,11 @@
 "use client";
 
 import createClient, { type Middleware } from "openapi-fetch";
+import type { paths as MePaths } from "./gen/customer-channel";
 import type { paths as CustomerPaths } from "./gen/customer";
 import type { paths as OnboardingPaths } from "./gen/onboarding";
 import type { paths as KycPaths } from "./gen/kyc";
 import type { paths as DocumentPaths } from "./gen/document";
-import type { paths as DepositPaths } from "./gen/deposit";
-import type { paths as StatementPaths } from "./gen/statement";
-import type { paths as PaymentPaths } from "./gen/payment";
-import type { paths as CardPaths } from "./gen/card";
-import type { paths as LoanPaths } from "./gen/loan";
-import type { paths as WalletPaths } from "./gen/wallet";
-import type { paths as InsightsPaths } from "./gen/insights";
-import type { paths as RewardsPaths } from "./gen/rewards";
-import type { paths as InboxPaths } from "./gen/inbox";
-import type { paths as NotificationPaths } from "./gen/notification";
 import { authHeaders } from "@/lib/auth";
 
 /** RFC 9457 problem returned by every Meridian service. */
@@ -39,7 +30,7 @@ const auth: Middleware = {
     for (const [k, v] of Object.entries(authHeaders())) request.headers.set(k, v);
     // Every write is idempotent: a retry of the same click must not double-post. Money movement passes its own
     // key (kept for the whole confirmation) so a resubmitted confirmation reuses it.
-    if (request.method === "POST" && !request.headers.has("Idempotency-Key")) {
+    if (request.method !== "GET" && request.method !== "HEAD" && !request.headers.has("Idempotency-Key")) {
       request.headers.set("Idempotency-Key", crypto.randomUUID());
     }
     return request;
@@ -53,23 +44,19 @@ function client<P extends object>() {
 }
 
 /**
- * Typed clients generated from the owning services' contracts (npm run gen:api). Requests go to /v1/... on this
- * origin; Next proxies them to the edge gateway.
+ * Typed clients generated from the contracts (npm run gen:api). Requests go to /v1/... on this origin; Next proxies
+ * them to the edge gateway.
+ *
+ * `me` is the customer channel (/v1/me/*, customer-channel-service): every signed-in screen uses only this client.
+ * The server takes the customer from the token (dev: X-Customer-Id), checks that every referenced object is theirs,
+ * builds the request bodies itself and requires a recent sign-in for money movement (401 step_up_required).
+ * The other clients serve sign-up (before a customer exists) and the dev-mode customer picker only.
  */
+export const me = client<MePaths>();
 export const customers = client<CustomerPaths>();
 export const onboarding = client<OnboardingPaths>();
 export const kyc = client<KycPaths>();
 export const documents = client<DocumentPaths>();
-export const deposits = client<DepositPaths>();
-export const statements = client<StatementPaths>();
-export const payments = client<PaymentPaths>();
-export const cards = client<CardPaths>();
-export const loans = client<LoanPaths>();
-export const wallets = client<WalletPaths>();
-export const insights = client<InsightsPaths>();
-export const rewards = client<RewardsPaths>();
-export const inbox = client<InboxPaths>();
-export const notifications = client<NotificationPaths>();
 
 /** Idempotency-Key header for a write; pass a key held for the whole confirmation to make resubmits safe. */
 export function idem(key?: string): { "Idempotency-Key": string } {
@@ -122,10 +109,33 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+type MyDocumentType = NonNullable<MePaths["/v1/me/documents"]["post"]["requestBody"]>["content"]["application/json"]["document_type"];
+
+/**
+ * Uploads a file of the signed-in customer: register it (owner = the customer, set by the server), PUT the bytes to
+ * the pre-signed URL, then confirm size and SHA-256 (starts virus scanning). Returns the document id.
+ */
+export async function uploadMyDocument(file: File, documentType: MyDocumentType): Promise<string> {
+  const doc = unwrap(await me.POST("/v1/me/documents", {
+    params: { header: idem() },
+    body: { document_type: documentType, file_name: file.name, content_type: file.type || "application/octet-stream" },
+  }));
+  const target = unwrap(await me.POST("/v1/me/documents/{document_id}/upload-url", {
+    params: { path: { document_id: doc.id! }, header: idem() } })) as { method?: string; url?: string; headers?: Record<string, string> };
+  if (!target.url) throw new ApiError({ detail: "Upload URL missing from the response" });
+  const bytes = await file.arrayBuffer();
+  const put = await fetch(target.url, { method: target.method ?? "PUT", headers: target.headers ?? {}, body: bytes });
+  if (!put.ok) throw new ApiError({ status: put.status, title: "Upload failed", detail: put.statusText });
+  unwrap(await me.POST("/v1/me/documents/{document_id}/complete-upload", {
+    params: { path: { document_id: doc.id! }, header: idem() }, body: { size_bytes: bytes.byteLength, checksum: await sha256Hex(bytes) },
+  }));
+  return doc.id!;
+}
+
 type DocumentType = NonNullable<DocumentPaths["/v1/documents"]["post"]["requestBody"]>["content"]["application/json"]["document_type"];
 
 /**
- * Stores a file in document-service: create the document record, PUT the bytes to the pre-signed URL, then confirm
+ * Sign-up only (no customer yet): stores a file in document-service: create the document record, PUT the bytes to the pre-signed URL, then confirm
  * with size and SHA-256 (which starts virus scanning). Returns the document id.
  */
 export async function uploadDocument(file: File, ownerType: string, ownerId: string, documentType: DocumentType,

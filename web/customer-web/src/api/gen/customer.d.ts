@@ -1107,7 +1107,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        CustomerGroupsMembersRequest: {
+        CustomerGroupsAddMembersRequest: {
             /** Format: uuid */
             customer_id: string;
             member_role?: string;
@@ -2232,6 +2232,10 @@ export interface components {
              * @description Email address for email-type contacts
              */
             email?: string | null;
+            /** @description Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search */
+            readonly masked_value?: string | null;
+            /** @description Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match search; key shared with search-service, never reversible */
+            readonly lookup_hash?: string | null;
             /** @description Free label, e.g. Work */
             label?: string | null;
             /** @description Primary contact of this type */
@@ -5274,7 +5278,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomerGroupsMembersRequest"];
+                "application/json": components["schemas"]["CustomerGroupsAddMembersRequest"];
             };
         };
         responses: {

@@ -3,8 +3,8 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { download, payments, unwrap } from "@/api/client";
-import { assertMine, useCustomerId } from "@/api/me";
+import { download, me, unwrap } from "@/api/client";
+import { mine, useCustomerId } from "@/api/me";
 import { Async, Badge, Button, Card, DateTime, ErrorBanner, LinkButton, Money, Notice, PageHeader, Summary, masked } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 
@@ -18,7 +18,7 @@ export default function Receipt() {
   const [dlError, setDlError] = useState<unknown>(null);
   const q = useQuery({
     queryKey: ["payment", id], enabled: !!c,
-    queryFn: async () => assertMine(unwrap(await payments.GET("/v1/payments/{id}", { params: { path: { id } } })), c),
+    queryFn: () => mine(async () => unwrap(await me.GET("/v1/me/payments/{payment_id}", { params: { path: { payment_id: id } } }))),
     refetchInterval: (query) => (query.state.data && !FINAL.includes(query.state.data.status ?? "") ? 3000 : false),
   });
 
@@ -47,7 +47,7 @@ export default function Receipt() {
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={async () => {
                   setDlError(null);
-                  try { await download(`/v1/payments/${p.id}/receipt`, `receipt-${p.id}.pdf`); } catch (e) { setDlError(e); }
+                  try { await download(`/v1/me/payments/${p.id}/receipt`, `receipt-${p.id}.pdf`); } catch (e) { setDlError(e); }
                 }}>{t("receipt.download")}</Button>
                 <LinkButton href="/move" variant="ghost">{t("receipt.done")}</LinkButton>
               </div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useCustomerId, useMe, useMyAccounts } from "@/api/me";
-import type { PaymentCreate } from "@/api/types";
+import { useMyAccounts } from "@/api/me";
+import type { MyPayment } from "@/api/types";
 import { accountName } from "@/components/banking";
 import { AMOUNT, PaymentFlow } from "@/components/payment-flow";
 import { Async, Card, Empty, Field, Input, LinkButton, Money, PageHeader, Select } from "@/components/ui";
@@ -10,8 +10,6 @@ import { useT } from "@/lib/i18n";
 
 export default function OwnTransfer() {
   const t = useT();
-  const c = useCustomerId();
-  const me = useMe();
   const accounts = useMyAccounts();
   const [form, setForm] = useState({ from: "", to: "", amount: "", reference: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -29,19 +27,15 @@ export default function OwnTransfer() {
           const targets = active.filter((a) => a.id !== form.from && (!from || a.currency === from.currency));
           const name = (id: string) => { const a = active.find((x) => x.id === id); return a ? accountName(a) : ""; };
 
-          function build(): PaymentCreate | null {
+          function build(): MyPayment | null {
             const e: Record<string, string> = {};
             if (!form.from) e.from = t("form.required");
             if (!form.to) e.to = t("form.required");
             if (!AMOUNT.test(form.amount)) e.amount = t("form.amount");
             setErrors(e);
             if (Object.keys(e).length || !from) return null;
-            return {
-              payment_type: "INTERNAL_TRANSFER", direction: "INTERNAL", channel: "WEB", priority: "NORMAL",
-              customer_id: c, debtor_account_id: form.from, creditor_account_id: form.to,
-              debtor_name: me.data?.display_name ?? undefined,
-              amount: form.amount, currency: from.currency, reference: form.reference || undefined,
-            };
+            return { kind: "OWN_TRANSFER", from_account_id: form.from, to_account_id: form.to, amount: form.amount,
+              reference: form.reference || undefined, channel: "WEB" };
           }
 
           return (
@@ -64,9 +58,9 @@ export default function OwnTransfer() {
                 </Field>
                 <PaymentFlow build={build} submitLabel={t("transfer.confirm")}
                   summary={(b) => [
-                    { label: t("transfer.from"), value: name(b.debtor_account_id ?? "") },
-                    { label: t("transfer.to"), value: name(b.creditor_account_id ?? "") },
-                    { label: t("pay.amount"), value: <Money amount={b.amount} currency={b.currency} /> },
+                    { label: t("transfer.from"), value: name(b.from_account_id) },
+                    { label: t("transfer.to"), value: name(b.to_account_id ?? "") },
+                    { label: t("pay.amount"), value: <Money amount={b.amount} currency={from?.currency} /> },
                     ...(b.reference ? [{ label: t("pay.reference"), value: b.reference }] : []),
                   ]} />
               </form>

@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { idem, payments, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { qk, useCustomerId } from "@/api/me";
-import type { PaymentCreate, PaymentValidation } from "@/api/types";
+import type { MyPayment, PaymentValidation } from "@/api/types";
 import { useT } from "@/lib/i18n";
 import { StepUpConfirm } from "./step-up";
 import { Button, ErrorBanner, Money } from "./ui";
@@ -13,24 +13,25 @@ import { Button, ErrorBanner, Money } from "./ui";
 export const AMOUNT = /^(?!0+(\.0+)?$)\d{1,13}(\.\d{1,2})?$/;
 
 /**
- * Money movement: Review (POST /v1/payments/validate: account checks, route, cut-off, fees, Confirmation of Payee),
- * then step-up confirmation, then POST /v1/payments with one Idempotency-Key kept for this confirmation, so a retry
- * after a timeout cannot create a second payment. On success the customer lands on the receipt.
+ * Money movement: Review (POST /v1/me/payments/validate: account checks, route, cut-off, fees, Confirmation of Payee),
+ * then step-up confirmation, then POST /v1/me/payments with one Idempotency-Key kept for this confirmation, so a retry
+ * after a timeout cannot create a second payment. The body only says what to move (kind, from, to / payee, amount);
+ * the channel builds the payment (customer, currency, creditor details) and enforces the recent sign-in.
  */
 export function PaymentFlow({ build, summary, disabled, submitLabel }:
-  { build: () => PaymentCreate | null; summary: (body: PaymentCreate) => { label: ReactNode; value: ReactNode }[];
+  { build: () => MyPayment | null; summary: (body: MyPayment) => { label: ReactNode; value: ReactNode }[];
     disabled?: boolean; submitLabel: string }) {
   const t = useT();
   const router = useRouter();
   const qc = useQueryClient();
   const c = useCustomerId();
-  const [body, setBody] = useState<PaymentCreate | null>(null);
+  const [body, setBody] = useState<MyPayment | null>(null);
   const [validation, setValidation] = useState<PaymentValidation | null>(null);
   const [key, setKey] = useState<string>("");
 
   const validate = useMutation({
-    mutationFn: async (b: PaymentCreate) => unwrap(await payments.POST("/v1/payments/validate", {
-      params: { header: idem() }, body: { payment: b as unknown as Record<string, never> },
+    mutationFn: async (b: MyPayment) => unwrap(await me.POST("/v1/me/payments/validate", {
+      params: { header: idem() }, body: b,
     })) as PaymentValidation,
     onSuccess: (v, b) => {
       setValidation(v);
@@ -42,7 +43,7 @@ export function PaymentFlow({ build, summary, disabled, submitLabel }:
   });
 
   const create = useMutation({
-    mutationFn: async () => unwrap(await payments.POST("/v1/payments", { params: { header: idem(key) }, body: body! })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/payments", { params: { header: idem(key) }, body: body! })),
     onSuccess: (p) => {
       qc.invalidateQueries({ queryKey: qk.payments(c) });
       qc.invalidateQueries({ queryKey: qk.accounts(c) });
@@ -77,7 +78,7 @@ export function PaymentFlow({ build, summary, disabled, submitLabel }:
         items={body ? [
           ...summary(body),
           ...(fee?.amount ? [{ label: t("pay.fee"), value: <Money amount={fee.amount} currency={fee.currency} /> }] : []),
-          ...(validation?.total_debit ? [{ label: t("pay.totalDebit"), value: <Money amount={validation.total_debit} currency={validation.currency ?? body.currency} /> }] : []),
+          ...(validation?.total_debit ? [{ label: t("pay.totalDebit"), value: <Money amount={validation.total_debit} currency={validation.currency} /> }] : []),
           ...(validation?.execution_date ? [{ label: t("pay.executes"), value: validation.execution_date }] : []),
           ...(validation?.payee_verification?.result ? [{ label: t("pay.cop"),
             value: `${validation.payee_verification.result.replaceAll("_", " ").toLowerCase()}${validation.payee_verification.matched_name ? ` · ${validation.payee_verification.matched_name}` : ""}` }] : []),

@@ -297,6 +297,206 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/onboarding/public/applications/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an application on the tenant's PUBLISHED journey with this code (channel MOBILE_APP or WEB, allowed by the journey). Rate-limited per client IP and per device_fingerprint (429 rate_limited); attestation_token carries the CAPTCHA / app attestation verdict (422 attestation_required when it is required). The application_number is server-generated. Returns the applicant token (once)
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The applicant's own application (no risk, decision or review fields)
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        get: operations["onboardingApplicantGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/next-step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The current step with its typed field definitions
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        get: operations["onboardingApplicantNextStep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/steps/{step_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a step; input is validated against the step's typed fields (422 invalid_fields with input.<field> errors). Contact verification steps complete only through otp/verify
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantSteps"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/otp/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a one-time code for a PHONE_VERIFICATION or EMAIL_VERIFICATION step through notification-service; a new code supersedes the previous one; resend cooldown and a per-application send limit (429 otp_send_limit)
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantOtpSend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the code (422 otp_invalid, otp_expired, otp_locked after max_attempts wrong codes); completes the contact step and records the verified phone or email
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantOtpVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a document with document-service for the applicant (owner ONBOARDING_APPLICATION) and return its pre-signed upload (document_id, method, url, headers, expires_at)
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/documents/{document_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the uploaded content of one of the application's documents (starts virus scanning in document-service)
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantDocumentsComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit the application for decision; the applicant token is revoked
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/onboarding/public/applications/{id}/token/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the applicant token: the presented token is revoked and a new one is issued
+         * @description Public endpoint for an external provider callback: no bearer token; the service verifies the provider signature and resolves the tenant from the referenced entity.
+         */
+        post: operations["onboardingApplicantTokenRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/onboarding/offline-batches": {
         parameters: {
             query?: never;
@@ -414,12 +614,106 @@ export interface components {
             message: string;
             step_codes?: unknown[];
         };
+        OnboardingApplicantStartRequest: {
+            journey_code: string;
+            /** @enum {string} */
+            channel: "MOBILE_APP" | "WEB" | "USSD" | "AGENT" | "BRANCH" | "API";
+            device_fingerprint: string;
+            attestation_token?: string;
+            product_ids?: unknown[];
+            utm?: {
+                [key: string]: unknown;
+            };
+        };
+        OnboardingApplicantStepsRequest: {
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        OnboardingApplicantOtpSendRequest: {
+            step_code: string;
+            destination: string;
+        };
+        OnboardingApplicantOtpVerifyRequest: {
+            step_code: string;
+            code: string;
+        };
+        OnboardingApplicantDocumentsRequest: {
+            step_code: string;
+            document_type: string;
+            file_name: string;
+            content_type: string;
+        };
+        OnboardingApplicantDocumentsCompleteRequest: {
+            /** Format: int64 */
+            size_bytes: number;
+            checksum: string;
+        };
         /** @description One page of OnboardingOfflineBatch results (newest first) */
         OnboardingOfflineBatchPage: {
             data: components["schemas"]["OnboardingOfflineBatch"][];
             /** @description Pass as ?cursor= to fetch the next page */
             next_cursor?: string | null;
             has_more: boolean;
+        };
+        /** @description Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest) */
+        OnboardingApplicantToken: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Application the token is bound to
+             */
+            onboarding_application_id: string;
+            /**
+             * Format: date-time
+             * @description Expiry (short-lived; rotate with token/refresh)
+             */
+            readonly expires_at: string;
+            /**
+             * Format: date-time
+             * @description Revocation time (rotated, application closed)
+             */
+            readonly revoked_at?: string | null;
+            /** @description ROTATED, SUBMITTED, CLOSED */
+            readonly revoked_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Last authenticated request
+             */
+            readonly last_used_at?: string | null;
+            /** @description Client IP at issue (IPv4 or IPv6 address) */
+            readonly issued_ip?: string | null;
+            /** @description Device fingerprint at issue */
+            readonly device_fingerprint?: string | null;
+            /** @description The token, returned once when issued; send it as X-Applicant-Token (returned once; never stored) */
+            readonly applicant_token?: string;
+            /** @description Server-generated application reference (returned once; never stored) */
+            readonly application_number?: string;
+            /** @description Code of the current step (returned once; never stored) */
+            readonly current_step?: string;
         };
         /** @description One customer's run through an onboarding journey */
         OnboardingApplication: {
@@ -447,8 +741,8 @@ export interface components {
              * @description Optimistic lock version; send as If-Match
              */
             readonly row_version: number;
-            /** @description Human-readable reference */
-            application_number: string;
+            /** @description Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>) */
+            readonly application_number: string;
             /**
              * Format: uuid
              * @description Journey version
@@ -591,8 +885,6 @@ export interface components {
             custom_field_5?: string | null;
         };
         OnboardingApplicationCreate: {
-            /** @description Human-readable reference */
-            application_number: string;
             /**
              * Format: uuid
              * @description Journey version
@@ -672,8 +964,6 @@ export interface components {
             custom_field_5?: string;
         };
         OnboardingApplicationUpdate: {
-            /** @description Human-readable reference */
-            application_number?: string;
             /**
              * Format: uuid
              * @description Journey version
@@ -808,7 +1098,7 @@ export interface components {
              * @enum {string}
              */
             target_tier: "TIER_0" | "TIER_1" | "TIER_2" | "TIER_3";
-            /** @description Steps, branching conditions and screens (server-driven UI) */
+            /** @description Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max} */
             definition: {
                 [key: string]: unknown;
             };
@@ -821,6 +1111,11 @@ export interface components {
              * @description Days before an idle application expires
              */
             expiry_days: number;
+            /**
+             * Format: uuid
+             * @description Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)
+             */
+            legal_entity_id?: string | null;
             /**
              * Format: date-time
              * @description Publication time
@@ -872,7 +1167,7 @@ export interface components {
              * @enum {string}
              */
             target_tier: "TIER_0" | "TIER_1" | "TIER_2" | "TIER_3";
-            /** @description Steps, branching conditions and screens (server-driven UI) */
+            /** @description Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max} */
             definition: {
                 [key: string]: unknown;
             };
@@ -885,6 +1180,11 @@ export interface components {
              * @description Days before an idle application expires
              */
             expiry_days?: number;
+            /**
+             * Format: uuid
+             * @description Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)
+             */
+            legal_entity_id?: string;
             /**
              * Format: uuid
              * @description Maker-checker approval for publication
@@ -922,7 +1222,7 @@ export interface components {
              * @enum {string}
              */
             target_tier?: "TIER_0" | "TIER_1" | "TIER_2" | "TIER_3";
-            /** @description Steps, branching conditions and screens (server-driven UI) */
+            /** @description Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max} */
             definition?: {
                 [key: string]: unknown;
             };
@@ -935,6 +1235,11 @@ export interface components {
              * @description Days before an idle application expires
              */
             expiry_days?: number;
+            /**
+             * Format: uuid
+             * @description Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)
+             */
+            legal_entity_id?: string;
             /**
              * Format: uuid
              * @description Maker-checker approval for publication
@@ -1066,6 +1371,79 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description One-time code sent to verify the applicant's phone or email for a contact step (hashes only) */
+        OnboardingOtp: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Application
+             */
+            onboarding_application_id: string;
+            /** @description PHONE_VERIFICATION or EMAIL_VERIFICATION step */
+            step_code: string;
+            /** @description SMS or EMAIL */
+            readonly channel: string;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "PENDING" | "VERIFIED" | "EXPIRED" | "LOCKED" | "SUPERSEDED";
+            /**
+             * Format: int32
+             * @description Wrong attempts so far
+             */
+            readonly attempts: number;
+            /**
+             * Format: int32
+             * @description Wrong attempts before the code is locked
+             */
+            readonly max_attempts: number;
+            /**
+             * Format: date-time
+             * @description Code expiry
+             */
+            readonly expires_at: string;
+            /**
+             * Format: date-time
+             * @description Verification time
+             */
+            readonly verified_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Notification that delivered the code
+             */
+            readonly notification_id?: string | null;
+            /** @description Masked destination, e.g. +2547******01 (returned once; never stored) */
+            readonly destination_masked?: string;
+            /**
+             * Format: date-time
+             * @description Earliest time a new code can be requested (returned once; never stored)
+             */
+            readonly resend_after?: string;
+        };
         /** @description Execution state of one step of an application */
         OnboardingStep: {
             /**
@@ -1149,6 +1527,8 @@ export interface components {
             custom_field_4?: string | null;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
+            /** @description Typed field definitions of the step from the journey ({name, type, label_key, required, pattern, enum, min_length, max_length, min, max}), returned by next-step (returned once; never stored) */
+            readonly fields?: unknown[];
         };
     };
     responses: {
@@ -1931,6 +2311,340 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantStart: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantStartRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicantToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantGet: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantNextStep: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantSteps: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                step_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantStepsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantOtpSend: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantOtpSendRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingOtp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantOtpVerify: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantOtpVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantDocuments: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantDocumentsComplete: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApplicantDocumentsCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantSubmit: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    onboardingApplicantTokenRefresh: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicantToken"];
                 };
             };
             400: components["responses"]["BadRequest"];

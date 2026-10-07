@@ -3,8 +3,8 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { idem, loans, unwrap } from "@/api/client";
-import { assertMine, qk, useCustomerId, useMyAccounts } from "@/api/me";
+import { idem, me, unwrap } from "@/api/client";
+import { mine, qk, useCustomerId, useMyAccounts } from "@/api/me";
 import { accountName } from "@/components/banking";
 import { AMOUNT } from "@/components/payment-flow";
 import { StepUpConfirm } from "@/components/step-up";
@@ -20,15 +20,15 @@ export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
   const loan = useQuery({
     queryKey: ["loan", id], enabled: !!c,
-    queryFn: async () => assertMine(unwrap(await loans.GET("/v1/loans/{id}", { params: { path: { id } } })), c),
+    queryFn: () => mine(async () => unwrap(await me.GET("/v1/me/loans/{loan_id}", { params: { path: { loan_id: id } } }))),
   });
   const schedule = useQuery({
     queryKey: ["loan-schedule", id], enabled: loan.isSuccess,
-    queryFn: async () => unwrap(await loans.GET("/v1/loans/{id}/schedule", { params: { path: { id }, query: { limit: 200 } } })).data,
+    queryFn: async () => unwrap(await me.GET("/v1/me/loans/{loan_id}/schedule", { params: { path: { loan_id: id }, query: { limit: 200 } } })).data,
   });
   const repayments = useQuery({
     queryKey: ["loan-repayments", id], enabled: loan.isSuccess,
-    queryFn: async () => unwrap(await loans.GET("/v1/loans/{id}/repayments", { params: { path: { id }, query: { limit: 20 } } })).data,
+    queryFn: async () => unwrap(await me.GET("/v1/me/loans/{loan_id}/repayments", { params: { path: { loan_id: id }, query: { limit: 20 } } })).data,
   });
   const accounts = useMyAccounts();
   const [form, setForm] = useState({ amount: "", source: "" });
@@ -37,9 +37,9 @@ export default function LoanDetail() {
   const [key, setKey] = useState("");
 
   const repay = useMutation({
-    mutationFn: async () => unwrap(await loans.POST("/v1/loans/{id}/repay", {
-      params: { path: { id }, header: idem(key) },
-      body: { amount: form.amount, source: "MANUAL", source_account_id: form.source },
+    mutationFn: async () => unwrap(await me.POST("/v1/me/loans/{loan_id}/repay", {
+      params: { path: { loan_id: id }, header: idem(key) },
+      body: { amount: form.amount, source_account_id: form.source },
     })),
     onSuccess: () => {
       setReview(false);

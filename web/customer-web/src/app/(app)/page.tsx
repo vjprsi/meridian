@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { inbox, unwrap } from "@/api/client";
+import { me, unwrap } from "@/api/client";
 import { useCustomerId, useMe, useMyAccounts, useMyCards, useMyLoans, useMyPayments, useMyWallets } from "@/api/me";
 import { AccountTile, CardTile, PaymentRow, WalletTile } from "@/components/banking";
 import { Async, Card, Empty, LinkButton, Money, Badge } from "@/components/ui";
@@ -11,7 +11,7 @@ import { useT } from "@/lib/i18n";
 export default function Home() {
   const t = useT();
   const c = useCustomerId();
-  const me = useMe();
+  const self = useMe();
   const accounts = useMyAccounts();
   const walletsQ = useMyWallets();
   const cardsQ = useMyCards();
@@ -19,17 +19,17 @@ export default function Home() {
   const activity = useMyPayments(8);
   const banners = useQuery({
     queryKey: ["announcements", c], enabled: !!c,
-    queryFn: async () => unwrap(await inbox.GET("/v1/inbox/announcements/active", {
-      params: { query: { customer_id: c, app: "CUSTOMER_WEB", placement: "HOME_BANNER", limit: 3 } } })).data,
+    queryFn: async () => unwrap(await me.GET("/v1/me/announcements", {
+      params: { query: { app: "CUSTOMER_WEB", placement: "HOME_BANNER", limit: 3 } } })).data,
   });
 
-  const name = me.data?.first_name ?? me.data?.display_name;
+  const name = self.data?.first_name ?? self.data?.display_name;
 
   return (
     <>
       <div className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight">{name ? t("home.greeting", { name }) : t("home.title")}</h1>
-        {me.data?.customer_number && <p className="text-sm text-muted">{t("home.customerNo", { no: me.data.customer_number })}</p>}
+        {self.data?.customer_number && <p className="text-sm text-muted">{t("home.customerNo", { no: self.data.customer_number })}</p>}
       </div>
 
       {(banners.data ?? []).map((b) => (

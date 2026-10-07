@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { deposits, download, idem, statements, unwrap } from "@/api/client";
+import { download, idem, me, unwrap } from "@/api/client";
 import { useAccountBalance, useMyAccount } from "@/api/me";
 import type { Statement } from "@/api/types";
 import { accountName } from "@/components/banking";
@@ -29,8 +29,8 @@ export default function AccountPage() {
   const txns = useInfiniteQuery({
     queryKey: ["transactions", id, range], enabled: !!account,
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => unwrap(await deposits.GET("/v1/deposit-accounts/{id}/transactions", {
-      params: { path: { id }, query: { limit: 25, cursor: pageParam,
+    queryFn: async ({ pageParam }) => unwrap(await me.GET("/v1/me/accounts/{account_id}/transactions", {
+      params: { path: { account_id: id }, query: { limit: 25, cursor: pageParam,
         from: range.from ? `${range.from}T00:00:00Z` : undefined,
         to: range.to ? `${range.to}T23:59:59Z` : undefined } } })),
     getNextPageParam: (last) => (last.has_more ? last.next_cursor ?? undefined : undefined),
@@ -67,7 +67,7 @@ export default function AccountPage() {
           <Button variant="secondary" onClick={async () => {
             setDlError(null);
             try {
-              await download(`/v1/deposit-accounts/${account.id}/confirmation-letter`, `confirmation-${account.account_number}.txt`);
+              await download(`/v1/me/accounts/${account.id}/confirmation-letter`, `confirmation-${account.account_number}.txt`);
             } catch (e) { setDlError(e); }
           }}>{t("account.confirmationLetter")}</Button>
         </div>
@@ -114,12 +114,12 @@ export default function AccountPage() {
         )}
       </Card>
 
-      <Statements accountId={account.id!} currency={account.currency} accountNumber={account.account_number ?? ""} />
+      <Statements accountId={account.id!} accountNumber={account.account_number ?? ""} />
     </>
   );
 }
 
-function Statements({ accountId, currency, accountNumber }: { accountId: string; currency: string; accountNumber: string }) {
+function Statements({ accountId, accountNumber }: { accountId: string; accountNumber: string }) {
   const t = useT();
   const qc = useQueryClient();
   const today = new Date();
@@ -130,15 +130,14 @@ function Statements({ accountId, currency, accountNumber }: { accountId: string;
 
   const list = useQuery({
     queryKey: ["statements", accountId],
-    queryFn: async () => unwrap(await statements.GET("/v1/statements", { params: { query: { deposit_account_id: accountId, limit: 24 } } }))
-      .data.filter((s) => s.deposit_account_id === accountId),
+    queryFn: async () => unwrap(await me.GET("/v1/me/accounts/{account_id}/statements", {
+      params: { path: { account_id: accountId }, query: { limit: 24 } } })).data,
     refetchInterval: (q) => (q.state.data?.some((s) => s.status === "PENDING" || s.status === "GENERATING") ? 4000 : false),
   });
 
   const create = useMutation({
-    mutationFn: async () => unwrap(await statements.POST("/v1/statements", {
-      params: { header: idem() },
-      body: { deposit_account_id: accountId, currency, is_on_demand: true, ...form },
+    mutationFn: async () => unwrap(await me.POST("/v1/me/accounts/{account_id}/statements", {
+      params: { path: { account_id: accountId }, header: idem() }, body: form,
     })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["statements", accountId] }),
   });
@@ -146,9 +145,8 @@ function Statements({ accountId, currency, accountNumber }: { accountId: string;
   async function get(s: Statement) {
     setDlError(null);
     try {
-      const link = unwrap(await statements.GET("/v1/statements/{id}/download-link", { params: { path: { id: s.id! } } })) as { url?: string };
-      if (!link.url) throw new Error("No download link");
-      await download(link.url, `statement-${accountNumber}-${s.period_start}_${s.period_end}.${s.format.toLowerCase()}`);
+      await download(`/v1/me/accounts/${accountId}/statements/${s.id}/download`,
+        `statement-${accountNumber}-${s.period_start}_${s.period_end}.${s.format.toLowerCase()}`);
     } catch (e) {
       setDlError(e);
     }

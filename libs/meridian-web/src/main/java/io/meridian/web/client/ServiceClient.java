@@ -2,6 +2,7 @@ package io.meridian.web.client;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.web.security.CustomerContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -19,7 +20,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Calls another Meridian service by name, propagating the caller's tenant, user and bearer token.
+ * Calls another Meridian service by name, propagating the caller's tenant, user and bearer token. A customer's token
+ * ({@link CustomerContext}) is never forwarded: those calls use the service identity (client credentials) instead.
  * Base URLs come from {@code meridian.services.<name>.url}, else {@code meridian.services.url-template} ({@code {name}},
  * {@code {port}} placeholders), else http://localhost:<port> from the generated services manifest. Downstream problem responses are re-thrown as {@link ApiException} with the same code;
  * 5xx / connection failures become 502 {@code upstream_error}.
@@ -64,21 +66,70 @@ public class ServiceClient {
     }
 
     public JsonNode send(String service, String method, String path, Object body, String key) {
+        HttpRequest.Builder b = request(service, method, path, body, key, "application/json");
+        HttpResponse<String> r = exchange(service, b, HttpResponse.BodyHandlers.ofString());
+        JsonNode node = r.body() == null || r.body().isBlank() ? json.createObjectNode() : json.readTree(r.body());
+        if (r.statusCode() >= 400) {
+            throw problem(service, r.statusCode(), node);
+        }
+        return node;
+    }
+
+    /** A file returned by another service (PDF receipt, statement, text letter). */
+    public record Download(byte[] content, String contentType, String contentDisposition) {}
+
+    /**
+     * GET of a non-JSON response (file download), with the same identity, tenant and error mapping as
+     * {@link #get(String, String)}.
+     */
+    public Download getBytes(String service, String path) {
+        HttpRequest.Builder b = request(service, "GET", path, null, null, "*/*");
+        HttpResponse<byte[]> r = exchange(service, b, HttpResponse.BodyHandlers.ofByteArray());
+        if (r.statusCode() >= 400) {
+            JsonNode node;
+            try {
+                node = json.readTree(r.body());
+            } catch (RuntimeException e) {
+                node = json.createObjectNode();
+            }
+            throw problem(service, r.statusCode(), node == null ? json.createObjectNode() : node);
+        }
+        return new Download(r.body(), r.headers().firstValue("Content-Type").orElse("application/octet-stream"),
+                r.headers().firstValue("Content-Disposition").orElse(null));
+    }
+
+    private HttpRequest.Builder request(String service, String method, String path, Object body, String key,
+                                        String accept) {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(baseUrl(service) + path))
                 .timeout(timeout)
                 .header("Content-Type", "application/json")
-                .header("Accept", "application/json");
+                .header("Accept", accept);
         TenantContext.current().ifPresent(t -> b.header("X-Tenant-Id", t.toString()));
         b.header("X-User", TenantContext.principal());
-        // dev-mode caller attributes (roles, step-up MFA): receivers only honour them in dev mode; with JWTs the
-        // forwarded token carries them
-        forwardInbound(b, "X-Roles");
-        forwardInbound(b, "X-MFA-Verified");
+        boolean customer = CustomerContext.current().isPresent();
         String auth = currentAuthorization();
-        if (auth != null) {
-            b.header("Authorization", auth);                         // act on behalf of the calling user
-        } else if (serviceTokens.configured()) {
-            b.header("Authorization", "Bearer " + serviceTokens.token()); // job/callback: service identity
+        if (customer) {
+            // the customer the service acts for; receivers honour it only with an internal (service) token
+            b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
+            // A customer's token is never forwarded (it carries no domain scope, and the receiving service must not
+            // act with the customer's identity): the customer channel calls with its own service identity for the
+            // tenant, as the acting user customer:<id>. Dev-mode role / MFA headers are not relayed either.
+            if (serviceTokens.configured()) {
+                b.header("Authorization", "Bearer " + serviceTokens.token());
+            } else if (auth != null) {
+                throw new ApiException(503, "service_identity_not_configured",
+                        "Customer requests need meridian.service-auth.* (client credentials) to call " + service);
+            }
+        } else {
+            // dev-mode caller attributes (roles, step-up MFA): receivers only honour them in dev mode; with JWTs the
+            // forwarded token carries them
+            forwardInbound(b, "X-Roles");
+            forwardInbound(b, "X-MFA-Verified");
+            if (auth != null) {
+                b.header("Authorization", auth);                         // act on behalf of the calling user
+            } else if (serviceTokens.configured()) {
+                b.header("Authorization", "Bearer " + serviceTokens.token()); // job/callback: service identity
+            }
         }
         if (key != null) {
             if (key.startsWith("if-match:")) {
@@ -89,24 +140,26 @@ public class ServiceClient {
         }
         b.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)));
-        HttpResponse<String> r;
+        return b;
+    }
+
+    private <T> HttpResponse<T> exchange(String service, HttpRequest.Builder b, HttpResponse.BodyHandler<T> handler) {
         try {
-            r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+            return http.send(b.build(), handler);
         } catch (IOException e) {
             throw new ApiException(502, "upstream_error", service + " is not reachable: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ApiException(502, "upstream_error", "call to " + service + " interrupted");
         }
-        JsonNode node = r.body() == null || r.body().isBlank() ? json.createObjectNode() : json.readTree(r.body());
-        if (r.statusCode() >= 500) {
-            throw new ApiException(502, "upstream_error", service + " failed: " + node.path("detail").asString());
+    }
+
+    private static ApiException problem(String service, int status, JsonNode node) {
+        if (status >= 500) {
+            return new ApiException(502, "upstream_error", service + " failed: " + node.path("detail").asString());
         }
-        if (r.statusCode() >= 400) {
-            throw new ApiException(r.statusCode(), node.path("code").asString("upstream_rejected"),
-                    service + ": " + node.path("detail").asString());
-        }
-        return node;
+        return new ApiException(status, node.path("code").asString("upstream_rejected"),
+                service + ": " + node.path("detail").asString());
     }
 
     String baseUrl(String service) {
