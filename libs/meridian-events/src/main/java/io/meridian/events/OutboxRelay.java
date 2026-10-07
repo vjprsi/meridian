@@ -27,6 +27,8 @@ public class OutboxRelay {
     private final String topic;
     private final String source;
     private final int batchSize;
+    private io.micrometer.core.instrument.Counter relayed;
+    private io.micrometer.core.instrument.Counter failures;
 
     public OutboxRelay(JdbcClient jdbc, KafkaTemplate<String, String> kafka, TransactionTemplate tx,
                        String topic, String source, int batchSize) {
@@ -36,6 +38,30 @@ public class OutboxRelay {
         this.topic = topic;
         this.source = source;
         this.batchSize = batchSize;
+    }
+
+    /**
+     * GAP-10 saturation metrics: {@code meridian.outbox.relayed} / {@code meridian.outbox.relay.failures} (counters) and
+     * the backlog ({@code meridian.outbox.backlog} rows, {@code meridian.outbox.oldest.age} seconds), read from the
+     * outbox at scrape time (the table only holds unpublished events, so the query is cheap).
+     */
+    public void bindMetrics(io.micrometer.core.instrument.MeterRegistry meters) {
+        relayed = meters.counter("meridian.outbox.relayed");
+        failures = meters.counter("meridian.outbox.relay.failures");
+        io.micrometer.core.instrument.Gauge.builder("meridian.outbox.backlog", this, r -> r.backlog()[0])
+                .description("Unpublished outbox events").strongReference(true).register(meters);
+        io.micrometer.core.instrument.Gauge.builder("meridian.outbox.oldest.age", this, r -> r.backlog()[1])
+                .baseUnit("seconds").description("Age of the oldest unpublished outbox event").strongReference(true)
+                .register(meters);
+    }
+
+    private double[] backlog() {
+        try {
+            return jdbc.sql("select count(*), coalesce(extract(epoch from now() - min(created_at)), 0) from outbox")
+                    .query((rs, i) -> new double[] {rs.getLong(1), rs.getDouble(2)}).single();
+        } catch (RuntimeException e) {
+            return new double[] {Double.NaN, Double.NaN};
+        }
     }
 
     record Row(UUID id, UUID tenantId, String aggregateId, String type, String payload, OffsetDateTime createdAt) {}
@@ -73,12 +99,18 @@ public class OutboxRelay {
                 kafka.send(rec).get(10, TimeUnit.SECONDS);
             }
         } catch (Exception e) {
+            if (failures != null) {
+                failures.increment();
+            }
             log.warn("Outbox relay to {} failed; will retry: {}", topic, e.toString());
             throw new IllegalStateException(e);
         }
         jdbc.sql("delete from outbox where id = any(?)")
                 .param(rows.stream().map(Row::id).toArray(UUID[]::new))
                 .update();
+        if (relayed != null) {
+            relayed.increment(rows.size());
+        }
         return rows.size();
     }
 

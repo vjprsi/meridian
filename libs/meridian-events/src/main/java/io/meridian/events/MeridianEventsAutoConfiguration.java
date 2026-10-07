@@ -29,7 +29,10 @@ public class MeridianEventsAutoConfiguration {
     OutboxRelay outboxRelay(JdbcClient jdbc, KafkaTemplate<String, String> kafka, TransactionTemplate tx,
                             @Value("${meridian.events.topic}") String topic,
                             @Value("${spring.application.name}") String source,
-                            @Value("${meridian.events.batch-size:200}") int batchSize) {
-        return new OutboxRelay(jdbc, kafka, tx, topic, source, batchSize);
+                            @Value("${meridian.events.batch-size:200}") int batchSize,
+                            org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meters) {
+        OutboxRelay relay = new OutboxRelay(jdbc, kafka, tx, topic, source, batchSize);
+        meters.ifAvailable(relay::bindMetrics);
+        return relay;
     }
 }

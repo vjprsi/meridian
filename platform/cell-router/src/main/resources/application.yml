@@ -66,3 +66,15 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    distribution:                                  # GAP-10: histograms for J6 latency / p99 (SLO_SLA.md)
+      percentiles-histogram:
+        http.server.requests: true
+        meridian.router.upstream: true
+      slo:
+        http.server.requests: 25ms,50ms,100ms,250ms,500ms,1s,2s,5s
+        meridian.router.upstream: 25ms,50ms,100ms,250ms,500ms,1s,2s,5s
+      minimum-expected-value:
+        http.server.requests: 1ms
+      maximum-expected-value:
+        http.server.requests: 30s

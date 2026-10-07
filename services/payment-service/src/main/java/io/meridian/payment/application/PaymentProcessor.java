@@ -80,12 +80,15 @@ public class PaymentProcessor {
     private final ApprovalMatrix matrix;
     private final PaymentApprovalRequests central;
     private final FraudClient fraud;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
     public PaymentProcessor(Rows rows, PaymentRecords records, Events events, LedgerClient ledger,
                             CoreBankingClient core, RoutingClient routing, RiskClient risk, PaymentProperties props,
                             PaymentHooks hooks, TransactionTemplate tx, PaymentApprovalRequests central,
-                            io.meridian.web.tenancy.AdvisoryLocks locks, FraudClient fraud) {
+                            io.meridian.web.tenancy.AdvisoryLocks locks, FraudClient fraud,
+                            io.micrometer.core.instrument.MeterRegistry meters) {
         this.fraud = fraud;
+        this.meters = meters;
         this.locks = locks;
         this.central = central;
         this.rows = rows;
@@ -118,6 +121,32 @@ public class PaymentProcessor {
      * check and the new row commit together).
      */
     public ObjectNode initiate(ObjectNode request, String idempotencyKey, Options options, Runnable beforeInsert) {
+        // GAP-10 / SLO J1: initiation outcome counter and latency (synchronous part, incl. screening and fraud)
+        io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start(meters);
+        String outcome = "error";
+        String status = "NONE";
+        String reason = "none";
+        try {
+            ObjectNode p = doInitiate(request, idempotencyKey, options, beforeInsert);
+            status = str(p, "status") == null ? "UNKNOWN" : str(p, "status");
+            outcome = Set.of("FAILED", "REJECTED").contains(status) ? "failed" : "accepted";
+            return p;
+        } catch (ApiException e) {
+            outcome = e.status() >= 500 ? "error" : "rejected";
+            reason = e.code();
+            throw e;
+        } catch (RuntimeException e) {
+            reason = "exception";
+            throw e;
+        } finally {
+            String channel = options != null && options.equals(Options.DEFAULT) ? "api" : "internal";
+            meters.counter("meridian.payments.initiations", "outcome", outcome, "status", status, "reason", reason,
+                    "path", channel).increment();
+            sample.stop(meters.timer("meridian.payments.initiation.duration", "outcome", outcome));
+        }
+    }
+
+    private ObjectNode doInitiate(ObjectNode request, String idempotencyKey, Options options, Runnable beforeInsert) {
         TenantContext.require();
         Optional<ObjectNode> existing = rows.queryOne(
                 "select row_to_json(t)::text from payment t where idempotency_key = ?", idempotencyKey);

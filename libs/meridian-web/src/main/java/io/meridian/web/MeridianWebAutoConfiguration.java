@@ -134,6 +134,9 @@ public class MeridianWebAutoConfiguration {
             });
             http.authorizeHttpRequests(a -> a
                     .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                    // GAP-10: the Prometheus scrape carries no token. Services are not routed by the edge gateway
+                    // (/v1 only); the chart's NetworkPolicy admits only Meridian pods and the monitoring namespace.
+                    .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> { }));

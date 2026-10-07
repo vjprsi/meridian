@@ -153,6 +153,14 @@ public class WorkflowStore {
                 .query(UUID.class).list();
     }
 
+    /** Pending approval requests of the current tenant: {count, age in seconds of the oldest (0 when none)}. */
+    public long[] pendingApprovalStats() {
+        return jdbc.sql("""
+                select count(*), coalesce(extract(epoch from now() - min(created_at)), 0)::bigint
+                from approval_request where status = 'PENDING'""")
+                .query((rs, i) -> new long[] {rs.getLong(1), rs.getLong(2)}).single();
+    }
+
     /** Tenants with recent API activity (the idempotency table and outbox are not tenant-scoped). */
     public List<UUID> activeTenants() {
         return jdbc.sql("select distinct tenant_id from idempotency_key").query(UUID.class).list();

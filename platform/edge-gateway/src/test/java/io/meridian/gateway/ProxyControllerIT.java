@@ -20,7 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /** SEC-13 / SEC-16 / SEC-26 / SEC-31 through the real proxy against a stub upstream (jwt mode, the default). */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"meridian.gateway.max-body-size=1KB"})
+        properties = {"meridian.gateway.max-body-size=1KB", "management.server.port=0"})
 class ProxyControllerIT {
     static final Map<String, List<String>> seen = new ConcurrentHashMap<>();
     static final HttpServer upstream;
@@ -57,6 +57,9 @@ class ProxyControllerIT {
     @LocalServerPort
     int port;
 
+    @org.springframework.beans.factory.annotation.Value("${local.management.port}")
+    int managementPort;
+
     final HttpClient http = HttpClient.newHttpClient();
 
     @Test
@@ -84,9 +87,33 @@ class ProxyControllerIT {
     }
 
     @Test
-    void onlyHealthAndInfoAreExposed() throws Exception {
-        HttpResponse<String> metrics = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/actuator/metrics"))
-                .GET().build(), HttpResponse.BodyHandlers.ofString());
-        assertThat(metrics.statusCode()).isEqualTo(404);
+    void noActuatorOnTheRoutedPort() throws Exception {
+        for (String path : List.of("/actuator/metrics", "/actuator/prometheus")) {
+            HttpResponse<String> res = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(res.statusCode()).as(path).isEqualTo(404);
+        }
+        // the cell router's default probe (<gateway_url>/actuator/health/readiness) still answers, status only
+        HttpResponse<String> ready = http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + port + "/actuator/health/readiness")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(ready.statusCode()).isEqualTo(200);
+        assertThat(ready.body()).isEqualTo("{\"status\":\"UP\"}");
+    }
+
+    /** GAP-10: latency histograms on the management port (SEC-31: never through the ingress). */
+    @Test
+    void prometheusOnTheManagementPortHasLatencyHistograms() throws Exception {
+        http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/v1/access-policies")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> res = http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + managementPort + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(res.body()).contains("http_server_requests_seconds_bucket").contains("le=\"0.25\"");
+        HttpResponse<String> health = http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + managementPort + "/actuator/health/liveness")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(health.statusCode()).isEqualTo(200);
     }
 }

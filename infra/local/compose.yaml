@@ -2,7 +2,7 @@
 # Ports are in the 1xxxx range to avoid clashing with other local projects.
 #   cd infra/local && docker compose up -d          (from WSL / any Docker host)
 # UIs: Kafka console http://localhost:15080 · Temporal http://localhost:17280 · Keycloak http://localhost:15180
-#      Grafana http://localhost:13000 · OpenSearch Dashboards http://localhost:15601 · Mailpit http://localhost:18025
+#      Grafana http://localhost:13000 (Meridian dashboards) · Prometheus http://localhost:19090 · OpenSearch Dashboards http://localhost:15601 · Mailpit http://localhost:18025
 #      S3 (SeaweedFS) http://localhost:19000 · SeaweedFS master UI http://localhost:19333
 
 name: meridian
@@ -96,7 +96,9 @@ services:
     <<: *restart
     image: quay.io/keycloak/keycloak:26.4
     container_name: meridian-keycloak
-    command: ["start-dev", "--http-port=8080", "--health-enabled=true", "--import-realm"]
+    # metrics on the management port 9000 (scraped by the observability container); user event metrics = J4 login SLI
+    command: ["start-dev", "--http-port=8080", "--health-enabled=true", "--metrics-enabled=true",
+              "--event-metrics-user-enabled=true", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
@@ -131,7 +133,12 @@ services:
     <<: *restart
     image: grafana/otel-lgtm:latest
     container_name: meridian-observability
-    ports: ["13000:3000", "14317:4317", "14318:4318"]
+    ports: ["13000:3000", "14317:4317", "14318:4318", "19090:9090"]   # 19090: Prometheus UI (rules / alerts)
+    volumes:   # GAP-10: generated dashboards (folder "Meridian") and alert rules (tools/observability.py)
+      - ../observability/grafana/dashboards:/otel-lgtm/meridian/dashboards:ro
+      - ../observability/prometheus/rules:/otel-lgtm/meridian/rules:ro
+      - ../observability/local/grafana-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/meridian.yaml:ro
+      - ../observability/local/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
 
   mailpit:
     <<: *restart

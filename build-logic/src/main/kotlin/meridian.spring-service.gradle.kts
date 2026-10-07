@@ -24,6 +24,8 @@ dependencies {
     "implementation"("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
     "implementation"("org.springframework.boot:spring-boot-starter-kafka")
     "implementation"("org.springframework.boot:spring-boot-starter-opentelemetry")
+    // GAP-10: /actuator/prometheus for the ServiceMonitor (OTLP export stays on for the collector)
+    "implementation"("io.micrometer:micrometer-registry-prometheus")
     "runtimeOnly"("org.flywaydb:flyway-database-postgresql")
     "runtimeOnly"("org.postgresql:postgresql")
     "testImplementation"(project(":libs:meridian-test"))

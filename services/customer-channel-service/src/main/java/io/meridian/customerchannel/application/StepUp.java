@@ -24,8 +24,11 @@ public class StepUp {
     private final ChannelProperties props;
     private final ActionAudit audit;
     private final Clock clock;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
-    public StepUp(ChannelProperties props, ActionAudit audit, Optional<Clock> clock) {
+    public StepUp(ChannelProperties props, ActionAudit audit, Optional<Clock> clock,
+                  io.micrometer.core.instrument.MeterRegistry meters) {
+        this.meters = meters;
         this.props = props;
         this.audit = audit;
         this.clock = clock.orElse(Clock.systemUTC());
@@ -40,6 +43,9 @@ public class StepUp {
         if (recent && strong) {
             return;
         }
+        // GAP-10: step-up challenges per channel and cause (SLO_SLA.md login / step-up failures)
+        meters.counter("meridian.auth.step_up.challenges", "channel", "customer", "reason",
+                !strong ? "weak_auth" : "stale_auth").increment();
         audit.stepUpRequired(action, objectType, objectId);
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a && a.getResponse() != null) {
             a.getResponse().setHeader("WWW-Authenticate", "Bearer error=\"insufficient_user_authentication\", "

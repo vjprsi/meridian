@@ -37,8 +37,11 @@ public class CardAuthorizationsController implements CardAuthorizationsApi {
     private final LifecycleService lifecycle;
     private final Actions actions;
     private final CrudEngine crud;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
-    public CardAuthorizationsController(AuthorizationService auth, LifecycleService lifecycle, Actions actions, CrudEngine crud) {
+    public CardAuthorizationsController(AuthorizationService auth, LifecycleService lifecycle, Actions actions, CrudEngine crud,
+                                        io.micrometer.core.instrument.MeterRegistry meters) {
+        this.meters = meters;
         this.auth = auth;
         this.lifecycle = lifecycle;
         this.actions = actions;
@@ -47,7 +50,27 @@ public class CardAuthorizationsController implements CardAuthorizationsApi {
 
     @Override
     public ResponseEntity<CardAuthorization> cardAuthorizationsCreate(String idempotencyKey, CardAuthorizationCreate body) {
-        return actions.create(idempotencyKey, body, CardAuthorization.class, () -> auth.process(actions.tree(body)));
+        return actions.create(idempotencyKey, body, CardAuthorization.class, () -> timed(actions.tree(body)));
+    }
+
+    /**
+     * GAP-10 / SLO J2: decision latency at the service ({@code meridian.cards.authorization.duration}, tags
+     * {@code message_type}, {@code decision} APPROVED|PARTIAL|DECLINED|ERROR and {@code stand_in}).
+     */
+    private tools.jackson.databind.node.ObjectNode timed(JsonNode req) {
+        io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start(meters);
+        String type = req.path("message_type").asString("AUTHORIZATION");
+        String decision = "ERROR";
+        String standIn = "false";
+        try {
+            tools.jackson.databind.node.ObjectNode row = auth.process(req);
+            decision = row.path("decision").asString("UNKNOWN");
+            standIn = String.valueOf(row.path("stand_in").asBoolean(false));
+            return row;
+        } finally {
+            sample.stop(meters.timer("meridian.cards.authorization.duration", "message_type", type,
+                    "decision", decision, "stand_in", standIn));
+        }
     }
 
     @Override
