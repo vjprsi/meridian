@@ -93,7 +93,8 @@ public class SettlementService {
         return tx.execute(s -> {
             rows.lock("merchant", merchantId);
             if (rows.scalar("""
-                    select count(*) from merchant_settlement where merchant_id = ? and currency = ? and status <> 'FAILED'
+                    select count(*) from merchant_settlement where merchant_id = ? and currency = ?
+                      and status not in ('FAILED', 'REJECTED')
                       and period_start <= ? and period_end >= ?""", Long.class, merchantId, currency, end, start)
                     .orElse(0L) > 0) {
                 throw ApiException.conflict("settlement_overlap", "Another settlement already covers part of this period");
@@ -179,6 +180,31 @@ public class SettlementService {
             ObjectNode after = rows.get(TABLE, id);
             events.publish("wallets.merchant_settlement.approved", TABLE, after);
             approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+            return after;
+        });
+    }
+
+    /**
+     * Checker step: rejects a calculated settlement (four-eyes). Nothing has moved yet; the period is free to be
+     * settled again (a REJECTED settlement no longer counts as overlapping).
+     */
+    public ObjectNode reject(UUID id, String reason) {
+        return tx.execute(s -> {
+            ObjectNode st = rows.lock(TABLE, id);
+            if (!"CALCULATED".equals(Rows.str(st, "status"))) {
+                throw ApiException.conflict("invalid_transition", "The settlement is " + Rows.str(st, "status"));
+            }
+            if (TenantContext.principal().equals(Rows.str(st, "created_by"))) {
+                throw ApiException.unprocessable("four_eyes_violation",
+                        "A settlement must be rejected by a different user than the one who calculated it");
+            }
+            ObjectNode v = rows.object();
+            v.put("status", "REJECTED");
+            v.put("rejected_by", TenantContext.principal());
+            v.put("rejection_reason", reason == null ? null : reason.length() > 255 ? reason.substring(0, 255) : reason);
+            ObjectNode after = rows.update(TABLE, id, v);
+            events.publish("wallets.merchant_settlement.rejected", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
             return after;
         });
     }

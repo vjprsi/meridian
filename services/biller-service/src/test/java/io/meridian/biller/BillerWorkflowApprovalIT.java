@@ -119,19 +119,31 @@ class BillerWorkflowApprovalIT {
     }
 
     @Test
-    void rejectionFromWorkflowKeepsItPendingAndStaleOrLateDecisionsAreIgnored() throws Exception {
-        String id = settlement("WFB2");
-        Map<?, ?> payload = (Map<?, ?>) requests.get(id).get("payload");
-
-        // no rejected state for settlements: it stays CALCULATED for a direct decision
-        dispatcher.dispatch(UUID.fromString(TENANT), decision(id, payload, "checker"), Outcome.REJECTED);
-        assertThat(get("/v1/biller-settlements/" + id).get("status").asString()).isEqualTo("CALCULATED");
+    void rejectionFromWorkflowReleasesThePaymentsAndStaleOrLateDecisionsAreIgnored() throws Exception {
+        String rejectedId = settlement("WFB2");
+        Map<?, ?> rejectedPayload = (Map<?, ?>) requests.get(rejectedId).get("payload");
 
         // an approval whose amount no longer matches the settlement does nothing
-        ObjectNode stale = decision(id, payload, "checker");
+        ObjectNode stale = decision(rejectedId, rejectedPayload, "checker");
         ((ObjectNode) stale.get("payload")).put("net_amount", "999");
         dispatcher.dispatch(UUID.fromString(TENANT), stale, Outcome.APPROVED);
-        assertThat(get("/v1/biller-settlements/" + id).get("status").asString()).isEqualTo("CALCULATED");
+        assertThat(get("/v1/biller-settlements/" + rejectedId).get("status").asString()).isEqualTo("CALCULATED");
+
+        // rejected in the inbox: REJECTED, and its payment is released for a new settlement of the period
+        dispatcher.dispatch(UUID.fromString(TENANT), decision(rejectedId, rejectedPayload, "checker"), Outcome.REJECTED);
+        JsonNode rejected = get("/v1/biller-settlements/" + rejectedId);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("checker");
+        assertThat(get("/v1/biller-settlements/" + rejectedId + "/payments").get("data")).isEmpty();
+        dispatcher.dispatch(UUID.fromString(TENANT), decision(rejectedId, rejectedPayload, "checker"), Outcome.APPROVED);
+        assertThat(get("/v1/biller-settlements/" + rejectedId).get("status").asString()).isEqualTo("REJECTED");
+
+        String today = LocalDate.now(ZoneOffset.UTC).toString();
+        JsonNode again = post("/v1/biller-settlements", "{\"biller_id\":\"" + rejected.get("biller_id").asString()
+                + "\",\"period_start\":\"" + today + "\",\"period_end\":\"" + today + "\",\"currency\":\"KES\"}", "maker", 201);
+        assertThat(again.get("payment_count").asInt()).isEqualTo(1);
+        String id = again.get("id").asString();
+        Map<?, ?> payload = (Map<?, ?>) requests.get(id).get("payload");
 
         // direct approval closes the inbox item after commit; a late workflow decision is then ignored
         post("/v1/biller-settlements/" + id + "/approve", "{}", "maker", 422);

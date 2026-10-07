@@ -116,13 +116,51 @@ class GlWorkflowApprovalIT {
     void journalRejectionAndStaleDecisionsLeaveItUnposted() throws Exception {
         String id = journal("20.00");
         Map<?, ?> payload = (Map<?, ?>) lastRequest.get().get("payload");
-        dispatcher.dispatch(UUID.fromString(TENANT), decision("gl_journal", id, payload, CHECKER), Outcome.REJECTED);
-        assertThat(approvals(id)).isEmpty();
-
+        // a stale decision (other checksum) is ignored
         ObjectNode stale = decision("gl_journal", id, payload, CHECKER);
         ((ObjectNode) stale.get("payload")).put("checksum", "stale");
-        dispatcher.dispatch(UUID.fromString(TENANT), stale, Outcome.APPROVED);
+        dispatcher.dispatch(UUID.fromString(TENANT), stale, Outcome.REJECTED);
+        assertThat(get("/v1/gl/journal-rejections?gl_journal_id=" + id).get("data")).isEmpty();
+
+        // the maker rejecting in the inbox is refused; the checker's rejection is recorded and the journal never posts
+        dispatcher.dispatch(UUID.fromString(TENANT), decision("gl_journal", id, payload, MAKER), Outcome.REJECTED);
+        assertThat(get("/v1/gl/journal-rejections?gl_journal_id=" + id).get("data")).isEmpty();
+        dispatcher.dispatch(UUID.fromString(TENANT), decision("gl_journal", id, payload, CHECKER), Outcome.REJECTED);
+        JsonNode rejections = get("/v1/gl/journal-rejections?gl_journal_id=" + id).get("data");
+        assertThat(rejections).hasSize(1);
+        assertThat(rejections.get(0).get("rejected_by").asString()).isEqualTo(CHECKER);
         assertThat(approvals(id)).isEmpty();
+
+        // a later approval (redelivered or direct) cannot post a rejected journal
+        dispatcher.dispatch(UUID.fromString(TENANT), decision("gl_journal", id, payload, CHECKER), Outcome.APPROVED);
+        assertThat(approvals(id)).isEmpty();
+        assertThat(post("/v1/gl/journals/" + id + "/approve", "{}", CHECKER, 409).get("code").asString())
+                .isEqualTo("journal_rejected");
+        assertThat(post("/v1/gl/journals/" + id + "/reject", "{\"reason\":\"again\"}", CHECKER, 409).get("code").asString())
+                .isEqualTo("already_rejected");
+    }
+
+    @Test
+    void rejectedJournalNoLongerBlocksThePeriodClose() throws Exception {
+        String mar = period("2026-03-01", "2026-03-31");
+        String id = post("/v1/gl/journals", """
+                {"legal_entity_id":"%s","accounting_period_id":"%s","journal_type":"MANUAL_ADJUSTMENT","value_date":"2026-03-10",
+                 "description":"wrong","lines":[
+                  {"gl_account_id":"%s","direction":"DEBIT","amount":"7.00","currency":"USD"},
+                  {"gl_account_id":"%s","direction":"CREDIT","amount":"7.00","currency":"USD"}]}"""
+                .formatted(le, mar, impairment, cash), MAKER, 201).get("id").asString();
+        JsonNode blocked = post("/v1/gl/periods/" + mar + "/close", null, MAKER, 200);
+        assertThat(blocked.get("status").asString()).isEqualTo("FAILED");
+        assertThat(blocked.get("steps").toString()).contains("1 manual journal(s) await approval");
+
+        assertThat(post("/v1/gl/journals/" + id + "/reject", "{\"reason\":\"mine\"}", MAKER, 422).get("code").asString())
+                .isEqualTo("four_eyes_violation");
+        JsonNode rejection = post("/v1/gl/journals/" + id + "/reject", "{\"reason\":\"wrong account\"}", CHECKER, 200);
+        assertThat(rejection.get("gl_journal_id").asString()).isEqualTo(id);
+        assertThat(rejection.get("reason").asString()).isEqualTo("wrong account");
+        assertThat(post("/v1/gl/periods/" + mar + "/close", null, MAKER, 200).get("status").asString())
+                .isEqualTo("SUCCEEDED");
+        assertThat(get("/v1/gl/periods/" + mar).get("status").asString()).isEqualTo("SOFT_CLOSED");
     }
 
     @Test

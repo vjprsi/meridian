@@ -12,7 +12,8 @@ public class Events {
     static final Set<String> DECLARED = Set.of(
             "treasury.liquidity_position.projected", "treasury.liquidity_position.shortfall",
             "treasury.liquidity_ladder.completed", "treasury.lcr.calculated", "treasury.lcr.breached",
-            "treasury.lcr.approved", "treasury.nsfr.calculated", "treasury.nsfr.breached", "treasury.nsfr.approved",
+            "treasury.lcr.approved", "treasury.lcr.rejected", "treasury.nsfr.calculated", "treasury.nsfr.breached",
+            "treasury.nsfr.approved", "treasury.nsfr.rejected",
             "treasury.liquidity_stress_scenario.approved", "treasury.liquidity_stress.completed",
             "treasury.liquidity_stress.breached", "treasury.intraday_liquidity.recorded",
             "treasury.liquidity_eod_run.completed");

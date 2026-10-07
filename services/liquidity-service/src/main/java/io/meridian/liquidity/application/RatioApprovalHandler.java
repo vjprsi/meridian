@@ -8,9 +8,9 @@ import java.util.UUID;
 /**
  * Applies workflow-service decisions on LCR / NSFR snapshots (G11). Approval runs the same status and four-eyes
  * checks as the direct endpoint, with the deciding approver as principal. A decision for a calculation that was
- * replaced (row_version changed) or already decided is ignored. There is no local reject for ratio snapshots: a
- * rejection leaves the snapshot CALCULATED for the maker to recalculate. Registered per resource type in
- * {@link RatioApprovalHandlers}.
+ * replaced (row_version changed) or already decided is ignored. A rejection (or changes requested) rejects the
+ * snapshot like {@code POST /{id}/reject} (REJECTED; a recalculation replaces and resubmits it). Registered per
+ * resource type in {@link RatioApprovalHandlers}.
  */
 public class RatioApprovalHandler implements ApprovalOutcomeHandler {
     private final RatioService ratios;
@@ -35,7 +35,8 @@ public class RatioApprovalHandler implements ApprovalOutcomeHandler {
         }
         switch (d.outcome()) {
             case APPROVED -> ratios.approve(table, id);
-            case REJECTED, CHANGES_REQUESTED, EXPIRED, CANCELLED -> { } // stays CALCULATED: recalculate or decide directly
+            case REJECTED, CHANGES_REQUESTED -> ratios.reject(table, id, "rejected in workflow request " + d.approvalRequestId());
+            case EXPIRED, CANCELLED -> { } // stays CALCULATED: recalculate or decide directly
             default -> throw new ApiException(500, "unknown_outcome", "Unhandled outcome " + d.outcome());
         }
     }

@@ -4,6 +4,7 @@ import io.meridian.liquidity.api.generated.LcrCalculationsApi;
 import io.meridian.liquidity.api.generated.model.LcrCalculation;
 import io.meridian.liquidity.api.generated.model.LcrCalculationsApproveRequest;
 import io.meridian.liquidity.api.generated.model.LcrCalculationsCalculateRequest;
+import io.meridian.liquidity.api.generated.model.LcrCalculationsRejectRequest;
 import io.meridian.liquidity.application.RatioService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -32,5 +33,12 @@ public class LcrCalculationsController implements LcrCalculationsApi {
                                                                  LcrCalculationsApproveRequest body) {
         return http.ok(idempotencyKey, "lcr-approve", id, body, LcrCalculation.class,
                 () -> ratios.approve("lcr_calculation", id));
+    }
+
+    @Override
+    public ResponseEntity<LcrCalculation> lcrCalculationsReject(UUID id, String idempotencyKey,
+                                                                LcrCalculationsRejectRequest body) {
+        return http.ok(idempotencyKey, "lcr-reject", id, body, LcrCalculation.class,
+                () -> ratios.reject("lcr_calculation", id, http.tree(body).path("reason").asString(null)));
     }
 }

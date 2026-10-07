@@ -106,12 +106,48 @@ class MerchantWorkflowApprovalIT {
         assertThat(get("/v1/merchants/" + merchant).get("status").asString()).isEqualTo("ACTIVE");
         assertThat(wallets.calls.stream().filter(c -> c.path().equals("/v1/wallets")).count()).isEqualTo(walletsOpened);
 
+        // a rejection returns the onboarding for rework (ONBOARDING with the reason), never terminates it
         String rejected = post("/v1/merchants", merchantBody(plan), 201, "maker").get("id").asString();
         Map<?, ?> p2 = (Map<?, ?>) last("merchant").get("payload");
-        dispatch("merchant", rejected, "activate", p2, "checker", Outcome.CHANGES_REQUESTED);
-        assertThat(get("/v1/merchants/" + rejected).get("status").asString()).isEqualTo("ONBOARDING");
         dispatch("merchant", rejected, "activate", p2, "checker", Outcome.REJECTED);
-        assertThat(get("/v1/merchants/" + rejected).get("status").asString()).isEqualTo("TERMINATED");
+        JsonNode returned = get("/v1/merchants/" + rejected);
+        assertThat(returned.get("status").asString()).isEqualTo("ONBOARDING");
+        assertThat(returned.get("onboarding_rejected_by").asString()).isEqualTo("checker");
+        assertThat(returned.get("status_reason").asString()).contains("onboarding rejected");
+        // an approval of the rejected submission (late or redelivered) does nothing; nor can it be activated directly
+        dispatch("merchant", rejected, "activate", p2, "checker", Outcome.APPROVED);
+        assertThat(get("/v1/merchants/" + rejected).get("status").asString()).isEqualTo("ONBOARDING");
+        assertThat(post("/v1/merchants/" + rejected + "/activate", "{}", 409, "checker").get("code").asString())
+                .isEqualTo("onboarding_rejected");
+
+        // the maker reworks it: the rejection is cleared and a new request opens; the old one stays stale
+        HttpResponse<String> patched = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/v1/merchants/" + rejected))
+                .header("X-Tenant-Id", TENANT).header("X-User", "maker").header("Content-Type", "application/json")
+                .header("If-Match", "\"" + returned.get("row_version").asString() + "\"")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"trading_name\":\"Duka Mpya\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(patched.statusCode()).as(patched.body()).isEqualTo(200);
+        assertThat(json.readTree(patched.body()).hasNonNull("onboarding_rejected_by")).isFalse();
+        Map<?, ?> p3 = (Map<?, ?>) last("merchant").get("payload");
+        assertThat(p3.get("trading_name")).isEqualTo("Duka Mpya");
+        dispatch("merchant", rejected, "activate", p2, "checker", Outcome.APPROVED);
+        assertThat(get("/v1/merchants/" + rejected).get("status").asString()).isEqualTo("ONBOARDING");
+        dispatch("merchant", rejected, "activate", p3, "checker", Outcome.APPROVED);
+        assertThat(get("/v1/merchants/" + rejected).get("status").asString()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void onboardingReturnedDirectlyKeepsFourEyes() throws Exception {
+        String merchant = post("/v1/merchants", merchantBody(plan()), 201, "maker").get("id").asString();
+        assertThat(post("/v1/merchants/" + merchant + "/reject-onboarding", "{\"reason\":\"mine\"}", 422, "maker")
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        JsonNode r = post("/v1/merchants/" + merchant + "/reject-onboarding", "{\"reason\":\"KYC documents missing\"}",
+                200, "checker");
+        assertThat(r.get("status").asString()).isEqualTo("ONBOARDING");
+        assertThat(r.get("status_reason").asString()).isEqualTo("KYC documents missing");
+        assertThat(post("/v1/merchants/" + merchant + "/reject-onboarding", "{\"reason\":\"again\"}", 409, "checker")
+                .get("code").asString()).isEqualTo("already_rejected");
     }
 
     @Test
@@ -153,19 +189,28 @@ class MerchantWorkflowApprovalIT {
     }
 
     @Test
-    void settlementApprovedFromWorkflowAndRejectionLeavesItCalculated() throws Exception {
+    void settlementApprovedFromWorkflowAndRejectionFreesThePeriod() throws Exception {
         String merchant = activeMerchant();
         pay(merchant, "2000");
         String today = LocalDate.now(ZoneOffset.UTC).toString();
-        String id = post("/v1/merchant-settlements", "{\"merchant_id\":\"" + merchant + "\",\"period_start\":\"" + today
-                + "\",\"period_end\":\"" + today + "\",\"currency\":\"KES\"}", 201, "maker").get("id").asString();
+        String settle = "{\"merchant_id\":\"" + merchant + "\",\"period_start\":\"" + today
+                + "\",\"period_end\":\"" + today + "\",\"currency\":\"KES\"}";
+        String first = post("/v1/merchant-settlements", settle, 201, "maker").get("id").asString();
+        Map<?, ?> firstPayload = (Map<?, ?>) last("merchant_settlement").get("payload");
+        dispatch("merchant_settlement", first, "approve", firstPayload, "checker", Outcome.REJECTED);
+        JsonNode rejected = get("/v1/merchant-settlements/" + first);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("checker");
+        dispatch("merchant_settlement", first, "approve", firstPayload, "checker", Outcome.APPROVED);
+        assertThat(get("/v1/merchant-settlements/" + first).get("status").asString()).isEqualTo("REJECTED");
+
+        // the period can be settled again after the rejection
+        String id = post("/v1/merchant-settlements", settle, 201, "maker").get("id").asString();
         Map<String, Object> req = last("merchant_settlement");
         assertThat(req).containsEntry("resource_id", id).containsEntry("action", "approve").containsEntry("currency", "KES");
         assertThat(req.get("amount")).isNotNull();
         Map<?, ?> payload = (Map<?, ?>) req.get("payload");
 
-        dispatch("merchant_settlement", id, "approve", payload, "checker", Outcome.REJECTED);
-        assertThat(get("/v1/merchant-settlements/" + id).get("status").asString()).isEqualTo("CALCULATED");
         ObjectNode stale = json.valueToTree(payload);
         stale.put("net_amount", "1.00");
         dispatch("merchant_settlement", id, "approve", json.treeToValue(stale, Map.class), "checker", Outcome.APPROVED);

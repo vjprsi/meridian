@@ -13,7 +13,7 @@ public class Events {
     static final Set<String> DECLARED = Set.of(
             "wallets.biller.status_changed", "wallets.bill_payment.completed", "wallets.bill_payment.failed",
             "wallets.bill_payment.reversed", "wallets.airtime_topup.completed", "wallets.airtime_topup.failed",
-            "wallets.biller_settlement.approved", "wallets.biller_settlement.paid");
+            "wallets.biller_settlement.approved", "wallets.biller_settlement.rejected", "wallets.biller_settlement.paid");
 
     private static final Set<String> HIDDEN = Set.of("tenant_id", "connection_config", "raw_response");
 

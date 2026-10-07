@@ -99,18 +99,26 @@ class LiquidityWorkflowApprovalIT {
     }
 
     @Test
-    void nsfrRejectionKeepsSnapshotAndStaleDecisionAfterRecalculationIsIgnored() throws Exception {
+    void nsfrRejectionIsRecordedAndStaleDecisionAfterRecalculationIsIgnored() throws Exception {
         String id = post("/v1/treasury/liquidity/nsfr/calculate", nsfr("2026-11-11", "1000"), "risk-maker", 200)
                 .get("id").asString();
         Map<?, ?> first = (Map<?, ?>) last("nsfr_calculation", id).get("payload");
 
+        // the calculator rejecting in the inbox is refused (four-eyes); the checker's rejection is recorded
+        dispatcher.dispatch(UUID.fromString(TENANT), decision("nsfr_calculation", id, first, "risk-maker"), Outcome.REJECTED);
+        assertThat(get("/v1/treasury/liquidity/nsfr/" + id).get("status").asString()).isEqualTo("CALCULATED");
         dispatcher.dispatch(UUID.fromString(TENANT), decision("nsfr_calculation", id, first, "risk-checker"), Outcome.REJECTED);
         JsonNode rejected = get("/v1/treasury/liquidity/nsfr/" + id);
-        assertThat(rejected.get("status").asString()).isEqualTo("CALCULATED");
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("risk-checker");
         assertThat(rejected.hasNonNull("approved_by")).isFalse();
+        assertThat(post("/v1/treasury/liquidity/nsfr/" + id + "/approve", "{}", "risk-checker", 409).get("code").asString())
+                .isEqualTo("invalid_transition");
 
-        // recalculation replaces the snapshot (new row_version) and opens a new request
-        post("/v1/treasury/liquidity/nsfr/calculate", nsfr("2026-11-11", "900"), "risk-maker", 200);
+        // recalculation replaces the snapshot (new row_version, rejection cleared) and opens a new request
+        JsonNode recalculated = post("/v1/treasury/liquidity/nsfr/calculate", nsfr("2026-11-11", "900"), "risk-maker", 200);
+        assertThat(recalculated.get("status").asString()).isEqualTo("CALCULATED");
+        assertThat(recalculated.hasNonNull("rejected_by")).isFalse();
         Map<?, ?> second = (Map<?, ?>) last("nsfr_calculation", id).get("payload");
         assertThat(second.get("row_version")).isNotEqualTo(first.get("row_version"));
 
@@ -120,6 +128,16 @@ class LiquidityWorkflowApprovalIT {
 
         dispatcher.dispatch(UUID.fromString(TENANT), decision("nsfr_calculation", id, second, "risk-checker"), Outcome.APPROVED);
         assertThat(get("/v1/treasury/liquidity/nsfr/" + id).get("status").asString()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void lcrRejectedDirectlyByAChecker() throws Exception {
+        String id = post("/v1/treasury/liquidity/lcr/calculate", lcr("2026-11-13"), "risk-maker", 200).get("id").asString();
+        assertThat(post("/v1/treasury/liquidity/lcr/" + id + "/reject", "{\"reason\":\"mine\"}", "risk-maker", 422)
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        JsonNode r = post("/v1/treasury/liquidity/lcr/" + id + "/reject", "{\"reason\":\"HQLA haircut wrong\"}", "risk-checker", 200);
+        assertThat(r.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(r.get("rejection_reason").asString()).isEqualTo("HQLA haircut wrong");
     }
 
     @Test

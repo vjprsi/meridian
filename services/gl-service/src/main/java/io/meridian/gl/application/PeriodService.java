@@ -102,7 +102,8 @@ public class PeriodService {
         long unapproved = store.count("""
                 select count(*) from gl_journal j where j.legal_entity_id = ? and j.value_date between ? and ?
                   and j.journal_type not in ('AUTO_AGGREGATE', 'YEAR_END_CLOSE')
-                  and not exists (select 1 from gl_journal_approval a where a.gl_journal_id = j.id)""", le, start, end);
+                  and not exists (select 1 from gl_journal_approval a where a.gl_journal_id = j.id)
+                  and not exists (select 1 from gl_journal_rejection r where r.gl_journal_id = j.id)""", le, start, end);
         failed += step(checklist, "manual_journals_approved", unapproved == 0 ? "PASSED" : "FAILED",
                 unapproved == 0 ? "All manual journals are approved" : unapproved + " manual journal(s) await approval");
 

@@ -6,6 +6,7 @@ import io.meridian.casemanagement.api.generated.model.SarReportCreate;
 import io.meridian.casemanagement.api.generated.model.SarReportUpdate;
 import io.meridian.casemanagement.api.generated.model.SarReportsAcknowledgeRequest;
 import io.meridian.casemanagement.api.generated.model.SarReportsApproveRequest;
+import io.meridian.casemanagement.api.generated.model.SarReportsReturnToDraftRequest;
 import io.meridian.casemanagement.api.generated.model.SarReportsFileRequest;
 import io.meridian.casemanagement.api.generated.model.SarReportsRecordRejectionRequest;
 import io.meridian.casemanagement.api.generated.model.SarReportsSubmitForApprovalRequest;
@@ -58,6 +59,12 @@ public class SarReportsController implements SarReportsApi {
     public ResponseEntity<SarReport> sarReportsApprove(UUID id, String idempotencyKey, SarReportsApproveRequest body) {
         String comment = Http.text(http.tree(body), "comment");
         return http.once(idempotencyKey, body, SarReport.class, () -> http.ok(sars.approve(id, comment), SarReport.class));
+    }
+
+    @Override
+    public ResponseEntity<SarReport> sarReportsReturnToDraft(UUID id, String idempotencyKey, SarReportsReturnToDraftRequest body) {
+        String reason = Http.text(http.tree(body), "reason");
+        return http.once(idempotencyKey, body, SarReport.class, () -> http.ok(sars.returnToDraft(id, reason), SarReport.class));
     }
 
     @Override

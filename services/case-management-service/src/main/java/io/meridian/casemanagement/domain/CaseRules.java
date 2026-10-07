@@ -53,6 +53,7 @@ public final class CaseRules {
             "draft_narrative", Set.of("DRAFT", "REJECTED"),
             "submit_for_approval", Set.of("DRAFT", "REJECTED"),
             "approve", Set.of("PENDING_APPROVAL"),
+            "return_to_draft", Set.of("PENDING_APPROVAL"),
             "file", Set.of("APPROVED"),
             "acknowledge", Set.of("SUBMITTED"),
             "record_rejection", Set.of("SUBMITTED"),

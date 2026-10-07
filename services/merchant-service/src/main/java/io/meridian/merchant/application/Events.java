@@ -11,8 +11,9 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 public class Events {
     static final Set<String> DECLARED = Set.of(
-            "wallets.merchant.onboarded", "wallets.merchant.status_changed", "wallets.merchant_qr.paid",
-            "wallets.merchant_payment_link.paid", "wallets.merchant_settlement.approved",
+            "wallets.merchant.onboarded", "wallets.merchant.status_changed", "wallets.merchant.onboarding_rejected",
+            "wallets.merchant_qr.paid", "wallets.merchant_payment_link.paid", "wallets.merchant_settlement.approved",
+            "wallets.merchant_settlement.rejected",
             "wallets.merchant_settlement.paid", "wallets.merchant_refund.completed", "wallets.merchant_refund.rejected");
 
     private final OutboxWriter outbox;
