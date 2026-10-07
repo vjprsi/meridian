@@ -31150,7 +31150,7 @@ components:
         ledger_id:
           type: string
           format: uuid
-          description: Ledger book
+          description: Ledger book (immutable after creation)
         code:
           type: string
           maxLength: 64
@@ -31168,17 +31168,17 @@ components:
           - INCOME
           - EXPENSE
           - OFF_BALANCE
-          description: Accounting class
+          description: Accounting class (immutable after creation)
         normal_balance:
           type: string
           enum:
           - DEBIT
           - CREDIT
-          description: Side that increases the balance
+          description: Side that increases the balance (immutable after creation)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Account currency (single-currency accounts) (ISO 4217)
+          description: Account currency (single-currency accounts; immutable after creation) (ISO 4217)
         parent_id:
           type:
           - string
@@ -31196,13 +31196,13 @@ components:
           - string
           - 'null'
           maxLength: 40
-          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN (immutable after creation)
         owner_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Id of the owning business object in its service
+          description: Id of the owning business object in its service (immutable after creation)
         status:
           type: string
           enum:
@@ -31215,29 +31215,32 @@ components:
           readOnly: true
         allow_negative:
           type: boolean
-          description: Whether available balance may go below zero
+          description: Whether available balance may go below zero (set at creation; changed only by the owning service via
+            POST /{id}/overdraft-limit, never by PATCH)
         overdraft_limit:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
+          description: Arranged overdraft; available = balance + limit - holds (set at creation; changed only by the owning
+            service via POST /{id}/overdraft-limit, never by PATCH)
         min_balance:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Minimum balance that must remain
+          description: Minimum balance that must remain (immutable after creation)
         opened_at:
           type: string
           format: date-time
-          description: Opening time
+          description: Opening time (immutable after creation)
         closed_at:
           type:
           - string
           - 'null'
           format: date-time
-          description: Closing time
+          description: Closing time (set by /close)
+          readOnly: true
         metadata:
           type:
           - object
@@ -31362,7 +31365,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Entry this one reverses (set by POST /{id}/reverse)
+          description: Entry this one reverses (set by POST /{id}/reverse); unique, so an entry can be reversed only once
+            (SEC-05)
           readOnly: true
         source_service:
           type: string
@@ -55365,7 +55369,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount, for threshold routing
+          description: Amount, for threshold routing (a request without an amount gets every level of an amount-tiered policy)
         currency:
           type:
           - string
@@ -55397,6 +55401,14 @@ components:
           type: string
           maxLength: 64
           description: Requesting user
+          readOnly: true
+        owner_service:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Service that owns the resource type and executes the decision; set from the caller's service identity
+            (X-Meridian-Service with an internal token), workflow-service for generic requests opened by users (SEC-03)
           readOnly: true
         required_approvals:
           type: integer

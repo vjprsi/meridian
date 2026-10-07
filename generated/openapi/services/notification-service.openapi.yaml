@@ -1873,7 +1873,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Amount, for threshold routing
+          description: Amount, for threshold routing (a request without an amount gets every level of an amount-tiered policy)
         currency:
           type:
           - string
@@ -1905,6 +1905,14 @@ components:
           type: string
           maxLength: 64
           description: Requesting user
+          readOnly: true
+        owner_service:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Service that owns the resource type and executes the decision; set from the caller's service identity
+            (X-Meridian-Service with an internal token), workflow-service for generic requests opened by users (SEC-03)
           readOnly: true
         required_approvals:
           type: integer

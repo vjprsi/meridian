@@ -3394,22 +3394,22 @@ API: /v1/ledger-accounts · Requirements: LED-01, LED-02, LED-03, LED-08
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| ledger_id | uuid | no | FK → ledger | ledger_id | Ledger book |
+| ledger_id | uuid | no | FK → ledger | ledger_id | Ledger book (immutable after creation) |
 | code | varchar(64) | no | UQ | code | Account code / number inside the ledger |
 | name | varchar(160) | no |  | name | Display name |
-| account_type | varchar(40) (LedgerAccountType) | no |  | account_type | Accounting class |
-| normal_balance | varchar(40) (NormalBalance) | no |  | normal_balance | Side that increases the balance |
-| currency | char(3) | no |  | currency | Account currency (single-currency accounts) |
+| account_type | varchar(40) (LedgerAccountType) | no |  | account_type | Accounting class (immutable after creation) |
+| normal_balance | varchar(40) (NormalBalance) | no |  | normal_balance | Side that increases the balance (immutable after creation) |
+| currency | char(3) | no |  | currency | Account currency (single-currency accounts; immutable after creation) |
 | parent_id | uuid | yes | FK → ledger_account | parent_id | Parent for hierarchies, sub-ledgers and virtual accounts |
 | gl_account_id | uuid | yes | ref → gl_account | gl_account_id | GL control account this account rolls up to |
-| owner_type | varchar(40) | yes |  | owner_type | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN |
-| owner_id | uuid | yes |  | owner_id | Id of the owning business object in its service |
+| owner_type | varchar(40) | yes |  | owner_type | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN (immutable after creation) |
+| owner_id | uuid | yes |  | owner_id | Id of the owning business object in its service (immutable after creation) |
 | status | varchar(40) (LedgerAccountStatus) | no |  | status (read-only) | Posting restrictions (changed by /freeze, /unfreeze, /close) |
-| allow_negative | boolean | no |  | allow_negative | Whether available balance may go below zero |
-| overdraft_limit | numeric(28,8) | no |  | overdraft_limit | Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit) |
-| min_balance | numeric(28,8) | no |  | min_balance | Minimum balance that must remain |
-| opened_at | timestamptz | no |  | opened_at | Opening time |
-| closed_at | timestamptz | yes |  | closed_at | Closing time |
+| allow_negative | boolean | no |  | allow_negative | Whether available balance may go below zero (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH) |
+| overdraft_limit | numeric(28,8) | no |  | overdraft_limit | Arranged overdraft; available = balance + limit - holds (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH) |
+| min_balance | numeric(28,8) | no |  | min_balance | Minimum balance that must remain (immutable after creation) |
+| opened_at | timestamptz | no |  | opened_at | Opening time (immutable after creation) |
+| closed_at | timestamptz | yes |  | closed_at (read-only) | Closing time (set by /close) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -3436,7 +3436,7 @@ API: /v1/journal-entries · Requirements: LED-01, LED-05, LED-06, LED-07
 | effective_at | timestamptz | no |  | effective_at | Economic time of the transaction (default: now) |
 | value_date | date | no |  | value_date | Date interest starts or stops counting (default: today) |
 | booked_at | timestamptz | no |  | booked_at (read-only) | Time the ledger committed the entry |
-| reversal_of_id | uuid | yes | FK → journal_entry | reversal_of_id (read-only) | Entry this one reverses (set by POST /{id}/reverse) |
+| reversal_of_id | uuid | yes | FK → journal_entry | reversal_of_id (read-only) | Entry this one reverses (set by POST /{id}/reverse); unique, so an entry can be reversed only once (SEC-05) |
 | source_service | varchar(64) | no |  | source_service (read-only) | Service or client that requested the posting (from the caller identity) |
 | source_type | varchar(64) | yes |  | source_type | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION |
 | source_id | uuid | yes |  | source_id | Business object id |
@@ -9878,6 +9878,36 @@ API: /v1/user-roles · Requirements: ADM-02, LIM-02
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `privileged_change`
+
+A privileged identity change (elevation, role permission grant, MFA reset) as submitted by its maker; executed from this record, never from the approval payload (SEC-03)
+
+API: internal only · Requirements: ADM-02, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| operation | varchar(64) | no |  | operation (read-only) | resource_type/action, e.g. user_role/elevate, role/add_permissions, app_user/reset_mfa |
+| resource_id | uuid | no |  | resource_id (read-only) | User or role the change applies to |
+| details | jsonb | no |  | details (read-only) | What was requested, as validated at submission (role_id, duration_minutes, permission_ids, ...) |
+| requested_by | varchar(64) | no |  | requested_by (read-only) | Maker (principal that submitted the change) |
+| approval_request_id | uuid | no | ref → approval_request | approval_request_id (read-only) | Central approval request deciding this change |
+| status | varchar(40) (PrivilegedChangeStatus) | no |  | status (read-only) | Lifecycle |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Checker whose approval executed (or rejected) the change |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Why an approved change could not be applied |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `access_policy`
 
 Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
@@ -10830,11 +10860,12 @@ API: /v1/approval-requests · Requirements: LIM-02, ADM-03
 | summary | text | yes |  | summary | Human-readable description of the change |
 | payload | jsonb | no |  | payload | Operation to execute once approved |
 | diff | jsonb | yes |  | diff | Before/after diff for updates |
-| amount | numeric(28,8) | yes |  | amount | Amount, for threshold routing |
+| amount | numeric(28,8) | yes |  | amount | Amount, for threshold routing (a request without an amount gets every level of an amount-tiered policy) |
 | currency | char(3) | yes |  | currency | Currency of the amount |
 | priority | varchar(40) (WorkTaskPriority) | no |  | priority | Priority |
 | status | varchar(40) (ApprovalRequestStatus) | no |  | status (read-only) | Status |
 | maker | varchar(64) | no |  | maker (read-only) | Requesting user |
+| owner_service | varchar(64) | yes |  | owner_service (read-only) | Service that owns the resource type and executes the decision; set from the caller's service identity (X-Meridian-Service with an internal token), workflow-service for generic requests opened by users (SEC-03) |
 | required_approvals | integer | no |  | required_approvals (read-only) | Approvals required |
 | approvals_received | integer | no |  | approvals_received (read-only) | Approvals received |
 | current_level | integer | no |  | current_level (read-only) | Current approval level |

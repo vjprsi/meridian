@@ -108,22 +108,22 @@ COMMENT ON COLUMN ledger_account.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN ledger_account.updated_at IS 'Last update time';
 COMMENT ON COLUMN ledger_account.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN ledger_account.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN ledger_account.ledger_id IS 'Ledger book';
+COMMENT ON COLUMN ledger_account.ledger_id IS 'Ledger book (immutable after creation)';
 COMMENT ON COLUMN ledger_account.code IS 'Account code / number inside the ledger';
 COMMENT ON COLUMN ledger_account.name IS 'Display name';
-COMMENT ON COLUMN ledger_account.account_type IS 'Accounting class';
-COMMENT ON COLUMN ledger_account.normal_balance IS 'Side that increases the balance';
-COMMENT ON COLUMN ledger_account.currency IS 'Account currency (single-currency accounts)';
+COMMENT ON COLUMN ledger_account.account_type IS 'Accounting class (immutable after creation)';
+COMMENT ON COLUMN ledger_account.normal_balance IS 'Side that increases the balance (immutable after creation)';
+COMMENT ON COLUMN ledger_account.currency IS 'Account currency (single-currency accounts; immutable after creation)';
 COMMENT ON COLUMN ledger_account.parent_id IS 'Parent for hierarchies, sub-ledgers and virtual accounts';
 COMMENT ON COLUMN ledger_account.gl_account_id IS 'GL control account this account rolls up to';
-COMMENT ON COLUMN ledger_account.owner_type IS 'Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN';
-COMMENT ON COLUMN ledger_account.owner_id IS 'Id of the owning business object in its service';
+COMMENT ON COLUMN ledger_account.owner_type IS 'Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN (immutable after creation)';
+COMMENT ON COLUMN ledger_account.owner_id IS 'Id of the owning business object in its service (immutable after creation)';
 COMMENT ON COLUMN ledger_account.status IS 'Posting restrictions (changed by /freeze, /unfreeze, /close)';
-COMMENT ON COLUMN ledger_account.allow_negative IS 'Whether available balance may go below zero';
-COMMENT ON COLUMN ledger_account.overdraft_limit IS 'Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)';
-COMMENT ON COLUMN ledger_account.min_balance IS 'Minimum balance that must remain';
-COMMENT ON COLUMN ledger_account.opened_at IS 'Opening time';
-COMMENT ON COLUMN ledger_account.closed_at IS 'Closing time';
+COMMENT ON COLUMN ledger_account.allow_negative IS 'Whether available balance may go below zero (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH)';
+COMMENT ON COLUMN ledger_account.overdraft_limit IS 'Arranged overdraft; available = balance + limit - holds (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH)';
+COMMENT ON COLUMN ledger_account.min_balance IS 'Minimum balance that must remain (immutable after creation)';
+COMMENT ON COLUMN ledger_account.opened_at IS 'Opening time (immutable after creation)';
+COMMENT ON COLUMN ledger_account.closed_at IS 'Closing time (set by /close)';
 COMMENT ON COLUMN ledger_account.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN ledger_account.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ledger_account.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -169,6 +169,7 @@ CREATE TABLE journal_entry (
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
+  CONSTRAINT uq_journal_entry_reversal_of_id UNIQUE (tenant_id, reversal_of_id),
   CONSTRAINT uq_journal_entry_1 UNIQUE (tenant_id, ledger_id, idempotency_key)
 );
 COMMENT ON TABLE journal_entry IS 'One balanced, atomic set of ledger entries (a ledger transaction). Append-only.';
@@ -183,7 +184,7 @@ COMMENT ON COLUMN journal_entry.description IS 'Narrative shown on statements';
 COMMENT ON COLUMN journal_entry.effective_at IS 'Economic time of the transaction (default: now)';
 COMMENT ON COLUMN journal_entry.value_date IS 'Date interest starts or stops counting (default: today)';
 COMMENT ON COLUMN journal_entry.booked_at IS 'Time the ledger committed the entry';
-COMMENT ON COLUMN journal_entry.reversal_of_id IS 'Entry this one reverses (set by POST /{id}/reverse)';
+COMMENT ON COLUMN journal_entry.reversal_of_id IS 'Entry this one reverses (set by POST /{id}/reverse); unique, so an entry can be reversed only once (SEC-05)';
 COMMENT ON COLUMN journal_entry.source_service IS 'Service or client that requested the posting (from the caller identity)';
 COMMENT ON COLUMN journal_entry.source_type IS 'Business object type, e.g. PAYMENT, CARD_AUTHORIZATION';
 COMMENT ON COLUMN journal_entry.source_id IS 'Business object id';
@@ -201,7 +202,6 @@ COMMENT ON COLUMN journal_entry.custom_field_4 IS 'Tenant-defined custom field 4
 COMMENT ON COLUMN journal_entry.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_journal_entry_tenant ON journal_entry (tenant_id, created_at);
 CREATE INDEX ix_journal_entry_ledger_id ON journal_entry (ledger_id);
-CREATE INDEX ix_journal_entry_reversal_of_id ON journal_entry (reversal_of_id);
 CREATE INDEX ix_journal_entry_source_id ON journal_entry (source_id);
 CREATE INDEX ix_journal_entry_correlation_id ON journal_entry (correlation_id);
 CREATE INDEX ix_journal_entry_reference ON journal_entry (reference);

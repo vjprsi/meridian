@@ -153,6 +153,59 @@ ALTER TABLE role_permission ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON role_permission USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_role_permission_touch BEFORE UPDATE ON role_permission FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- privileged_change: A privileged identity change (elevation, role permission grant, MFA reset) as submitted by its maker; executed from this record, never from the approval payload (SEC-03)
+CREATE TABLE privileged_change (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  operation                    varchar(64) NOT NULL,
+  resource_id                  uuid NOT NULL,
+  details                      jsonb NOT NULL,
+  requested_by                 varchar(64) NOT NULL,
+  approval_request_id          uuid NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPLIED', 'REJECTED', 'CANCELLED', 'FAILED')),
+  decided_by                   varchar(64),
+  decided_at                   timestamptz,
+  failure_reason               varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_privileged_change_approval_request_id UNIQUE (tenant_id, approval_request_id)
+);
+COMMENT ON TABLE privileged_change IS 'A privileged identity change (elevation, role permission grant, MFA reset) as submitted by its maker; executed from this record, never from the approval payload (SEC-03)';
+COMMENT ON COLUMN privileged_change.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN privileged_change.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN privileged_change.created_at IS 'Creation time';
+COMMENT ON COLUMN privileged_change.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN privileged_change.updated_at IS 'Last update time';
+COMMENT ON COLUMN privileged_change.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN privileged_change.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN privileged_change.operation IS 'resource_type/action, e.g. user_role/elevate, role/add_permissions, app_user/reset_mfa';
+COMMENT ON COLUMN privileged_change.resource_id IS 'User or role the change applies to';
+COMMENT ON COLUMN privileged_change.details IS 'What was requested, as validated at submission (role_id, duration_minutes, permission_ids, ...)';
+COMMENT ON COLUMN privileged_change.requested_by IS 'Maker (principal that submitted the change)';
+COMMENT ON COLUMN privileged_change.approval_request_id IS 'Central approval request deciding this change';
+COMMENT ON COLUMN privileged_change.status IS 'Lifecycle';
+COMMENT ON COLUMN privileged_change.decided_by IS 'Checker whose approval executed (or rejected) the change';
+COMMENT ON COLUMN privileged_change.decided_at IS 'Decision time';
+COMMENT ON COLUMN privileged_change.failure_reason IS 'Why an approved change could not be applied';
+COMMENT ON COLUMN privileged_change.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN privileged_change.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN privileged_change.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN privileged_change.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN privileged_change.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_privileged_change_tenant ON privileged_change (tenant_id, created_at);
+CREATE INDEX ix_privileged_change_resource_id ON privileged_change (resource_id);
+ALTER TABLE privileged_change ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON privileged_change USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_privileged_change_touch BEFORE UPDATE ON privileged_change FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- access_policy: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
 CREATE TABLE access_policy (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),

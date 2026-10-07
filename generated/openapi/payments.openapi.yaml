@@ -8018,7 +8018,10 @@ paths:
   /v1/fx/quotes/{id}/accept:
     post:
       operationId: fxQuotesAccept
-      summary: Accept the quote and book the deal
+      summary: 'Accept the quote and book the deal. Single use (row lock; a replay for the same payment_id returns its deal).
+        With payment_id the binding is mandatory and checked atomically: customer_id must match the quote customer, sell/buy
+        currencies must match, sell_amount (and buy_amount when given) must equal the quote within meridian.fx.accept-amount-tolerance
+        (default 0)'
       tags:
       - Fx Quotes
       security:
@@ -10202,6 +10205,27 @@ components:
         payment_id:
           type: string
           format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        sell_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        sell_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        buy_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        buy_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
     FxDealPage:
       type: object
       description: One page of FxDeal results (newest first)

@@ -95,6 +95,7 @@ CREATE TABLE approval_request (
   priority                     varchar(40) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED', 'EXPIRED', 'EXECUTED', 'EXECUTION_FAILED')),
   maker                        varchar(64) NOT NULL,
+  owner_service                varchar(64),
   required_approvals           integer NOT NULL,
   approvals_received           integer NOT NULL DEFAULT 0,
   current_level                integer NOT NULL DEFAULT 1,
@@ -126,11 +127,12 @@ COMMENT ON COLUMN approval_request.title IS 'Short title shown in the approvals 
 COMMENT ON COLUMN approval_request.summary IS 'Human-readable description of the change';
 COMMENT ON COLUMN approval_request.payload IS 'Operation to execute once approved';
 COMMENT ON COLUMN approval_request.diff IS 'Before/after diff for updates';
-COMMENT ON COLUMN approval_request.amount IS 'Amount, for threshold routing';
+COMMENT ON COLUMN approval_request.amount IS 'Amount, for threshold routing (a request without an amount gets every level of an amount-tiered policy)';
 COMMENT ON COLUMN approval_request.currency IS 'Currency of the amount';
 COMMENT ON COLUMN approval_request.priority IS 'Priority';
 COMMENT ON COLUMN approval_request.status IS 'Status';
 COMMENT ON COLUMN approval_request.maker IS 'Requesting user';
+COMMENT ON COLUMN approval_request.owner_service IS 'Service that owns the resource type and executes the decision; set from the caller''s service identity (X-Meridian-Service with an internal token), workflow-service for generic requests opened by users (SEC-03)';
 COMMENT ON COLUMN approval_request.required_approvals IS 'Approvals required';
 COMMENT ON COLUMN approval_request.approvals_received IS 'Approvals received';
 COMMENT ON COLUMN approval_request.current_level IS 'Current approval level';
