@@ -77,6 +77,27 @@ The edge gateway serves every API at `http://localhost:18000/v1/...` (routes gen
 bundled contract at `http://localhost:18000/openapi.yaml`. Local mode uses `X-Tenant-Id: <uuid>` instead of tokens.
 When a service's generated schema changes, the launcher recreates that local database (dev data only).
 
+## Developer portal
+
+`web/developer-portal` (Next.js 16, same stack and look as the ops console in `web/meridian-console`) serves the public
+API docs and the developer console on http://localhost:13200:
+
+```bash
+cd web/developer-portal
+npm install
+npm run dev          # or: npm run build && npm start   (both run sync:specs first)
+npm run sync:specs   # copy generated/openapi + generated/asyncapi into public/specs (+ search index, catalogue)
+npm run gen:api      # regenerate typed clients for identity-service and webhook-service
+```
+
+- Public (no login): guides (getting started, auth & scopes, idempotency, pagination, errors, webhooks with HMAC
+  verification, versioning & changelog), API reference per domain (`/reference/<domain>`), event catalogue
+  (`/events`) and client-side full-text search over every operation and event.
+- Console (Keycloak SSO via client `meridian-console`, or dev mode with `X-Tenant-Id`): apps = API clients (create,
+  scopes, rotate secret, suspend), API keys (one-time reveal, rotate, revoke), webhook endpoints, subscriptions,
+  test events, delivery log with retry, event replays, and a sandbox try-it console calling the gateway as the user.
+- `/v1/*` is proxied to the edge gateway (`MERIDIAN_GATEWAY_URL`, default `http://localhost:18000`).
+
 ## Deploying to Kubernetes
 
 One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gateway
