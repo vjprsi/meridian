@@ -26,13 +26,19 @@ import org.springframework.web.servlet.HandlerInterceptor;
  *   <li>{@value #OPERATOR_SCOPE} (SEC-15: platform-global writes, the tenant registry, cross-tenant operations), which
  *       additionally requires an internal service token or a user token of the configured platform-operator tenant
  *       ({@code meridian.security.platform-operator-tenant}); {@code meridian:admin} of a bank never satisfies it.</li>
+ *   <li>{@value #ROUTING_READ_SCOPE} (the cell router's own client: tenant placement / routing reads only), under the
+ *       same internal-or-operator-tenant rule.</li>
  * </ul>
+ * {@link RequiredScope#anyOf()} lists scopes accepted instead of the required one; any one of them that is satisfied
+ * (under its own rules) admits the request.
  * SEC-29: a {@code /v1} handler without {@link RequiredScope} is refused unless it is marked {@link PublicEndpoint}
  * or the request matches a spec-{@code [public]} route. Dev mode (no tokens) skips the check.
  */
 public class ScopeInterceptor implements HandlerInterceptor {
     /** Platform operator scope (cell / tenant registry, global reference data, cross-tenant jobs). */
     public static final String OPERATOR_SCOPE = "platform:operator";
+    /** Narrow scope of the cell router (registry routing reads only); never implied by a wildcard or admin scope. */
+    public static final String ROUTING_READ_SCOPE = "platform:routing-read";
 
     private final MeridianProperties props;
     private final SecurityProperties security;
@@ -64,14 +70,37 @@ public class ScopeInterceptor implements HandlerInterceptor {
         }
         String need = required.value();
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!permits(scopes(auth), need)) {
-            throw new ApiException(403, "insufficient_scope", "This operation requires scope " + need);
+        Set<String> granted = scopes(auth);
+        boolean operatorDenied = false;
+        for (String candidate : candidates(required)) {
+            if (!permits(granted, candidate)) {
+                continue;
+            }
+            if (operatorGrade(candidate) && !operator(auth)) {
+                operatorDenied = true;
+                continue;
+            }
+            return true;
         }
-        if (OPERATOR_SCOPE.equals(need) && !operator(auth)) {
+        if (operatorDenied) {
             throw new ApiException(403, "operator_tenant_required",
                     "Platform operator operations are reserved to the platform operator tenant");
         }
-        return true;
+        throw new ApiException(403, "insufficient_scope", "This operation requires scope " + need
+                + (required.anyOf().length == 0 ? "" : " (or " + String.join(", ", required.anyOf()) + ")"));
+    }
+
+    /** The required scope followed by the scopes accepted instead. */
+    static List<String> candidates(RequiredScope required) {
+        List<String> out = new java.util.ArrayList<>();
+        out.add(required.value());
+        out.addAll(List.of(required.anyOf()));
+        return out;
+    }
+
+    /** Scopes honoured only for internal service tokens and tokens of the platform-operator tenant. */
+    static boolean operatorGrade(String scope) {
+        return OPERATOR_SCOPE.equals(scope) || ROUTING_READ_SCOPE.equals(scope);
     }
 
     /** The operator scope counts for internal service tokens and for users of the platform-operator tenant only. */
@@ -93,7 +122,7 @@ public class ScopeInterceptor implements HandlerInterceptor {
     static boolean permits(Set<String> granted, String need) {
         if (CustomerContext.CUSTOMER_SCOPE.equals(need) || AgentContext.AGENT_SCOPE.equals(need)
                 || BusinessContext.BUSINESS_SCOPE.equals(need) || MerchantContext.MERCHANT_SCOPE.equals(need)
-                || OPERATOR_SCOPE.equals(need)) {
+                || operatorGrade(need)) {
             return granted.contains(need);
         }
         String domain = need.substring(0, need.indexOf(':'));

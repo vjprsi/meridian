@@ -30,6 +30,8 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
                              administration need a recent authentication); no password grant
   meridian-service           confidential, client credentials, every staff scope + meridian:internal + platform:operator
                              (service-to-service)
+  meridian-cell-router       confidential, client credentials, only platform:routing-read (tenant routing and cell
+                             reads); tokens carry the platform-operator tenant, no meridian:internal
   meridian-readonly          confidential, client credentials, read scopes only (authorisation tests)
   meridian-customer-web      public, authorization code + PKCE (customer web banking); only the customer scope plus
                              openid/profile; tokens carry customer_id and tenant_id from user attributes (admin-managed,
@@ -91,6 +93,8 @@ CUSTOMER_SCOPE = "channels:customer"
 AGENT_SCOPE = "channels:agent"
 BUSINESS_SCOPE = "channels:business"
 MERCHANT_SCOPE = "channels:merchant"
+# The cell router's only scope: tenant routing / cell reads in the registry (spec `scopes:` on tenant-service).
+ROUTING_SCOPE = "platform:routing-read"
 
 
 def attribute_mapper(name: str, attribute: str) -> dict:
@@ -175,11 +179,14 @@ def main():
     privileged = ["cards:pan_reveal", "cards:vault_admin"]
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
-              for n in scope_names + ["meridian:internal", operator] + channel_scopes + privileged]
+              for n in scope_names + ["meridian:internal", operator, ROUTING_SCOPE] + channel_scopes + privileged]
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
                                 "access.token.claim": "true", "id.token.claim": "true", "userinfo.token.claim": "true"}}
+    # The cell router's tokens: tenant = the platform-operator tenant (services honour platform:routing-read only for
+    # that tenant or internal tokens), audience meridian-api, no meridian:internal.
+    router_tenant_mapper = dict(tenant_mapper, config=dict(tenant_mapper["config"], **{"claim.value": PLATFORM_TENANT}))
     # Customer tokens: identity from admin-managed user attributes; auth_time and acr for step-up checks; sub and
     # preferred_username explicitly (the realm's default "basic" scope may be absent in an imported realm).
     customer_mappers = [
@@ -240,6 +247,12 @@ def main():
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,
              "protocolMappers": [tenant_mapper, audience_mapper()],
              "defaultClientScopes": scope_names + ["meridian:internal", operator]},
+            # The cell router (platform/cell-router): reads tenant routing and cells from the registry, nothing else.
+            {"clientId": "meridian-cell-router", "name": "Meridian cell router", "publicClient": False,
+             "secret": "meridian-cell-router-secret", "serviceAccountsEnabled": True,
+             "standardFlowEnabled": False, "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "protocolMappers": [router_tenant_mapper, audience_mapper()],
+             "defaultClientScopes": [ROUTING_SCOPE], "optionalClientScopes": []},
             {"clientId": "meridian-readonly", "name": "Read-only integration", "publicClient": False,
              "secret": "meridian-readonly-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,

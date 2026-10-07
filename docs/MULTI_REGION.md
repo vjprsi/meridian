@@ -129,8 +129,13 @@ Metrics (management port, not the routed port): `meridian.router.requests{cell,o
 `meridian.router.cell.healthy{cell}`, `meridian.router.cell.serving{cell}`,
 `meridian.router.placement.lookups{result=hit|miss|stale}`, `meridian.router.placement.invalidations`.
 
-The router reads the registry with its own client-credentials identity (`meridian:internal platform:operator`) and the
-operator tenant id; it never forwards a caller's token to the registry.
+The router reads the registry with its own Keycloak client `meridian-cell-router` (client credentials, scope
+`platform:routing-read` only, tokens carry the platform-operator tenant; no `meridian:internal`, no
+`platform:operator`). `GET /v1/platform/tenants/{id}/routing`, `GET /v1/platform/cells` and `GET /v1/platform/cells/{id}`
+declare `x-required-scope: platform:routing-read` (spec `scopes:`; `platform:operator` still accepted); the scope is
+never implied by `platform:*` or `meridian:admin` and is honoured only for the operator tenant or internal tokens.
+Helm: `router.auth.clientSecret` (default `meridian-cell-router-client`), `router.auth.scope` `platform:routing-read`.
+The router never forwards a caller's token to the registry.
 
 ## 4. Data replication and RPO
 

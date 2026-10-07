@@ -3,8 +3,8 @@ Meridian cell router {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" 
 Tenant registry: {{ .Values.router.registryUrl }}
 Health check for the load balancer / Route 53: GET /healthz on the http port.
 Required secret (not created by this chart):
-  {{ .Values.router.auth.clientSecret }}  client-id/client-secret of the router's service client
-                                (scopes meridian:internal platform:operator; registry reads are operator-only, SEC-15)
+  {{ .Values.router.auth.clientSecret }}  client-id/client-secret of the router's own client (meridian-cell-router:
+                                scope platform:routing-read only, tokens of the platform-operator tenant; SEC-15)
 Cell gateways must list the router's addresses in global.trustedProxies (SEC-16) to keep the client address.
 {{- if .Values.router.cellOverrides }}
 WARNING: break-glass cell overrides in force: {{ toJson .Values.router.cellOverrides }}

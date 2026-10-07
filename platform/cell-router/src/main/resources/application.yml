@@ -24,10 +24,11 @@ meridian:
   router:
     registry-url: http://localhost:9124            # tenant-service (control plane)
     operator-tenant: ""                            # SEC-15: platform-operator tenant id
-    auth:                                          # router service identity (client credentials)
+    auth:                                          # router's own client (client credentials), never meridian-service
       token-uri: ""
-      client-id: ""
+      client-id: meridian-cell-router
       client-secret: ""
+      scope: platform:routing-read                 # tenant routing and cell reads only
     jwt:
       jwk-set-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/certs
       issuer: http://localhost:15180/realms/meridian

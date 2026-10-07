@@ -10,8 +10,8 @@ import org.springframework.util.unit.DataSize;
  * Cell router configuration ({@code meridian.router.*}).
  *
  * @param registryUrl    base URL of tenant-service (the tenant registry of the control plane)
- * @param operatorTenant platform-operator tenant id sent as {@code X-Tenant-Id} with the router's service token
- *                       (SEC-15: registry reads are operator-only)
+ * @param operatorTenant platform-operator tenant id sent as {@code X-Tenant-Id} (honoured only for internal tokens;
+ *                       the router's own client already carries the operator tenant in its token)
  * @param auth           client credentials of the router's service identity (empty token URI: no token, dev only)
  * @param jwt            verification of callers' access tokens (JWKS, issuer, audiences, tenant claim)
  * @param cacheTtl       how long a tenant's placement is cached without an invalidation event
@@ -44,8 +44,20 @@ public record RouterProperties(String registryUrl, String operatorTenant, Auth a
         maxBodySize = maxBodySize == null ? DataSize.ofMegabytes(64) : maxBodySize;
     }
 
-    /** OAuth2 client credentials of the router (scope platform:operator + meridian:internal on the realm). */
-    public record Auth(String tokenUri, String clientId, String clientSecret, String scope) {}
+    /**
+     * OAuth2 client credentials of the router's own client ({@value #CLIENT_ID}: scope {@value #SCOPE} only, tokens of
+     * the platform-operator tenant), never the shared {@code meridian-service} client with {@code meridian:internal}
+     * and {@code platform:operator}.
+     */
+    public record Auth(String tokenUri, String clientId, String clientSecret, String scope) {
+        public static final String CLIENT_ID = "meridian-cell-router";
+        public static final String SCOPE = "platform:routing-read";
+
+        public Auth {
+            clientId = clientId == null || clientId.isBlank() ? CLIENT_ID : clientId;
+            scope = scope == null || scope.isBlank() ? SCOPE : scope;
+        }
+    }
 
     /** Access-token verification: signature (JWKS), issuer, audience (SEC-14), tenant claim name. */
     public record Jwt(String jwkSetUri, String issuer, List<String> audiences, String tenantClaim) {
