@@ -60,6 +60,11 @@ public class IdentityApprovals {
     private static ApprovalOutcomeHandler handler(String resourceType, ApprovalExecutor executor) {
         return new ApprovalOutcomeHandler() {
             @Override
+            public boolean centralOnly() {
+                return true; // no local approve endpoint: decided in workflow-service only
+            }
+
+            @Override
             public String resourceType() {
                 return resourceType;
             }

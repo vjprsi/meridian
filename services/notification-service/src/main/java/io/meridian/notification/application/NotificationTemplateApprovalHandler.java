@@ -18,6 +18,11 @@ public class NotificationTemplateApprovalHandler implements ApprovalOutcomeHandl
     }
 
     @Override
+    public boolean centralOnly() {
+        return true; // no local approve endpoint: decided in workflow-service only
+    }
+
+    @Override
     public String resourceType() {
         return TemplateService.RESOURCE_TYPE;
     }

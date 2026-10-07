@@ -28,7 +28,7 @@ no tenant EOD endpoints yet for reconciliation runs, fee/billing charging or GL 
 are tenant-wide, not per legal entity; the generator cannot express operator-only reads of global tables.
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Done ([public]) |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
-| G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | In progress: `libs/meridian-approvals` + guide pattern; reference pricing-rules; per-domain rollout running |
+| G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | Done: libs/meridian-approvals in all services (see G11 notes) |
 | G12 | Read-style operations declared 204 (view, ownership-tree, exposure, evaluate, simulate, test-connection, registration-options) | Same as G2: response schemas | Done (same as G2) |
 | G13 | Search endpoints lack `q` parameter | Add `?q:string!` to search actions | Open |
 
@@ -62,6 +62,30 @@ duplicate resource names and ambiguous paths are now hard validation errors; wri
 | Treasury | Revaluation / fair-value changes not posted to ledger; holiday calendars not applied to value dates; settled-flows feed for liquidity EOD; ALM multi-currency and NII floor; FX list omits legs. |
 | Engagement | customer-service segment member listing; points-earn liability accrual not posted; card-service handling of MERCHANT_DENY `merchant_ids` shape; `CAMPAIGN_MESSAGE` default template; card/wallet enrichment consumers. |
 | Reporting/AI | Export 10k-row cap; LLM usage attribution follows current policy; visibility filtering only on saved queries and dashboards. |
+
+## G11 notes (central approvals rollout)
+
+Converted in workflow mode (local mode unchanged): pricing tables, product versions/scripts, onboarding referrals,
+KYC documents, KYC tier (customer, central-only), deposit opening/overdraft/closure, CRM redress and articles, GL
+journals and period close, payments and bulk payments (per level), limit overrides, risk-rating overrides, AML
+dispositions and SARs, sanctions true matches, credit decisions, document verification, loan write-offs and
+restructures, collateral, legal proceedings, out-of-policy plans, treasury counterparties/limits/SSIs, LCR/NSFR,
+stress scenarios, ALM assumptions, card program go-live, dispute write-off, wallet reversals/bank links/PIN resets,
+agent float and cash management, agent KYC, commission plans and payout runs, biller and merchant settlements,
+merchant refunds and onboarding, disbursement batches (per level), rewards adjustments, campaigns, report
+versions/adjustments/submissions, KPI certification, model versions, copilot actions, purge requests, and the
+central-only platform flows (tenant modules, identity, config activation, document/notification templates, audit
+exports).
+
+Spec gaps (flows still local or with no place to record a rejection):
+- Submit-for-approval actions missing: fraud rules, limit rules, TM scenario versions, FTP curve publish, onboarding
+  journey publish, USSD menu publish, card fee waiver (needs a waiver request), program/agent/merchant reactivation.
+- Rejected states missing: SAR (MLRO return-to-draft), gl_journal (REJECTED or rejection record), biller/merchant
+  settlements, alm assumptions, liquidity LCR/NSFR, report definition versions, KPIs.
+- Decide: merchant onboarding rejection currently terminates (irreversible); alternative is leaving it ONBOARDING.
+- Library follow-ups: decision comment in `ApprovalDecision`; `diff` on `ApprovalSpec`; `Approvals.get(id)`;
+  re-open a request after an approved decision fails a business check (e.g. insufficient funding).
+- Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
 
 ## Per-domain notes
 

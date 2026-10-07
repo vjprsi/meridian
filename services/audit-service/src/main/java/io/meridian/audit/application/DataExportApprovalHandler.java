@@ -20,6 +20,11 @@ public class DataExportApprovalHandler implements ApprovalOutcomeHandler {
     }
 
     @Override
+    public boolean centralOnly() {
+        return true; // no local approve endpoint: decided in workflow-service only
+    }
+
+    @Override
     public String resourceType() {
         return DataExportService.RESOURCE_TYPE;
     }

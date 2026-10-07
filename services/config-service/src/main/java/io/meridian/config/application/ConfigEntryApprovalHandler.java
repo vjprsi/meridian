@@ -20,6 +20,11 @@ public class ConfigEntryApprovalHandler implements ApprovalOutcomeHandler {
     }
 
     @Override
+    public boolean centralOnly() {
+        return true; // no local approve endpoint: decided in workflow-service only
+    }
+
+    @Override
     public String resourceType() {
         return ConfigEntryService.APPROVAL_RESOURCE;
     }
