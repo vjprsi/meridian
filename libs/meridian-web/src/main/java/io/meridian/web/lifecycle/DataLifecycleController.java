@@ -20,16 +20,46 @@ import tools.jackson.databind.node.ObjectNode;
  * naming the calling service ({@code X-Meridian-Service}), which must be one of
  * {@code meridian.data-lifecycle.callers} (default archive-service, customer-service). The tenant is the one the
  * service token carries in {@code X-Tenant-Id}; row-level security applies to every statement.
+ *
+ * <p>MR-GAME-DAY tenant moves: {@code POST /v1/internal/data-lifecycle/move/{tables,extract,import}} copy a tenant's
+ * rows between cells; reserved to {@code meridian.data-lifecycle.move-callers} (default data-mover).
  */
 @RestController
 @RequestMapping("/v1/internal/data-lifecycle")
 public class DataLifecycleController {
     private final DataLifecycleService lifecycle;
     private final Set<String> callers;
+    private final Set<String> moveCallers;
 
     public DataLifecycleController(DataLifecycleService lifecycle, Set<String> callers) {
+        this(lifecycle, callers, Set.of("data-mover"));
+    }
+
+    public DataLifecycleController(DataLifecycleService lifecycle, Set<String> callers, Set<String> moveCallers) {
         this.lifecycle = lifecycle;
         this.callers = Set.copyOf(callers);
+        this.moveCallers = Set.copyOf(moveCallers);
+    }
+
+    @PostMapping("/move/tables")
+    @RequiredScope("platform:operator")
+    public ObjectNode moveTables() {
+        guard(moveCallers);
+        return lifecycle.moveTables();
+    }
+
+    @PostMapping("/move/extract")
+    @RequiredScope("platform:operator")
+    public ObjectNode moveExtract(@RequestBody JsonNode body) {
+        guard(moveCallers);
+        return lifecycle.moveExtract(body);
+    }
+
+    @PostMapping("/move/import")
+    @RequiredScope("platform:operator")
+    public ObjectNode moveImport(@RequestBody JsonNode body) {
+        guard(moveCallers);
+        return lifecycle.moveImport(body);
     }
 
     @PostMapping("/count")
@@ -75,6 +105,10 @@ public class DataLifecycleController {
     }
 
     private void guard() {
+        guard(callers);
+    }
+
+    private static void guard(Set<String> callers) {
         TenantContext.require();
         String caller = TenantContext.callingService().orElse(null);
         if (caller == null || !callers.contains(caller)) {
