@@ -420,7 +420,7 @@ CREATE POLICY tenant_isolation ON screening_whitelist USING (tenant_id = current
 CREATE TRIGGER trg_screening_whitelist_touch BEFORE UPDATE ON screening_whitelist FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
--- state change and relayed to Kafka by the outbox relay (Debezium).
+-- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.
 CREATE TABLE outbox (
   id              uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id       uuid NOT NULL,
@@ -429,8 +429,12 @@ CREATE TABLE outbox (
   event_type      varchar(128) NOT NULL,
   payload         jsonb NOT NULL,
   headers         jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  published_at    timestamptz
 );
+COMMENT ON COLUMN outbox.published_at IS 'When the relay published the event (NULL = pending). Relayed rows are kept for the replay window (meridian.events.retention.window) and then purged (MR-GAME-DAY)';
+CREATE INDEX ix_outbox_pending ON outbox (created_at, id) WHERE published_at IS NULL;
+CREATE INDEX ix_outbox_published ON outbox (published_at) WHERE published_at IS NOT NULL;
 CREATE INDEX ix_outbox_created ON outbox (created_at);
 
 -- Idempotency keys for POST requests (24h retention).
