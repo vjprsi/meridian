@@ -48,6 +48,20 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         refundDays = refundDays == null ? 56 : refundDays;
     }
 
+    /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
+    @Override
+    public UUID ledgerId() {
+        return io.meridian.web.config.TenantSettings.uuid("payment-service", "ledger_id", ledgerId);
+    }
+
+    /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code payment-service}). */
+    @Override
+    public Gl gl() {
+        return new Gl(io.meridian.web.config.TenantSettings.uuid("payment-service", "gl.clearing", gl.clearing()),
+                io.meridian.web.config.TenantSettings.uuid("payment-service", "gl.fee_income", gl.feeIncome()),
+                io.meridian.web.config.TenantSettings.uuid("payment-service", "gl.direct_debit_clearing", gl.directDebitClearing()));
+    }
+
     /**
      * @param clearing          default rail clearing account when a rail has no settlement account
      * @param feeIncome         fee income account

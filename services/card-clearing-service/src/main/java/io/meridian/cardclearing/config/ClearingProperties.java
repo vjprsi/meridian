@@ -19,6 +19,32 @@ public record ClearingProperties(UUID ledgerId, Clearing clearing) {
         clearing = clearing == null ? new Clearing(null, null, null, null, null, null, null, null) : clearing;
     }
 
+    /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
+    @Override
+    public UUID ledgerId() {
+        return io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "ledger_id", ledgerId);
+    }
+
+    /**
+     * Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code card-clearing-service}:
+     * {@code clearing.settlement_accounts.<SCHEME>}, {@code clearing.fee_income_account}, ...).
+     */
+    @Override
+    public Clearing clearing() {
+        Map<String, UUID> settlement = new HashMap<>(clearing.settlementAccounts());
+        for (String scheme : java.util.List.of("VISA", "MASTERCARD", "AMEX", "UNIONPAY", "JCB", "DISCOVER", "RUPAY", "ELO", "LOCAL")) {
+            UUID tenant = io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "clearing.settlement_accounts." + scheme, null);
+            if (tenant != null) {
+                settlement.put(scheme, tenant);
+            }
+        }
+        return new Clearing(settlement, io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "clearing.fee_income_account", clearing.feeIncomeAccount()),
+                io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "clearing.interchange_income_account", clearing.interchangeIncomeAccount()),
+                io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "clearing.nostro_account", clearing.nostroAccount()),
+                io.meridian.web.config.TenantSettings.uuid("card-clearing-service", "clearing.tax_account", clearing.taxAccount()),
+                clearing.matchTolerancePct(), clearing.atmFee(), clearing.interchangeRates());
+    }
+
     /**
      * @param settlementAccounts  scheme settlement (clearing) ledger account per scheme, e.g. VISA -> uuid
      * @param feeIncomeAccount    fee income for cardholder fees

@@ -29,6 +29,20 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
         risk = risk == null ? new Risk(null, null, null) : risk;
     }
 
+    /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
+    @Override
+    public UUID ledgerId() {
+        return io.meridian.web.config.TenantSettings.uuid("wallet-service", "ledger_id", ledgerId);
+    }
+
+    /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code wallet-service}). */
+    @Override
+    public Gl gl() {
+        return new Gl(io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.fee_income", gl.feeIncome()),
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.tax_payable", gl.taxPayable()),
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.bank_clearing", gl.bankClearing()));
+    }
+
     /** Ledger accounts: fee income, tax payable and the bank clearing (nostro / settlement) account. */
     public record Gl(UUID feeIncome, UUID taxPayable, UUID bankClearing) {}
 

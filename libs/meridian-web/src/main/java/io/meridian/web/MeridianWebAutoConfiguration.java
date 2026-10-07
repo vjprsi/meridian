@@ -112,6 +112,14 @@ public class MeridianWebAutoConfiguration {
         return new ServiceClient(json, env);
     }
 
+    /** Per-tenant ledger routing from config-service (namespace {@code ledger}); see {@link io.meridian.web.config.TenantSettings}. */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.config.TenantSettings tenantSettings(ServiceClient client, Environment env) {
+        return new io.meridian.web.config.TenantSettings(client,
+                env.getProperty("meridian.tenant-settings.ttl-ms", Long.class, 30_000L)).install();
+    }
+
     @Bean
     WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props) {
         return new WebMvcConfigurer() {

@@ -39,6 +39,22 @@ public record DepositProperties(UUID ledgerId, String country, String bankCode, 
         batch = batch == null ? new Batch(false, List.of(), null) : batch;
     }
 
+    /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
+    @Override
+    public UUID ledgerId() {
+        return io.meridian.web.config.TenantSettings.uuid("deposit-service", "ledger_id", ledgerId);
+    }
+
+    /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code deposit-service}). */
+    @Override
+    public Gl gl() {
+        return new Gl(io.meridian.web.config.TenantSettings.uuid("deposit-service", "gl.interest_expense", gl.interestExpense()),
+                io.meridian.web.config.TenantSettings.uuid("deposit-service", "gl.interest_income", gl.interestIncome()),
+                io.meridian.web.config.TenantSettings.uuid("deposit-service", "gl.fee_income", gl.feeIncome()),
+                io.meridian.web.config.TenantSettings.uuid("deposit-service", "gl.tax_payable", gl.taxPayable()),
+                io.meridian.web.config.TenantSettings.uuid("deposit-service", "gl.clearing", gl.clearing()));
+    }
+
     /** Internal ledger accounts (ids in ledger-service). */
     public record Gl(UUID interestExpense, UUID interestIncome, UUID feeIncome, UUID taxPayable, UUID clearing) {}
 

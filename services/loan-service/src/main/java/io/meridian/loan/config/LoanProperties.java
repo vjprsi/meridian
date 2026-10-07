@@ -32,6 +32,31 @@ public record LoanProperties(UUID ledgerId, Gl gl, List<LocalDate> holidays, Int
         batch = batch == null ? new Batch(false, List.of(), null) : batch;
     }
 
+    /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
+    @Override
+    public UUID ledgerId() {
+        return io.meridian.web.config.TenantSettings.uuid("loan-service", "ledger_id", ledgerId);
+    }
+
+    /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code loan-service}). */
+    @Override
+    public Gl gl() {
+        return new Gl(io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.interest_receivable", gl.interestReceivable()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.interest_income", gl.interestIncome()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.interest_suspense", gl.interestSuspense()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.fee_receivable", gl.feeReceivable()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.fee_income", gl.feeIncome()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.penalty_receivable", gl.penaltyReceivable()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.penalty_income", gl.penaltyIncome()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.write_off_expense", gl.writeOffExpense()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.recovery_income", gl.recoveryIncome()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.agency_commission", gl.agencyCommission()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.clearing", gl.clearing()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.overpayment", gl.overpayment()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.tax_payable", gl.taxPayable()),
+                io.meridian.web.config.TenantSettings.uuid("loan-service", "gl.waiver_expense", gl.waiverExpense()));
+    }
+
     /**
      * Internal ledger accounts (ids in ledger-service). {@code clearing} receives funds paid out to wallets, cards
      * and external transfers and funds received from outside the bank (cash, transfers, collateral sales).
