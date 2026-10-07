@@ -92,8 +92,16 @@ public class FileStore {
     }
 
     public byte[] readSigned(String key, long expires, String signature) {
-        if (Instant.now().getEpochSecond() > expires) {
+        long now = Instant.now().getEpochSecond();
+        if (now > expires) {
             throw new ApiException(403, "url_expired", "The download link has expired");
+        }
+        // SEC-36: a link is never valid for longer than this service issues them (+1 min clock skew)
+        if (expires > now + urlTtl.toSeconds() + 60) {
+            throw new ApiException(403, "invalid_expiry", "The download link expiry exceeds the maximum lifetime");
+        }
+        if (key == null || isQuarantined(key)) {
+            throw new ApiException(403, "file_quarantined", "Quarantined content is never served");
         }
         if (signature == null || !MessageDigest.isEqual(hmac(key + "\n" + expires).getBytes(StandardCharsets.UTF_8),
                 signature.getBytes(StandardCharsets.UTF_8))) {

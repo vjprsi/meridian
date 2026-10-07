@@ -26,15 +26,6 @@ final class Http {
         return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders()).body(object(json, r.getBody()));
     }
 
-    /** Absolute URL for a path on this service (used for pre-signed download links). */
-    static String absolute(String path) {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
-            HttpServletRequest r = a.getRequest();
-            return r.getScheme() + "://" + r.getServerName() + ":" + r.getServerPort() + r.getContextPath() + path;
-        }
-        return path;
-    }
-
     static int ifMatch(String ifMatch) {
         if (ifMatch == null || ifMatch.isBlank()) {
             throw ApiException.badRequest("if_match_required", "If-Match header with the current row_version is required");

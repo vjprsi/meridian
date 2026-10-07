@@ -26,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @RestController
 public class InboundFilesController implements InboundFilesApi {
+    private final LinkBase links;
     private final InboundService inbound;
     private final ContentFetcher fetcher;
     private final Rows rows;
@@ -34,7 +35,8 @@ public class InboundFilesController implements InboundFilesApi {
     private final JsonMapper json;
 
     public InboundFilesController(InboundService inbound, ContentFetcher fetcher, Rows rows, CrudEngine crud,
-                                  Idempotency idempotency, JsonMapper json) {
+                                  Idempotency idempotency, JsonMapper json, LinkBase links) {
+        this.links = links;
         this.inbound = inbound;
         this.fetcher = fetcher;
         this.rows = rows;
@@ -79,7 +81,7 @@ public class InboundFilesController implements InboundFilesApi {
     @Override
     public ResponseEntity<Map<String, Object>> inboundFilesDownload(UUID id) {
         TenantContext.require();
-        return ResponseEntity.ok(Http.object(json, inbound.downloadLink(id, Http::absolute)));
+        return ResponseEntity.ok(Http.object(json, inbound.downloadLink(id, links::absolute)));
     }
 
     @Override
