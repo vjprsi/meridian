@@ -215,8 +215,9 @@ public class ApprovalService {
     public ObjectNode cancel(UUID id, String reason, Caller caller) {
         ObjectNode r = store.lock(TABLE, id);
         StateMachine.APPROVAL_REQUEST.require(r.path("status").asString(), "CANCELLED");
-        if (!caller.principal().equals(r.path("maker").asString())) {
-            throw new ApiException(403, "not_maker", "Only the maker " + r.path("maker").asString() + " can cancel this request");
+        if (!mayCancel(r, caller)) {
+            throw new ApiException(403, "not_maker", "Only the maker " + r.path("maker").asString()
+                    + ", an approver of the current level or the owning service can cancel this request");
         }
         ObjectNode values = json.createObjectNode();
         values.put("status", "CANCELLED");
@@ -261,6 +262,21 @@ public class ApprovalService {
     }
 
     // ------------------------------------------------------------------ internals
+
+    /**
+     * Who may withdraw a pending request: the maker; a checker eligible for the current level (who could reject it
+     * anyway) - this is how an owning service retires the inbox item after the change was decided directly on its
+     * own endpoint ({@code Approvals.cancelOpen} runs as the deciding user); or a service identity ({@code svc:...},
+     * internal tokens only in JWT mode).
+     */
+    private static boolean mayCancel(ObjectNode r, Caller caller) {
+        String principal = caller.principal();
+        if (principal.equals(r.path("maker").asString()) || principal.startsWith("svc:")) {
+            return true;
+        }
+        ApprovalRoute route = ApprovalRoute.fromJson(r.get("approval_route"));
+        return route.at(r.path("current_level").asInt(1)).allows(caller.roles());
+    }
 
     private ObjectNode close(UUID id, String comment, Caller caller, String decision, String status, String event) {
         if (comment == null || comment.isBlank()) {

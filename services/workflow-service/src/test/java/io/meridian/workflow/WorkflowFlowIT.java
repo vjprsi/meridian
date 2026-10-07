@@ -191,8 +191,16 @@ class WorkflowFlowIT {
         assertThat(cancelRejected.get("code").asString()).isEqualTo("invalid_transition");
 
         String r2 = newRequest("alice");
-        JsonNode notMaker = post("/v1/approval-requests/" + r2 + "/cancel", "{\"reason\":\"x\"}", "bob", "CHECKER", 403);
+        JsonNode notMaker = post("/v1/approval-requests/" + r2 + "/cancel", "{\"reason\":\"x\"}", "carol", "", 403);
         assertThat(notMaker.get("code").asString()).isEqualTo("not_maker");
+        // An owning service retires the inbox item after a direct decision as the deciding checker (Approvals.cancelOpen)
+        // or under its service identity: both may cancel; a user without the level's role may not (above).
+        String direct = newRequest("alice");
+        assertThat(post("/v1/approval-requests/" + direct + "/cancel", "{\"reason\":\"approved directly\"}", "bob", "CHECKER", 200)
+                .get("status").asString()).isEqualTo("CANCELLED");
+        String bySvc = newRequest("alice");
+        assertThat(post("/v1/approval-requests/" + bySvc + "/cancel", "{\"reason\":\"superseded\"}", "svc:payment-service", "", 200)
+                .get("status").asString()).isEqualTo("CANCELLED");
         JsonNode cancelled = post("/v1/approval-requests/" + r2 + "/cancel", "{\"reason\":\"duplicate\"}", "alice", "", 200);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
         assertThat(cancelled.get("cancel_reason").asString()).isEqualTo("duplicate");
