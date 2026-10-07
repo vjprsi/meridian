@@ -14,13 +14,15 @@ class HeaderPolicyTest {
         HeaderPolicy dev = new HeaderPolicy("dev", List.of());
         for (String h : List.of("X-Tenant-Id", "x-user", "X-Roles", "X-MFA-Verified", "X-Customer-Id",
                 "X-On-Behalf-Of-Customer", "X-Meridian-Service", "X-Auth-Time", "X-Acr", "X-Permissions",
-                "X-Caller-Service")) {
+                "X-Caller-Service", "X-Agent-Id")) {
             assertThat(jwt.forward(h)).as(h).isFalse();
             assertThat(dev.forward(h)).as(h).isTrue();
         }
         assertThat(jwt.forward("Authorization")).isTrue();
         assertThat(jwt.forward("Idempotency-Key")).isTrue();
         assertThat(jwt.forward("X-Rail-Signature")).isTrue();
+        assertThat(jwt.forward("X-Agent-Device-Proof")).isTrue();
+        assertThat(jwt.forward("X-Applicant-Token")).isTrue();
         assertThat(new HeaderPolicy(null, null).devMode()).isFalse();
     }
 
