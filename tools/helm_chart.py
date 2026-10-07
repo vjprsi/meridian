@@ -3,7 +3,8 @@
 
 infra/helm/meridian deploys a whole Meridian cell: every domain service plus the edge gateway, each with Deployment,
 Service, ServiceAccount, HorizontalPodAutoscaler, PodDisruptionBudget, NetworkPolicy and (optionally) a
-Prometheus ServiceMonitor; global.cell.* names the cell (S20). infra/helm/meridian-router deploys the cell router, the
+Prometheus ServiceMonitor, plus one schema-migration Job per service (Helm pre-install / pre-upgrade hook, the only
+place the schema-owner credentials are mounted - GAP-22); global.cell.* names the cell (S20). infra/helm/meridian-router deploys the cell router, the
 regional entry tier in front of the cells. Infrastructure (PostgreSQL, Kafka, Keycloak, OTel collector) is external and
 referenced through values. Secrets are referenced by name, never rendered. Run after tools/generate.py.
 """
@@ -25,6 +26,7 @@ HOT = {"ledger-service": (3, "1", "1Gi"), "payment-service": (3, "1", "1Gi"),
 # the chart only references it. The services refuse to start outside security-mode=dev when one is missing or a
 # committed development default (libs/meridian-web RequiredSecrets, card-vault MasterKeyProviders).
 SERVICE_SECRETS = {
+    "analytics-service": {"MERIDIAN_ANALYTICS_EMBED_SECRET": "embed-secret"},
     "audit-service": {"MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY": "download-signing-key"},
     "card-authorization-service": {"MERIDIAN_CARDS_AUTH_JIT_SECRET": "jit-secret"},
     "card-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret"},
@@ -35,6 +37,8 @@ SERVICE_SECRETS = {
                                   "MERIDIAN_CARDS_TOKENS_OTP_KEY": "otp-key",
                                   "MERIDIAN_CARDS_TOKENS_PAYLOAD_KEY": "payload-key"},
     "card-vault-service": {"MERIDIAN_CARDS_VAULT_MASTER_KEY": "master-key"},
+    # GAP-14: identifier hashes, OTP peppering and passkey challenges
+    "customer-service": {"MERIDIAN_CUSTOMER_SECRET_KEY": "secret-key"},
     "document-service": {"MERIDIAN_ESIGN_CALLBACK_SECRET": "esign-callback-secret",
                          "MERIDIAN_DOCUMENTS_S3_ACCESS_KEY": "s3-access-key",
                          "MERIDIAN_DOCUMENTS_S3_SECRET_KEY": "s3-secret-key"},
@@ -48,9 +52,16 @@ SERVICE_SECRETS = {
                            "MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET": "resume-token-secret"},
     "reconciliation-service": {"MERIDIAN_REFS_COUNTERPARTY_KEY": "counterparty-key"},
     "routing-service": {"MERIDIAN_ROUTING_CALLBACK_SECRET": "callback-secret"},
-    "search-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": "contact-lookup-key"},
     "statement-service": {"MERIDIAN_STATEMENT_DOWNLOAD_SECRET": "download-secret"},
     "webhook-service": {"MERIDIAN_WEBHOOKS_KEY": "encryption-key"},
+}
+
+# Secrets that several services MUST share, as {service: {ENV_VAR: (Secret name, key)}}: one Secret referenced by
+# every consumer, so the values cannot drift apart (GAP-14: customer-service and search-service compute the same
+# contact lookup hash only with the same key).
+SHARED_SECRETS = {
+    "customer-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": ("meridian-contact-lookup", "key")},
+    "search-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": ("meridian-contact-lookup", "key")},
 }
 
 HELPERS = r'''{{/* Common labels for a Meridian component. */}}
@@ -166,10 +177,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: username}}
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: password}}
-            - name: SPRING_FLYWAY_USER
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
-            - name: SPRING_FLYWAY_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+            # GAP-22: the long-lived pod holds the runtime role only; migrations run as the schema owner in the
+            # pre-install / pre-upgrade Job (templates/migrations.yaml), never in the Deployment
+            - name: SPRING_FLYWAY_ENABLED
+              value: "false"
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: {{ $svc.dbPool | default $g.postgres.poolSize | quote }}
             {{- end }}
@@ -182,6 +193,10 @@ spec:
             {{- range $envName, $key := $svc.secretEnv }}
             - name: {{ $envName }}
               valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
+            {{- end }}
+            {{- range $envName, $ref := $svc.sharedSecretEnv }}
+            - name: {{ $envName }}
+              valueFrom: {secretKeyRef: {name: {{ $ref.secret }}, key: {{ $ref.key }}}}
             {{- end }}
             {{- range $k, $v := $svc.env }}
             - name: {{ $k }}
@@ -285,6 +300,84 @@ spec:
 {{- end }}
 '''
 
+MIGRATIONS_TPL = r'''{{- /*
+GAP-22: schema migrations run as the schema owner in one Job per service, before the Deployments are created or
+updated (Helm hooks pre-install / pre-upgrade). The Job starts the service image in migrate-only mode
+(MERIDIAN_MIGRATE_ONLY=true: Flyway, then exit; no web server, Kafka or schedulers), so the owner credentials
+(global.postgres.migrationSecret) are mounted here and nowhere else. A failed Job fails the release before any pod
+is replaced. The Job pod carries its own name label, so the service's Service never selects it. A standby cell
+never migrates: its database is a read-only replica of the primary, which already ran the same migrations.
+*/ -}}
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- if and $g.migrations.enabled (ne $g.cell.role "standby") }}
+{{- range $svc := .Values.services }}
+{{- if and $svc.enabled $svc.database }}
+{{- $ctx := dict "root" $root "name" (printf "%s-migrate" $svc.name) "domain" $svc.domain }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-migrate" $svc.name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "meridian.labels" $ctx | nindent 4 }}
+    app.kubernetes.io/component: db-migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ $g.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ $g.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ $g.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "meridian.labels" $ctx | nindent 8 }}
+        app.kubernetes.io/component: db-migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with $g.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "meridian.image" (dict "root" $root "name" $svc.name) }}
+          imagePullPolicy: {{ $g.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            - name: MERIDIAN_MIGRATE_ONLY
+              value: "true"
+            - name: SPRING_DATASOURCE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+            - name: SPRING_FLYWAY_USER
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+          resources:
+            requests: {cpu: {{ $g.migrations.resources.cpu | quote }}, memory: {{ $g.migrations.resources.memory | quote }}}
+            limits: {memory: {{ $g.migrations.resources.memory | quote }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+{{- end }}
+{{- end }}
+{{- end }}
+'''
+
 CONFIG_TPL = r'''{{- $g := .Values.global -}}
 {{- if and $g.cell.id (not (regexMatch "^[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?$" $g.cell.id)) }}
 {{- fail "global.cell.id must be the cell code of the tenant registry (lowercase letters, digits, dashes)" }}
@@ -373,12 +466,25 @@ API: {{ if .Values.ingress.enabled }}https://{{ .Values.ingress.host }}{{ else }
 
 Required secrets in the namespace (not created by this chart):
   {{ .Values.global.postgres.appSecret }}        username/password of the runtime role (RLS-bound, no DDL)
-  {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner used by Flyway
+  {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner, mounted only by the
+      <service>-migrate Jobs (Helm pre-install / pre-upgrade hooks), never by a running Deployment (GAP-22)
   {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the service account (scope meridian:internal)
 {{- range $svc := .Values.services }}
 {{- if and $svc.enabled $svc.secretEnv }}
   {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}  keys: {{ join ", " (values $svc.secretEnv | sortAlpha) }}
 {{- end }}
+{{- end }}
+{{- $shared := dict }}
+{{- range $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- range $envName, $ref := $svc.sharedSecretEnv }}
+{{- $k := printf "%s  key: %s" $ref.secret $ref.key }}
+{{- $_ := set $shared $k (append (get $shared $k | default list) $svc.name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $k, $users := $shared }}
+  {{ $k }}  (one Secret shared by {{ join ", " $users }})
 {{- end }}
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.
@@ -734,6 +840,8 @@ def services_values(manifest):
         if s["name"] in SERVICE_SECRETS:
             r["secretName"] = f"meridian-{s['name']}-secrets"
             r["secretEnv"] = dict(sorted(SERVICE_SECRETS[s["name"]].items()))
+        if s["name"] in SHARED_SECRETS:
+            r["sharedSecretEnv"] = dict(sorted(SHARED_SECRETS[s["name"]].items()))
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
                  "replicas": 3, "cpu": "500m", "memory": "512Mi"})
@@ -772,7 +880,13 @@ def values_yaml(rows, app_version):
         '    sslMode: "require"',
         "    poolSize: 20",
         '    appSecret: "meridian-db-app"',
-        '    migrationSecret: "meridian-db-owner"',
+        '    migrationSecret: "meridian-db-owner"   # schema owner: mounted only by the migration Jobs (GAP-22)',
+        "  migrations:               # GAP-22: Flyway per service in a pre-install / pre-upgrade hook Job (schema owner)",
+        "    enabled: true           # false: run migrations out of band (e.g. a GitOps PreSync job); pods never migrate",
+        "    backoffLimit: 1",
+        "    activeDeadlineSeconds: 900",
+        "    ttlSecondsAfterFinished: 86400",
+        "    resources: {cpu: 250m, memory: 512Mi}",
         "  kafka:",
         '    bootstrapServers: "meridian-kafka:9092"',
         "  auth:",
@@ -801,7 +915,8 @@ def values_yaml(rows, app_version):
         "  tls: []",
         "",
         "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,",
-        "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git).",
+        "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),",
+        "# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).",
         "services:",
     ]
     for r in rows:
@@ -814,6 +929,10 @@ def values_yaml(rows, app_version):
             lines.append("    secretEnv:")
             for env, key in r["secretEnv"].items():
                 lines.append(f"      {env}: {yaml_value(key)}")
+        if "sharedSecretEnv" in r:
+            lines.append("    sharedSecretEnv:")
+            for env, (secret, key) in r["sharedSecretEnv"].items():
+                lines.append(f"      {env}: {{secret: {yaml_value(secret)}, key: {yaml_value(key)}}}")
     return "\n".join(lines) + "\n"
 
 
@@ -835,6 +954,7 @@ kubeVersion: ">=1.30.0-0"
         "templates/_helpers.tpl": HELPERS,
         "templates/services.yaml": SERVICES_TPL,
         "templates/config.yaml": CONFIG_TPL,
+        "templates/migrations.yaml": MIGRATIONS_TPL,
         "templates/ingress.yaml": INGRESS_TPL,
         "templates/NOTES.txt": NOTES,
         ".helmignore": ".git/\n*.md.bak\n",

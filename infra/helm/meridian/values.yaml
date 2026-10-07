@@ -18,7 +18,13 @@ global:
     sslMode: "require"
     poolSize: 20
     appSecret: "meridian-db-app"
-    migrationSecret: "meridian-db-owner"
+    migrationSecret: "meridian-db-owner"   # schema owner: mounted only by the migration Jobs (GAP-22)
+  migrations:               # GAP-22: Flyway per service in a pre-install / pre-upgrade hook Job (schema owner)
+    enabled: true           # false: run migrations out of band (e.g. a GitOps PreSync job); pods never migrate
+    backoffLimit: 1
+    activeDeadlineSeconds: 900
+    ttlSecondsAfterFinished: 86400
+    resources: {cpu: 250m, memory: 512Mi}
   kafka:
     bootstrapServers: "meridian-kafka:9092"
   auth:
@@ -47,7 +53,8 @@ ingress:
   tls: []
 
 # One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,
-# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git).
+# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),
+# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).
 services:
   - name: deposit-service
     domain: "accounts"
@@ -229,9 +236,8 @@ services:
     enabled: true
     database: "search_db"
     schema: "search"
-    secretName: "meridian-search-service-secrets"
-    secretEnv:
-      MERIDIAN_CONTACT_LOOKUP_KEY: "contact-lookup-key"
+    sharedSecretEnv:
+      MERIDIAN_CONTACT_LOOKUP_KEY: {secret: "meridian-contact-lookup", key: "key"}
   - name: archive-service
     domain: "operations"
     enabled: true
@@ -242,6 +248,11 @@ services:
     enabled: true
     database: "customer_db"
     schema: "customer"
+    secretName: "meridian-customer-service-secrets"
+    secretEnv:
+      MERIDIAN_CUSTOMER_SECRET_KEY: "secret-key"
+    sharedSecretEnv:
+      MERIDIAN_CONTACT_LOOKUP_KEY: {secret: "meridian-contact-lookup", key: "key"}
   - name: onboarding-service
     domain: "party"
     enabled: true
@@ -361,6 +372,9 @@ services:
     enabled: true
     database: "analytics_db"
     schema: "analytics"
+    secretName: "meridian-analytics-service-secrets"
+    secretEnv:
+      MERIDIAN_ANALYTICS_EMBED_SECRET: "embed-secret"
   - name: ai-platform-service
     domain: "reporting"
     enabled: true

@@ -89,10 +89,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: username}}
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: password}}
-            - name: SPRING_FLYWAY_USER
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
-            - name: SPRING_FLYWAY_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+            # GAP-22: the long-lived pod holds the runtime role only; migrations run as the schema owner in the
+            # pre-install / pre-upgrade Job (templates/migrations.yaml), never in the Deployment
+            - name: SPRING_FLYWAY_ENABLED
+              value: "false"
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: {{ $svc.dbPool | default $g.postgres.poolSize | quote }}
             {{- end }}
@@ -105,6 +105,10 @@ spec:
             {{- range $envName, $key := $svc.secretEnv }}
             - name: {{ $envName }}
               valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
+            {{- end }}
+            {{- range $envName, $ref := $svc.sharedSecretEnv }}
+            - name: {{ $envName }}
+              valueFrom: {secretKeyRef: {name: {{ $ref.secret }}, key: {{ $ref.key }}}}
             {{- end }}
             {{- range $k, $v := $svc.env }}
             - name: {{ $k }}

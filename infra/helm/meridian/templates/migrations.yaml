@@ -1,0 +1,76 @@
+{{- /*
+GAP-22: schema migrations run as the schema owner in one Job per service, before the Deployments are created or
+updated (Helm hooks pre-install / pre-upgrade). The Job starts the service image in migrate-only mode
+(MERIDIAN_MIGRATE_ONLY=true: Flyway, then exit; no web server, Kafka or schedulers), so the owner credentials
+(global.postgres.migrationSecret) are mounted here and nowhere else. A failed Job fails the release before any pod
+is replaced. The Job pod carries its own name label, so the service's Service never selects it. A standby cell
+never migrates: its database is a read-only replica of the primary, which already ran the same migrations.
+*/ -}}
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- if and $g.migrations.enabled (ne $g.cell.role "standby") }}
+{{- range $svc := .Values.services }}
+{{- if and $svc.enabled $svc.database }}
+{{- $ctx := dict "root" $root "name" (printf "%s-migrate" $svc.name) "domain" $svc.domain }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-migrate" $svc.name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "meridian.labels" $ctx | nindent 4 }}
+    app.kubernetes.io/component: db-migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ $g.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ $g.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ $g.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "meridian.labels" $ctx | nindent 8 }}
+        app.kubernetes.io/component: db-migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with $g.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "meridian.image" (dict "root" $root "name" $svc.name) }}
+          imagePullPolicy: {{ $g.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            - name: MERIDIAN_MIGRATE_ONLY
+              value: "true"
+            - name: SPRING_DATASOURCE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+            - name: SPRING_FLYWAY_USER
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+          resources:
+            requests: {cpu: {{ $g.migrations.resources.cpu | quote }}, memory: {{ $g.migrations.resources.memory | quote }}}
+            limits: {memory: {{ $g.migrations.resources.memory | quote }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+{{- end }}
+{{- end }}
+{{- end }}
