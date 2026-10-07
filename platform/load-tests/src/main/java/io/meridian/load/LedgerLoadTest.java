@@ -24,6 +24,11 @@ import tools.jackson.databind.json.JsonMapper;
  * accounts, funds them, then runs closed-loop workers posting random balanced transfers between customer
  * accounts for the given duration. Prints TPS, latency percentiles and errors, then asks the ledger to verify
  * itself (balances = sum of entries, gapless versions, balanced entries, content hashes).
+ *
+ * <p>{@code --with-refs true} posts every transfer the way payment-service does (RECON-REAL-REFS): with a reference
+ * and {@code external_refs} (UETR, end-to-end id, instruction id, clearing and rail references, counterparty name and
+ * account), i.e. typed reference columns on the journal and both lines, the partial reference indexes and the
+ * counterparty account pseudonym on every posting.
  */
 public final class LedgerLoadTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -31,25 +36,28 @@ public final class LedgerLoadTest {
             .connectTimeout(Duration.ofSeconds(5)).version(HttpClient.Version.HTTP_1_1).build();
 
     private final String base;
+    private final boolean withRefs;
     private final String tenant = UUID.randomUUID().toString();
 
-    private LedgerLoadTest(String base) {
+    private LedgerLoadTest(String base, boolean withRefs) {
         this.base = base;
+        this.withRefs = withRefs;
     }
 
     public static void main(String[] args) throws Exception {
         Map<String, String> a = new ConcurrentHashMap<>(Map.of("--base", "http://localhost:9110", "--seconds", "60",
-                "--concurrency", "64", "--accounts", "200", "--target-tps", "1000"));
+                "--concurrency", "64", "--accounts", "200", "--target-tps", "1000", "--with-refs", "false"));
         for (int i = 0; i + 1 < args.length; i += 2) {
             a.put(args[i], args[i + 1]);
         }
-        new LedgerLoadTest(a.get("--base")).run(Integer.parseInt(a.get("--seconds")),
+        new LedgerLoadTest(a.get("--base"), Boolean.parseBoolean(a.get("--with-refs"))).run(Integer.parseInt(a.get("--seconds")),
                 Integer.parseInt(a.get("--concurrency")), Integer.parseInt(a.get("--accounts")),
                 Integer.parseInt(a.get("--target-tps")));
     }
 
     private void run(int seconds, int concurrency, int nAccounts, int targetTps) throws Exception {
-        System.out.printf("tenant %s, %d accounts, %d workers, %ds%n", tenant, nAccounts, concurrency, seconds);
+        System.out.printf("tenant %s, %d accounts, %d workers, %ds, payment refs %s%n", tenant, nAccounts, concurrency,
+                seconds, withRefs ? "on every posting" : "off");
         String ledger = post("/v1/ledgers", """
                 {"code":"LOAD","name":"Load test","legal_entity_id":"%s","base_currency":"USD"}""".formatted(UUID.randomUUID()))
                 .get("id").asString();
@@ -107,8 +115,11 @@ public final class LedgerLoadTest {
                         }
                         long t0 = System.nanoTime();
                         try {
-                            HttpResponse<String> res = send("/v1/journal-entries",
-                                    entry(ledger, from, "DEBIT", to, "CREDIT", "1.00"), UUID.randomUUID().toString());
+                            String body = entry(ledger, from, "DEBIT", to, "CREDIT", "1.00");
+                            if (withRefs) {
+                                body = withRefs(body, rnd);
+                            }
+                            HttpResponse<String> res = send("/v1/journal-entries", body, UUID.randomUUID().toString());
                             long micros = (System.nanoTime() - t0) / 1000;
                             if (res.statusCode() == 201) {
                                 ok.increment();
@@ -150,6 +161,18 @@ public final class LedgerLoadTest {
                 {"ledger_id":"%s","entries":[{"ledger_account_id":"%s","direction":"%s","amount":"%s","currency":"USD"},
                  {"ledger_account_id":"%s","direction":"%s","amount":"%s","currency":"USD"}]}"""
                 .formatted(ledger, a, da, amount, b, db, amount);
+    }
+
+    /** The posting as payment-service sends it: reference = end-to-end id plus external_refs. */
+    private static String withRefs(String entry, ThreadLocalRandom rnd) {
+        String e2e = "E2E" + Long.toString(rnd.nextLong() & Long.MAX_VALUE, 36).toUpperCase();
+        String refs = """
+                ,"reference":"%s","external_refs":{"uetr":"%s","end_to_end_id":"%s","instruction_id":"INS%d",
+                 "bank_reference":"SCT%d","scheme_reference":"TX%d","counterparty_name":"Acme Supplies Ltd",
+                 "counterparty_account":"DE89370400440532%06d","purpose_code":"SUPP"}}""".formatted(e2e, UUID.randomUUID(),
+                e2e, rnd.nextInt(1_000_000_000), rnd.nextLong(1_000_000_000_000L), rnd.nextLong(1_000_000_000_000L),
+                rnd.nextInt(1_000_000));
+        return entry.substring(0, entry.lastIndexOf('}')) + refs;
     }
 
     private JsonNode post(String path, String body) throws Exception {

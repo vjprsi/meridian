@@ -35,7 +35,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Statement / settlement file intake. A file arrives with its {@code content} (camt.052/053/054 XML, MT940/MT942,
- * CSV statement or scheme settlement report, or a JSON array, per the source's file_format) or as pre-parsed
+ * BAI2, CSV statement or scheme settlement report, or a JSON array, per the source's file_format) or as pre-parsed
  * {@code records}; it is stored, de-duplicated by SHA-256 and by the statement identification it states (statement
  * id + sequence number per source: the same statement re-sent with different bytes is rejected), parsed into
  * immutable recon_records and checked (currency, opening + movements = closing, MT942 declared debit / credit
@@ -176,6 +176,7 @@ public class FileService {
             case "CSV" -> CsvStatementParser.parse(content, csvConfig(source.path("parser_config"), sourceCcy));
             case "CAMT_053", "CAMT_054" -> CamtStatementParser.parse(content);
             case "MT940", "MT942" -> Mt940Parser.parse(content);
+            case "BAI2" -> io.meridian.reconciliation.domain.Bai2Parser.parse(content);
             case "JSON" -> {
                 JsonNode n;
                 try {

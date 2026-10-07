@@ -168,6 +168,32 @@ class ReconRealRefsIT {
         assertThat(missingExternal).containsAll(inFlight).doesNotContainAnyElementsOf(reversedPair);
     }
 
+    @Test
+    void bai2StatementsAreImportedAndChecked() throws Exception {
+        String bai;
+        try (var in = ReconRealRefsIT.class.getResourceAsStream("/statements/bai2-sample.txt")) {
+            bai = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        String source = post(MAKER, "/v1/reconciliation/sources", """
+                {"name":"US operating account (BAI2)","source_type":"BANK_STATEMENT","file_format":"BAI2",
+                 "currency":"USD","ledger_account_id":"%s"}""".formatted(UUID.randomUUID()), 201).get("id").asString();
+        JsonNode file = post(MAKER, "/v1/reconciliation/files/import", """
+                {"recon_source_id":"%s","file_name":"bai2-20260306.txt","content":%s}"""
+                .formatted(source, json.writeValueAsString(bai)), 200);
+        assertThat(file.get("status").asString()).as(file.toString()).isEqualTo("PARSED");
+        assertThat(file.get("record_count").asInt()).isEqualTo(3);
+        assertThat(file.get("statement_id").asString()).isEqualTo("BAI-20260306-01");
+        assertThat(new BigDecimal(file.get("closing_balance").asString())).isEqualByComparingTo("11625.00");
+        JsonNode records = get("/v1/reconciliation/files/" + file.get("id").asString() + "/records").get("data");
+        assertThat(records.toString()).contains("FED2026030600001").contains("3f2504e0-4f89-41d3-9a0c-0305e82c3301");
+        JsonNode broken = post(MAKER, "/v1/reconciliation/files/import", """
+                {"recon_source_id":"%s","file_name":"bai2-broken.txt","content":%s}"""
+                .formatted(source, json.writeValueAsString(bai.replace("BAI-20260306-01", "BAI-20260306-02")
+                        .replace("49,2425000", "49,2425001"))), 200);
+        assertThat(broken.get("status").asString()).isEqualTo("FAILED");
+        assertThat(broken.get("error").asString()).contains("control total");
+    }
+
     // ------------------------------------------------------------------ the week
 
     private void buildWeek() {
