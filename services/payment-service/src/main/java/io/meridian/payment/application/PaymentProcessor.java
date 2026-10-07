@@ -57,6 +57,7 @@ public class PaymentProcessor {
     }
 
     private final Rows rows;
+    private final io.meridian.web.tenancy.AdvisoryLocks locks;
     private final PaymentRecords records;
     private final Events events;
     private final LedgerClient ledger;
@@ -71,7 +72,9 @@ public class PaymentProcessor {
 
     public PaymentProcessor(Rows rows, PaymentRecords records, Events events, LedgerClient ledger,
                             CoreBankingClient core, RoutingClient routing, RiskClient risk, PaymentProperties props,
-                            PaymentHooks hooks, TransactionTemplate tx, PaymentApprovalRequests central) {
+                            PaymentHooks hooks, TransactionTemplate tx, PaymentApprovalRequests central,
+                            io.meridian.web.tenancy.AdvisoryLocks locks) {
+        this.locks = locks;
         this.central = central;
         this.rows = rows;
         this.records = records;
@@ -887,10 +890,27 @@ public class PaymentProcessor {
     public ObjectNode receive(JsonNode req, String idempotencyKey) {
         String e2e = str(req, "end_to_end_id");
         String railCode = str(req, "rail_code");
-        Optional<ObjectNode> dup = rows.queryOne("""
-                select row_to_json(t)::text from payment t
-                where direction = 'INBOUND' and end_to_end_id = ? and rail_code = ? and amount = ?::numeric""",
-                e2e, railCode, str(req, "amount"));
+        String txId = str(req, "transaction_id");
+        // SEC-28: one credit per rail transaction. The rail's transaction id identifies it when present; the end-to-end
+        // id only when it is a real one (NOTPROVIDED is shared by unrelated credits); otherwise the idempotency key.
+        boolean e2eUsable = e2e != null && !e2e.isBlank() && !"NOTPROVIDED".equalsIgnoreCase(e2e.trim());
+        String identity = txId != null && !txId.isBlank() ? "tx:" + txId
+                : e2eUsable ? "e2e:" + e2e + ":" + str(req, "amount") : "key:" + idempotencyKey;
+        return locks.withLock("pay-in:" + railCode + ":" + identity, java.time.Duration.ofSeconds(25),
+                () -> receiveLocked(req, idempotencyKey, e2e, railCode, txId, e2eUsable));
+    }
+
+    private ObjectNode receiveLocked(JsonNode req, String idempotencyKey, String e2e, String railCode, String txId,
+                                     boolean e2eUsable) {
+        Optional<ObjectNode> dup = txId != null && !txId.isBlank()
+                ? rows.queryOne("""
+                        select row_to_json(t)::text from payment t
+                        where direction = 'INBOUND' and rail_code = ? and transaction_id = ?""", railCode, txId)
+                : e2eUsable ? rows.queryOne("""
+                        select row_to_json(t)::text from payment t
+                        where direction = 'INBOUND' and end_to_end_id = ? and rail_code = ? and amount = ?::numeric""",
+                        e2e, railCode, str(req, "amount"))
+                : Optional.empty();
         if (dup.isPresent()) {
             return dup.get();
         }

@@ -182,9 +182,7 @@ public class AccountSupport {
     /** Four-eyes: the checker must differ from the maker. */
     public static void requireFourEyes(JsonNode row, String what) {
         String maker = str(row, "created_by");
-        if (maker != null && maker.equals(TenantContext.principal())) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    "The " + what + " must be approved by someone other than " + maker + " who created it");
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker,
+                "The " + what + " must be approved by someone other than " + maker + " who created it");
     }
 }

@@ -34,6 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @RestController
 public class CardTokensController implements CardTokensApi {
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
     static final String SIGNATURE_HEADER = "X-Signature";
 
     private final TokenService tokens;
@@ -44,7 +45,9 @@ public class CardTokensController implements CardTokensApi {
     private final HttpServletRequest request;
 
     CardTokensController(TokenService tokens, Actions actions, CrudEngine crud, Idempotency idempotency,
-                         CardsProperties props, HttpServletRequest request) {
+                         CardsProperties props, HttpServletRequest request,
+                         io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.tokens = tokens;
         this.actions = actions;
         this.crud = crud;
@@ -64,7 +67,7 @@ public class CardTokensController implements CardTokensApi {
     @Override
     public ResponseEntity<CardToken> cardTokensNetworkProvisionRequests(UUID tenantId,
                                                                         CardTokensNetworkProvisionRequestsRequest body) {
-        verify(TokenizationConfig.currentBody());
+        verify(tenantId, TokenizationConfig.currentBody());
         JsonNode req = actions.tree(body);
         ObjectNode row = Actions.asTenant(tenantId, "token-service-callback", () -> tokens.networkProvision(req));
         return ResponseEntity.ok(actions.model(row, CardToken.class));
@@ -72,7 +75,7 @@ public class CardTokensController implements CardTokensApi {
 
     @Override
     public ResponseEntity<CardToken> cardTokensNetworkEvents(UUID tenantId, CardTokensNetworkEventsRequest body) {
-        verify(TokenizationConfig.currentBody());
+        verify(tenantId, TokenizationConfig.currentBody());
         JsonNode req = actions.tree(body);
         ObjectNode row = Actions.asTenant(tenantId, "token-service-callback", () -> tokens.networkEvent(
                 req.get("network_token_ref").asString(), req.get("event_type").asString(),
@@ -136,9 +139,13 @@ public class CardTokensController implements CardTokensApi {
                 Crud.params().with("card_token_id", id).with("limit", limit).with("cursor", cursor));
     }
 
-    private void verify(byte[] body) {
-        if (!Crypto.verifySignature(props.callbackSecret(), body, request.getHeader(SIGNATURE_HEADER))) {
+    /** SEC-17: v2 signature (timestamp, nonce, ?tenant_id bound), legacy body-only while the deprecation flag is on. */
+    private void verify(UUID tenantId, byte[] body) {
+        String secret = props.callbackSecret();
+        if (secret == null || secret.isBlank() || tenantId == null) {
             throw Actions.invalidSignature();
         }
+        callbacks.verify("token-service", tenantId.toString(), body, request.getHeader(SIGNATURE_HEADER),
+                io.meridian.web.callback.CallbackVerifier.Headers.of(request), b -> Crypto.hmacHex(secret, b));
     }
 }

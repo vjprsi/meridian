@@ -72,3 +72,9 @@ tasks.named<ProcessResources>("processResources") {
     // Route table: lets the service permit its own public (provider callback) endpoints without a token.
     from(rootProject.layout.projectDirectory.file("generated/routes.json")) { into("meridian") }
 }
+
+// SEC-13: services default to meridian.security-mode=jwt. Tests run in dev mode (tenant/user from headers) unless a
+// test sets the mode itself (@SpringBootTest properties take precedence over this environment variable).
+tasks.withType<Test>().configureEach {
+    environment("MERIDIAN_SECURITY_MODE", "dev")
+}

@@ -46,11 +46,8 @@ public final class CustomFieldRules {
             errors.add(new ApiException.FieldError("allowed_values", "required", "ENUM fields need allowed_values"));
         }
         if (d.regex() != null) {
-            try {
-                Pattern.compile(d.regex());
-            } catch (PatternSyntaxException e) {
-                errors.add(new ApiException.FieldError("validation_regex", "invalid_regex", e.getDescription()));
-            }
+            io.meridian.common.text.SafeRegex.problem(d.regex()).ifPresent(why ->
+                    errors.add(new ApiException.FieldError("validation_regex", "invalid_regex", why)));
         }
         if (d.minValue() != null || d.maxValue() != null) {
             if (!isOrdered(d.dataType())) {
@@ -107,7 +104,7 @@ public final class CustomFieldRules {
         if (typeError != null) {
             return new ApiException.FieldError(field, d.dataType() == DataType.ENUM ? "not_allowed" : "invalid_type", typeError);
         }
-        if (d.regex() != null && !Pattern.compile(d.regex()).matcher(value).matches()) {
+        if (d.regex() != null && !io.meridian.common.text.SafeRegex.matches(d.regex(), value)) {
             return new ApiException.FieldError(field, "pattern", "must match " + d.regex());
         }
         if (isOrdered(d.dataType())) {

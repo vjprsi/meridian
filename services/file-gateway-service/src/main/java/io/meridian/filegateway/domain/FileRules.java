@@ -37,11 +37,7 @@ public final class FileRules {
 
     /** True if the file name matches the pattern in full. */
     public static boolean matches(String pattern, String fileName) {
-        try {
-            return Pattern.compile(pattern).matcher(fileName).matches();
-        } catch (PatternSyntaxException e) {
-            return false;
-        }
+        return io.meridian.common.text.SafeRegex.matches(pattern, fileName); // SEC-30
     }
 
     public static void requireIpOrCidr(String v) {

@@ -136,7 +136,8 @@ class CardVaultFlowIT {
         assertThat(logs.get("data")).hasSize(1);
         assertThat(logs.get("data").get(0).get("success").asBoolean()).isTrue();
         assertThat(logs.get("data").get(0).get("pan_token").asString()).isEqualTo(token);
-        assertThat(logs.get("data").get(0).get("caller_service").asString()).isEqualTo("cardholder-app");
+        // SEC-32: the client-chosen X-Caller-Service header is not believed; the actor is recorded instead
+        assertThat(logs.get("data").get(0).get("caller_service").asString()).isEqualTo("alice");
         assertThat(logs.get("data").get(0).get("actor_id").asString()).isEqualTo("alice");
 
         // unknown card: 404 and a failed access row that survived the rollback
@@ -232,6 +233,19 @@ class CardVaultFlowIT {
         assertThat(bad.get("pin_result").asString()).isEqualTo("NOT_PROCESSED");
         JsonNode none = verify(null, null, null, null, null);
         assertThat(none.get("cvv_result").asString()).isEqualTo("P");
+        // SEC-24: a correct CVV2 resets the counter; 5 consecutive failures block CVV2 checks, even for the right value
+        assertThat(verify("321", null, null, null, null).get("cvv_result").asString()).isEqualTo("M");
+        for (int i = 1; i <= 5; i++) {
+            JsonNode miss = verify(String.format("%03d", i), null, null, null, null);
+            assertThat(miss.get("cvv_result").asString()).isEqualTo("N");
+            assertThat(miss.get("cvv_blocked").asBoolean()).isEqualTo(i == 5);
+        }
+        JsonNode cvvBlocked = verify("321", null, null, null, null);
+        assertThat(cvvBlocked.get("cvv_result").asString()).isEqualTo("N");
+        assertThat(cvvBlocked.get("cvv_blocked").asBoolean()).isTrue();
+        try (Connection c = DriverManager.getConnection(MeridianTestContainers.adminJdbcUrl(), "meridian", "meridian")) {
+            c.createStatement().execute("update card_vault.card_data_vault set cvv_fail_count = 0, cvv_blocked_at = null");
+        }
 
         for (int i = 1; i <= 3; i++) {
             JsonNode wrong = verify(null, null, null, pinBlock("2580", PAN_FULL, "zpk-default", 1), "zpk-default");
@@ -323,6 +337,15 @@ class CardVaultFlowIT {
                 {"pan_token":"%s","encrypted_pin_block":"%s","pin_key_id":"%s"}"""
                 .formatted(token, pinBlock("7391", PAN_FULL, "zpk-partner", 1), zpk.get("id").asString()), 200)
                 .get("pin_result").asString()).isEqualTo("VERIFIED");
+
+        // SEC-37: data keys are tenant-scoped; platform labels and the scope separator are reserved
+        for (JsonNode k : call(TENANT, "GET", "/v1/card-vault/keys?key_type=PAN_DEK", null, null, 200).get("data")) {
+            assertThat(k.get("hsm_key_label").asString()).endsWith("@" + TENANT);
+        }
+        problem(TENANT, "POST", "/v1/card-vault/keys", "key-res1", """
+                {"key_type":"ZPK","hsm_key_label":"pan-dek"}""", 422, "reserved_key_label");
+        problem(TENANT, "POST", "/v1/card-vault/keys", "key-res2", """
+                {"key_type":"PAN_DEK","hsm_key_label":"x@0199a000-0000-7000-8000-0000000c0002"}""", 422, "reserved_key_label");
     }
 
     @Test

@@ -233,6 +233,33 @@ class KycFlowIT {
         JsonNode noProfile = check(UUID.randomUUID().toString(), "LIVENESS", null, 422);
         assertThat(noProfile.get("code").asString()).isEqualTo("profile_not_found");
         assertThat(get("/v1/kyc/profiles/" + bobProfile + "/checks", TENANT).get("data")).hasSize(3);
+
+        // SEC-17 v2: every applied field is signed (a changed score fails), fresh and single use
+        customerNames.put(bob, "Bob ASYNC Smith");
+        String ref2 = check(bobProfile, "FACE_MATCH", null, 201).get("provider_reference").asString();
+        String canonical = "{\"provider_reference\":\"" + ref2 + "\",\"score\":0.9,\"status\":\"PASSED\"}";
+        String ts = String.valueOf(java.time.Instant.now().getEpochSecond());
+        String nonce = "kyc-" + UUID.randomUUID();
+        String v2 = sign(ts + "." + nonce + ".." + canonical);
+        String tampered = "{\"payload\":{\"provider_reference\":\"%s\",\"status\":\"PASSED\",\"score\":0.1,\"signature\":\"%s\"}}"
+                .formatted(ref2, v2);
+        assertThat(callbackV2(tampered, ts, nonce).statusCode()).isEqualTo(401);
+        String genuine = "{\"payload\":{\"provider_reference\":\"%s\",\"status\":\"PASSED\",\"score\":0.9,\"signature\":\"%s\"}}"
+                .formatted(ref2, v2);
+        HttpResponse<String> ok2 = callbackV2(genuine, ts, nonce);
+        assertThat(ok2.statusCode()).as(ok2.body()).isEqualTo(204);
+        HttpResponse<String> replay = callbackV2(genuine, ts, nonce);
+        assertThat(replay.statusCode()).isEqualTo(409);
+        assertThat(replay.body()).contains("callback_replayed");
+    }
+
+    private HttpResponse<String> callbackV2(String body, String ts, String nonce) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/v1/kyc/checks/provider-callbacks/SANDBOX_KYC/events"))
+                .header("X-Tenant-Id", TENANT).header("X-User", "provider").header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .header("X-Callback-Timestamp", ts).header("X-Callback-Nonce", nonce)
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Test

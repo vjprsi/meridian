@@ -36,7 +36,7 @@ public class BureauReportsController implements BureauReportsApi {
     @Override
     public ResponseEntity<Map<String, Object>> bureauReportsCallbacksEvents(String provider,
                                                                            BureauReportsCallbacksEventsRequest body) {
-        callbacks.verify(OriginationConfig.currentBody(), request.getHeader(CallbackSecurity.SIGNATURE_HEADER));
+        callbacks.verify(provider, OriginationConfig.currentBody(), request.getHeader(CallbackSecurity.SIGNATURE_HEADER));
         ObjectNode req = (ObjectNode) actions.tree(body);
         CallbackSecurity.Route route = callbacks.route("BUREAU", provider, Http.text(req, "bureau_reference"));
         try {

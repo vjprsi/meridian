@@ -111,9 +111,7 @@ public class FeeService {
             throw ApiException.conflict("already_waived", "The fee was already waived");
         }
         String creator = ClearingStore.text(fee, "created_by");
-        if (creator != null && creator.equals(TenantContext.principal())) {
-            throw ApiException.unprocessable("four_eyes_violation", "A fee cannot be waived by the principal that charged it");
-        }
+        io.meridian.common.tenancy.FourEyes.require(creator, "A fee cannot be waived by the principal that charged it");
         UUID original = ClearingStore.uuid(fee, "journal_entry_id");
         UUID waiverId = Ids.newId();
         UUID reversal = original == null ? null

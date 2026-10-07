@@ -57,7 +57,8 @@ import tools.jackson.databind.json.JsonMapper;
                 "meridian.onboarding.public.starts-per-device-per-hour=3",
                 "meridian.onboarding.public.starts-per-ip-per-hour=4",
                 "meridian.onboarding.public.otp-max-sends=4",
-                "meridian.onboarding.public.otp-resend-seconds=1"})
+                "meridian.onboarding.public.otp-resend-seconds=1",
+                "meridian.onboarding.public.otp-sends-per-destination-per-hour=5"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -380,6 +381,33 @@ class OnboardingApplicantIT {
         assertThat(NUMBER.matcher(app.get("application_number").asString()).matches()).isTrue();
         JsonNode next = staff("GET", "/v1/onboarding/applications/" + app.get("id").asString() + "/next-step", null, "maker", 200);
         assertThat(next.get("fields").get(0).get("type").asString()).isEqualTo("PHONE");
+    }
+
+    @Test
+    @Order(12)
+    void codesPerDestinationAreLimitedAcrossApplications() throws Exception {
+        JsonNode one = start("SELF_SERVICE", "WEB", nextIp(), "device-pump-1", 201);
+        JsonNode two = start("SELF_SERVICE", "WEB", nextIp(), "device-pump-2", 201);
+        String send = "{\"step_code\":\"phone\",\"destination\":\"+254700000099\"}";
+        for (int i = 0; i < 4; i++) {
+            pub("POST", one.get("onboarding_application_id").asString(), "/otp/send", send,
+                    one.get("applicant_token").asString(), 200);
+            Thread.sleep(1100);
+        }
+        String app2 = two.get("onboarding_application_id").asString();
+        String token2 = two.get("applicant_token").asString();
+        pub("POST", app2, "/otp/send", send, token2, 200);
+        Thread.sleep(1100);
+        assertThat(pub("POST", app2, "/otp/send", send, token2, 429).get("code").asString())
+                .as("a fresh application cannot pump the same number").isEqualTo("otp_destination_limit");
+    }
+
+    @Test
+    @Order(13)
+    void theRightMostForwardedHopIsTheClient() throws Exception {
+        start("SELF_SERVICE", "WEB", "6.6.6.6, 203.0.113.250", "device-hop", 201);
+        assertThat(adminCount("select count(*) from onboarding.onboarding_application where device_fingerprint = ? "
+                + "and host(ip_address) = '203.0.113.250'", "device-hop")).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ helpers

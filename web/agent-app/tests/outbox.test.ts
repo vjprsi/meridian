@@ -82,6 +82,21 @@ describe("encryption", () => {
     await expect(again.unlock(PIN)).rejects.toBeInstanceOf(OfflineLimitError);
   });
 
+  it("erases the queue and its key after too many wrong PINs (SEC-23)", async () => {
+    const store = new MemoryOutboxStore();
+    const { ob } = await newOutbox(store);
+    await ob.enqueue("CASH_IN", cashIn("20"), online);
+    let clock = Date.now();
+    const victim = new Outbox(store, { policy, iterations: FAST, now: () => new Date(clock) });
+    for (let i = 1; i < 10; i++) {
+      expect(await victim.unlock("999999")).toBe(false);
+      clock += 24 * 3600_000; // wait out each lockout
+    }
+    await expect(victim.unlock("999999")).rejects.toBeInstanceOf(OfflineLimitError);
+    expect(await store.all()).toHaveLength(0);
+    await expect(victim.unlock(PIN)).rejects.toThrow(/not been set up/);
+  });
+
   it("persists encrypted records in IndexedDB across instances", async () => {
     const factory = new IDBFactory();
     const s1 = new IdbOutboxStore("t-db", factory);

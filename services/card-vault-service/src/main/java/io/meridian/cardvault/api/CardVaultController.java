@@ -169,8 +169,13 @@ public class CardVaultController implements CardVaultApi {
         }
     }
 
+    /**
+     * SEC-32: the calling service comes from the authenticated service identity (X-Meridian-Service, honoured only
+     * with an internal token; dev mode: the header) or the relaying client ({@code azp}); a client-chosen
+     * X-Caller-Service header is no longer believed.
+     */
     private AccessLog.Caller caller() {
-        String svc = request.getHeader(CALLER_HEADER);
+        String svc = TenantContext.callingService().or(TenantContext::via).orElse(null);
         String principal = TenantContext.principal();
         return new AccessLog.Caller(svc == null || svc.isBlank() ? principal : svc, principal, request.getRemoteAddr());
     }

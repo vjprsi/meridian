@@ -55,11 +55,15 @@ public class Events {
     /** Maker-checker: the acting principal must differ from each of the given makers. */
     public static void fourEyes(String... makers) {
         String p = TenantContext.principal();
+        boolean anyMaker = false;
         for (String m : makers) {
-            if (m != null && m.equals(p)) {
-                throw ApiException.unprocessable("four_eyes_violation",
-                        "The same user cannot both prepare and approve this change");
+            if (m != null && !m.isBlank()) {
+                anyMaker = true;
+                io.meridian.common.tenancy.FourEyes.require(m, p, "The same user cannot both prepare and approve this change");
             }
+        }
+        if (!anyMaker) {
+            io.meridian.common.tenancy.FourEyes.require(null, p, "The same user cannot both prepare and approve this change");
         }
     }
 

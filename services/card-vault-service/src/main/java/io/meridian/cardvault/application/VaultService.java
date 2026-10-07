@@ -39,6 +39,9 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class VaultService {
     private static final int ROTATION_BATCH = 500;
+    private static final int SYNC_BATCHES = 20;
+    /** SEC-24: consecutive wrong CVV2 values after which CVV2 checks of the card are blocked. */
+    private final int cvvTryLimit;
 
     public record Tokenize(String pan, String cvv, Integer expiryMonth, Integer expiryYear, UUID cardId) {}
 
@@ -56,7 +59,10 @@ public class VaultService {
     private final SecureRandom random = new SecureRandom();
 
     public VaultService(VaultStore store, KeyService keys, Hsm hsm, AccessLog access, Events events, JsonMapper json,
-                        JdbcClient jdbc, PlatformTransactionManager tm) {
+                        JdbcClient jdbc, PlatformTransactionManager tm,
+                        @org.springframework.beans.factory.annotation.Value("${meridian.cards.vault.cvv-try-limit:5}")
+                        int cvvTryLimit) {
+        this.cvvTryLimit = cvvTryLimit;
         this.store = store;
         this.keys = keys;
         this.hsm = hsm;
@@ -182,8 +188,19 @@ public class VaultService {
             KeyService.Key dek = keys.byId(r.dekKeyId());
             Map<String, Object> out = new LinkedHashMap<>();
             String cvvResult = "P";
+            boolean cvvBlocked = false;
             if (v.cvv() != null && r.cvv() != null) {
-                cvvResult = constantEquals(dec(dek, r.panToken(), "cvv", r.cvv()), v.cvv()) ? "M" : "N";
+                // SEC-24: consecutive CVV2 failures per card block further CVV2 checks (distributed card testing)
+                if (store.cvvBlocked(r.id())) {
+                    cvvResult = "N";
+                    cvvBlocked = true;
+                    access.failure(caller, "AUTHORIZATION", r.panToken(), r.cardId(), "cvv2 checks blocked");
+                } else {
+                    boolean match = constantEquals(dec(dek, r.panToken(), "cvv", r.cvv()), v.cvv());
+                    cvvResult = match ? "M" : "N";
+                    int fails = store.cvvOutcome(r.id(), match, cvvTryLimit);
+                    cvvBlocked = fails >= cvvTryLimit;
+                }
             }
             String expResult = "P";
             if (v.expiryMonth() != null && v.expiryYear() != null) {
@@ -218,6 +235,7 @@ public class VaultService {
             store.touchDetokenized(r.id());
             access.success(caller, "AUTHORIZATION", r.panToken(), r.cardId());
             out.put("cvv_result", cvvResult);
+            out.put("cvv_blocked", cvvBlocked);
             out.put("expiry_result", expResult);
             out.put("pin_result", pinResult);
             out.put("pin_try_count", tries);
@@ -305,26 +323,48 @@ public class VaultService {
 
     // ------------------------------------------------------------------ key rotation
 
+    /**
+     * Rotates a key. SEC-40: PAN DEK re-encryption runs in batches of {@value #ROTATION_BATCH} records, each in its own
+     * short transaction (no tenant-wide lock for the whole run); after {@value #SYNC_BATCHES} batches the rest
+     * continues on a background thread for the same tenant and the response says {@code "status": "IN_PROGRESS"}.
+     * Records are decryptable under either key meanwhile (each names its DEK).
+     */
     public Map<String, Object> rotate(String keyType, AccessLog.Caller caller) {
-        return tx.execute(s -> {
-            KeyService.Key next = keys.rotate(keyType);
-            int count = 0;
-            if ("PAN_DEK".equals(keyType)) {
-                Map<UUID, KeyService.Key> cache = new java.util.HashMap<>();
-                List<VaultStore.Record> batch;
-                do {
-                    batch = store.encryptedUnderOtherKey(next.id(), ROTATION_BATCH);
-                    for (VaultStore.Record r : batch) {
-                        KeyService.Key old = cache.computeIfAbsent(r.dekKeyId(), keys::byId);
-                        String t = r.panToken();
-                        store.reEncrypt(r.id(),
-                                reWrap(old, next, t, "pan", r.pan()), reWrap(old, next, t, "cvv", r.cvv()),
-                                reWrap(old, next, t, "exp", r.expiry()), reWrap(old, next, t, "pin", r.pin()),
-                                next.id());
-                        count++;
+        KeyService.Key next = tx.execute(s -> keys.rotate(keyType));
+        int count = 0;
+        boolean more = false;
+        if ("PAN_DEK".equals(keyType)) {
+            Map<UUID, KeyService.Key> cache = new java.util.concurrent.ConcurrentHashMap<>();
+            int batches = 0;
+            int n;
+            do {
+                n = reEncryptBatch(next, cache);
+                count += n;
+                batches++;
+            } while (n == ROTATION_BATCH && batches < SYNC_BATCHES);
+            more = n == ROTATION_BATCH;
+            if (more) {
+                UUID tenant = io.meridian.common.tenancy.TenantContext.require();
+                String principal = io.meridian.common.tenancy.TenantContext.principal();
+                Thread.ofVirtual().name("vault-rotation-" + next.id()).start(() -> {
+                    try {
+                        io.meridian.common.tenancy.TenantContext.callAs(tenant, principal, () -> {
+                            int k;
+                            do {
+                                k = reEncryptBatch(next, cache);
+                            } while (k == ROTATION_BATCH);
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        org.slf4j.LoggerFactory.getLogger(VaultService.class)
+                                .error("background re-encryption under key {} stopped: {}", next.id(), e.toString());
                     }
-                } while (batch.size() == ROTATION_BATCH);
+                });
             }
+        }
+        int reEncrypted = count;
+        boolean inProgress = more;
+        return tx.execute(s -> {
             access.success(caller, "KEY_ROTATION", null, null);
             JsonNode keyRow = json.readTree(jdbc.sql("select row_to_json(k)::text from card_vault_key k where id = ?")
                     .param(next.id()).query(String.class).single());
@@ -333,9 +373,27 @@ public class VaultService {
             out.put("key_type", keyType);
             out.put("new_key_id", next.id().toString());
             out.put("version", next.version());
-            out.put("re_encrypted", count);
+            out.put("re_encrypted", reEncrypted);
+            out.put("status", inProgress ? "IN_PROGRESS" : "COMPLETED");
             return out;
         });
+    }
+
+    /** One batch of PAN DEK re-encryption in its own transaction; returns how many records it re-encrypted. */
+    private int reEncryptBatch(KeyService.Key next, Map<UUID, KeyService.Key> cache) {
+        Integer n = tx.execute(s -> {
+            List<VaultStore.Record> batch = store.encryptedUnderOtherKey(next.id(), ROTATION_BATCH);
+            for (VaultStore.Record r : batch) {
+                KeyService.Key old = cache.computeIfAbsent(r.dekKeyId(), keys::byId);
+                String t = r.panToken();
+                store.reEncrypt(r.id(),
+                        reWrap(old, next, t, "pan", r.pan()), reWrap(old, next, t, "cvv", r.cvv()),
+                        reWrap(old, next, t, "exp", r.expiry()), reWrap(old, next, t, "pin", r.pin()),
+                        next.id());
+            }
+            return batch.size();
+        });
+        return n == null ? 0 : n;
     }
 
     // ------------------------------------------------------------------ helpers

@@ -111,9 +111,7 @@ public class ModuleService {
             throw ApiException.conflict("approval_not_granted", "Approval request is " + status);
         }
         String maker = approval.path("maker").asString(approval.path("created_by").asString(null));
-        if (maker != null && maker.equals(TenantContext.principal())) {
-            throw ApiException.unprocessable("four_eyes_violation", "The maker cannot execute their own approval");
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker, "The maker cannot execute their own approval");
         JsonNode payload = approval.path("payload");
         UUID moduleId = UUID.fromString(payload.path("module_id").asString(approval.path("resource_id").asString()));
         boolean enable = payload.path("is_enabled").asBoolean();

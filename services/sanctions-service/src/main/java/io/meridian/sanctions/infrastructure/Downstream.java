@@ -18,12 +18,18 @@ import tools.jackson.databind.JsonNode;
 /** case-management-service (confirmed matches), document-service (list files) and list publisher downloads. */
 @Component
 public class Downstream {
-    private final ServiceClient client;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+    /** Cap for list files fetched from document-service (internal blob store). */
+    static final long MAX_INTERNAL_BYTES = 64L * 1024 * 1024;
 
-    public Downstream(ServiceClient client) {
+    private final ServiceClient client;
+    private final io.meridian.web.outbound.OutboundHttp outbound;
+    // internal document-service links only: no redirects, size-capped
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+
+    public Downstream(ServiceClient client, io.meridian.web.outbound.OutboundHttp outbound) {
         this.client = client;
+        this.outbound = outbound;
     }
 
     /** Opens a SANCTIONS case for a confirmed match and links the screening result to it; returns the case id. */
@@ -57,18 +63,45 @@ public class Downstream {
         if (u == null) {
             throw ApiException.unprocessable("document_unavailable", "document-service returned no download URL");
         }
-        return download(u);
+        return internal(u);
     }
 
-    /** Downloads a list file from its publisher (source_url). */
+    /**
+     * Downloads a list file from its publisher ({@code source_url}). SEC-39: through the shared outbound policy
+     * (https, public addresses only, pinned resolution, no redirects, {@code meridian.outbound.max-response-bytes}).
+     */
     public String download(String url) {
+        io.meridian.web.outbound.OutboundHttp.Response r;
         try {
-            HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (r.statusCode() >= 300) {
-                throw new ApiException(502, "list_download_failed", "Download returned HTTP " + r.statusCode());
+            r = outbound.get(url, Map.of("Accept", "*/*"));
+        } catch (io.meridian.web.outbound.OutboundUrlPolicy.RejectedException e) {
+            throw ApiException.unprocessable("source_url_not_allowed", e.getMessage());
+        } catch (io.meridian.web.outbound.OutboundHttp.Failure e) {
+            throw new ApiException(502, "list_download_failed", "Download failed (" + e.code() + ")");
+        }
+        if (r.status() >= 300) {
+            throw new ApiException(502, "list_download_failed", "Download returned HTTP " + r.status());
+        }
+        if (r.truncated()) {
+            throw new ApiException(502, "list_too_large", "The list file exceeds the configured download limit");
+        }
+        return new String(r.body(), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String internal(String url) {
+        try {
+            HttpResponse<java.io.InputStream> r = http.send(HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(60)).GET().build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (java.io.InputStream in = r.body()) {
+                if (r.statusCode() >= 300) {
+                    throw new ApiException(502, "list_download_failed", "Download returned HTTP " + r.statusCode());
+                }
+                byte[] data = in.readNBytes((int) MAX_INTERNAL_BYTES + 1);
+                if (data.length > MAX_INTERNAL_BYTES) {
+                    throw new ApiException(502, "list_too_large", "The list file exceeds " + MAX_INTERNAL_BYTES + " bytes");
+                }
+                return new String(data, java.nio.charset.StandardCharsets.UTF_8);
             }
-            return r.body();
         } catch (IOException e) {
             throw new ApiException(502, "list_download_failed", "Download failed: " + e.getMessage());
         } catch (InterruptedException e) {

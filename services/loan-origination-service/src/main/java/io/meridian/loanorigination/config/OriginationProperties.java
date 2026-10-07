@@ -6,7 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * loan-origination-service settings ({@code meridian.loan-origination.*}).
  *
- * @param callbackSecret          HMAC-SHA256 secret verifying the public e-signature and bureau callbacks
+ * @param callbackSecret          HMAC-SHA256 secret verifying the public e-signature and bureau callbacks of providers
+ *                                without an own secret
+ * @param callbackSecrets         SEC-17: per-provider secrets (provider code, upper case -> secret), so one provider
+ *                                cannot sign another provider's events
  * @param defaultBureauProvider   bureau adapter used when a pull names none (SANDBOX, SANDBOX_ASYNC, ...)
  * @param defaultEsignProvider    e-signature provider used when an acceptance names none
  * @param bureauValidityDays      days a received bureau report may be reused
@@ -20,9 +23,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OriginationProperties(String callbackSecret, String defaultBureauProvider, String defaultEsignProvider,
                                     Integer bureauValidityDays, Integer offerValidityDays, Integer envelopeValidityDays,
                                     Integer applicationValidityDays, BigDecimal defaultRate,
-                                    BigDecimal counterOfferStep) {
+                                    BigDecimal counterOfferStep, java.util.Map<String, String> callbackSecrets) {
     public OriginationProperties {
         callbackSecret = callbackSecret == null ? "dev-lending-callback-secret" : callbackSecret;
+        callbackSecrets = callbackSecrets == null ? java.util.Map.of() : java.util.Map.copyOf(callbackSecrets);
         defaultBureauProvider = defaultBureauProvider == null ? "SANDBOX" : defaultBureauProvider;
         defaultEsignProvider = defaultEsignProvider == null ? "SANDBOX" : defaultEsignProvider;
         bureauValidityDays = bureauValidityDays == null ? 30 : bureauValidityDays;

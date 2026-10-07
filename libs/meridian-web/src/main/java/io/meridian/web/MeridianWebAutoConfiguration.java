@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Wires tenancy, security, errors, request ids and idempotency into every Meridian service. */
 @AutoConfiguration
-@EnableConfigurationProperties(MeridianProperties.class)
+@EnableConfigurationProperties({MeridianProperties.class, io.meridian.web.security.SecurityProperties.class})
 @Import(ProblemHandler.class)
 public class MeridianWebAutoConfiguration {
 
@@ -57,6 +57,12 @@ public class MeridianWebAutoConfiguration {
         return new io.meridian.web.security.RequiredSecrets();
     }
 
+    /** Dev security mode only when chosen explicitly, never inside Kubernetes by accident (SEC-13). */
+    @Bean
+    static io.meridian.web.security.SecurityModeGuard meridianSecurityModeGuard() {
+        return new io.meridian.web.security.SecurityModeGuard();
+    }
+
     /** Outbound policy for tenant-supplied URLs (SEC-08/09): https, public addresses only, pinned resolution. */
     @Bean
     @ConditionalOnMissingBean
@@ -68,6 +74,39 @@ public class MeridianWebAutoConfiguration {
     @ConditionalOnMissingBean
     io.meridian.web.outbound.OutboundHttp outboundHttp(io.meridian.web.outbound.OutboundUrlPolicy policy) {
         return new io.meridian.web.outbound.OutboundHttp(policy);
+    }
+
+    /**
+     * Keeps the raw body of spec-[public] requests (provider callbacks, up to 1 MiB) readable after JSON binding, so
+     * signatures can be checked over exactly what the provider sent ({@code CallbackVerifier.cachedBody()}).
+     */
+    @Bean
+    FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> publicRawBodyFilter(JsonMapper json,
+                                                                                                Environment env) {
+        var publicRoutes = ScopeInterceptor.routes(publicRoutes(json, env.getProperty("spring.application.name", "")));
+        var filter = new org.springframework.web.filter.OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest req,
+                                            jakarta.servlet.http.HttpServletResponse res,
+                                            jakarta.servlet.FilterChain chain)
+                    throws jakarta.servlet.ServletException, java.io.IOException {
+                chain.doFilter(publicRoutes.test(req)
+                        ? new org.springframework.web.util.ContentCachingRequestWrapper(req, 1 << 20) : req, res);
+            }
+        };
+        FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
+        return reg;
+    }
+
+    /** SEC-26: request body cap ({@code meridian.http.max-body-size}, default 16MB). */
+    @Bean
+    FilterRegistrationBean<BodySizeFilter> bodySizeFilter(Environment env) {
+        long max = env.getProperty("meridian.http.max-body-size", org.springframework.util.unit.DataSize.class,
+                org.springframework.util.unit.DataSize.ofMegabytes(16)).toBytes();
+        FilterRegistrationBean<BodySizeFilter> reg = new FilterRegistrationBean<>(new BodySizeFilter(max));
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+        return reg;
     }
 
     @Bean
@@ -104,13 +143,39 @@ public class MeridianWebAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    Idempotency idempotency(JdbcClient jdbc, JsonMapper json, TransactionTemplate tx) {
-        return new Idempotency(jdbc, json, tx);
+    Idempotency idempotency(JdbcClient jdbc, JsonMapper json, TransactionTemplate tx, Environment env) {
+        return new Idempotency(jdbc, json, tx,
+                env.getProperty("meridian.idempotency.stale-after", java.time.Duration.class, java.time.Duration.ofMinutes(10)),
+                env.getProperty("meridian.idempotency.retention", java.time.Duration.class, java.time.Duration.ofDays(30)));
+    }
+
+    /** Public provider callbacks: v2 signatures with timestamp, nonce and tenant binding (SEC-17). */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.callback.CallbackVerifier callbackVerifier(JdbcClient jdbc, Environment env) {
+        return new io.meridian.web.callback.CallbackVerifier(new io.meridian.web.callback.NonceStore.Jdbc(jdbc),
+                env.getProperty("meridian.callbacks.max-skew", java.time.Duration.class, java.time.Duration.ofMinutes(5)),
+                env.getProperty("meridian.callbacks.accept-legacy-signatures", Boolean.class, true),
+                java.time.Clock.systemUTC());
+    }
+
+    /** SEC-34: purges completed idempotency keys past their retention (every {@code meridian.idempotency.purge-interval}). */
+    @Bean(destroyMethod = "close")
+    io.meridian.web.idempotency.IdempotencyJanitor idempotencyJanitor(Idempotency idempotency, Environment env) {
+        return new io.meridian.web.idempotency.IdempotencyJanitor(idempotency, env.getProperty(
+                "meridian.idempotency.purge-interval", java.time.Duration.class, java.time.Duration.ofHours(6)));
     }
 
     @Bean
     static MeridianJsonCustomizer meridianJsonCustomizer() {
         return new MeridianJsonCustomizer();
+    }
+
+    /** Session advisory locks across replicas (SEC-28). */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.tenancy.AdvisoryLocks advisoryLocks(DataSource dataSource) {
+        return new io.meridian.web.tenancy.AdvisoryLocks(dataSource);
     }
 
     @Bean
@@ -148,13 +213,26 @@ public class MeridianWebAutoConfiguration {
     }
 
     @Bean
-    WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props) {
+    WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props,
+                                              io.meridian.web.security.SecurityProperties security,
+                                              JsonMapper json, Environment env) {
+        var publicRoutes = ScopeInterceptor.routes(publicRoutes(json, env.getProperty("spring.application.name", "")));
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
-                registry.addInterceptor(new ScopeInterceptor(props)).addPathPatterns("/v1/**");
+                registry.addInterceptor(new ScopeInterceptor(props, security, publicRoutes)).addPathPatterns("/v1/**");
             }
         };
+    }
+
+    /**
+     * SEC-14: audience (and optional client allow-list) check, added by Spring Boot to the auto-configured
+     * {@code JwtDecoder} next to the issuer / expiry validators.
+     */
+    @Bean
+    org.springframework.security.oauth2.core.OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt>
+            meridianAudienceValidator(io.meridian.web.security.SecurityProperties security, Environment env) {
+        return new io.meridian.web.security.AudienceValidator(security, env.getProperty("spring.application.name", ""));
     }
 
     /**

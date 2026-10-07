@@ -24,6 +24,7 @@ import tools.jackson.databind.JsonNode;
 /** Physical card orders and the public, HMAC-signed bureau status callback. */
 @RestController
 public class CardOrdersController implements CardOrdersApi {
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
     private final OrderService orders;
     private final Actions actions;
     private final CrudEngine crud;
@@ -32,7 +33,9 @@ public class CardOrdersController implements CardOrdersApi {
     private final TransactionTemplate tx;
 
     public CardOrdersController(OrderService orders, Actions actions, CrudEngine crud, CardProperties props,
-                                HttpServletRequest request, TransactionTemplate tx) {
+                                HttpServletRequest request, TransactionTemplate tx,
+                                io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.orders = orders;
         this.actions = actions;
         this.crud = crud;
@@ -70,7 +73,14 @@ public class CardOrdersController implements CardOrdersApi {
 
     @Override
     public ResponseEntity<CardOrder> cardOrdersBureauCallbacks(UUID tenantId, CardOrdersBureauCallbacksRequest body) {
-        Signatures.verify(props.callbackSecret(), CardConfig.currentBody(), request.getHeader("X-Signature"));
+        // SEC-17: v2 signature binds timestamp, nonce and the ?tenant_id the bureau calls back for
+        byte[] raw = CardConfig.currentBody();
+        if (raw == null || raw.length == 0 || tenantId == null) {
+            throw new ApiException(401, "invalid_signature", "X-Signature is missing or the body is empty");
+        }
+        String secret = props.callbackSecret();
+        callbacks.verify("card-bureau", tenantId.toString(), raw, request.getHeader("X-Signature"),
+                io.meridian.web.callback.CallbackVerifier.Headers.of(request), b -> Signatures.sign(secret, b));
         JsonNode req = actions.tree(body);
         try {
             return ResponseEntity.ok(TenantContext.callAs(tenantId, "bureau-callback",

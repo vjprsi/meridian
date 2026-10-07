@@ -38,7 +38,10 @@ public class TppService {
     private final Events events;
     private final SecureRandom random = new SecureRandom();
 
-    public TppService(Rows rows, Events events) {
+    private final CertificateTrust trust;
+
+    public TppService(Rows rows, Events events, CertificateTrust trust) {
+        this.trust = trust;
         this.rows = rows;
         this.events = events;
     }
@@ -69,6 +72,7 @@ public class TppService {
     public ObjectNode register(String softwareStatement, String certificatePem) {
         Instant now = rows.now().toInstant();
         Psd2Certificate cert = certificate(certificatePem, now);
+        trust.verify(certificatePem, now); // SEC-27: chains to a configured QTSP
         if (!cert.hasPsd2Statement()) {
             throw ApiException.unprocessable("psd2_statement_missing",
                     "The signing certificate must be an eIDAS certificate with the PSD2 QCStatement");
@@ -227,6 +231,7 @@ public class TppService {
         }
         String pem = str(v, "certificate_pem");
         Psd2Certificate cert = certificate(pem, rows.now().toInstant());
+        trust.verify(pem, rows.now().toInstant()); // SEC-27
         try {
             cert.requirePsd2Statement(type);
         } catch (Psd2Certificate.InvalidCertificateException e) {

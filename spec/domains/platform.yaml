@@ -93,6 +93,7 @@ services:
         prefix: cel
         description: A deployment cell (full stack slice) in one region that hosts a set of tenants
         tenant: false
+        operator_only: true        # SEC-15: tenant registry, operators only
         fr: [ADM-01]
         columns:
           - "code string(32) nn uq | Cell code, e.g. aws-euw1-c03"
@@ -114,6 +115,7 @@ services:
         prefix: ten
         description: A client organisation (bank, fintech, telco) using the platform
         tenant: false
+        operator_only: true        # SEC-15: tenant registry, operators only
         fr: [ADM-01]
         columns:
           - "code string(32) nn uq | Short unique tenant code"
@@ -146,6 +148,7 @@ services:
         prefix: tpl
         description: History of a tenant's placement on cells, including cell-to-cell migrations
         tenant: false
+        operator_only: true        # SEC-15: tenant registry, operators only
         fr: [ADM-01]
         columns:
           - "subject_tenant_id uuid nn fk=tenant idx | Tenant being placed"
@@ -578,6 +581,9 @@ services:
           - "is_primary bool nn default=false ro | Default factor"
           - "status enum:MfaFactorStatus nn default=PENDING_VERIFICATION ro | Status (changed by /verify)"
           - "last_used_at ts ro | Last successful use"
+          - "failed_attempts int nn default=0 ro | Consecutive failed verifications (lockout after the limit)"
+          - "locked_until ts ro | Verification locked until this time after too many failures"
+          - "last_used_step int ro | TOTP time step last accepted (a code is never accepted twice)"
         response_only:
           - "totp_secret string(64) | Base32 TOTP seed (TOTP enrolment only)"
           - "otpauth_uri string(500) | otpauth:// provisioning URI for authenticator apps (TOTP enrolment only)"

@@ -107,7 +107,9 @@ public class ActionAudit {
 
     private static String clientIp(HttpServletRequest req) {
         String fwd = req.getHeader("X-Forwarded-For");
-        String ip = fwd != null && !fwd.isBlank() ? fwd.split(",")[0].trim() : req.getRemoteAddr();
+        // SEC-16: the edge gateway overwrites X-Forwarded-For; take the right-most hop (left entries are client-chosen)
+        String[] hops = fwd == null ? new String[0] : fwd.split(",");
+        String ip = hops.length > 0 && !fwd.isBlank() ? hops[hops.length - 1].trim() : req.getRemoteAddr();
         return ip != null && ip.matches("[0-9a-fA-F:.]{2,45}") ? ip : null;
     }
 }

@@ -105,6 +105,40 @@ public final class TestCerts {
         }
     }
 
+    /** A self-signed CA (trust anchor) and a leaf it issued, as PEM (SEC-27 tests). */
+    public static synchronized String[] caAndLeaf() {
+        try {
+            KeyPair ca = rsa();
+            KeyPair leaf = rsa();
+            String caPem = sign(ca, "CN=Test QTSP Root, O=Test QTSP, C=GB", "CN=Test QTSP Root, O=Test QTSP, C=GB", ca);
+            String leafPem = sign(leaf, "CN=Test QTSP Root, O=Test QTSP, C=GB", "CN=acme-leaf, O=Acme Fintech Ltd, C=GB", ca);
+            return new String[] {caPem, leafPem};
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String sign(KeyPair subjectKeys, String issuer, String subject, KeyPair signer) throws Exception {
+        V3TBSCertificateGenerator g = new V3TBSCertificateGenerator();
+        g.setSerialNumber(new ASN1Integer(BigInteger.valueOf(++serial)));
+        g.setIssuer(new X500Name(issuer));
+        g.setSubject(new X500Name(subject));
+        g.setStartDate(new Time(Date.from(Instant.now().minusSeconds(3600))));
+        g.setEndDate(new Time(Date.from(Instant.now().plusSeconds(86_400))));
+        g.setSubjectPublicKeyInfo(SubjectPublicKeyInfo.getInstance(subjectKeys.getPublic().getEncoded()));
+        AlgorithmIdentifier alg = new AlgorithmIdentifier(PKCSObjectIdentifiers.sha256WithRSAEncryption, DERNull.INSTANCE);
+        g.setSignature(alg);
+        TBSCertificate tbs = g.generateTBSCertificate();
+        Signature sig = Signature.getInstance("SHA256withRSA");
+        sig.initSign(signer.getPrivate());
+        sig.update(tbs.getEncoded(ASN1Encoding.DER));
+        ASN1EncodableVector cert = new ASN1EncodableVector();
+        cert.add(tbs);
+        cert.add(alg);
+        cert.add(new DERBitString(sig.sign()));
+        return Psd2Certificate.toPem(new DERSequence(cert).getEncoded(ASN1Encoding.DER));
+    }
+
     public static Issued valid(String orgId, List<String> roles, String ncaId) {
         Instant now = Instant.now();
         return issue(orgId, roles, ncaId, now.minusSeconds(86_400), now.plusSeconds(365L * 86_400));

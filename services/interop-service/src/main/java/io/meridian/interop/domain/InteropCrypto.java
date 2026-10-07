@@ -98,6 +98,11 @@ public final class InteropCrypto {
         return node;
     }
 
+    /** Lowercase hex HMAC-SHA256 of a string (the v2 callback payload). */
+    public static String signText(String secret, String message) {
+        return HexFormat.of().formatHex(hmac(secret, message));
+    }
+
     public static String sign(String secret, JsonNode body) {
         return HexFormat.of().formatHex(hmac(secret, canonicalJson(body)));
     }

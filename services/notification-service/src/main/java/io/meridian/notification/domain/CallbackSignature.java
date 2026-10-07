@@ -23,6 +23,11 @@ public final class CallbackSignature {
     private CallbackSignature() {}
 
     /** The signature header value for a payload. */
+    /** {@code sha256=<hex>} HMAC of a text (the v2 payload {@code <ts>.<nonce>.<tenant>.<canonical payload>}). */
+    public static String signText(String secret, String text) {
+        return PREFIX + HexFormat.of().formatHex(hmac(secret, text));
+    }
+
     public static String sign(String secret, JsonNode payload) {
         return PREFIX + HexFormat.of().formatHex(hmac(secret, canonical(payload)));
     }

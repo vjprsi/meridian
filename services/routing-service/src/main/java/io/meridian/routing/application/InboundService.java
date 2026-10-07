@@ -40,9 +40,15 @@ public class InboundService {
     private final SettlementService settlement;
     private final RoutingProperties props;
     private final TransactionTemplate tx;
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
+    private final io.meridian.web.tenancy.AdvisoryLocks locks;
 
     public InboundService(Rows rows, Events events, Downstream downstream, SettlementService settlement,
-                          RoutingProperties props, TransactionTemplate tx) {
+                          RoutingProperties props, TransactionTemplate tx,
+                          io.meridian.web.callback.CallbackVerifier callbacks,
+                          io.meridian.web.tenancy.AdvisoryLocks locks) {
+        this.callbacks = callbacks;
+        this.locks = locks;
         this.rows = rows;
         this.events = events;
         this.downstream = downstream;
@@ -74,10 +80,21 @@ public class InboundService {
         if (payload == null || payload.isBlank()) {
             throw ApiException.badRequest("payload_required", "payload is required");
         }
-        if (!BankCodes.verify(secret, payload, signature)) {
-            storeRejected(railId, IsoMessages.canonical(declaredType), "UNKNOWN", null, payload, "FAILED", false,
-                    "invalid or missing X-Rail-Signature", null, null);
-            throw new ApiException(401, "invalid_signature", "X-Rail-Signature does not match the payload");
+        // SEC-17: v2 signature over "<timestamp>.<nonce>.<rail id>.<payload>", fresh and single-use; legacy
+        // payload-only signatures only while meridian.callbacks.accept-legacy-signatures is on
+        try {
+            if (secret == null) {
+                throw new ApiException(401, "invalid_signature", "No callback secret is configured for this rail");
+            }
+            callbacks.verify("rail:" + railId, railId.toString(), payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    signature, io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                    b -> BankCodes.sign(secret, new String(b, java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (ApiException e) {
+            if ("invalid_signature".equals(e.code()) || "stale_callback".equals(e.code())) {
+                storeRejected(railId, IsoMessages.canonical(declaredType), "UNKNOWN", null, payload, "FAILED", false,
+                        "invalid or missing X-Rail-Signature (" + e.code() + ")", null, null);
+            }
+            throw e;
         }
         IsoMessages.Parsed parsed;
         try {
@@ -92,16 +109,20 @@ public class InboundService {
                     + " does not match the payload (" + parsed.type() + ")");
         }
         String msgId = parsed.messageId() == null ? "NOID-" + BankCodes.sha256(payload).substring(0, 32) : parsed.messageId();
-        Optional<ObjectNode> dup = rows.queryOne("""
-                select row_to_json(t)::text from rail_message t where payment_rail_id = ? and direction = 'INBOUND'
-                and message_id = ? and replay_of_id is null and status = 'PARSED' order by created_at limit 1""",
-                railId, msgId);
-        if (dup.isPresent()) {
-            return dup.get();
-        }
-        UUID id = Ids.newId();
-        Outcome o = process(id, rail, parsed);
-        return store(id, rail, parsed, msgId, payload, o, null);
+        // SEC-28: concurrent deliveries of one message (several replicas) are serialised, so the duplicate check and
+        // the processing cannot interleave and credit twice
+        return locks.withLock("rail-in:" + railId + ":" + msgId, java.time.Duration.ofSeconds(25), () -> {
+            Optional<ObjectNode> dup = rows.queryOne("""
+                    select row_to_json(t)::text from rail_message t where payment_rail_id = ? and direction = 'INBOUND'
+                    and message_id = ? and replay_of_id is null and status = 'PARSED' order by created_at limit 1""",
+                    railId, msgId);
+            if (dup.isPresent()) {
+                return dup.get();
+            }
+            UUID id = Ids.newId();
+            Outcome o = process(id, rail, parsed);
+            return store(id, rail, parsed, msgId, payload, o, null);
+        });
     }
 
     /** Re-processes a stored inbound message; downstream calls are keyed by the original message, so applied steps dedupe. */

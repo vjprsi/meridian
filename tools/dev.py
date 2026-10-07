@@ -8,6 +8,8 @@
   python tools/dev.py down [names...]                              # stop all or some
   python tools/dev.py logs ledger-service
 
+Services and the gateway run with MERIDIAN_SECURITY_MODE=dev (header-based tenant/user; the deployed default is jwt);
+export MERIDIAN_SECURITY_MODE=jwt to run the local stack against Keycloak instead.
 Services run as `java -jar` on JDK 25 (MERIDIAN_JDK25 or D:/DevTools/jdk-25). Logs and pids live in .run/.
 Docker commands run through MERIDIAN_DOCKER (default: WSL Ubuntu-22.04 with the docker group).
 """
@@ -128,6 +130,9 @@ def up(names: list[str], reset: bool = False) -> None:
                                 cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
                                 # central maker-checker through workflow-service (tests default to local mode)
                                 env={**os.environ, "MERIDIAN_APPROVALS_MODE": os.environ.get("MERIDIAN_APPROVALS_MODE", "workflow"),
+                                     # SEC-13: services and gateway default to jwt; the local stack opts into dev
+                                     # mode (tenant/user from X-Tenant-Id / X-User, gateway forwards them)
+                                     "MERIDIAN_SECURITY_MODE": os.environ.get("MERIDIAN_SECURITY_MODE", "dev"),
                                      # 63 services share one local PostgreSQL (max_connections=600)
                                      "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6")})
         pid_file(t["name"]).write_text(str(proc.pid))

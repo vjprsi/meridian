@@ -62,7 +62,7 @@ public class ESignatureRequestsController implements ESignatureRequestsApi {
     @Override
     public ResponseEntity<Map<String, Object>> eSignatureRequestsCallbacksEvents(String provider,
                                                                                 ESignatureRequestsCallbacksEventsRequest body) {
-        callbacks.verify(OriginationConfig.currentBody(), request.getHeader(CallbackSecurity.SIGNATURE_HEADER));
+        callbacks.verify(provider, OriginationConfig.currentBody(), request.getHeader(CallbackSecurity.SIGNATURE_HEADER));
         JsonNode req = actions.tree(body);
         CallbackSecurity.Route route = callbacks.route("E_SIGNATURE", provider, Http.text(req, "provider_envelope_id"));
         try {

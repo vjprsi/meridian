@@ -130,11 +130,9 @@ public class MenuService {
         }
         String regex = Rows.str(n, "input_validation");
         if (regex != null) {
-            try {
-                Pattern.compile(regex);
-            } catch (PatternSyntaxException e) {
-                throw ApiException.unprocessable("invalid_regex", "input_validation is not a valid regular expression");
-            }
+            io.meridian.common.text.SafeRegex.problem(regex).ifPresent(why -> {
+                throw ApiException.unprocessable("invalid_regex", "input_validation is not allowed: " + why);
+            });
         }
         String type = Rows.str(n, "node_type");
         if ("ACTION".equals(type) && Rows.str(n, "action_code") == null) {

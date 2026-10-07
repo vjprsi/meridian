@@ -33,6 +33,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @RestController
 public class ThreedsAuthenticationsController implements ThreedsAuthenticationsApi {
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
     static final String SIGNATURE_HEADER = "X-Signature";
 
     private final ThreedsService threeds;
@@ -42,7 +43,9 @@ public class ThreedsAuthenticationsController implements ThreedsAuthenticationsA
     private final HttpServletRequest request;
 
     ThreedsAuthenticationsController(ThreedsService threeds, Idempotency idempotency, JsonMapper json,
-                                     CardsProperties props, HttpServletRequest request) {
+                                     CardsProperties props, HttpServletRequest request,
+                                     io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.threeds = threeds;
         this.idempotency = idempotency;
         this.json = json;
@@ -53,7 +56,8 @@ public class ThreedsAuthenticationsController implements ThreedsAuthenticationsA
     @Override
     public ResponseEntity<ThreedsAuthentication> threedsAuthenticationsAuthenticate(
             UUID tenantId, ThreedsAuthenticationsAuthenticateRequest body) {
-        verify(ThreedsConfig.currentBody());
+        byte[] raw = ThreedsConfig.currentBody();
+        verify(tenantId, raw, raw);
         JsonNode req = json.valueToTree(body);
         ObjectNode row = asTenant(tenantId, () -> threeds.authenticate(req));
         return ResponseEntity.ok(json.treeToValue(row, ThreedsAuthentication.class));
@@ -62,7 +66,10 @@ public class ThreedsAuthenticationsController implements ThreedsAuthenticationsA
     @Override
     public ResponseEntity<ThreedsAuthentication> threedsAuthenticationsResult(UUID id, UUID tenantId,
                                                                               String dsTransactionId) {
-        verify(dsTransactionId.getBytes(StandardCharsets.UTF_8));
+        // SEC-17: v2 covers the authentication id and dsTransactionId with timestamp + nonce, so the signature is a
+        // short-lived, single-use credential instead of a static bearer value; legacy (dsTransactionId only) is deprecated
+        verify(tenantId, (id + "." + dsTransactionId).getBytes(StandardCharsets.UTF_8),
+                dsTransactionId.getBytes(StandardCharsets.UTF_8));
         ObjectNode row = asTenant(tenantId, () -> threeds.result(id, dsTransactionId));
         return ResponseEntity.ok(json.treeToValue(row, ThreedsAuthentication.class));
     }
@@ -103,10 +110,13 @@ public class ThreedsAuthenticationsController implements ThreedsAuthenticationsA
         });
     }
 
-    private void verify(byte[] signed) {
-        if (!Crypto.verifySignature(props.callbackSecret(), signed, request.getHeader(SIGNATURE_HEADER))) {
+    private void verify(UUID tenantId, byte[] signed, byte[] legacySigned) {
+        String secret = props.callbackSecret();
+        if (secret == null || secret.isBlank() || tenantId == null) {
             throw new ApiException(401, "invalid_signature", "X-Signature is missing or does not match the request");
         }
+        callbacks.verify("directory-server", tenantId.toString(), signed, legacySigned, request.getHeader(SIGNATURE_HEADER),
+                io.meridian.web.callback.CallbackVerifier.Headers.of(request), b -> Crypto.hmacHex(secret, b));
     }
 
     private static <T> T asTenant(UUID tenant, Callable<T> work) {

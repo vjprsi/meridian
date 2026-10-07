@@ -21,6 +21,21 @@ public class KeyService {
             "PAN_DEK", "pan-dek", "CVK", "cvk", "ZPK", "zpk-default", "PIN_KEY", "pin-key", "CVV_KEY", "cvv-key",
             "MDK", "mdk");
 
+    /**
+     * SEC-37: data-encryption key types whose bootstrapped / rotated labels are tenant-scoped
+     * ({@code <label>@<tenant id>}), so no two tenants share key material for stored card data. Zone and scheme keys
+     * (ZPK, CVK, MDK, CVV_KEY) are exchanged with third parties and keep their labels. Keys created before this change
+     * keep their label until the next rotation, which moves them to the scoped label.
+     */
+    static final java.util.Set<String> TENANT_SCOPED = java.util.Set.of("PAN_DEK", "PIN_KEY");
+
+    static String scoped(String type, String label) {
+        if (!TENANT_SCOPED.contains(type) || label.contains("@")) {
+            return label;
+        }
+        return label + "@" + io.meridian.common.tenancy.TenantContext.require();
+    }
+
     public record Key(UUID id, String type, String label, int version, boolean active) {
         public Hsm.KeyRef ref() {
             return new Hsm.KeyRef(label, version);
@@ -43,8 +58,8 @@ public class KeyService {
             return k.get();
         }
         lock(type);
-        return findActive(type).orElseGet(() -> insert(type, DEFAULT_LABELS.getOrDefault(type, type.toLowerCase()), 1,
-                "AES-256-GCM", null));
+        return findActive(type).orElseGet(() -> insert(type,
+                scoped(type, DEFAULT_LABELS.getOrDefault(type, type.toLowerCase())), 1, "AES-256-GCM", null));
     }
 
     public Key byId(UUID id) {
@@ -92,9 +107,14 @@ public class KeyService {
      */
     @Transactional
     public Key create(String type, String label, String algorithm, OffsetDateTime retireAfter) {
-        if (label == null || label.isBlank() || label.length() > 128) {
-            throw ApiException.unprocessable("invalid_key_label", "hsm_key_label must be 1-128 characters");
+        if (label == null || label.isBlank() || label.length() > 80) {
+            throw ApiException.unprocessable("invalid_key_label", "hsm_key_label must be 1-80 characters");
         }
+        // SEC-37: platform labels and the tenant-scope separator are reserved
+        if (label.contains("@") || DEFAULT_LABELS.containsValue(label) || label.toLowerCase(java.util.Locale.ROOT).startsWith("meridian")) {
+            throw ApiException.unprocessable("reserved_key_label", "hsm_key_label " + label + " is reserved");
+        }
+        label = scoped(type, label);
         lock(type);
         int version = nextVersion(type, label);
         retire(type);
@@ -106,9 +126,10 @@ public class KeyService {
     public Key rotate(String type) {
         Key current = active(type);
         lock(type);
-        int version = nextVersion(type, current.label());
+        String label = scoped(type, current.label());
+        int version = nextVersion(type, label);
         retire(type);
-        return insert(type, current.label(), version, "AES-256-GCM", null);
+        return insert(type, label, version, "AES-256-GCM", null);
     }
 
     private int nextVersion(String type, String label) {

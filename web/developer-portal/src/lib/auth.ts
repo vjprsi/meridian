@@ -4,7 +4,7 @@ import { UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
 
 /**
  * Two sign-in modes (same as the ops console):
- *  - "oidc": Keycloak (realm meridian, client meridian-console, authorization code + PKCE); the tenant comes from
+ *  - "oidc": Keycloak (realm meridian, client meridian-developer-portal: platform scopes only, authorization code + PKCE; SEC-14); the tenant comes from
  *    the token's tenant_id claim. Used in every shared environment.
  *  - "dev":  local services in dev security mode; the portal sends X-Tenant-Id / X-User headers.
  */
@@ -28,7 +28,7 @@ export function oidc(): UserManager {
     const origin = window.location.origin;
     manager = new UserManager({
       authority: process.env.NEXT_PUBLIC_OIDC_AUTHORITY ?? "http://localhost:15180/realms/meridian",
-      client_id: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "meridian-console",
+      client_id: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "meridian-developer-portal",
       redirect_uri: `${origin}/auth/callback`,
       post_logout_redirect_uri: `${origin}/`,
       response_type: "code",

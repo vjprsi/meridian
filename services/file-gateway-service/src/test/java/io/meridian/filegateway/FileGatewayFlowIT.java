@@ -205,6 +205,20 @@ class FileGatewayFlowIT {
         HttpResponse<String> tampered = http.send(HttpRequest.newBuilder(URI.create(
                 link.get("url").asString().replace("signature=", "signature=0"))).build(), HttpResponse.BodyHandlers.ofString());
         assertThat(tampered.statusCode()).isEqualTo(403);
+
+        // SEC-36: a correctly signed link with an expiry beyond the issuing lifetime is refused
+        String url = link.get("url").asString();
+        String blobKey = java.net.URLDecoder.decode(url.replaceAll(".*[?&]key=([^&]+).*", "$1"), StandardCharsets.UTF_8);
+        long farFuture = java.time.Instant.now().plus(java.time.Duration.ofDays(365)).getEpochSecond();
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec("local-dev-signing-key-change-me".getBytes(StandardCharsets.UTF_8),
+                "HmacSHA256"));
+        String sig = java.util.HexFormat.of().formatHex(mac.doFinal((blobKey + "\n" + farFuture).getBytes(StandardCharsets.UTF_8)));
+        String forged = url.replaceAll("expires=\\d+", "expires=" + farFuture).replaceAll("signature=[0-9a-f]+", "signature=" + sig);
+        HttpResponse<String> longLived = http.send(HttpRequest.newBuilder(URI.create(forged)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(longLived.statusCode()).isEqualTo(403);
+        assertThat(longLived.body()).contains("invalid_expiry");
     }
 
     @Test

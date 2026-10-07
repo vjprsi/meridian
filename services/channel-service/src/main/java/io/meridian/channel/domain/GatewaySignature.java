@@ -23,10 +23,15 @@ public final class GatewaySignature {
     private GatewaySignature() {}
 
     public static String sign(String secret, Object body) {
+        return signBytes(secret, canonical(body).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Lowercase hex HMAC-SHA256 of raw bytes (the v2 payload {@code <ts>.<nonce>.<tenant>.<canonical body>}). */
+    public static String signBytes(String secret, byte[] data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal(canonical(body).getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(mac.doFinal(data));
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException(e);
         }

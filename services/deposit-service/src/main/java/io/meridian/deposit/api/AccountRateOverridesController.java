@@ -1,59 +1,71 @@
 package io.meridian.deposit.api;
 
-import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.deposit.api.generated.AccountRateOverridesApi;
 import io.meridian.deposit.api.generated.model.AccountRateOverride;
 import io.meridian.deposit.api.generated.model.AccountRateOverrideCreate;
-import io.meridian.deposit.application.AccountSupport;
-import io.meridian.web.crud.Crud;
-import io.meridian.web.crud.CrudEngine;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.Set;
+import io.meridian.deposit.api.generated.model.AccountRateOverrideUpdate;
+import io.meridian.deposit.api.generated.model.AccountRateOverridesApproveRequest;
+import io.meridian.deposit.api.generated.model.AccountRateOverridesRejectRequest;
+import io.meridian.deposit.application.RateOverrideService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 
-/** Account rate overrides: validated before generic CRUD (exactly one of absolute rate or adjustment). */
+/**
+ * Account rate overrides under maker-checker (SEC-20): create opens a PENDING_APPROVAL override (and a workflow
+ * request), approve / reject are checker actions (four-eyes); PATCH and DELETE go through the same rules instead of
+ * generic CRUD (see {@link RateOverrideService}).
+ */
 @RestController
 public class AccountRateOverridesController implements AccountRateOverridesApi {
-    private static final Set<String> KINDS = Set.of("CREDIT_INTEREST", "DEBIT_INTEREST", "OVERDRAFT_INTEREST",
-            "UNARRANGED_OVERDRAFT_INTEREST", "PENALTY_INTEREST", "BONUS_INTEREST", "CREDIT", "DEBIT", "OVERDRAFT",
-            "UNARRANGED_OVERDRAFT", "PENALTY", "BONUS");
-
-    private final CrudEngine crud;
-    private final AccountSupport accounts;
+    private final RateOverrideService overrides;
     private final Actions actions;
 
-    public AccountRateOverridesController(CrudEngine crud, AccountSupport accounts, Actions actions) {
-        this.crud = crud;
-        this.accounts = accounts;
+    public AccountRateOverridesController(RateOverrideService overrides, Actions actions) {
+        this.overrides = overrides;
         this.actions = actions;
     }
 
     @Override
     public ResponseEntity<AccountRateOverride> accountRateOverridesCreate(String idempotencyKey,
                                                                          AccountRateOverrideCreate body) {
+        return actions.create(idempotencyKey, body, AccountRateOverride.class, () -> overrides.create(body));
+    }
+
+    @Override
+    public ResponseEntity<AccountRateOverride> accountRateOverridesUpdate(UUID id, String ifMatch,
+                                                                         AccountRateOverrideUpdate body) {
         TenantContext.require();
-        JsonNode req = actions.tree(body);
-        accounts.reference(UUID.fromString(Http.text(req, "deposit_account_id")), "deposit_account_id");
-        if (!KINDS.contains(Http.text(req, "rate_kind"))) {
-            throw ApiException.unprocessable("invalid_rate_kind", "rate_kind must be an InterestRateKind value");
+        Integer version = null;
+        if (ifMatch != null && !ifMatch.isBlank()) {
+            try {
+                version = Integer.valueOf(ifMatch.replace("W/", "").replace("\"", "").trim());
+            } catch (NumberFormatException e) {
+                throw io.meridian.common.error.ApiException.badRequest("invalid_if_match", "If-Match must be the row version");
+            }
         }
-        BigDecimal rate = Http.decimal(req, "override_rate");
-        BigDecimal adjustment = Http.decimal(req, "rate_adjustment");
-        if ((rate == null) == (adjustment == null)) {
-            throw ApiException.unprocessable("rate_required", "Give exactly one of override_rate or rate_adjustment");
-        }
-        if (rate != null && (rate.compareTo(new BigDecimal("-0.1")) < 0 || rate.compareTo(BigDecimal.ONE) > 0)) {
-            throw ApiException.unprocessable("invalid_rate", "override_rate is an annual fraction between -0.1 and 1");
-        }
-        String to = Http.text(req, "valid_to");
-        if (to != null && LocalDate.parse(to).isBefore(LocalDate.parse(Http.text(req, "valid_from")))) {
-            throw ApiException.unprocessable("invalid_validity", "valid_to must not be before valid_from");
-        }
-        return crud.create("account_rate_override", AccountRateOverride.class, body, idempotencyKey, Crud.params());
+        return ResponseEntity.ok(actions.model(overrides.update(id, version, body), AccountRateOverride.class));
+    }
+
+    @Override
+    public ResponseEntity<Void> accountRateOverridesDelete(UUID id) {
+        TenantContext.require();
+        overrides.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<AccountRateOverride> accountRateOverridesApprove(UUID id, String idempotencyKey,
+                                                                          AccountRateOverridesApproveRequest body) {
+        return actions.action(idempotencyKey, id, "approve", body, AccountRateOverride.class,
+                () -> overrides.approve(id, body == null ? null : Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<AccountRateOverride> accountRateOverridesReject(UUID id, String idempotencyKey,
+                                                                         AccountRateOverridesRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, AccountRateOverride.class,
+                () -> overrides.reject(id, Http.text(actions.tree(body), "reason")));
     }
 }

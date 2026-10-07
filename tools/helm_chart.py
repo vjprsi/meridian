@@ -37,6 +37,7 @@ SERVICE_SECRETS = {
                          "MERIDIAN_DOCUMENTS_S3_ACCESS_KEY": "s3-access-key",
                          "MERIDIAN_DOCUMENTS_S3_SECRET_KEY": "s3-secret-key"},
     "file-gateway-service": {"MERIDIAN_FILES_SIGNING_KEY": "signing-key"},
+    "identity-service": {"MERIDIAN_IDENTITY_MFA_SEED_KEY": "mfa-seed-key"},
     "loan-origination-service": {"MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET": "callback-secret"},
     "onboarding-service": {"MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET": "otp-secret",
                            "MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET": "resume-token-secret"},
@@ -293,6 +294,14 @@ data:
   MERIDIAN_APPROVALS_MODE: {{ $g.approvalsMode | quote }}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ $g.kafka.bootstrapServers | quote }}
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: {{ $g.auth.issuerUri | quote }}
+  # SEC-14: tokens must carry this audience; SEC-15: only this tenant's users may use platform:operator
+  MERIDIAN_SECURITY_AUDIENCES: {{ $g.auth.audience | quote }}
+  MERIDIAN_SECURITY_PLATFORM_OPERATOR_TENANT: {{ $g.auth.platformOperatorTenant | quote }}
+  # SEC-16: load balancer / ingress addresses whose X-Forwarded-* the edge gateway believes (comma separated CIDRs)
+  MERIDIAN_GATEWAY_TRUSTED_PROXIES: {{ join "," $g.trustedProxies | quote }}
+  # SEC-17: provider callbacks must use v2 signatures (timestamp + nonce) once this is false
+  MERIDIAN_CALLBACKS_ACCEPT_LEGACY_SIGNATURES: {{ $g.callbacks.acceptLegacySignatures | quote }}
+  MERIDIAN_CALLBACKS_MAX_SKEW: {{ $g.callbacks.maxSkew | quote }}
   MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
@@ -405,6 +414,12 @@ def values_yaml(rows, app_version):
         "  auth:",
         '    issuerUri: "https://auth.example.com/realms/meridian"',
         '    serviceClientSecret: "meridian-service-client"',
+        '    audience: "meridian-api"          # SEC-14: required aud of every access token',
+        '    platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)',
+        "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress in front of the edge gateway",
+        "  callbacks:                # SEC-17: provider callback signatures",
+        "    acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2",
+        '    maxSkew: "5m"',
         "  otel:",
         '    endpoint: "http://otel-collector.monitoring:4318"',
         "    samplingProbability: 0.1",

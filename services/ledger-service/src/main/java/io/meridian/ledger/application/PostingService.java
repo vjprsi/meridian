@@ -60,6 +60,13 @@ public class PostingService {
         LedgerStore.LedgerInfo ledger = store.ledger(p.ledgerId());
         var existing = store.journalEntryByKey(p.ledgerId(), p.idempotencyKey());
         if (existing.isPresent()) {
+            // SEC-19: a replay must be the same posting; a reused key with other lines is refused, never replayed
+            List<String> requested = p.lines().stream().map(l -> LedgerStore.lineKey(l.accountId(), l.direction().name(),
+                    l.amount(), l.currency())).sorted().toList();
+            if (!requested.equals(store.entryLineKeys(existing.get()))) {
+                throw ApiException.unprocessable("idempotency_key_reused",
+                        "Idempotency-Key was already used for a journal entry with different lines");
+            }
             return new Posted(store.journalEntryJson(existing.get()).orElseThrow(), true);
         }
         if (!"ACTIVE".equals(ledger.status())) {
