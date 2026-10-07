@@ -3,7 +3,10 @@ package io.meridian.cardvault.api;
 import io.meridian.cardvault.api.generated.CardVaultKeysApi;
 import io.meridian.cardvault.api.generated.model.CardVaultKey;
 import io.meridian.cardvault.api.generated.model.CardVaultKeyCreate;
+import io.meridian.cardvault.api.generated.model.CardVaultKeysRewrapRequest;
 import io.meridian.cardvault.application.KeyService;
+import io.meridian.cardvault.application.VaultService;
+import io.meridian.web.security.RequiredScope;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
@@ -16,8 +19,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Vault key metadata. Create registers an HSM key: version and KCV come from the HSM, the new key becomes the
- * active key of its type (previous ones are retired). List / get are generic.
+ * Vault key metadata. Create registers a key: material, version and KCV come from the HSM / KMS adapter, the new key
+ * becomes the active key of its type (previous ones are retired). List / get are generic (the wrapped data key is
+ * never returned). Re-wrap is the per-tenant master key rotation (GAP-01), vault administrators or services only.
  */
 @RestController
 public class CardVaultKeysController implements CardVaultKeysApi {
@@ -25,12 +29,33 @@ public class CardVaultKeysController implements CardVaultKeysApi {
     private final Idempotency idempotency;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final VaultService vault;
+    private final VaultAccessPolicy access;
+    private final CardVaultController calls;
 
-    public CardVaultKeysController(KeyService keys, Idempotency idempotency, CrudEngine crud, JsonMapper json) {
+    public CardVaultKeysController(KeyService keys, Idempotency idempotency, CrudEngine crud, JsonMapper json,
+                                   VaultService vault, VaultAccessPolicy access, CardVaultController calls) {
         this.keys = keys;
         this.idempotency = idempotency;
         this.crud = crud;
         this.json = json;
+        this.vault = vault;
+        this.access = access;
+        this.calls = calls;
+    }
+
+    @Override
+    @RequiredScope(VaultAccessPolicy.SCOPE_ADMIN)
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public ResponseEntity<Map<String, Object>> cardVaultKeysRewrap(String idempotencyKey, CardVaultKeysRewrapRequest body) {
+        access.require(VaultAccessPolicy.Operation.REWRAP);
+        TenantContext.require();
+        java.util.LinkedHashMap<String, Object> fp = new java.util.LinkedHashMap<>();
+        fp.put("action", "rewrap");
+        fp.put("body", body == null ? json.createObjectNode() : json.valueToTree(body));
+        ResponseEntity raw = idempotency.execute(idempotencyKey, fp, Map.class,
+                () -> ResponseEntity.ok(vault.rewrapMasterKey(calls.caller())));
+        return (ResponseEntity<Map<String, Object>>) raw;
     }
 
     @Override

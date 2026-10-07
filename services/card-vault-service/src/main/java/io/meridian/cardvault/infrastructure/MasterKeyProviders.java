@@ -52,6 +52,39 @@ public final class MasterKeyProviders {
         return p;
     }
 
+    /** Previous master keys (comma separated base64), accepted for unwrapping until the re-wrap job has run. */
+    public static final String PREVIOUS_PROPERTY = "meridian.cards.vault.master-key-previous";
+
+    /**
+     * GAP-01 software master key rotation: the previous master keys still accepted for unwrapping data keys
+     * ({@value #PREVIOUS_PROPERTY}, e.g. {@code MERIDIAN_CARDS_VAULT_MASTER_KEY_PREVIOUS}); each validated like the
+     * current key.
+     */
+    public static java.util.List<MasterKeyProvider> previous(Environment env, boolean devMode) {
+        java.util.List<MasterKeyProvider> out = new java.util.ArrayList<>();
+        String v = env.getProperty(PREVIOUS_PROPERTY, "").trim();
+        int i = 0;
+        for (String part : v.split(",")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            MasterKeyProvider p = fromBase64(part, "environment (" + PREVIOUS_PROPERTY + "[" + i++ + "])");
+            validate(p, devMode);
+            out.add(p);
+        }
+        return out;
+    }
+
+    /** The configured key or file, if any (KMS / HSM modes: the legacy software key, only to adopt old keys). */
+    public static MasterKeyProvider optional(Environment env) {
+        String file = env.getProperty(FILE_PROPERTY, "").trim();
+        String value = env.getProperty(KEY_PROPERTY, "").trim();
+        if (!file.isEmpty()) {
+            return fromFile(Path.of(file));
+        }
+        return value.isEmpty() ? null : fromBase64(value, "environment (" + KEY_PROPERTY + ")");
+    }
+
     /** Checks length and, outside dev mode, that the key is not the development key. */
     public static void validate(MasterKeyProvider p, boolean devMode) {
         byte[] key = p.masterKey();

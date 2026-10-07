@@ -50,6 +50,26 @@ meridian:
       # security-mode=dev, where a clearly labelled local development key is used.
       master-key: ${MERIDIAN_CARDS_VAULT_MASTER_KEY:}
       master-key-file: ${MERIDIAN_CARDS_VAULT_MASTER_KEY_FILE:}
+      # GAP-01: software (dev; envelope under the master key above) | aws-kms (CDE KMS key, IRSA) | pkcs11 (HSM)
+      key-management: ${MERIDIAN_CARDS_VAULT_KEY_MANAGEMENT:software}
+      master-key-previous: ${MERIDIAN_CARDS_VAULT_MASTER_KEY_PREVIOUS:}   # software rotation: old keys, comma separated
+      data-key-cache-ttl: ${MERIDIAN_CARDS_VAULT_DATA_KEY_CACHE_TTL:PT5M}  # unwrapped data keys kept in memory
+      data-key-cache-max-entries: 10000
+      kms:
+        key-id: ${MERIDIAN_CARDS_VAULT_KMS_KEY_ID:}          # key ARN or alias/meridian-<cell>-cde (infra/tofu cell)
+        region: ${MERIDIAN_CARDS_VAULT_KMS_REGION:}
+        endpoint: ${MERIDIAN_CARDS_VAULT_KMS_ENDPOINT:}      # optional VPC interface endpoint
+      pkcs11:
+        config: ${MERIDIAN_CARDS_VAULT_PKCS11_CONFIG:}       # SunPKCS11 configuration file (library, slot, attributes)
+        pin: ${MERIDIAN_CARDS_VAULT_PKCS11_PIN:}             # HSM crypto-user PIN, from a Secret
+        key-alias-prefix: "meridian/"
+        pin-block-key-algorithm: GenericSecret
+      master-key-rotation:                                   # daily re-wrap of data keys under the current master
+        enabled: ${MERIDIAN_CARDS_VAULT_MASTER_KEY_ROTATION_ENABLED:true}
+        cron: "0 40 2 * * *"
+      # GAP-02: services allowed per operation when a service token names its service (defaults in VaultAccessPolicy)
+      # callers:
+      #   verify: [card-authorization-service]
       # SEC-11: dedicated scopes for clear-data reveal / vault administration plus recent step-up for user tokens
       step-up-max-age-seconds: 300
       step-up-acr-values: [ "2", "3", "mfa", "aal2", "aal3", "urn:meridian:acr:mfa" ]

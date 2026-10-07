@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.IntSupplier;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
@@ -35,6 +36,11 @@ import tools.jackson.databind.node.ObjectNode;
  * The PCI vault: tokenisation, detokenisation (reveal, lookup, verify, reissue), PIN management and key rotation.
  * Card data exists in clear only inside these methods; it is never logged, never put in events and never stored
  * outside encrypted columns. Every detokenisation writes an access-log row (failures in their own transaction).
+ *
+ * <p>GAP-03: CVV2 is never stored - it is derived on demand under the card's CVK ({@code cvk_key_id}) for reveal and
+ * verification. The PIN is never stored either: only the ISO 9564 PIN block encrypted under the PIN encryption key
+ * ({@code pin_key_id}), produced by {@link Hsm#translatePinBlock} (inside the HSM in PKCS#11 mode) and compared as
+ * ciphertext; weak PINs are refused by comparing with the encrypted weak-PIN reference blocks.
  */
 @Service
 public class VaultService {
@@ -43,10 +49,12 @@ public class VaultService {
     /** SEC-24: consecutive wrong CVV2 values after which CVV2 checks of the card are blocked. */
     private final int cvvTryLimit;
 
-    public record Tokenize(String pan, String cvv, Integer expiryMonth, Integer expiryYear, UUID cardId) {}
+    public record Tokenize(String pan, Integer expiryMonth, Integer expiryYear, UUID cardId) {}
 
     public record Verify(String panToken, String cvv, Integer expiryMonth, Integer expiryYear, String pinBlock,
                          String pinKeyId) {}
+
+    private record StoredPin(byte[] block, UUID keyId) {}
 
     private final VaultStore store;
     private final KeyService keys;
@@ -75,7 +83,7 @@ public class VaultService {
 
     /** Keyed fingerprint of a sensitive value, for idempotency fingerprints that must not contain card data. */
     public String fingerprint(String value) {
-        return value == null ? null : hsm.fingerprint(value);
+        return value == null ? null : hsm.fingerprint(keys.active("FINGERPRINT").ref(), value);
     }
 
     // ------------------------------------------------------------------ tokenize
@@ -87,10 +95,7 @@ public class VaultService {
         if (!CardData.expiryValid(t.expiryMonth(), t.expiryYear())) {
             throw ApiException.unprocessable("invalid_expiry", "expiry_month must be 1-12 and expiry_year 4 digits");
         }
-        if (t.cvv() != null && !CardData.cvvValid(t.cvv())) {
-            throw ApiException.unprocessable("invalid_cvv", "cvv must be 3 or 4 digits");
-        }
-        String fp = hsm.fingerprint(t.pan());
+        String fp = fingerprint(t.pan());
         return tx.execute(s -> {
             jdbc.sql("select pg_advisory_xact_lock(hashtext(?))").param("card_data_vault:" + fp).query().singleRow();
             for (VaultStore.Record r : store.activeByFingerprint(fp)) {
@@ -100,20 +105,21 @@ public class VaultService {
                 throw ApiException.conflict("pan_already_vaulted", "the PAN is already vaulted for another card");
             }
             KeyService.Key dek = keys.active("PAN_DEK");
-            String cvv = t.cvv() != null ? t.cvv()
-                    : hsm.deriveCvv(keys.active("CVK").ref(), t.pan(), t.expiryMonth(), t.expiryYear());
+            KeyService.Key cvk = keys.active("CVK");
             String token = newToken();
-            UUID id = store.insert(new VaultStore.NewRecord(token, fp,
-                    enc(dek, token, "pan", t.pan()), enc(dek, token, "cvv", cvv),
-                    enc(dek, token, "exp", CardData.expiry(t.expiryMonth(), t.expiryYear())), null, dek.id(),
-                    t.cardId(), CardData.bin(t.pan()), CardData.last4(t.pan()), false, 0));
+            UUID id = store.insert(new VaultStore.NewRecord(token, fp, enc(dek, token, "pan", t.pan()),
+                    enc(dek, token, "exp", CardData.expiry(t.expiryMonth(), t.expiryYear())), null, dek.id(), cvk.id(),
+                    null, t.cardId(), CardData.bin(t.pan()), CardData.last4(t.pan()), false, 0));
             return json.readTree(store.row(id));
         });
     }
 
     // ------------------------------------------------------------------ reveal / lookup
 
-    /** PAN, CVV and expiry of the card's active record; with a public key they are RSA-OAEP encrypted. */
+    /**
+     * PAN, CVV2 (derived under the card's CVK) and expiry of the card's active record; with a public key they are
+     * RSA-OAEP encrypted.
+     */
     public JsonNode reveal(UUID cardId, String purpose, String publicKey, AccessLog.Caller caller) {
         VaultStore.Record r = store.activeByCard(cardId).orElseGet(() -> {
             access.failure(caller, purpose, null, cardId, "no active vault record for the card");
@@ -131,8 +137,8 @@ public class VaultService {
         }
         KeyService.Key dek = keys.byId(r.dekKeyId());
         String pan = dec(dek, r.panToken(), "pan", r.pan());
-        String cvv = r.cvv() == null ? null : dec(dek, r.panToken(), "cvv", r.cvv());
         String exp = dec(dek, r.panToken(), "exp", r.expiry());
+        String cvv = hsm.deriveCvv(cvk(r).ref(), pan, CardData.expiryMonth(exp), CardData.expiryYear(exp));
         PublicKey key = pk;
         return tx.execute(s -> {
             store.touchDetokenized(r.id());
@@ -142,17 +148,13 @@ public class VaultService {
             if (key != null) {
                 ObjectNode secret = json.createObjectNode();
                 secret.put("pan", pan);
-                if (cvv != null) {
-                    secret.put("cvv", cvv);
-                }
+                secret.put("cvv", cvv);
                 secret.put("expiry_month", CardData.expiryMonth(exp));
                 secret.put("expiry_year", CardData.expiryYear(exp));
                 out.put("encrypted_payload", rsaEncrypt(key, json.writeValueAsBytes(secret)));
             } else {
                 out.put("pan", pan);
-                if (cvv != null) {
-                    out.put("cvv", cvv);
-                }
+                out.put("cvv", cvv);
                 out.put("expiry_month", CardData.expiryMonth(exp));
                 out.put("expiry_year", CardData.expiryYear(exp));
             }
@@ -164,7 +166,7 @@ public class VaultService {
         if (!CardData.panValid(pan)) {
             throw ApiException.unprocessable("invalid_pan", "pan must be 13-19 digits and pass the Luhn check");
         }
-        List<VaultStore.Record> found = store.activeByFingerprint(hsm.fingerprint(pan));
+        List<VaultStore.Record> found = store.activeByFingerprint(fingerprint(pan));
         if (found.isEmpty()) {
             access.failure(caller, purpose, null, null, "no active vault record for the PAN");
             throw ApiException.notFound("card vault record", "for the PAN");
@@ -187,16 +189,21 @@ public class VaultService {
             });
             KeyService.Key dek = keys.byId(r.dekKeyId());
             Map<String, Object> out = new LinkedHashMap<>();
+            String pan = dec(dek, r.panToken(), "pan", r.pan());
+            String stored = dec(dek, r.panToken(), "exp", r.expiry());
             String cvvResult = "P";
             boolean cvvBlocked = false;
-            if (v.cvv() != null && r.cvv() != null) {
+            if (v.cvv() != null) {
                 // SEC-24: consecutive CVV2 failures per card block further CVV2 checks (distributed card testing)
                 if (store.cvvBlocked(r.id())) {
                     cvvResult = "N";
                     cvvBlocked = true;
                     access.failure(caller, "AUTHORIZATION", r.panToken(), r.cardId(), "cvv2 checks blocked");
                 } else {
-                    boolean match = constantEquals(dec(dek, r.panToken(), "cvv", r.cvv()), v.cvv());
+                    // GAP-03: the CVV2 is recomputed under the card's CVK, never read from storage
+                    String expected = hsm.deriveCvv(cvk(r).ref(), pan, CardData.expiryMonth(stored),
+                            CardData.expiryYear(stored));
+                    boolean match = constantEquals(expected, v.cvv());
                     cvvResult = match ? "M" : "N";
                     int fails = store.cvvOutcome(r.id(), match, cvvTryLimit);
                     cvvBlocked = fails >= cvvTryLimit;
@@ -204,7 +211,6 @@ public class VaultService {
             }
             String expResult = "P";
             if (v.expiryMonth() != null && v.expiryYear() != null) {
-                String stored = dec(dek, r.panToken(), "exp", r.expiry());
                 expResult = stored.equals(CardData.expiry(v.expiryMonth(), v.expiryYear())) ? "M" : "N";
             }
             String pinResult = "NOT_PROCESSED";
@@ -215,14 +221,15 @@ public class VaultService {
                 } else if (tries >= PinRules.TRY_LIMIT) {
                     pinResult = "TRIES_EXCEEDED";
                 } else {
-                    String pan = dec(dek, r.panToken(), "pan", r.pan());
-                    String entered;
+                    StoredPin pin = currentPin(r, dek, pan);
+                    KeyService.Key zpk = keys.resolveZoneKey(v.pinKeyId());
+                    byte[] entered;
                     try {
-                        entered = clearPin(v.pinBlock(), v.pinKeyId(), pan);
+                        entered = hsm.translatePinBlock(zpk.ref(), v.pinBlock(), keys.byId(pin.keyId()).ref(), pan);
                     } catch (IllegalArgumentException e) {
                         entered = null; // an undecodable PIN block counts as a wrong PIN
                     }
-                    if (entered != null && constantEquals(dec(dek, r.panToken(), "pin", r.pin()), entered)) {
+                    if (entered != null && MessageDigest.isEqual(entered, pin.block())) {
                         pinResult = "VERIFIED";
                         tries = 0;
                     } else {
@@ -252,9 +259,11 @@ public class VaultService {
         });
         KeyService.Key dek = keys.byId(r.dekKeyId());
         String pan = dec(dek, r.panToken(), "pan", r.pan());
-        String pin;
+        KeyService.Key pek = keys.active("PIN_KEY");
+        byte[] translated;
         try {
-            pin = clearPin(pinBlock, pinKeyId, pan);
+            KeyService.Key zpk = keys.resolveZoneKey(pinKeyId);
+            translated = hsm.translatePinBlock(zpk.ref(), pinBlock, pek.ref(), pan);
         } catch (IllegalArgumentException e) {
             access.failure(caller, "PIN_MANAGEMENT", panToken, r.cardId(), "invalid PIN block");
             throw ApiException.unprocessable("invalid_pin_block",
@@ -263,12 +272,12 @@ public class VaultService {
             access.failure(caller, "PIN_MANAGEMENT", panToken, r.cardId(), e.code());
             throw e;
         }
-        if (PinRules.weak(pin)) {
+        if (weak(pek, pan, translated)) {
             access.failure(caller, "PIN_MANAGEMENT", panToken, r.cardId(), "weak PIN rejected");
             throw ApiException.unprocessable("weak_pin", "the PIN is too easy to guess (repeated or sequential digits)");
         }
         return tx.execute(s -> {
-            store.setPin(r.id(), enc(dek, r.panToken(), "pin", pin));
+            store.setPin(r.id(), translated, pek.id());
             access.success(caller, "PIN_MANAGEMENT", r.panToken(), r.cardId());
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("pan_token", r.panToken());
@@ -295,7 +304,10 @@ public class VaultService {
 
     // ------------------------------------------------------------------ reissue
 
-    /** Same PAN under a new token with a new expiry and CVV (PIN carried over); the source becomes inactive. */
+    /**
+     * Same PAN under a new token with a new expiry (the CVV2 follows from the active CVK); the stored PIN block
+     * carries over (same PAN, same PIN key); the source becomes inactive.
+     */
     public JsonNode reissue(String panToken, UUID cardId, Integer month, Integer year, AccessLog.Caller caller) {
         if (!CardData.expiryValid(month, year)) {
             throw ApiException.unprocessable("invalid_expiry", "expiry_month must be 1-12 and expiry_year 4 digits");
@@ -307,14 +319,14 @@ public class VaultService {
             });
             KeyService.Key old = keys.byId(src.dekKeyId());
             String pan = dec(old, src.panToken(), "pan", src.pan());
-            String pin = src.pin() == null ? null : dec(old, src.panToken(), "pin", src.pin());
+            StoredPin pin = src.pin() == null ? null : currentPin(src, old, pan);
             KeyService.Key dek = keys.active("PAN_DEK");
-            String cvv = hsm.deriveCvv(keys.active("CVK").ref(), pan, month, year);
+            KeyService.Key cvk = keys.active("CVK");
             String token = newToken();
             UUID id = store.insert(new VaultStore.NewRecord(token, src.fingerprint(), enc(dek, token, "pan", pan),
-                    enc(dek, token, "cvv", cvv), enc(dek, token, "exp", CardData.expiry(month, year)),
-                    pin == null ? null : enc(dek, token, "pin", pin), dek.id(), cardId, CardData.bin(pan),
-                    CardData.last4(pan), src.pinSet(), src.pinTryCount()));
+                    enc(dek, token, "exp", CardData.expiry(month, year)), pin == null ? null : pin.block(), dek.id(),
+                    cvk.id(), pin == null ? null : pin.keyId(), cardId, CardData.bin(pan), CardData.last4(pan),
+                    src.pinSet(), src.pinTryCount()));
             store.deactivate(src.id());
             access.success(caller, "REISSUE", src.panToken(), cardId);
             return json.readTree(store.row(id));
@@ -324,40 +336,46 @@ public class VaultService {
     // ------------------------------------------------------------------ key rotation
 
     /**
-     * Rotates a key. SEC-40: PAN DEK re-encryption runs in batches of {@value #ROTATION_BATCH} records, each in its own
-     * short transaction (no tenant-wide lock for the whole run); after {@value #SYNC_BATCHES} batches the rest
-     * continues on a background thread for the same tenant and the response says {@code "status": "IN_PROGRESS"}.
-     * Records are decryptable under either key meanwhile (each names its DEK).
+     * Rotates a key. SEC-40: PAN DEK re-encryption (and PIN key re-translation) runs in batches of
+     * {@value #ROTATION_BATCH} records, each in its own short transaction (no tenant-wide lock for the whole run);
+     * after {@value #SYNC_BATCHES} batches the rest continues on a background thread for the same tenant and the
+     * response says {@code "status": "IN_PROGRESS"}. Records stay readable meanwhile (each names its key). A rotated
+     * CVK applies to cards (re)issued from now on; existing cards keep verifying under the CVK they were issued with.
      */
     public Map<String, Object> rotate(String keyType, AccessLog.Caller caller) {
         KeyService.Key next = tx.execute(s -> keys.rotate(keyType));
+        Map<UUID, KeyService.Key> cache = new java.util.concurrent.ConcurrentHashMap<>();
+        IntSupplier batch = switch (keyType) {
+            case "PAN_DEK" -> () -> reEncryptBatch(next, cache);
+            case "PIN_KEY" -> () -> reTranslateBatch(next, cache);
+            default -> null;
+        };
         int count = 0;
         boolean more = false;
-        if ("PAN_DEK".equals(keyType)) {
-            Map<UUID, KeyService.Key> cache = new java.util.concurrent.ConcurrentHashMap<>();
+        if (batch != null) {
             int batches = 0;
             int n;
             do {
-                n = reEncryptBatch(next, cache);
+                n = batch.getAsInt();
                 count += n;
                 batches++;
             } while (n == ROTATION_BATCH && batches < SYNC_BATCHES);
             more = n == ROTATION_BATCH;
             if (more) {
-                UUID tenant = io.meridian.common.tenancy.TenantContext.require();
-                String principal = io.meridian.common.tenancy.TenantContext.principal();
+                UUID tenant = TenantContext.require();
+                String principal = TenantContext.principal();
                 Thread.ofVirtual().name("vault-rotation-" + next.id()).start(() -> {
                     try {
-                        io.meridian.common.tenancy.TenantContext.callAs(tenant, principal, () -> {
+                        TenantContext.callAs(tenant, principal, () -> {
                             int k;
                             do {
-                                k = reEncryptBatch(next, cache);
+                                k = batch.getAsInt();
                             } while (k == ROTATION_BATCH);
                             return null;
                         });
                     } catch (Exception e) {
                         org.slf4j.LoggerFactory.getLogger(VaultService.class)
-                                .error("background re-encryption under key {} stopped: {}", next.id(), e.toString());
+                                .error("background rotation under key {} stopped: {}", next.id(), e.toString());
                     }
                 });
             }
@@ -366,15 +384,40 @@ public class VaultService {
         boolean inProgress = more;
         return tx.execute(s -> {
             access.success(caller, "KEY_ROTATION", null, null);
-            JsonNode keyRow = json.readTree(jdbc.sql("select row_to_json(k)::text from card_vault_key k where id = ?")
-                    .param(next.id()).query(String.class).single());
-            events.publish("cards.card_vault.keys_rotated", "card_vault_key", keyRow);
+            events.publish("cards.card_vault.keys_rotated", "card_vault_key", json.readTree(keys.eventRow(next.id())));
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("key_type", keyType);
             out.put("new_key_id", next.id().toString());
             out.put("version", next.version());
             out.put("re_encrypted", reEncrypted);
             out.put("status", inProgress ? "IN_PROGRESS" : "COMPLETED");
+            return out;
+        });
+    }
+
+    /**
+     * Master key rotation for the current tenant (GAP-01): re-wraps every data key under the current master key
+     * version and adopts legacy derived keys; no record is re-encrypted. Audited and published (metadata only).
+     */
+    public Map<String, Object> rewrapMasterKey(AccessLog.Caller caller) {
+        return tx.execute(s -> {
+            KeyService.RewrapResult r = keys.rewrapAll();
+            access.success(caller, "KEY_ROTATION", null, null);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("master_key_ref", r.masterRef());
+            out.put("rewrapped", r.rewrapped());
+            out.put("adopted", r.adopted());
+            out.put("unchanged", r.unchanged());
+            if (!r.keyIds().isEmpty()) {
+                ObjectNode payload = json.createObjectNode();
+                payload.put("id", r.keyIds().getFirst().toString());
+                payload.put("master_key_ref", r.masterRef());
+                payload.put("rewrapped", r.rewrapped());
+                payload.put("adopted", r.adopted());
+                payload.put("unchanged", r.unchanged());
+                r.keyIds().forEach(id -> payload.withArray("key_ids").add(id.toString()));
+                events.publish("cards.card_vault.keys_rewrapped", "card_vault_key", payload);
+            }
             return out;
         });
     }
@@ -386,10 +429,31 @@ public class VaultService {
             for (VaultStore.Record r : batch) {
                 KeyService.Key old = cache.computeIfAbsent(r.dekKeyId(), keys::byId);
                 String t = r.panToken();
-                store.reEncrypt(r.id(),
-                        reWrap(old, next, t, "pan", r.pan()), reWrap(old, next, t, "cvv", r.cvv()),
-                        reWrap(old, next, t, "exp", r.expiry()), reWrap(old, next, t, "pin", r.pin()),
+                if (r.legacyPin()) {
+                    // a legacy PIN is encrypted under the old DEK: move it under the PIN key before the DEK changes
+                    currentPin(r, old, dec(old, t, "pan", r.pan()));
+                }
+                store.reEncrypt(r.id(), reWrap(old, next, t, "pan", r.pan()), reWrap(old, next, t, "exp", r.expiry()),
                         next.id());
+            }
+            return batch.size();
+        });
+        return n == null ? 0 : n;
+    }
+
+    /** One batch of PIN key re-translation (inside the HSM in HSM mode); returns how many PIN blocks it moved. */
+    private int reTranslateBatch(KeyService.Key next, Map<UUID, KeyService.Key> cache) {
+        Integer n = tx.execute(s -> {
+            List<VaultStore.Record> batch = store.pinUnderOtherKey(next.id(), ROTATION_BATCH);
+            for (VaultStore.Record r : batch) {
+                if (r.legacyPin()) {
+                    KeyService.Key dek = cache.computeIfAbsent(r.dekKeyId(), keys::byId);
+                    store.storePinBlock(r.id(), protectLegacyPin(r, dek, dec(dek, r.panToken(), "pan", r.pan()), next),
+                            next.id());
+                } else {
+                    KeyService.Key from = cache.computeIfAbsent(r.pinKeyId(), keys::byId);
+                    store.storePinBlock(r.id(), hsm.retranslatePin(from.ref(), r.pin(), next.ref()), next.id());
+                }
             }
             return batch.size();
         });
@@ -398,14 +462,45 @@ public class VaultService {
 
     // ------------------------------------------------------------------ helpers
 
-    private String clearPin(String wrapped, String pinKeyId, String pan) {
-        KeyService.Key zpk = keys.resolveZoneKey(pinKeyId);
-        byte[] block = hsm.unwrapPinBlock(zpk.ref(), wrapped);
+    /** The card verification key of a record (records from before GAP-03 without one: the active CVK). */
+    private KeyService.Key cvk(VaultStore.Record r) {
+        return r.cvkKeyId() != null ? keys.byId(r.cvkKeyId()) : keys.active("CVK");
+    }
+
+    /**
+     * The record's stored PIN block and its PIN key; a legacy row (PIN encrypted under the DEK, before GAP-03) is
+     * converted on the way and written back. Runs inside the caller's transaction.
+     */
+    private StoredPin currentPin(VaultStore.Record r, KeyService.Key dek, String pan) {
+        if (!r.legacyPin()) {
+            return new StoredPin(r.pin(), r.pinKeyId());
+        }
+        KeyService.Key pek = keys.active("PIN_KEY");
+        byte[] block = protectLegacyPin(r, dek, pan, pek);
+        store.storePinBlock(r.id(), block, pek.id());
+        return new StoredPin(block, pek.id());
+    }
+
+    private byte[] protectLegacyPin(VaultStore.Record r, KeyService.Key dek, String pan, KeyService.Key pek) {
+        byte[] pinBytes = hsm.decrypt(dek.ref(), r.pin(), aad(r.panToken(), "pin"));
+        byte[] clear = PinBlock.encode(new String(pinBytes, StandardCharsets.UTF_8), pan);
+        Arrays.fill(pinBytes, (byte) 0);
         try {
-            return PinBlock.decode(block, pan);
+            return hsm.protectReferencePinBlock(pek.ref(), clear);
         } finally {
+            Arrays.fill(clear, (byte) 0);
+        }
+    }
+
+    /** The translated block equals the encrypted reference block of a weak PIN (146 public values). */
+    private boolean weak(KeyService.Key pek, String pan, byte[] translated) {
+        boolean weak = false;
+        for (String pin : PinRules.weakPins()) {
+            byte[] block = PinBlock.encode(pin, pan);
+            weak |= MessageDigest.isEqual(hsm.protectReferencePinBlock(pek.ref(), block), translated);
             Arrays.fill(block, (byte) 0);
         }
+        return weak;
     }
 
     private byte[] reWrap(KeyService.Key from, KeyService.Key to, String token, String field, byte[] blob) {

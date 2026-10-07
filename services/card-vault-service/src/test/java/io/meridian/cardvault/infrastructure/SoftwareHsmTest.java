@@ -46,9 +46,10 @@ class SoftwareHsmTest {
     void kcvFingerprintAndCvvAreDeterministic() {
         assertThat(hsm.kcv(dek)).hasSize(6).isEqualTo(new SoftwareHsm(MASTER).kcv(dek))
                 .isNotEqualTo(hsm.kcv(new Hsm.KeyRef("pan-dek", 2)));
-        assertThat(hsm.fingerprint("4111111111111111")).hasSize(64)
-                .isEqualTo(new SoftwareHsm(MASTER).fingerprint("4111111111111111"))
-                .isNotEqualTo(hsm.fingerprint("4111111111111129"));
+        Hsm.KeyRef fpk = new Hsm.KeyRef("fingerprint", 1);
+        assertThat(hsm.fingerprint(fpk, "4111111111111111")).hasSize(64)
+                .isEqualTo(new SoftwareHsm(MASTER).fingerprint(fpk, "4111111111111111"))
+                .isNotEqualTo(hsm.fingerprint(fpk, "4111111111111129"));
         Hsm.KeyRef cvk = new Hsm.KeyRef("cvk", 1);
         String cvv = hsm.deriveCvv(cvk, "4111111111111111", 3, 2031);
         assertThat(cvv).matches("\\d{3}").isEqualTo(hsm.deriveCvv(cvk, "4111111111111111", 3, 2031));
@@ -59,14 +60,29 @@ class SoftwareHsmTest {
     }
 
     @Test
-    void unwrapsPinBlockWrappedWithTheSharedKdf() throws Exception {
-        byte[] clear = PinBlock.encode("2580", "4111111111111111");
-        String wrapped = wrap(SoftwareHsm.deriveKey(Base64.getDecoder().decode(MASTER), "zpk-default", 1), clear);
-        byte[] out = hsm.unwrapPinBlock(new Hsm.KeyRef("zpk-default", 1), wrapped);
-        assertThat(PinBlock.decode(out, "4111111111111111")).isEqualTo("2580");
-        assertThatThrownBy(() -> hsm.unwrapPinBlock(new Hsm.KeyRef("zpk-other", 1), wrapped))
+    void translatesPinBlocksWrappedWithTheSharedKdfToTheDeterministicStoredForm() throws Exception {
+        String pan = "4111111111111111";
+        Hsm.KeyRef zpk = new Hsm.KeyRef("zpk-default", 1);
+        Hsm.KeyRef pek = new Hsm.KeyRef("pin-key", 1);
+        byte[] zpkKey = SoftwareHsm.deriveKey(Base64.getDecoder().decode(MASTER), "zpk-default", 1);
+        String wrapped = wrap(zpkKey, PinBlock.encode("2580", pan));
+        String again = wrap(zpkKey, PinBlock.encode("2580", pan));
+        byte[] stored = hsm.translatePinBlock(zpk, wrapped, pek, pan);
+        // a fresh transport encryption of the same PIN translates to the same stored block; another PIN does not
+        assertThat(stored).hasSize(16).isEqualTo(hsm.translatePinBlock(zpk, again, pek, pan))
+                .isEqualTo(hsm.protectReferencePinBlock(pek, PinBlock.encode("2580", pan)))
+                .isNotEqualTo(hsm.translatePinBlock(zpk, wrap(zpkKey, PinBlock.encode("2581", pan)), pek, pan));
+        // the stored block is not the clear block and moves to a new PIN key without changing the PIN
+        assertThat(stored).isNotEqualTo(PinBlock.encode("2580", pan));
+        Hsm.KeyRef pek2 = new Hsm.KeyRef("pin-key", 2);
+        assertThat(hsm.retranslatePin(pek, stored, pek2)).isEqualTo(hsm.translatePinBlock(zpk, again, pek2, pan));
+        assertThatThrownBy(() -> hsm.retranslatePin(pek2, stored, pek)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> hsm.translatePinBlock(new Hsm.KeyRef("zpk-other", 1), wrapped, pek, pan))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> hsm.unwrapPinBlock(new Hsm.KeyRef("zpk-default", 1), "%%%"))
+        assertThatThrownBy(() -> hsm.translatePinBlock(zpk, "%%%", pek, pan))
+                .isInstanceOf(IllegalArgumentException.class);
+        // software mode still rejects a block that is not ISO 9564 format 0
+        assertThatThrownBy(() -> hsm.translatePinBlock(zpk, wrap(zpkKey, new byte[8]), pek, pan))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -1,32 +1,28 @@
 package io.meridian.cardvault.infrastructure;
 
-import io.meridian.cardvault.application.Hsm;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
-import java.util.Arrays;
+import java.security.Provider;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.crypto.Cipher;
 import javax.crypto.Mac;
-import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Software HSM for development and tests: every key is derived from one master key,
- * {@code key = HMAC-SHA256(master, "key:" + label + ":v" + version)}. Derived keys live only in memory.
+ * The original derived-key scheme, kept as the key derivation function of the development key management and for
+ * keys created before envelope encryption (GAP-01): {@code key = HMAC-SHA256(master, "key:" + label + ":v" + version)}.
+ * Every key is computed from one master key, so there is no per-key material to store, and rotating the master key
+ * would change every key; {@link EnvelopeHsm} adopts such keys (wraps the derived material once) so the master key
+ * can then be rotated by re-wrapping. Not used as the vault's {@code Hsm} bean any more.
  */
-public class SoftwareHsm implements Hsm {
-    private static final int IV_LEN = 12;
-    private static final int TAG_BITS = 128;
-    private static final KeyRef FINGERPRINT = new KeyRef("fingerprint", 1);
+public class SoftwareHsm extends JcaHsm {
+    /** Reference used for derived (not wrapped) keys. */
+    public static final String DERIVED = "derived";
 
     private final byte[] master;
-    private final SecureRandom random = new SecureRandom();
-    private final Map<KeyRef, SecretKeySpec> keys = new ConcurrentHashMap<>();
+    private final Map<String, SecretKeySpec> keys = new ConcurrentHashMap<>();
 
     public SoftwareHsm(String masterKeyBase64) {
         this(decode(masterKeyBase64));
@@ -34,6 +30,7 @@ public class SoftwareHsm implements Hsm {
 
     /** @param masterKey 32-byte master key (copied; the caller may zeroise its array) */
     public SoftwareHsm(byte[] masterKey) {
+        super("GenericSecret");
         if (masterKey == null || masterKey.length != 32) {
             throw new IllegalStateException("The card-vault master key must be 32 bytes");
         }
@@ -52,89 +49,42 @@ public class SoftwareHsm implements Hsm {
         return hmac(master, ("key:" + label + ":v" + version).getBytes(StandardCharsets.UTF_8));
     }
 
-    private SecretKeySpec key(KeyRef ref) {
-        return keys.computeIfAbsent(ref, r -> new SecretKeySpec(deriveKey(master, r.label(), r.version()), "AES"));
+    @Override
+    protected SecretKey key(KeyRef ref) {
+        return keys.computeIfAbsent(ref.name(), n -> new SecretKeySpec(deriveKey(master, ref.label(), ref.version()), "AES"));
     }
 
     @Override
-    public byte[] encrypt(KeyRef key, byte[] plain, byte[] aad) {
-        try {
-            byte[] iv = new byte[IV_LEN];
-            random.nextBytes(iv);
-            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(Cipher.ENCRYPT_MODE, key(key), new GCMParameterSpec(TAG_BITS, iv));
-            if (aad != null) {
-                c.updateAAD(aad);
-            }
-            byte[] ct = c.doFinal(plain);
-            return ByteBuffer.allocate(IV_LEN + ct.length).put(iv).put(ct).array();
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("encryption failed", e);
-        }
+    protected Provider provider() {
+        return null;
     }
 
     @Override
-    public byte[] decrypt(KeyRef key, byte[] blob, byte[] aad) {
-        if (blob == null || blob.length <= IV_LEN) {
-            throw new IllegalStateException("ciphertext too short");
-        }
-        try {
-            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(Cipher.DECRYPT_MODE, key(key), new GCMParameterSpec(TAG_BITS, blob, 0, IV_LEN));
-            if (aad != null) {
-                c.updateAAD(aad);
-            }
-            return c.doFinal(blob, IV_LEN, blob.length - IV_LEN);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("decryption failed (wrong key or tampered data)");
-        }
+    public KeyMaterial createKey(KeyRef key) {
+        return new KeyMaterial(null, DERIVED, kcv(key));
     }
 
     @Override
-    public String kcv(KeyRef key) {
-        try {
-            Cipher c = Cipher.getInstance("AES/ECB/NoPadding");
-            c.init(Cipher.ENCRYPT_MODE, key(key));
-            return HexFormat.of().withUpperCase().formatHex(c.doFinal(new byte[16])).substring(0, 6);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("kcv failed", e);
-        }
+    public KeyMaterial rewrap(KeyRef key) {
+        return new KeyMaterial(null, DERIVED, kcv(key));
     }
 
     @Override
-    public String fingerprint(String value) {
-        return HexFormat.of().formatHex(hmac(key(FINGERPRINT).getEncoded(), value.getBytes(StandardCharsets.UTF_8)));
+    public String currentMasterRef() {
+        return DERIVED;
     }
 
     @Override
-    public String deriveCvv(KeyRef cvk, String pan, int month, int year) {
-        String yymm = String.format("%02d%02d", year % 100, month);
-        byte[] mac = hmac(key(cvk).getEncoded(), (pan + "|" + yymm + "|cvv2").getBytes(StandardCharsets.UTF_8));
-        int v = ByteBuffer.wrap(mac, 0, 4).getInt() & 0x7fffffff;
-        return String.format("%03d", v % 1000);
+    public boolean pinInsideHsm() {
+        return false;
     }
 
     @Override
-    public byte[] unwrapPinBlock(KeyRef zpk, String wrappedBase64) {
-        byte[] blob;
-        try {
-            blob = Base64.getDecoder().decode(wrappedBase64.trim());
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("PIN block is not base64");
-        }
-        try {
-            byte[] clear = decrypt(zpk, blob, null);
-            if (clear.length != 8) {
-                Arrays.fill(clear, (byte) 0);
-                throw new IllegalArgumentException("PIN block must be 8 bytes");
-            }
-            return clear;
-        } catch (IllegalStateException e) {
-            throw new IllegalArgumentException("PIN block cannot be unwrapped under the zone key");
-        }
+    public String describe() {
+        return "derived keys from one software master key (legacy)";
     }
 
-    private static byte[] hmac(byte[] key, byte[] data) {
+    static byte[] hmac(byte[] key, byte[] data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));

@@ -9,7 +9,8 @@ import tools.jackson.databind.JsonNode;
 /** Publishes the vault's events (names exactly as declared in spec/domains/cards.yaml) via the outbox. */
 @Component
 public class Events {
-    static final Set<String> DECLARED = Set.of("cards.card_vault.revealed", "cards.card_vault.keys_rotated");
+    static final Set<String> DECLARED = Set.of("cards.card_vault.revealed", "cards.card_vault.keys_rotated",
+            "cards.card_vault.keys_rewrapped");
 
     private final OutboxWriter outbox;
 

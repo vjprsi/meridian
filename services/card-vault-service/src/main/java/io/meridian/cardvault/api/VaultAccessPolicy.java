@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -26,9 +27,16 @@ import org.springframework.stereotype.Component;
  *       shortcut) and, for user tokens, a recent step-up authentication</li>
  *   <li>PIN unblock and key rotation: a service token ({@value #SCOPE_INTERNAL}, e.g. card-service orchestrating an
  *       unblock it authorised itself) or the exact scope {@value #SCOPE_ADMIN} plus recent step-up</li>
- *   <li>lookup (PAN to card), verify (CVV / expiry / PIN oracle) and PIN set: service tokens, or
+ *   <li>tokenize, reissue, lookup (PAN to card), verify (CVV / expiry / PIN oracle) and PIN set: service tokens, or
  *       {@value #SCOPE_ADMIN} plus step-up</li>
+ *   <li>master key re-wrap: like key rotation</li>
  * </ul>
+ *
+ * GAP-02 named callers: when a service token names its service ({@code X-Meridian-Service}, honoured only with an
+ * internal token), that service must be one of {@code meridian.cards.vault.callers.<operation>} (defaults: card-service
+ * tokenizes, reissues and manages PINs, card-authorization-service verifies, card-tokenization-service and
+ * card-threeds-service look up PANs); others get 403 {@code caller_not_allowed}. The NetworkPolicy of the CDE
+ * enforces the same list at the network layer; with per-service Keycloak clients the token's {@code azp} proves it.
  *
  * Step-up = the token's {@code auth_time} is at most {@code meridian.cards.vault.step-up-max-age-seconds} old and its
  * {@code acr} is one of {@code step-up-acr-values} or its {@code amr} contains one of {@code step-up-amr-values}.
@@ -42,13 +50,23 @@ public class VaultAccessPolicy {
     public static final String SCOPE_INTERNAL = "meridian:internal";
 
     /** Vault operations with an access rule. */
-    public enum Operation { REVEAL, LOOKUP, VERIFY, PIN_SET, PIN_UNBLOCK, ROTATE_KEYS }
+    public enum Operation { REVEAL, TOKENIZE, REISSUE, LOOKUP, VERIFY, PIN_SET, PIN_UNBLOCK, ROTATE_KEYS, REWRAP }
+
+    /** GAP-02: services that may perform each operation with a service token (defaults; override per operation). */
+    static final Map<Operation, List<String>> DEFAULT_CALLERS = Map.of(
+            Operation.TOKENIZE, List.of("card-service"),
+            Operation.REISSUE, List.of("card-service"),
+            Operation.PIN_SET, List.of("card-service"),
+            Operation.PIN_UNBLOCK, List.of("card-service"),
+            Operation.VERIFY, List.of("card-authorization-service"),
+            Operation.LOOKUP, List.of("card-tokenization-service", "card-threeds-service"));
 
     private final boolean devMode;
     private final long maxAgeSeconds;
     private final Set<String> acrValues;
     private final Set<String> amrValues;
     private final Clock clock;
+    private final Map<Operation, Set<String>> callers;
 
     @org.springframework.beans.factory.annotation.Autowired
     public VaultAccessPolicy(Environment env) {
@@ -56,16 +74,37 @@ public class VaultAccessPolicy {
                 env.getProperty("meridian.cards.vault.step-up-max-age-seconds", Long.class, 300L),
                 list(env, "meridian.cards.vault.step-up-acr-values", List.of("2", "3", "mfa", "aal2", "aal3")),
                 list(env, "meridian.cards.vault.step-up-amr-values", List.of("mfa", "otp", "totp", "hwk", "webauthn")),
-                Clock.systemUTC());
+                Clock.systemUTC(), callers(env));
     }
 
     VaultAccessPolicy(boolean devMode, long maxAgeSeconds, Collection<String> acrValues, Collection<String> amrValues,
                       Clock clock) {
+        this(devMode, maxAgeSeconds, acrValues, amrValues, clock, DEFAULT_CALLERS);
+    }
+
+    VaultAccessPolicy(boolean devMode, long maxAgeSeconds, Collection<String> acrValues, Collection<String> amrValues,
+                      Clock clock, Map<Operation, List<String>> callers) {
         this.devMode = devMode;
         this.maxAgeSeconds = maxAgeSeconds;
         this.acrValues = Set.copyOf(acrValues);
         this.amrValues = Set.copyOf(amrValues);
         this.clock = clock;
+        Map<Operation, Set<String>> c = new java.util.EnumMap<>(Operation.class);
+        callers.forEach((op, list) -> c.put(op, Set.copyOf(list)));
+        this.callers = c;
+    }
+
+    private static Map<Operation, List<String>> callers(Environment env) {
+        Map<Operation, List<String>> out = new java.util.EnumMap<>(Operation.class);
+        for (Operation op : Operation.values()) {
+            String name = "meridian.cards.vault.callers." + op.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+            List<String> fallback = DEFAULT_CALLERS.get(op);
+            List<String> configured = list(env, name, fallback == null ? List.of() : fallback);
+            if (!configured.isEmpty()) {
+                out.put(op, configured);
+            }
+        }
+        return out;
     }
 
     /** Throws 403 / 401 {@link ApiException} unless the current token may perform the operation. */
@@ -86,8 +125,9 @@ public class VaultAccessPolicy {
                     requireStepUp(jwt);
                 }
             }
-            case PIN_UNBLOCK, ROTATE_KEYS, LOOKUP, VERIFY, PIN_SET -> {
+            case PIN_UNBLOCK, ROTATE_KEYS, REWRAP, TOKENIZE, REISSUE, LOOKUP, VERIFY, PIN_SET -> {
                 if (service) {
+                    requireNamedCaller(op);
                     return;
                 }
                 if (!scopes.contains(SCOPE_ADMIN)) {
@@ -98,6 +138,20 @@ public class VaultAccessPolicy {
             }
             default -> throw new IllegalStateException("unhandled vault operation " + op);
         }
+    }
+
+    /** GAP-02: a service that names itself must be one of the operation's callers. */
+    void requireNamedCaller(Operation op) {
+        Set<String> allowed = callers.get(op);
+        if (allowed == null || allowed.isEmpty()) {
+            return;
+        }
+        io.meridian.common.tenancy.TenantContext.callingService().ifPresent(svc -> {
+            if (!allowed.contains(svc)) {
+                throw new ApiException(403, "caller_not_allowed",
+                        svc + " may not call the card-vault operation " + op.name().toLowerCase(java.util.Locale.ROOT));
+            }
+        });
     }
 
     void requireStepUp(Jwt jwt) {

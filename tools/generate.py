@@ -136,6 +136,9 @@ class Api:
     # [required scope, accepted alternatives...]} (e.g. the cell router's narrow platform:routing-read, with
     # platform:operator still accepted).
     scopes: dict = field(default_factory=dict)
+    # GAP-02: internal API (service-to-service only, e.g. the PCI card vault): left out of generated/routes.json, so
+    # the edge gateway never routes it; callers inside the cluster reach it through ServiceClient.
+    internal: bool = False
 
 
 @dataclass
@@ -317,7 +320,8 @@ def load_domains() -> list:
                     actions=[parse_action(x, ctx) for x in (a.get("actions", []) or [])],
                     description=a.get("description", ""), fr=a.get("fr", []) or [],
                     scopes={str(k): ([v] if isinstance(v, str) else list(v))
-                            for k, v in (a.get("scopes", {}) or {}).items()}))
+                            for k, v in (a.get("scopes", {}) or {}).items()},
+                    internal=bool(a.get("internal", False))))
             for e in s.get("events", []) or []:
                 parts = [p.strip() for p in e.split("|")]
                 events.append(Event(parts[0], parts[1] if len(parts) > 1 else "",
@@ -834,6 +838,7 @@ class Endpoint:
     response_schema: str
     fr: list
     public: bool = False
+    internal: bool = False   # GAP-02: service-to-service only, never routed by the edge gateway
 
 
 def prune_components(doc: dict) -> None:
@@ -941,6 +946,12 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     if a.fr or t.fr:
                         o["x-requirements"] = sorted(set(a.fr + t.fr))
                     o["x-service"] = s.name
+                    if a.internal:
+                        if public:
+                            raise SpecError(f"{s.name} {a.resource}: an internal API cannot have [public] operations")
+                        o["x-meridian-internal"] = True   # not x-internal: openapi-generator skips those
+                        o["description"] = ((o.get("description", "") + " ").lstrip() +
+                                            "Internal: service-to-service only, not routed by the edge gateway.")
                     if public:
                         o["security"] = []
                         o["x-public"] = True
@@ -981,7 +992,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         target["paths"].setdefault(path, {})[method] = o
                     endpoints.append(Endpoint(oid, method.upper(), path, summary, d.id, s.name, a.resource,
                                               t.name, kind, "public" if public else granted, req_schema,
-                                              resp_schema, sorted(set(a.fr + t.fr)), public))
+                                              resp_schema, sorted(set(a.fr + t.fr)), public, a.internal))
 
                 rn = camel(a.resource)
                 noun = a.resource.replace("-", " ")
@@ -1290,10 +1301,12 @@ def personal_data(s):
 
 
 def gen_routes(endpoints):
-    """generated/routes.json: every operation's method + path template -> owning service and port (edge gateway)."""
+    """generated/routes.json: every operation's method + path template -> owning service and port (edge gateway).
+    Internal APIs (GAP-02, `internal: true`) are left out: the gateway and the cell router never route them."""
     import json
     ports = {x["name"]: x["port"] for x in json.loads((OUT / "services.json").read_text(encoding="utf-8"))}
-    routes = sorted({(e.method, e.path, e.service, e.public) for e in endpoints}, key=lambda r: (r[1], r[0]))
+    routes = sorted({(e.method, e.path, e.service, e.public) for e in endpoints if not e.internal},
+                    key=lambda r: (r[1], r[0]))
     (OUT / "routes.json").write_text(json.dumps(
         [{"method": m, "path": pth, "service": svc, "port": ports[svc], "public": pub}
          for m, pth, svc, pub in routes], indent=1),
@@ -1328,8 +1341,11 @@ def main():
     gen_routes(endpoints)
     apps = load_yaml(_quote_descriptions((SPEC / "apps.yaml").read_text(encoding="utf-8"))) \
         if (SPEC / "apps.yaml").exists() else {}
-    op_ids = {e.op_id for e in endpoints}
-    missing = [f"{a['id']} / {sc['name']}: {op}" for a in (apps or {}).get("apps", [])
+    op_ids = {e.op_id for e in endpoints if not e.internal}
+    internal_ids = {e.op_id for e in endpoints if e.internal}
+    missing = [f"{a['id']} / {sc['name']}: {op}" + (" (internal API: not reachable from an app, GAP-02)"
+                                                     if op in internal_ids else "")
+               for a in (apps or {}).get("apps", [])
                for sc in a.get("screens", []) for op in sc.get("apis", []) if op not in op_ids]
     if missing:
         msg = "Screens reference unknown API operations:\n  - " + "\n  - ".join(missing)

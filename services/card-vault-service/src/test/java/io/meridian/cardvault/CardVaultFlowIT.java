@@ -41,8 +41,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * card-vault-service end to end over HTTP against PostgreSQL 18 (RLS enforced): tokenisation and de-duplication,
  * reveal (clear and RSA-wrapped) with audit, lookup, CVV / expiry / PIN verification with try counting, PIN set,
- * change and unblock from wrapped ISO 9564 format 0 blocks, reissue and PAN DEK rotation. Asserts that no PAN / CVV
- * ever appears in clear in the database or the outbox.
+ * change and unblock from wrapped ISO 9564 format 0 blocks, reissue, PAN DEK / PIN key rotation and the master key
+ * re-wrap (GAP-01). GAP-03: CVV2 is derived under the CVK, never stored; PINs are stored only as PIN blocks under the
+ * PIN encryption key. Asserts that no PAN / CVV ever appears in clear in the database or the outbox.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})
@@ -69,12 +70,16 @@ class CardVaultFlowIT {
     final UUID card2 = UUID.randomUUID();
     String token;
     String token2;
+    String cvv1;
 
     @BeforeAll
     void setUp() throws Exception {
         JsonNode r = call(TENANT, "POST", "/v1/card-vault", "tok-1", """
-                {"pan":"%s","cvv":"321","expiry_month":3,"expiry_year":2031,"card_id":"%s"}""".formatted(PAN_FULL, card), 201);
+                {"pan":"%s","expiry_month":3,"expiry_year":2031,"card_id":"%s"}""".formatted(PAN_FULL, card), 201);
         token = r.get("pan_token").asString();
+        // GAP-03: the CVV2 is the one derived under the tenant's CVK (software key management: the documented KDF)
+        cvv1 = new SoftwareHsm(MASTER).deriveCvv(new io.meridian.cardvault.application.Hsm.KeyRef("cvk", 1), PAN_FULL, 3,
+                2031);
         JsonNode r2 = call(TENANT, "POST", "/v1/card-vault", "tok-2", """
                 {"pan":"%s","expiry_month":7,"expiry_year":2030,"card_id":"%s"}""".formatted(PAN2_FULL, card2), 201);
         token2 = r2.get("pan_token").asString();
@@ -94,7 +99,7 @@ class CardVaultFlowIT {
 
         // idempotent replay (same key + body) returns the stored response
         HttpResponse<String> replay = raw(TENANT, "POST", "/v1/card-vault", "tok-1", """
-                {"pan":"%s","cvv":"321","expiry_month":3,"expiry_year":2031,"card_id":"%s"}""".formatted(PAN_FULL, card));
+                {"pan":"%s","expiry_month":3,"expiry_year":2031,"card_id":"%s"}""".formatted(PAN_FULL, card));
         assertThat(replay.statusCode()).isEqualTo(201);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(json.readTree(replay.body()).get("pan_token").asString()).isEqualTo(token);
@@ -112,8 +117,10 @@ class CardVaultFlowIT {
                 {"pan":"4111111111111112","expiry_month":3,"expiry_year":2031}""", 422, "invalid_pan");
         problem(TENANT, "POST", "/v1/card-vault", "tok-bad2", """
                 {"pan":"4111111111111111","expiry_month":13,"expiry_year":2031}""", 422, "invalid_expiry");
-        problem(TENANT, "POST", "/v1/card-vault", "tok-bad3", """
-                {"pan":"4111111111111111","cvv":"12","expiry_month":1,"expiry_year":2031}""", 422, "invalid_cvv");
+        // key versions are recorded per record: DEK and card verification key
+        assertThat(r.get("dek_key_id").isNull()).isFalse();
+        assertThat(r.get("cvk_key_id").isNull()).isFalse();
+        assertThat(r.has("cvv_encrypted")).isFalse();
     }
 
     @Test
@@ -122,7 +129,7 @@ class CardVaultFlowIT {
         JsonNode r = call(TENANT, "POST", "/v1/card-vault/reveal", "rev-1", """
                 {"card_id":"%s","purpose":"REVEAL"}""".formatted(card), 200);
         assertThat(r.get("pan").asString()).isEqualTo(PAN_FULL);
-        assertThat(r.get("cvv").asString()).isEqualTo("321");
+        assertThat(r.get("cvv").asString()).isEqualTo(cvv1);   // derived on demand, never stored
         assertThat(r.get("expiry_month").asInt()).isEqualTo(3);
         assertThat(r.get("expiry_year").asInt()).isEqualTo(2031);
         assertThat(r.get("last_detokenized_at").isNull()).isFalse();
@@ -179,7 +186,7 @@ class CardVaultFlowIT {
                 PSource.PSpecified.DEFAULT));
         JsonNode secret = json.readTree(c.doFinal(Base64.getDecoder().decode(r.get("encrypted_payload").asString())));
         assertThat(secret.get("pan").asString()).isEqualTo(PAN_FULL);
-        assertThat(secret.get("cvv").asString()).isEqualTo("321");
+        assertThat(secret.get("cvv").asString()).isEqualTo(cvv1);
         assertThat(secret.get("expiry_month").asInt()).isEqualTo(3);
         problem(TENANT, "POST", "/v1/card-vault/reveal", "rev-badkey", """
                 {"card_id":"%s","purpose":"REVEAL","public_key":"not-a-key"}""".formatted(card), 422, "invalid_public_key");
@@ -222,25 +229,29 @@ class CardVaultFlowIT {
         JsonNode change = call(TENANT, "POST", "/v1/card-vault/pin", "pin-2", body(token, pinBlock("7391", PAN_FULL,
                 "zpk-default", 1), "zpk-default"), 200);
         assertThat(change.get("event_type").asString()).isEqualTo("CHANGE");
+        // GAP-03: the PIN is stored only as a PIN block under the PIN encryption key, named per record
+        JsonNode rec = call(TENANT, "GET", "/v1/card-vault/" + id(token), null, null, 200);
+        assertThat(rec.get("pin_key_id").isNull()).isFalse();
+        assertThat(rec.has("pin_encrypted")).isFalse();
 
-        JsonNode ok = verify("321", 3, 2031, pinBlock("7391", PAN_FULL, "zpk-default", 1), "zpk-default");
+        JsonNode ok = verify(cvv1, 3, 2031, pinBlock("7391", PAN_FULL, "zpk-default", 1), "zpk-default");
         assertThat(ok.get("pin_result").asString()).isEqualTo("VERIFIED");
         assertThat(ok.get("cvv_result").asString()).isEqualTo("M");
         assertThat(ok.get("expiry_result").asString()).isEqualTo("M");
-        JsonNode bad = verify("999", 4, 2031, null, null);
+        JsonNode bad = verify(wrongCvv(1), 4, 2031, null, null);
         assertThat(bad.get("cvv_result").asString()).isEqualTo("N");
         assertThat(bad.get("expiry_result").asString()).isEqualTo("N");
         assertThat(bad.get("pin_result").asString()).isEqualTo("NOT_PROCESSED");
         JsonNode none = verify(null, null, null, null, null);
         assertThat(none.get("cvv_result").asString()).isEqualTo("P");
         // SEC-24: a correct CVV2 resets the counter; 5 consecutive failures block CVV2 checks, even for the right value
-        assertThat(verify("321", null, null, null, null).get("cvv_result").asString()).isEqualTo("M");
+        assertThat(verify(cvv1, null, null, null, null).get("cvv_result").asString()).isEqualTo("M");
         for (int i = 1; i <= 5; i++) {
-            JsonNode miss = verify(String.format("%03d", i), null, null, null, null);
+            JsonNode miss = verify(wrongCvv(i), null, null, null, null);
             assertThat(miss.get("cvv_result").asString()).isEqualTo("N");
             assertThat(miss.get("cvv_blocked").asBoolean()).isEqualTo(i == 5);
         }
-        JsonNode cvvBlocked = verify("321", null, null, null, null);
+        JsonNode cvvBlocked = verify(cvv1, null, null, null, null);
         assertThat(cvvBlocked.get("cvv_result").asString()).isEqualTo("N");
         assertThat(cvvBlocked.get("cvv_blocked").asBoolean()).isTrue();
         try (Connection c = DriverManager.getConnection(MeridianTestContainers.adminJdbcUrl(), "meridian", "meridian")) {
@@ -355,8 +366,8 @@ class CardVaultFlowIT {
             c.createStatement().execute("set search_path to card_vault");
             for (String sql : List.of(
                     "select string_agg(to_jsonb(v)::text, '') from card_data_vault v",
-                    "select string_agg(encode(pan_encrypted, 'escape') || coalesce(encode(cvv_encrypted, 'escape'), '')"
-                            + " || encode(expiry_encrypted, 'escape'), '') from card_data_vault",
+                    "select string_agg(encode(pan_encrypted, 'escape') || encode(expiry_encrypted, 'escape'), '')"
+                            + " from card_data_vault",
                     "select string_agg(to_jsonb(l)::text, '') from card_vault_access_log l",
                     "select string_agg(payload::text, '') from outbox",
                     "select string_agg(coalesce(response_body::text, '') || request_hash, '') from idempotency_key")) {
@@ -386,7 +397,71 @@ class CardVaultFlowIT {
         assertThat(r.get("pan_token").asString()).isNotEqualTo(token2);
     }
 
+    @Test
+    @Order(10)
+    void pinKeyRotationReTranslatesStoredPinBlocks() throws Exception {
+        JsonNode r = call(TENANT, "POST", "/v1/card-vault/rotate-keys", "rot-pin", """
+                {"key_type":"PIN_KEY"}""", 200);
+        assertThat(r.get("version").asInt()).isEqualTo(2);
+        assertThat(r.get("re_encrypted").asInt()).isEqualTo(2); // the reissued record and its inactive source
+        JsonNode rec = call(TENANT, "GET", "/v1/card-vault/" + id(token), null, null, 200);
+        assertThat(rec.get("pin_key_id").asString()).isEqualTo(r.get("new_key_id").asString());
+        // (zpk-partner is the active zone key since the previous test)
+        assertThat(verify(null, null, null, pinBlock("7391", PAN_FULL, "zpk-partner", 1), "zpk-partner")
+                .get("pin_result").asString()).isEqualTo("VERIFIED");
+        problem(TENANT, "POST", "/v1/card-vault/rotate-keys", "rot-fp", """
+                {"key_type":"FINGERPRINT"}""", 422, "key_not_rotatable");
+    }
+
+    @Test
+    @Order(11)
+    void masterKeyRewrapAdoptsLegacyKeysWithoutTouchingRecords() throws Exception {
+        // nothing to do: every key is already wrapped under the current master key
+        JsonNode first = call(TENANT, "POST", "/v1/card-vault/keys/rewrap", "rw-1", "{}", 200);
+        assertThat(first.get("rewrapped").asInt()).isZero();
+        assertThat(first.get("adopted").asInt()).isZero();
+        assertThat(first.get("unchanged").asInt()).isGreaterThanOrEqualTo(5);
+        assertThat(first.get("master_key_ref").asString()).startsWith("software:");
+
+        // keys from before envelope encryption (no wrapped data key) are adopted; records stay untouched
+        byte[] before = panCiphertext(token);
+        try (Connection c = DriverManager.getConnection(MeridianTestContainers.adminJdbcUrl(), "meridian", "meridian")) {
+            var ps = c.prepareStatement("update card_vault.card_vault_key set wrapped_key = null, master_key_ref = null"
+                    + " where tenant_id = ?::uuid and key_type in ('PAN_DEK', 'CVK')");
+            ps.setString(1, TENANT);
+            assertThat(ps.executeUpdate()).isGreaterThanOrEqualTo(3);
+        }
+        JsonNode second = call(TENANT, "POST", "/v1/card-vault/keys/rewrap", "rw-2", "{}", 200);
+        assertThat(second.get("adopted").asInt()).isGreaterThanOrEqualTo(3);
+        assertThat(panCiphertext(token)).isEqualTo(before);
+        JsonNode rev = call(TENANT, "POST", "/v1/card-vault/reveal", "rev-rw", """
+                {"card_id":"%s","purpose":"REVEAL"}""".formatted(card2), 200);
+        assertThat(rev.get("pan").asString()).isEqualTo(PAN2_FULL);
+        assertThat(outbox("cards.card_vault.keys_rewrapped")).hasSize(1)
+                .allSatisfy(p -> assertThat(p).contains("adopted").doesNotContain("wrapped_key"));
+        // the keys API and key events never carry wrapped key material
+        assertThat(call(TENANT, "GET", "/v1/card-vault/keys?limit=50", null, null, 200).toString())
+                .doesNotContain("wrapped_key");
+        assertThat(String.join("", outbox("cards.card_vault.keys_rotated"))).doesNotContain("wrapped_key");
+    }
+
+    @Test
+    @Order(12)
+    void storedCvv2IsGone() throws Exception {
+        try (Connection c = DriverManager.getConnection(MeridianTestContainers.adminJdbcUrl(), "meridian", "meridian");
+             ResultSet rs = c.createStatement().executeQuery("select count(*) from information_schema.columns"
+                     + " where table_schema = 'card_vault' and column_name = 'cvv_encrypted'")) {
+            rs.next();
+            assertThat(rs.getInt(1)).isZero();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /** A CVV2 that is not the card's. */
+    String wrongCvv(int i) {
+        return String.format("%03d", (Integer.parseInt(cvv1) + i) % 1000);
+    }
 
     JsonNode verify(String cvv, Integer month, Integer year, String block, String keyId) throws Exception {
         java.util.Map<String, Object> b = new java.util.LinkedHashMap<>();

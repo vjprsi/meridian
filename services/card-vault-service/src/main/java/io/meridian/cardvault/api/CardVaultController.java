@@ -58,12 +58,12 @@ public class CardVaultController implements CardVaultApi {
 
     @Override
     public ResponseEntity<CardDataVault> cardVaultCreate(String idempotencyKey, CardDataVaultCreate body) {
+        access.require(VaultAccessPolicy.Operation.TOKENIZE);
         JsonNode req = tree(body);
-        VaultService.Tokenize t = new VaultService.Tokenize(Http.text(req, "pan"), Http.text(req, "cvv"),
+        VaultService.Tokenize t = new VaultService.Tokenize(Http.text(req, "pan"),
                 Http.integer(req, "expiry_month"), Http.integer(req, "expiry_year"), Http.uuid(req, "card_id"));
         Map<String, Object> fp = fingerprint("tokenize");
         fp.put("pan", vault.fingerprint(t.pan()));
-        fp.put("cvv", vault.fingerprint(t.cvv()));
         fp.put("expiry", t.expiryMonth() + "/" + t.expiryYear());
         fp.put("card_id", String.valueOf(t.cardId()));
         return idempotency.execute(idempotencyKey, fp, CardDataVault.class,
@@ -133,6 +133,7 @@ public class CardVaultController implements CardVaultApi {
 
     @Override
     public ResponseEntity<CardDataVault> cardVaultReissue(String idempotencyKey, CardVaultReissueRequest body) {
+        access.require(VaultAccessPolicy.Operation.REISSUE);
         JsonNode req = tree(body);
         Map<String, Object> fp = fingerprint("reissue");
         fp.put("body", req);
@@ -174,7 +175,7 @@ public class CardVaultController implements CardVaultApi {
      * with an internal token; dev mode: the header) or the relaying client ({@code azp}); a client-chosen
      * X-Caller-Service header is no longer believed.
      */
-    private AccessLog.Caller caller() {
+    AccessLog.Caller caller() {
         String svc = TenantContext.callingService().or(TenantContext::via).orElse(null);
         String principal = TenantContext.principal();
         return new AccessLog.Caller(svc == null || svc.isBlank() ? principal : svc, principal, request.getRemoteAddr());

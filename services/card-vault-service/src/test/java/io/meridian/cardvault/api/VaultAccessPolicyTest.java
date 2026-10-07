@@ -95,6 +95,33 @@ class VaultAccessPolicyTest {
     }
 
     @Test
+    void namedServiceCallersAreLimitedPerOperation() {
+        token("meridian:internal cards:*", Map.of());
+        try {
+            io.meridian.common.tenancy.TenantContext.setCallingService("card-authorization-service");
+            assertThatCode(() -> policy.require(Operation.VERIFY)).doesNotThrowAnyException();
+            denied(() -> policy.require(Operation.TOKENIZE), 403, "caller_not_allowed");
+            denied(() -> policy.require(Operation.LOOKUP), 403, "caller_not_allowed");
+            io.meridian.common.tenancy.TenantContext.setCallingService("card-service");
+            for (Operation op : new Operation[] {Operation.TOKENIZE, Operation.REISSUE, Operation.PIN_SET,
+                    Operation.PIN_UNBLOCK}) {
+                assertThatCode(() -> policy.require(op)).doesNotThrowAnyException();
+            }
+            denied(() -> policy.require(Operation.VERIFY), 403, "caller_not_allowed");
+            io.meridian.common.tenancy.TenantContext.setCallingService("ledger-service");
+            for (Operation op : new Operation[] {Operation.TOKENIZE, Operation.VERIFY, Operation.LOOKUP}) {
+                denied(() -> policy.require(op), 403, "caller_not_allowed");
+            }
+            io.meridian.common.tenancy.TenantContext.setCallingService("card-threeds-service");
+            assertThatCode(() -> policy.require(Operation.LOOKUP)).doesNotThrowAnyException();
+        } finally {
+            io.meridian.common.tenancy.TenantContext.setCallingService(null);
+        }
+        // a service token that does not name its service (jobs, callbacks) keeps the service rule only
+        assertThatCode(() -> policy.require(Operation.VERIFY)).doesNotThrowAnyException();
+    }
+
+    @Test
     void serviceTokensCannotRevealWithoutTheScope() {
         token("cards:* meridian:internal", Map.of());
         denied(() -> policy.require(Operation.REVEAL), 403, "insufficient_scope");
