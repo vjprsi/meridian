@@ -23,6 +23,10 @@ tags:
   description: Platform-operator API for deployment cells
 - name: Tenants
   description: Platform-operator API for tenant lifecycle
+- name: Starter Pack Runs
+  description: Tenant starter packs (bootstrap defaults) applied to the caller's tenant
+- name: Starter Pack Items
+  description: What starter packs created or found in the owning services
 - name: Modules
   description: Platform modules enabled for the tenant and their module-level configuration
 - name: Legal Entities
@@ -837,7 +841,8 @@ paths:
   /v1/platform/tenants/provision-from-template:
     post:
       operationId: tenantsProvisionFromTemplate
-      summary: Provision a tenant from a template bank in minutes
+      summary: Provision a tenant from a template bank in minutes; with starter_pack the pack is applied right after commit
+        (service identity acting for the new tenant)
       tags:
       - Tenants
       security:
@@ -874,6 +879,421 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
       x-required-scope: meridian:admin
       x-table: tenant
+  /v1/platform/tenants/{id}/apply-starter-pack:
+    post:
+      operationId: tenantsApplyStarterPack
+      summary: Apply, resume or upgrade a starter pack for this tenant (platform operator; calls run with service identity
+        acting for the tenant; maker-checker items are submitted, never approved)
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsApplyStarterPackRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
+      x-required-scope: meridian:admin
+      x-table: tenant
+  /v1/starter-pack-runs:
+    get:
+      operationId: starterPackRunsList
+      summary: List starter pack runs
+      tags:
+      - Starter Pack Runs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: pack_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - AWAITING_APPROVAL
+          - NEEDS_ATTENTION
+          - FAILED
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - PROVISIONING
+          - OPERATOR
+          - SELF_SERVICE
+          - RESUME
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: starter_pack_run
+      x-crud: true
+      x-crud-list: true
+  /v1/starter-pack-runs/{id}:
+    get:
+      operationId: starterPackRunsGet
+      summary: Retrieve starter pack run
+      tags:
+      - Starter Pack Runs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: starter_pack_run
+      x-crud: true
+      x-crud-get: true
+  /v1/starter-pack-runs/catalog:
+    get:
+      operationId: starterPackRunsCatalog
+      summary: Available starter packs (code, versions, market, parameters, steps); with pack_code the full latest definition
+      tags:
+      - Starter Pack Runs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: pack_code
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: starter_pack_run
+  /v1/starter-pack-runs/apply:
+    post:
+      operationId: starterPackRunsApply
+      summary: Apply, re-apply or upgrade a starter pack to the caller's tenant (idempotent; maker-checker items are submitted
+        for approval, never approved)
+      tags:
+      - Starter Pack Runs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StarterPackRunsApplyRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: starter_pack_run
+  /v1/starter-pack-runs/{id}/resume:
+    post:
+      operationId: starterPackRunsResume
+      summary: Resume a FAILED or AWAITING_APPROVAL run with its pack version and parameters
+      tags:
+      - Starter Pack Runs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: starter_pack_run
+  /v1/starter-pack-items:
+    get:
+      operationId: starterPackItemsList
+      summary: List starter pack items
+      tags:
+      - Starter Pack Items
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: pack_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: step_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - DONE
+          - AWAITING_APPROVAL
+          - AWAITING_ACTIVATION
+          - BLOCKED
+          - FAILED
+          - EXISTING
+      - name: target_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: item_key
+        in: query
+        schema:
+          type: string
+          maxLength: 160
+      - name: is_pack_owned
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackItemPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: starter_pack_item
+      x-crud: true
+      x-crud-list: true
+  /v1/starter-pack-items/{id}:
+    get:
+      operationId: starterPackItemsGet
+      summary: Retrieve starter pack item
+      tags:
+      - Starter Pack Items
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StarterPackItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: starter_pack_item
+      x-crud: true
+      x-crud-get: true
   /v1/modules:
     get:
       operationId: modulesList
@@ -16729,6 +17149,12 @@ components:
           type: string
           format: email
           maxLength: 320
+        starter_pack:
+          type: string
+          maxLength: 64
+        starter_pack_parameters:
+          type: object
+          additionalProperties: true
       required:
       - template_code
       - code
@@ -16738,6 +17164,74 @@ components:
       - default_currency
       - default_country
       - primary_contact_email
+    TenantsApplyStarterPackRequest:
+      type: object
+      properties:
+        pack_code:
+          type: string
+          maxLength: 64
+        version:
+          type: string
+          maxLength: 32
+        parameters:
+          type: object
+          additionalProperties: true
+        dry_run:
+          type: boolean
+      required:
+      - pack_code
+    StarterPackRunPage:
+      type: object
+      description: One page of StarterPackRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StarterPackRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StarterPackRunsApplyRequest:
+      type: object
+      properties:
+        pack_code:
+          type: string
+          maxLength: 64
+        version:
+          type: string
+          maxLength: 32
+        parameters:
+          type: object
+          additionalProperties: true
+        dry_run:
+          type: boolean
+      required:
+      - pack_code
+    StarterPackItemPage:
+      type: object
+      description: One page of StarterPackItem results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StarterPackItem'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     TenantModulePage:
       type: object
       description: One page of TenantModule results (newest first)
@@ -29450,6 +29944,372 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    StarterPackItem:
+      type: object
+      description: 'Registry of what a starter pack created (pack-owned, upgradable) or found (existing, never changed) in
+        the owning services; drives idempotent re-runs, resume after failure and version upgrades
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        pack_code:
+          type: string
+          maxLength: 64
+          description: Pack
+        item_key:
+          type: string
+          maxLength: 160
+          description: Item key inside the pack
+        step_code:
+          type: string
+          maxLength: 64
+          description: Step of the pack
+        target_service:
+          type: string
+          maxLength: 64
+          description: Owning service
+        resource_path:
+          type: string
+          maxLength: 160
+          description: Collection path of the resource in the owning service
+        resource_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resource id in the owning service
+        is_pack_owned:
+          type: boolean
+          description: Created by the pack (upgraded by newer pack versions); false = pre-existing, never modified
+        status:
+          type: string
+          enum:
+          - PENDING
+          - DONE
+          - AWAITING_APPROVAL
+          - AWAITING_ACTIVATION
+          - BLOCKED
+          - FAILED
+          - EXISTING
+          description: Item state
+        checksum:
+          type: string
+          maxLength: 64
+          description: Checksum of the item definition last applied
+        pack_version:
+          type: string
+          maxLength: 32
+          description: Pack version that last applied the item
+        request_body:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Create body of an unconfirmed attempt, replayed verbatim with its Idempotency-Key on resume
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the unconfirmed attempt
+        approval_request_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Approval requests the item waits for
+        pending_action:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Step a checker (different user) must perform
+        last_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run that last touched the item
+        last_error:
+          type:
+          - string
+          - 'null'
+          description: Last failure
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - pack_code
+      - item_key
+      - step_code
+      - target_service
+      - resource_path
+      - is_pack_owned
+      - status
+      - checksum
+      - pack_version
+    StarterPackRun:
+      type: object
+      description: 'One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and
+        routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        pack_code:
+          type: string
+          maxLength: 64
+          description: Starter pack applied
+        pack_version:
+          type: string
+          maxLength: 32
+          description: Pack version applied
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - AWAITING_APPROVAL
+          - NEEDS_ATTENTION
+          - FAILED
+          description: Run status
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - PROVISIONING
+          - OPERATOR
+          - SELF_SERVICE
+          - RESUME
+          description: What started the run
+          readOnly: true
+        parameters:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Resolved pack parameters (pack defaults, tenant facts, request overrides)
+        dry_run:
+          type: boolean
+          description: 'Plan only: nothing is called, outcomes are predicted'
+        resumed_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run this one resumes
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start time
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End time
+          readOnly: true
+        created_count:
+          type: integer
+          format: int32
+          description: Items created
+          readOnly: true
+        updated_count:
+          type: integer
+          format: int32
+          description: Pack-owned items upgraded
+          readOnly: true
+        unchanged_count:
+          type: integer
+          format: int32
+          description: Items already applied (skipped)
+          readOnly: true
+        existing_count:
+          type: integer
+          format: int32
+          description: Items that already existed and are not pack-owned (skipped, never changed)
+          readOnly: true
+        awaiting_approval_count:
+          type: integer
+          format: int32
+          description: Items waiting for a checker (approval request or checker activation)
+          readOnly: true
+        failed_count:
+          type: integer
+          format: int32
+          description: Items that failed or need attention
+          readOnly: true
+        approval_request_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Approval requests (workflow-service) the run's items are waiting for
+          readOnly: true
+        results:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Per step: {step, title, status, items: [{key, service, outcome, resource_id, approval_request_ids,
+            pending_action, message}]}'
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: First failure
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - pack_code
+      - pack_version
+      - status
+      - trigger
+      - dry_run
+      - created_count
+      - updated_count
+      - unchanged_count
+      - existing_count
+      - awaiting_approval_count
+      - failed_count
     TaxRateRule:
       type: object
       description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
@@ -29954,6 +30814,19 @@ components:
           maxLength: 64
           description: Template the tenant was provisioned from
           readOnly: true
+        starter_pack_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Starter pack applied right after provisioning (empty = none)
+        starter_pack_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Starter pack run started by provisioning
+          readOnly: true
         metadata:
           type:
           - object
@@ -30084,6 +30957,10 @@ components:
           format: email
           maxLength: 320
           description: Billing contact
+        starter_pack_code:
+          type: string
+          maxLength: 64
+          description: Starter pack applied right after provisioning (empty = none)
         metadata:
           type: object
           additionalProperties: true
@@ -30193,6 +31070,10 @@ components:
           format: email
           maxLength: 320
           description: Billing contact
+        starter_pack_code:
+          type: string
+          maxLength: 64
+          description: Starter pack applied right after provisioning (empty = none)
         metadata:
           type: object
           additionalProperties: true

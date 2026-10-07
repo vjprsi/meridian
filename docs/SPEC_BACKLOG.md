@@ -94,7 +94,8 @@ Spec gaps (flows still local or with no place to record a rejection):
   contact-directory changes from the e2e pass, or load flakiness: rerun alone first).
 - Done since resume: search indexing feed (97 event types, 17 kinds); per-tenant ledger settings in all services;
   X-Roles forwarding; BusinessDates (payment, deposit); EOD job results; missing ledger config is 422 everywhere.
-- Next: tenant bootstrap / country pack seeding fees, limits, commission plans; search gaps (source backfill action,
+- Done: tenant starter packs (tenant-service; generic + KE); service-on-behalf principal is the human (four-eyes safe in JWT mode).
+- Next: run e2e setup S live with the starter pack (untested live); starter pack gaps (fx routing keys, retire removed items, stale RUNNING runs, approver roles); search gaps (source backfill action,
   dead-letter store, journal erasure, customer contact fields in events, loan status events, spec says OpenSearch but
   service uses PostgreSQL FTS); BusinessDates in more services.
 - E2E: `python tools/e2e/journeys.py` (all 8 journeys passed on a fresh tenant with the full stack up).

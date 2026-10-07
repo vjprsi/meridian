@@ -271,7 +271,8 @@ public class ApprovalService {
      */
     private static boolean mayCancel(ObjectNode r, Caller caller) {
         String principal = caller.principal();
-        if (principal.equals(r.path("maker").asString()) || principal.startsWith("svc:")) {
+        if (principal.equals(r.path("maker").asString()) || principal.startsWith("svc:")
+                || io.meridian.common.tenancy.TenantContext.via().isPresent()) {
             return true;
         }
         ApprovalRoute route = ApprovalRoute.fromJson(r.get("approval_route"));

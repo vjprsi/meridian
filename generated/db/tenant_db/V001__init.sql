@@ -105,6 +105,8 @@ CREATE TABLE tenant (
   reinstatement_reason         varchar(255),
   reinstated_at                timestamptz,
   template_code                varchar(64),
+  starter_pack_code            varchar(64),
+  starter_pack_run_id          uuid,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -142,6 +144,8 @@ COMMENT ON COLUMN tenant.suspension_reason IS 'Reason for suspension';
 COMMENT ON COLUMN tenant.reinstatement_reason IS 'Reason given on the last /reinstate';
 COMMENT ON COLUMN tenant.reinstated_at IS 'Last reinstatement time';
 COMMENT ON COLUMN tenant.template_code IS 'Template the tenant was provisioned from';
+COMMENT ON COLUMN tenant.starter_pack_code IS 'Starter pack applied right after provisioning (empty = none)';
+COMMENT ON COLUMN tenant.starter_pack_run_id IS 'Starter pack run started by provisioning';
 COMMENT ON COLUMN tenant.metadata IS 'Operator metadata';
 COMMENT ON COLUMN tenant.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -572,6 +576,149 @@ CREATE INDEX ix_tenant_branding_icon_document_id ON tenant_branding (icon_docume
 ALTER TABLE tenant_branding ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON tenant_branding USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_tenant_branding_touch BEFORE UPDATE ON tenant_branding FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- starter_pack_run: One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+
+CREATE TABLE starter_pack_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  pack_code                    varchar(64) NOT NULL,
+  pack_version                 varchar(32) NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'AWAITING_APPROVAL', 'NEEDS_ATTENTION', 'FAILED')),
+  trigger                      varchar(40) NOT NULL DEFAULT 'OPERATOR' CHECK (trigger IN ('PROVISIONING', 'OPERATOR', 'SELF_SERVICE', 'RESUME')),
+  parameters                   jsonb,
+  dry_run                      boolean NOT NULL DEFAULT false,
+  resumed_from_id              uuid REFERENCES starter_pack_run(id),
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  created_count                integer NOT NULL DEFAULT 0,
+  updated_count                integer NOT NULL DEFAULT 0,
+  unchanged_count              integer NOT NULL DEFAULT 0,
+  existing_count               integer NOT NULL DEFAULT 0,
+  awaiting_approval_count      integer NOT NULL DEFAULT 0,
+  failed_count                 integer NOT NULL DEFAULT 0,
+  approval_request_ids         jsonb,
+  results                      jsonb,
+  error                        text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE starter_pack_run IS 'One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+';
+COMMENT ON COLUMN starter_pack_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN starter_pack_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN starter_pack_run.created_at IS 'Creation time';
+COMMENT ON COLUMN starter_pack_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN starter_pack_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN starter_pack_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN starter_pack_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN starter_pack_run.pack_code IS 'Starter pack applied';
+COMMENT ON COLUMN starter_pack_run.pack_version IS 'Pack version applied';
+COMMENT ON COLUMN starter_pack_run.status IS 'Run status';
+COMMENT ON COLUMN starter_pack_run.trigger IS 'What started the run';
+COMMENT ON COLUMN starter_pack_run.parameters IS 'Resolved pack parameters (pack defaults, tenant facts, request overrides)';
+COMMENT ON COLUMN starter_pack_run.dry_run IS 'Plan only: nothing is called, outcomes are predicted';
+COMMENT ON COLUMN starter_pack_run.resumed_from_id IS 'Run this one resumes';
+COMMENT ON COLUMN starter_pack_run.started_at IS 'Start time';
+COMMENT ON COLUMN starter_pack_run.finished_at IS 'End time';
+COMMENT ON COLUMN starter_pack_run.created_count IS 'Items created';
+COMMENT ON COLUMN starter_pack_run.updated_count IS 'Pack-owned items upgraded';
+COMMENT ON COLUMN starter_pack_run.unchanged_count IS 'Items already applied (skipped)';
+COMMENT ON COLUMN starter_pack_run.existing_count IS 'Items that already existed and are not pack-owned (skipped, never changed)';
+COMMENT ON COLUMN starter_pack_run.awaiting_approval_count IS 'Items waiting for a checker (approval request or checker activation)';
+COMMENT ON COLUMN starter_pack_run.failed_count IS 'Items that failed or need attention';
+COMMENT ON COLUMN starter_pack_run.approval_request_ids IS 'Approval requests (workflow-service) the run''s items are waiting for';
+COMMENT ON COLUMN starter_pack_run.results IS 'Per step: {step, title, status, items: [{key, service, outcome, resource_id, approval_request_ids, pending_action, message}]}';
+COMMENT ON COLUMN starter_pack_run.error IS 'First failure';
+COMMENT ON COLUMN starter_pack_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_starter_pack_run_tenant ON starter_pack_run (tenant_id, created_at);
+CREATE INDEX ix_starter_pack_run_pack_code ON starter_pack_run (pack_code);
+CREATE INDEX ix_starter_pack_run_resumed_from_id ON starter_pack_run (resumed_from_id);
+ALTER TABLE starter_pack_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON starter_pack_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_starter_pack_run_touch BEFORE UPDATE ON starter_pack_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- starter_pack_item: Registry of what a starter pack created (pack-owned, upgradable) or found (existing, never changed) in the owning services; drives idempotent re-runs, resume after failure and version upgrades
+
+CREATE TABLE starter_pack_item (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  pack_code                    varchar(64) NOT NULL,
+  item_key                     varchar(160) NOT NULL,
+  step_code                    varchar(64) NOT NULL,
+  target_service               varchar(64) NOT NULL,
+  resource_path                varchar(160) NOT NULL,
+  resource_id                  uuid,
+  is_pack_owned                boolean NOT NULL DEFAULT true,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'DONE', 'AWAITING_APPROVAL', 'AWAITING_ACTIVATION', 'BLOCKED', 'FAILED', 'EXISTING')),
+  checksum                     varchar(64) NOT NULL,
+  pack_version                 varchar(32) NOT NULL,
+  request_body                 jsonb,
+  idempotency_key              varchar(128),
+  approval_request_ids         jsonb,
+  pending_action               varchar(255),
+  last_run_id                  uuid REFERENCES starter_pack_run(id),
+  last_error                   text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_starter_pack_item_1 UNIQUE (tenant_id, pack_code, item_key)
+);
+COMMENT ON TABLE starter_pack_item IS 'Registry of what a starter pack created (pack-owned, upgradable) or found (existing, never changed) in the owning services; drives idempotent re-runs, resume after failure and version upgrades
+';
+COMMENT ON COLUMN starter_pack_item.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN starter_pack_item.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN starter_pack_item.created_at IS 'Creation time';
+COMMENT ON COLUMN starter_pack_item.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN starter_pack_item.updated_at IS 'Last update time';
+COMMENT ON COLUMN starter_pack_item.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN starter_pack_item.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN starter_pack_item.pack_code IS 'Pack';
+COMMENT ON COLUMN starter_pack_item.item_key IS 'Item key inside the pack';
+COMMENT ON COLUMN starter_pack_item.step_code IS 'Step of the pack';
+COMMENT ON COLUMN starter_pack_item.target_service IS 'Owning service';
+COMMENT ON COLUMN starter_pack_item.resource_path IS 'Collection path of the resource in the owning service';
+COMMENT ON COLUMN starter_pack_item.resource_id IS 'Resource id in the owning service';
+COMMENT ON COLUMN starter_pack_item.is_pack_owned IS 'Created by the pack (upgraded by newer pack versions); false = pre-existing, never modified';
+COMMENT ON COLUMN starter_pack_item.status IS 'Item state';
+COMMENT ON COLUMN starter_pack_item.checksum IS 'Checksum of the item definition last applied';
+COMMENT ON COLUMN starter_pack_item.pack_version IS 'Pack version that last applied the item';
+COMMENT ON COLUMN starter_pack_item.request_body IS 'Create body of an unconfirmed attempt, replayed verbatim with its Idempotency-Key on resume';
+COMMENT ON COLUMN starter_pack_item.idempotency_key IS 'Idempotency-Key of the unconfirmed attempt';
+COMMENT ON COLUMN starter_pack_item.approval_request_ids IS 'Approval requests the item waits for';
+COMMENT ON COLUMN starter_pack_item.pending_action IS 'Step a checker (different user) must perform';
+COMMENT ON COLUMN starter_pack_item.last_run_id IS 'Run that last touched the item';
+COMMENT ON COLUMN starter_pack_item.last_error IS 'Last failure';
+COMMENT ON COLUMN starter_pack_item.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_item.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_item.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_item.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN starter_pack_item.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_starter_pack_item_tenant ON starter_pack_item (tenant_id, created_at);
+CREATE INDEX ix_starter_pack_item_step_code ON starter_pack_item (step_code);
+CREATE INDEX ix_starter_pack_item_last_run_id ON starter_pack_item (last_run_id);
+ALTER TABLE starter_pack_item ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON starter_pack_item USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_starter_pack_item_touch BEFORE UPDATE ON starter_pack_item FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

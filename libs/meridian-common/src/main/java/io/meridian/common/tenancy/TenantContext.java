@@ -14,12 +14,28 @@ public final class TenantContext {
 
     private static final ThreadLocal<UUID> CURRENT = new ThreadLocal<>();
     private static final ThreadLocal<String> PRINCIPAL = new ThreadLocal<>();
+    private static final ThreadLocal<String> VIA = new ThreadLocal<>();
 
     private TenantContext() {}
 
     public static void set(UUID tenantId, String principal) {
         CURRENT.set(tenantId);
         PRINCIPAL.set(principal);
+    }
+
+    /**
+     * Binds tenant and principal for a call made by another service on behalf of {@code principal}: {@code via} is the
+     * calling service's client id. Four-eyes checks compare principals (the humans); {@link #via()} only says that a
+     * service relayed the call.
+     */
+    public static void set(UUID tenantId, String principal, String via) {
+        set(tenantId, principal);
+        VIA.set(via);
+    }
+
+    /** The service that relayed the current call on behalf of the principal, if any. */
+    public static Optional<String> via() {
+        return Optional.ofNullable(VIA.get());
     }
 
     public static Optional<UUID> current() {
@@ -43,6 +59,7 @@ public final class TenantContext {
     public static void clear() {
         CURRENT.remove();
         PRINCIPAL.remove();
+        VIA.remove();
     }
 
     /** Runs {@code body} with the given tenant bound, restoring the previous binding afterwards. */

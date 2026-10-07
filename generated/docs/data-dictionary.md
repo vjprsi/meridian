@@ -9252,6 +9252,8 @@ API: /v1/platform/tenants · Requirements: ADM-01
 | reinstatement_reason | varchar(255) | yes |  | reinstatement_reason (read-only) | Reason given on the last /reinstate |
 | reinstated_at | timestamptz | yes |  | reinstated_at (read-only) | Last reinstatement time |
 | template_code | varchar(64) | yes |  | template_code (read-only) | Template the tenant was provisioned from |
+| starter_pack_code | varchar(64) | yes |  | starter_pack_code | Starter pack applied right after provisioning (empty = none) |
+| starter_pack_run_id | uuid | yes |  | starter_pack_run_id (read-only) | Starter pack run started by provisioning |
 | metadata | jsonb | yes |  | metadata | Operator metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -9488,6 +9490,84 @@ API: /v1/branding · Requirements: ADM-01
 | email_sender_name | varchar(120) | yes |  | email_sender_name | Email sender name |
 | email_sender_address | varchar(320) | yes |  | email_sender_address | Email sender address |
 | sms_sender_id | varchar(11) | yes |  | sms_sender_id | Alphanumeric SMS sender id |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `starter_pack_run`
+
+One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+
+
+API: /v1/starter-pack-runs · Requirements: ADM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| pack_code | varchar(64) | no |  | pack_code | Starter pack applied |
+| pack_version | varchar(32) | no |  | pack_version | Pack version applied |
+| status | varchar(40) (StarterPackRunStatus) | no |  | status (read-only) | Run status |
+| trigger | varchar(40) (StarterPackTrigger) | no |  | trigger (read-only) | What started the run |
+| parameters | jsonb | yes |  | parameters | Resolved pack parameters (pack defaults, tenant facts, request overrides) |
+| dry_run | boolean | no |  | dry_run | Plan only: nothing is called, outcomes are predicted |
+| resumed_from_id | uuid | yes | FK → starter_pack_run | resumed_from_id | Run this one resumes |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start time |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End time |
+| created_count | integer | no |  | created_count (read-only) | Items created |
+| updated_count | integer | no |  | updated_count (read-only) | Pack-owned items upgraded |
+| unchanged_count | integer | no |  | unchanged_count (read-only) | Items already applied (skipped) |
+| existing_count | integer | no |  | existing_count (read-only) | Items that already existed and are not pack-owned (skipped, never changed) |
+| awaiting_approval_count | integer | no |  | awaiting_approval_count (read-only) | Items waiting for a checker (approval request or checker activation) |
+| failed_count | integer | no |  | failed_count (read-only) | Items that failed or need attention |
+| approval_request_ids | jsonb | yes |  | approval_request_ids (read-only) | Approval requests (workflow-service) the run's items are waiting for |
+| results | jsonb | yes |  | results (read-only) | Per step: {step, title, status, items: [{key, service, outcome, resource_id, approval_request_ids, pending_action, message}]} |
+| error | text | yes |  | error (read-only) | First failure |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `starter_pack_item`
+
+Registry of what a starter pack created (pack-owned, upgradable) or found (existing, never changed) in the owning services; drives idempotent re-runs, resume after failure and version upgrades
+
+
+API: /v1/starter-pack-items · Requirements: ADM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| pack_code | varchar(64) | no |  | pack_code | Pack |
+| item_key | varchar(160) | no |  | item_key | Item key inside the pack |
+| step_code | varchar(64) | no |  | step_code | Step of the pack |
+| target_service | varchar(64) | no |  | target_service | Owning service |
+| resource_path | varchar(160) | no |  | resource_path | Collection path of the resource in the owning service |
+| resource_id | uuid | yes |  | resource_id | Resource id in the owning service |
+| is_pack_owned | boolean | no |  | is_pack_owned | Created by the pack (upgraded by newer pack versions); false = pre-existing, never modified |
+| status | varchar(40) (StarterPackItemStatus) | no |  | status | Item state |
+| checksum | varchar(64) | no |  | checksum | Checksum of the item definition last applied |
+| pack_version | varchar(32) | no |  | pack_version | Pack version that last applied the item |
+| request_body | jsonb | yes |  | request_body | Create body of an unconfirmed attempt, replayed verbatim with its Idempotency-Key on resume |
+| idempotency_key | varchar(128) | yes |  | idempotency_key | Idempotency-Key of the unconfirmed attempt |
+| approval_request_ids | jsonb | yes |  | approval_request_ids | Approval requests the item waits for |
+| pending_action | varchar(255) | yes |  | pending_action | Step a checker (different user) must perform |
+| last_run_id | uuid | yes | FK → starter_pack_run | last_run_id | Run that last touched the item |
+| last_error | text | yes |  | last_error | Last failure |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

@@ -94,6 +94,12 @@ Lessons from the rollout (all 63 services):
   ServiceClient sends it as `X-Tenant-Id`, which receivers honour only for internal tokens.
 - Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
 
+
+Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
+people) and `TenantContext.via()` names the relaying service client. Without `X-User` the principal is
+`svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed
+this" decisions.
+
 ## Per-tenant ledger settings (config-service namespace `ledger`)
 
 Ledger books, internal (GL / clearing / income / funding) accounts, treasury wallets and similar ids are tenant

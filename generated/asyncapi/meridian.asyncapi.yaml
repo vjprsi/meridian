@@ -905,6 +905,8 @@ channels:
         $ref: '#/components/messages/PlatformTenantSuspended'
       PlatformTenantReinstated:
         $ref: '#/components/messages/PlatformTenantReinstated'
+      PlatformStarterPackRunCompleted:
+        $ref: '#/components/messages/PlatformStarterPackRunCompleted'
       PlatformCellDrainStarted:
         $ref: '#/components/messages/PlatformCellDrainStarted'
       PlatformTenantMigrated:
@@ -11140,6 +11142,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Tenant'
+    PlatformStarterPackRunCompleted:
+      name: platform.starter_pack_run.completed
+      title: A starter pack run finished (completed, awaiting approval, needs attention or failed)
+      summary: A starter pack run finished (completed, awaiting approval, needs attention or failed)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.starter_pack_run.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/StarterPackRun'
     PlatformCellDrainStarted:
       name: platform.cell.drain_started
       title: A cell stopped accepting new tenants
@@ -50183,6 +50207,19 @@ components:
           maxLength: 64
           description: Template the tenant was provisioned from
           readOnly: true
+        starter_pack_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Starter pack applied right after provisioning (empty = none)
+        starter_pack_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Starter pack run started by provisioning
+          readOnly: true
         metadata:
           type:
           - object
@@ -50237,6 +50274,202 @@ components:
       - timezone
       - environment
       - primary_contact_email
+    StarterPackRun:
+      type: object
+      description: 'One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and
+        routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        pack_code:
+          type: string
+          maxLength: 64
+          description: Starter pack applied
+        pack_version:
+          type: string
+          maxLength: 32
+          description: Pack version applied
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - AWAITING_APPROVAL
+          - NEEDS_ATTENTION
+          - FAILED
+          description: Run status
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - PROVISIONING
+          - OPERATOR
+          - SELF_SERVICE
+          - RESUME
+          description: What started the run
+          readOnly: true
+        parameters:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Resolved pack parameters (pack defaults, tenant facts, request overrides)
+        dry_run:
+          type: boolean
+          description: 'Plan only: nothing is called, outcomes are predicted'
+        resumed_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run this one resumes
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start time
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End time
+          readOnly: true
+        created_count:
+          type: integer
+          format: int32
+          description: Items created
+          readOnly: true
+        updated_count:
+          type: integer
+          format: int32
+          description: Pack-owned items upgraded
+          readOnly: true
+        unchanged_count:
+          type: integer
+          format: int32
+          description: Items already applied (skipped)
+          readOnly: true
+        existing_count:
+          type: integer
+          format: int32
+          description: Items that already existed and are not pack-owned (skipped, never changed)
+          readOnly: true
+        awaiting_approval_count:
+          type: integer
+          format: int32
+          description: Items waiting for a checker (approval request or checker activation)
+          readOnly: true
+        failed_count:
+          type: integer
+          format: int32
+          description: Items that failed or need attention
+          readOnly: true
+        approval_request_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Approval requests (workflow-service) the run's items are waiting for
+          readOnly: true
+        results:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Per step: {step, title, status, items: [{key, service, outcome, resource_id, approval_request_ids,
+            pending_action, message}]}'
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: First failure
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - pack_code
+      - pack_version
+      - status
+      - trigger
+      - dry_run
+      - created_count
+      - updated_count
+      - unchanged_count
+      - existing_count
+      - awaiting_approval_count
+      - failed_count
     Cell:
       type: object
       description: A deployment cell (full stack slice) in one region that hosts a set of tenants

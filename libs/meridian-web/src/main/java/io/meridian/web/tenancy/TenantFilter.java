@@ -32,6 +32,7 @@ public class TenantFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         UUID tenant = null;
         String principal = "anonymous";
+        String via = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
             String claim = jwt.getClaimAsString(props.tenantClaim());
@@ -41,8 +42,11 @@ public class TenantFilter extends OncePerRequestFilter {
             // User tokens can never choose their tenant: the claim always wins for them.
             if (isInternal(jwt) && parse(req.getHeader(TENANT_HEADER)) != null) {
                 tenant = parse(req.getHeader(TENANT_HEADER));
+                // The principal is the human the service acts for (so maker != checker compares people, not
+                // "svc:x/anna" vs "anna"); without one it is the service itself. The relaying service is kept apart.
                 String onBehalf = req.getHeader(USER_HEADER);
-                principal = "svc:" + jwt.getClaimAsString("azp") + (onBehalf == null ? "" : "/" + onBehalf);
+                via = jwt.getClaimAsString("azp");
+                principal = onBehalf == null || onBehalf.isBlank() ? "svc:" + via : onBehalf;
             }
         } else if (props.devMode()) {
             tenant = parse(req.getHeader(TENANT_HEADER));
@@ -51,7 +55,7 @@ public class TenantFilter extends OncePerRequestFilter {
         }
         try {
             if (tenant != null) {
-                TenantContext.set(tenant, principal);
+                TenantContext.set(tenant, principal, via);
             }
             chain.doFilter(req, res);
         } finally {
