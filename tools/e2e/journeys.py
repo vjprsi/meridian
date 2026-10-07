@@ -670,6 +670,70 @@ def journey_b(j: Journey):
     y = balances(api, b)
     j.final = {"payment": pid, "status": final["status"], "amina_balance": str(x[2]), "brian_balance": str(y[2])}
 
+
+def payment_until(api: Api, pid: str, states: tuple, timeout=30) -> dict:
+    terminal = {"SETTLED", "COMPLETED", "REJECTED", "FAILED", "CANCELLED", "RETURNED"}
+
+    def look():
+        x = api.get(f"/v1/payments/{pid}")
+        if x["status"] in states:
+            return x
+        if x["status"] in terminal:
+            fail(f"payment {pid} is {x['status']} (wanted {states}): {_short(x)}")
+        return None
+    return wait_for(f"payment {pid} in {states}", look, timeout)
+
+
+@journey("C", "Maker-checker: payment above the approval threshold decided in the workflow inbox")
+def journey_c(j: Journey):
+    api = j.api
+    a = ensure_account(j, "account_a", "Amina", "Otieno")
+    b = ensure_account(j, "account_b", "Brian", "Kamau")
+    fund_account(j, a, "50000.00", "Amina")
+
+    def transfer(amount, ref):
+        return api.post("/v1/payments", {
+            "payment_type": "INTERNAL_TRANSFER", "direction": "INTERNAL", "channel": "WEB",
+            "customer_id": a["customer_id"], "debtor_account_id": a["id"], "creditor_account_id": b["id"],
+            "creditor_name": "Brian Kamau", "amount": amount, "currency": CCY, "reference": ref})
+    a0, b0 = balances(api, a), balances(api, b)
+    big = j.step("payment: maker initiates 20000 transfer (threshold 10000)", transfer, "20000.00", "Car deposit")
+    pid = big["id"]
+    j.step("payment: PENDING_APPROVAL (funds are reserved only once approved)", lambda: (lambda x, bal: f"{x['status']}, available {bal[0]}"
+           if bal[2] == a0[2] else fail(f"balance moved before approval: {bal} (before {a0})"))(
+        payment_until(api, pid, ("PENDING_APPROVAL",)), balances(api, a)))
+    req = j.step("workflow: approval request in checker inbox (routed by amount)", find_pending_approval, api, "payment", pid)
+    j.step("workflow: request carries amount/currency", lambda: f"{req['amount']} {req['currency']}, maker {req['maker']}"
+           if dec(req.get("amount")) == Decimal("20000") and req.get("maker") == MAKER else fail(_short(req)))
+    j.step("workflow: not in the maker's own inbox", lambda: "absent" if not any(
+        r["id"] == req["id"] for r in api.get("/v1/approval-requests/inbox?limit=100", roles=CHECKER_ROLES).get("data", []))
+        else fail("maker sees own request"))
+    j.step("workflow: maker cannot approve (four-eyes)", api.post, f"/v1/approval-requests/{req['id']}/approve",
+           {"comment": "self"}, roles=CHECKER_ROLES, expect=(403, 409, 422))
+    j.step("payment-service: maker cannot approve directly either", api.post, f"/v1/payments/{pid}/approve", {},
+           expect=(403, 409, 422))
+    j.step("workflow: checker approves", api.post, f"/v1/approval-requests/{req['id']}/approve",
+           {"comment": "verified with customer"}, user=CHECKER)
+    done = j.step("payment-service: applies the decision -> SETTLED", payment_until, api, pid, ("SETTLED", "COMPLETED"))
+    j.step("balances: Amina -20000, Brian +20000", lambda: (lambda x, y: f"Amina {x[2]}, Brian {y[2]}"
+           if a0[2] - x[2] == Decimal("20000") and y[2] - b0[2] == Decimal("20000") else fail(f"{a0}->{x}; {b0}->{y}"))(
+        balances(api, a), balances(api, b)))
+    j.step("payment: approvals recorded", lambda: (lambda d: f"{len(d)} approval(s) by " + ", ".join(
+        sorted({json.dumps(x.get('approved_by') or x.get('decided_by') or '?') for x in d})) if d else fail("no approvals"))(
+        api.get(f"/v1/payments/{pid}/approvals").get("data", [])))
+    # reject path
+    a1 = balances(api, a)
+    rej = j.step("payment: maker initiates a second 15000 transfer", transfer, "15000.00", "Second car deposit")
+    payment_until(api, rej["id"], ("PENDING_APPROVAL",))
+    req2 = find_pending_approval(api, "payment", rej["id"])
+    j.step("workflow: checker rejects", api.post, f"/v1/approval-requests/{req2['id']}/reject",
+           {"comment": "customer did not confirm"}, user=CHECKER)
+    j.step("payment-service: REJECTED/CANCELLED, balance untouched", lambda: (lambda x, bal: f"{x['status']}, available {bal[0]}"
+           if bal[0] == a1[0] and bal[2] == a1[2] else fail(f"balance {bal} != {a1}"))(
+        payment_until(api, rej["id"], ("REJECTED", "CANCELLED")), balances(api, a)))
+    j.final = {"approved_payment": pid, "status": done["status"], "rejected_payment": rej["id"],
+               "amina_balance": str(balances(api, a)[2])}
+
 # @@JOURNEYS@@
 
 def _load_journey_modules():
