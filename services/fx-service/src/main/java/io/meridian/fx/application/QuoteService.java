@@ -38,9 +38,11 @@ public class QuoteService {
     private final FxProperties props;
     private final Clock clock;
     private final TransactionTemplate tx;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
     public QuoteService(Rows rows, ReferenceDataClient refdata, Events events, FxProperties props, Clock clock,
-                        TransactionTemplate tx) {
+                        TransactionTemplate tx, io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.rows = rows;
         this.refdata = refdata;
         this.events = events;
@@ -256,8 +258,9 @@ public class QuoteService {
                 Rows.date(r, "valid_from"), Rows.date(r, "valid_to"))).toList();
     }
 
+    /** The tenant's business date (business-day-service), else the service clock's date. */
     private LocalDate today() {
-        return LocalDate.now(clock);
+        return businessDates.today(() -> LocalDate.now(clock));
     }
 
     private static boolean contains(JsonNode arr, String value) {

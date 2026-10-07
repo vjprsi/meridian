@@ -5,10 +5,12 @@ import io.meridian.ledger.api.generated.LedgersApi;
 import io.meridian.ledger.api.generated.model.Ledger;
 import io.meridian.ledger.api.generated.model.LedgerEodRun;
 import io.meridian.ledger.api.generated.model.LedgerVerification;
+import io.meridian.ledger.api.generated.model.LedgersEndOfDayRequest;
 import io.meridian.ledger.api.generated.model.LedgersEodRequest;
 import io.meridian.ledger.api.generated.model.LedgersLockRequest;
 import io.meridian.ledger.application.AccountService;
 import io.meridian.ledger.application.LedgerOpsService;
+import io.meridian.ledger.application.TenantEodService;
 import java.time.LocalDate;
 import io.meridian.web.crud.CrudEngine;
 import java.util.UUID;
@@ -22,12 +24,15 @@ import tools.jackson.databind.json.JsonMapper;
 public class LedgersController implements LedgersApi {
     private final AccountService accounts;
     private final LedgerOpsService ops;
+    private final TenantEodService tenantEod;
     private final CrudEngine crud;
     private final JsonMapper json;
 
-    public LedgersController(AccountService accounts, LedgerOpsService ops, CrudEngine crud, JsonMapper json) {
+    public LedgersController(AccountService accounts, LedgerOpsService ops, TenantEodService tenantEod, CrudEngine crud,
+                             JsonMapper json) {
         this.accounts = accounts;
         this.ops = ops;
+        this.tenantEod = tenantEod;
         this.crud = crud;
         this.json = json;
     }
@@ -50,5 +55,20 @@ public class LedgersController implements LedgersApi {
         TenantContext.require();
         LocalDate date = LocalDate.parse(json.valueToTree(body).get("business_date").asString());
         return ResponseEntity.status(HttpStatus.CREATED).body(crud.read(ops.endOfDay(id, date), LedgerEodRun.class));
+    }
+
+    /** Tenant-wide (or per legal entity / one ledger) end of day; used by the business-day LEDGER_EOD job. */
+    @Override
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<java.util.Map<String, Object>> ledgersEndOfDay(String idempotencyKey, LedgersEndOfDayRequest body) {
+        TenantContext.require();
+        tools.jackson.databind.JsonNode req = json.valueToTree(body);
+        LocalDate date = LocalDate.parse(req.get("business_date").asString());
+        return ResponseEntity.ok(json.treeToValue(tenantEod.endOfDay(date, uuid(req, "legal_entity_id"), uuid(req, "ledger_id")),
+                java.util.Map.class));
+    }
+
+    private static UUID uuid(tools.jackson.databind.JsonNode req, String field) {
+        return req.hasNonNull(field) && !req.get(field).asString().isBlank() ? UUID.fromString(req.get(field).asString()) : null;
     }
 }

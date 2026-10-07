@@ -81,6 +81,10 @@ class TreasuryDealFlowIT {
     JdbcClient jdbc;
     @MockitoBean
     ServiceClient serviceClient;
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+    /** ENTITY's business date reported by the stubbed business-day-service (null: none, the database date applies). */
+    volatile LocalDate businessDate;
 
     final HttpClient http = HttpClient.newHttpClient();
     final List<Call> calls = Collections.synchronizedList(new ArrayList<>());
@@ -108,6 +112,10 @@ class TreasuryDealFlowIT {
             String path = i.getArgument(1);
             if ("config-service".equals(i.getArgument(0))) { // no tenant ledger settings: deployment properties apply
                 return json.readTree("{\"namespace\":\"ledger\",\"values\":{}}");
+            }
+            if ("business-day-service".equals(i.getArgument(0))) {
+                return businessDate != null && path.equals("/v1/operations/business-days/current?legal_entity_id=" + ENTITY)
+                        ? json.readTree("{\"business_date\":\"" + businessDate + "\"}") : null;
             }
             calls.add(new Call(i.getArgument(0), "GET", path, null, null));
             if (path.startsWith("/v1/reference/fx-rates/latest?base=EUR&quote=USD")) {
@@ -542,6 +550,23 @@ class TreasuryDealFlowIT {
                 .isEqualTo("four_eyes_violation");
         post("/v1/treasury/limits/" + id + "/approve", "{}", "checker", 200);
         return id;
+    }
+
+    @Test
+    @Order(8)
+    void tradeDatesAreCheckedAgainstTheEntityBusinessDate() throws Exception {
+        LocalDate ahead = today.plusDays(5);
+        assertThat(post("/v1/treasury/fx-deals", fx("SPOT", ahead, ahead, "1.0850", null, null), "dealer", 422)
+                .get("code").asString()).isEqualTo("invalid_dates");
+        try {
+            businessDate = ahead; // the entity has already rolled forward
+            businessDates.invalidate();
+            assertThat(post("/v1/treasury/fx-deals", fx("SPOT", ahead, ahead, "1.0850", null, null), "dealer", 201)
+                    .get("trade_date").asString()).isEqualTo(ahead.toString());
+        } finally {
+            businessDate = null;
+            businessDates.invalidate();
+        }
     }
 
     private String mm(String type, String principal, LocalDate trade, LocalDate value, LocalDate maturity) {

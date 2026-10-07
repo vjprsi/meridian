@@ -323,6 +323,48 @@ class LedgerPostingIT {
         assertBalance(carol, "-40", "-40");
     }
 
+    @Test
+    @Order(16)
+    void tenantWideEndOfDayRunsEveryLedgerOnceAndFiltersByLegalEntity() throws Exception {
+        String entity2 = UUID.randomUUID().toString();
+        String ledger2 = post("/v1/ledgers", """
+                {"code":"SUB","name":"Subsidiary book","legal_entity_id":"%s","base_currency":"USD"}""".formatted(entity2), 201)
+                .get("id").asString();
+        post("/v1/ledger-accounts", """
+                {"ledger_id":"%s","code":"9000-SUB","name":"Cash","account_type":"ASSET","normal_balance":"DEBIT","currency":"USD",
+                 "allow_negative":true}""".formatted(ledger2), 201);
+        String date = "2026-01-15";
+
+        // per legal entity: only the subsidiary book
+        JsonNode sub = post("/v1/ledgers/end-of-day", "{\"business_date\":\"" + date + "\",\"legal_entity_id\":\"" + entity2 + "\"}", 200);
+        assertThat(sub.get("ledgers").asInt()).isEqualTo(1);
+        assertThat(sub.get("runs")).hasSize(1);
+        assertThat(sub.get("runs").get(0).get("ledger_id").asString()).isEqualTo(ledger2);
+        assertThat(sub.get("runs").get(0).get("snapshots_written").asInt()).isEqualTo(1);
+
+        // tenant-wide: the main book runs, the subsidiary is already closed for the date
+        JsonNode all = post("/v1/ledgers/end-of-day", "{\"business_date\":\"" + date + "\"}", 200);
+        assertThat(all.get("ledgers").asInt()).isEqualTo(2);
+        assertThat(all.get("runs")).hasSize(1);
+        assertThat(all.get("runs").get(0).get("ledger_id").asString()).isEqualTo(ledger);
+        assertThat(all.get("skipped").get(0).get("ledger_id").asString()).isEqualTo(ledger2);
+        assertThat(all.get("failed")).isEmpty();
+
+        // retry is a no-op; one ledger (backward-compatible LEDGER_EOD with parameters.ledger_id)
+        assertThat(post("/v1/ledgers/end-of-day", "{\"business_date\":\"" + date + "\"}", 200).get("runs")).isEmpty();
+        JsonNode one = post("/v1/ledgers/end-of-day", "{\"business_date\":\"2026-01-16\",\"ledger_id\":\"" + ledger + "\"}", 200);
+        assertThat(one.get("ledgers").asInt()).isEqualTo(1);
+        assertThat(one.get("runs").get(0).get("ledger_id").asString()).isEqualTo(ledger);
+        post("/v1/ledgers/end-of-day", "{\"business_date\":\"2026-01-16\",\"ledger_id\":\"" + UUID.randomUUID() + "\"}", 404);
+        post("/v1/ledgers/end-of-day", "{}", 400);
+
+        // another tenant sees none of these ledgers
+        HttpResponse<String> other = send("POST", "/v1/ledgers/end-of-day", "{\"business_date\":\"" + date + "\"}",
+                UUID.randomUUID().toString(), OTHER_TENANT);
+        assertThat(other.statusCode()).as(other.body()).isEqualTo(200);
+        assertThat(json.readTree(other.body()).get("ledgers").asInt()).isZero();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String account(String code, String name, String type, String normal, boolean allowNegative) throws Exception {

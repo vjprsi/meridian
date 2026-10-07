@@ -3,6 +3,7 @@ package io.meridian.businessday;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import io.meridian.businessday.application.JobPackInstaller;
 import io.meridian.businessday.application.JobTemplates;
 import io.meridian.businessday.application.StandardJobPack;
 import io.meridian.businessday.domain.CycleType;
@@ -186,16 +187,46 @@ class StandardJobPackTest {
 
     @Test
     void dailyPlanKeepsTheOrderThroughInactiveAndMonthEndJobs() {
-        // the EOD plan without the inactive ledger job and the EOM-only ECL job still orders reporting after accruals
+        // the EOD plan without the EOM-only ECL job still orders the ledger close and reporting after accruals
         Set<String> eod = pack.jobs().stream().filter(StandardJobPack.Job::active)
                 .filter(j -> j.columns().get("cycle_types").toString().contains("\"EOD\""))
                 .map(StandardJobPack.Job::code).collect(Collectors.toSet());
-        assertThat(eod).doesNotContain("LEDGER_EOD", "GL_ECL_PROVISION").contains("STATEMENT_CYCLE");
+        assertThat(eod).doesNotContain("GL_ECL_PROVISION").contains("LEDGER_EOD", "STATEMENT_CYCLE");
         JobGraph daily = pack.graph().restrictTo(eod);
+        assertBefore(daily, "DEP_INTEREST_ACCRUAL", "LEDGER_EOD");
+        assertBefore(daily, "LEDGER_EOD", "STATEMENT_CYCLE");
         assertBefore(daily, "DEP_INTEREST_ACCRUAL", "STATEMENT_CYCLE");
         assertBefore(daily, "COLLECTIONS_STRATEGY_RUN", "LIQ_POSITION_SNAPSHOT");
         assertBefore(daily, "LOAN_DELINQUENCY", "REG_REPORT_RUN_DUE");
         assertThat(daily.levels().size()).isGreaterThanOrEqualTo(6);
+    }
+
+    @Test
+    void ledgerEodRunsTenantWideWithoutParametersAndKeepsAnOptionalBook() {
+        StandardJobPack.Job ledger = pack.jobs().stream().filter(j -> j.code().equals("LEDGER_EOD")).findFirst().orElseThrow();
+        assertThat(ledger.path()).isEqualTo("/v1/ledgers/end-of-day");
+        assertThat(ledger.active()).isTrue();
+        assertThat(ledger.requiredParameters()).isEmpty();
+        assertThat(pack.jobs().stream().filter(j -> !j.requiredParameters().isEmpty()).map(StandardJobPack.Job::code))
+                .as("no standard job needs tenant parameters any more").isEmpty();
+        // legal entity of the EOD run; a tenant that pinned one book keeps it through parameters.ledger_id
+        JsonNode body = JobTemplates.renderBody(ledger.columns().get("body_template"), JSON.readTree("""
+                {"business_date":"2026-10-06","legal_entity_id":"e1","parameters":{"ledger_id":"L1"}}"""));
+        assertThat(body.toString()).isEqualTo("{\"business_date\":\"2026-10-06\",\"legal_entity_id\":\"e1\",\"ledger_id\":\"L1\"}");
+        JsonNode wide = JobTemplates.renderBody(ledger.columns().get("body_template"), JSON.readTree("""
+                {"business_date":"2026-10-06","legal_entity_id":"e1","parameters":{}}"""));
+        assertThat(wide.get("ledger_id").isNull()).isTrue();
+
+        // upgrade from the per-book definition: activated only when it waited for the missing ledger_id
+        JsonNode legacyWaiting = JSON.readTree("""
+                {"is_active":false,"http_path":"/v1/ledgers/{parameters.ledger_id}/eod","parameters":{"ledger_id":null}}""");
+        JsonNode legacyOff = JSON.readTree("""
+                {"is_active":false,"http_path":"/v1/ledgers/{parameters.ledger_id}/eod","parameters":{"ledger_id":"L1"}}""");
+        JsonNode legacyOn = JSON.readTree("""
+                {"is_active":true,"http_path":"/v1/ledgers/{parameters.ledger_id}/eod","parameters":{"ledger_id":"L1"}}""");
+        assertThat(JobPackInstaller.waitedOnlyForParameters(ledger, legacyWaiting)).isTrue();
+        assertThat(JobPackInstaller.waitedOnlyForParameters(ledger, legacyOff)).isFalse();
+        assertThat(JobPackInstaller.waitedOnlyForParameters(ledger, legacyOn)).isFalse();
     }
 
     @Test

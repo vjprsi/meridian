@@ -63,7 +63,7 @@ public class CollectionsEod {
         }
         for (UUID tenant : props.batch().tenants()) {
             try {
-                TenantContext.callAs(tenant, "system:end-of-day", () -> run(rows.dbToday().minusDays(1)));
+                TenantContext.callAs(tenant, "system:end-of-day", () -> run(rows.today().minusDays(1)));
             } catch (Exception e) {
                 log.error("collections strategy run failed for tenant {}", tenant, e);
             }

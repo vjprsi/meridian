@@ -162,6 +162,22 @@ creates them through the owning services' public APIs. Packs live in `services/t
   run; `POST /v1/starter-pack-runs/{id}/resume` continues it.
 - A new pack item must pass `StarterPackDefinitionTest`: the route must exist in `generated/routes.json` and the
   rendered body must match the request schema in `generated/openapi`.
+- Data-driven keys and repetition: object keys may hold placeholders (`"${param.currency}": ...`). An item with
+  `for_each: "${param.<list>}"` becomes one item per value (key `<key>.<value lower case>`, `${each}` / `${each.lower}`
+  inside, also in references such as `${ref.ledger_book/fx_position.${each.lower}}`); an object with a
+  `$for_each: "${param.<list>}"` entry becomes one copy of its other entries per value, so maps keyed by currency can be
+  rendered (fx-service `position_accounts.<CCY>` from `fx_currencies`). Repetition is expanded with the run's
+  parameters before the run; the catalog validates packs expanded with the defaults.
+
+## Contact search (party.customer_contact.*)
+
+Customer events never carry e-mail addresses or phone numbers. A contact point has `masked_value` and `lookup_hash`
+(HMAC-SHA256 of the normalised value: e-mail lower-cased, phone digits only without a leading `00`) under the key
+`meridian.contact-lookup.key` (`MERIDIAN_CONTACT_LOOKUP_KEY`), shared by customer-service and search-service only.
+Verified contacts are published with `party.customer_contact.verified`; deletion, a changed value, merge and erasure
+publish `party.customer_contact.removed`; both payloads drop `phone` / `email`. search-service indexes doc kind
+`customer_contact` (masked title, hash as identifier, `customer_id`) and hashes a query that is an e-mail or phone with
+the same key, so exact contact search works without indexing the contact.
 
 ## Time
 
@@ -177,8 +193,13 @@ creates them through the owning services' public APIs. Packs live in `services/t
 "Today" for value dates, due dates and accruals is the business date from business-day-service, not the UTC
 calendar date: inject `io.meridian.web.time.BusinessDates` and call `today(legalEntityId, fallback)` when the
 record has a legal entity, else `today(fallback)` (tenant-wide, used when all entities agree). Pass the service's own
-clock as the fallback so tests keep controlling dates. Timestamps stay `Clocks.now()`. Adopted in payment-service
-and deposit-service; others to follow when they touch date logic.
+clock as the fallback so tests keep controlling dates. Timestamps stay `Clocks.now()`. Pattern: one `today()` helper
+per service (`Rows.today()` or the service's support class) wrapping the old clock / `select current_date`, plus a
+`today(legalEntityId)` / `today(record)` overload where the record has a legal entity (loan-service, treasury-deal);
+SQL validity filters bind the date (`valid_from <= :today`) instead of using `current_date`. Tests that stub
+business-day-service clear the cache with `BusinessDates.invalidate()`; a test without a mocked `ServiceClient` sets
+`meridian.business-date.source=clock`. Adopted in payment, deposit, loan, wallet, billing, collections, treasury-deal,
+statement, fx, routing, rewards, insights and campaign services.
 
 ## Tests (required per service)
 

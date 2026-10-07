@@ -39,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
-                "meridian.billing.overdue-sweep-enabled=false"})
+                "meridian.business-date.source=clock", "meridian.billing.overdue-sweep-enabled=false"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

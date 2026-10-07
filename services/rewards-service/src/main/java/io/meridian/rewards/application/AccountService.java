@@ -84,7 +84,7 @@ public class AccountService {
         v.put("status", "ACTIVE");
         v.put("enrolled_at", rows.now().toString());
         ObjectNode row = rows.insert(T, v);
-        row = evaluateTier(row, program, rows.now().toLocalDate(), false);
+        row = evaluateTier(row, program, rows.today(), false);
         events.publish("engagement.points_account.enrolled", T, row, PointsAccount.class);
         return row;
     }
@@ -164,7 +164,7 @@ public class AccountService {
                 .counterparty(toId).source("TRANSFER", transferId).reason(reason).event("engagement.points.transferred"));
         ledger.append(to, new PointsLedger.Move("TRANSFER_IN", points, "transfer:" + transferId + ":in")
                 .counterparty(fromId).source("TRANSFER", transferId).reason(reason)
-                .expires(PointsLedger.expiry(program, rows.now().toLocalDate())).event("engagement.points.transferred"));
+                .expires(PointsLedger.expiry(program, rows.today())).event("engagement.points.transferred"));
         return rows.get(T, fromId);
     }
 
@@ -243,7 +243,7 @@ public class AccountService {
         PointsLedger.Move m = new PointsLedger.Move("ADJUST", points, "adjustment:" + id).source("ADJUSTMENT", id)
                 .reason(text(adj, "reason")).event("engagement.points.adjusted");
         if (points > 0) {
-            m.expires(PointsLedger.expiry(program, rows.now().toLocalDate()));
+            m.expires(PointsLedger.expiry(program, rows.today()));
         }
         ObjectNode entry = ledger.append(a, m);
         ObjectNode v = rows.object();
@@ -283,7 +283,7 @@ public class AccountService {
     public ObjectNode recalculateTier(UUID id) {
         ObjectNode a = rows.lock(T, id);
         ObjectNode program = rows.get("rewards_program", Json.uuid(a, "rewards_program_id"));
-        return evaluateTier(a, program, rows.now().toLocalDate(), true);
+        return evaluateTier(a, program, rows.today(), true);
     }
 
     /** Evaluates the tier as of {@code asOf} over the program's tier period and stores the decision. */
@@ -331,7 +331,7 @@ public class AccountService {
         out.put("points_account_id", id.toString());
         out.put("available_points", a.path("available_points").asLong());
         out.put("lots_total", s.balance());
-        LocalDate today = rows.now().toLocalDate();
+        LocalDate today = rows.today();
         out.put("expiring_points_30d", s.expiringBetween(today, today.plusDays(PointsLedger.EXPIRY_HORIZON_DAYS)));
         LocalDate next = s.nextExpiry(today);
         out.put("next_expiry_date", next == null ? null : next.toString());

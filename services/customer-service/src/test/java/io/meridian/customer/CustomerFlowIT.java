@@ -53,7 +53,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
-                "meridian.approvals.listener-enabled=false"})
+                "meridian.approvals.listener-enabled=false",
+                "meridian.contact-lookup.key=test-contact-lookup-key-0123456789"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -192,8 +193,10 @@ class CustomerFlowIT {
         aliceMobile = post("/v1/customers/" + alice + "/contacts", """
                 {"customer_id":"%s","contact_type":"MOBILE","phone":"+447700900123","is_primary":true}""".formatted(alice), 201)
                 .get("id").asString();
-        post("/v1/customers/" + alice + "/contacts", """
+        JsonNode aliceEmail = post("/v1/customers/" + alice + "/contacts", """
                 {"customer_id":"%s","contact_type":"EMAIL","email":"Alice.Smith@Example.com"}""".formatted(alice), 201);
+        assertThat(aliceEmail.get("masked_value").asString()).isEqualTo("a***h@example.com");
+        assertThat(aliceEmail.get("lookup_hash").asString()).hasSize(64);
         assertThat(code(post("/v1/customers/" + alice + "/contacts/" + aliceMobile + "/verify", "{\"code\":\"123456\"}", 409)))
                 .isEqualTo("no_active_verification");
         sentMessages.clear();
@@ -218,6 +221,35 @@ class CustomerFlowIT {
         assertThat(challenges.get(0).get("status").asString()).isEqualTo("VERIFIED");
         assertThat(challenges.get(0).get("attempts").asInt()).isEqualTo(1);
         assertThat(outbox("party.customer_contact.verified", aliceMobile)).isEqualTo(1);
+        // search gets the masked contact and the keyed lookup hash, never the number itself
+        assertThat(verified.get("masked_value").asString()).isEqualTo("+44*******123");
+        assertThat(verified.get("lookup_hash").asString())
+                .isEqualTo("55e7a67e242c662f26bcc7ed625f7efd6fbd87005cc1c68c6a6e27188f8ee1e3"); // HMAC of 447700900123
+        JsonNode verifiedEvent = outboxPayload("party.customer_contact.verified", aliceMobile);
+        assertThat(verifiedEvent.has("phone")).isFalse();
+        assertThat(verifiedEvent.has("email")).isFalse();
+        assertThat(verifiedEvent.get("lookup_hash").asString()).isEqualTo(verified.get("lookup_hash").asString());
+        assertThat(verifiedEvent.get("customer_id").asString()).isEqualTo(alice);
+        assertThat(verifiedEvent.toString()).doesNotContain("7700900");
+
+        // a verified contact whose value changes, or that is deleted, leaves search (masked payload)
+        String spare = post("/v1/customers/" + alice + "/contacts", """
+                {"customer_id":"%s","contact_type":"WHATSAPP","phone":"+447700900999"}""".formatted(alice), 201).get("id").asString();
+        sentMessages.clear();
+        post("/v1/customers/" + alice + "/contacts/" + spare + "/send-verification", null, 200);
+        JsonNode spareVerified = post("/v1/customers/" + alice + "/contacts/" + spare + "/verify",
+                "{\"code\":\"" + otpFromLastMessage() + "\"}", 200);
+        JsonNode changed = patch("/v1/customers/" + alice + "/contacts/" + spare, "{\"phone\":\"+447700900998\"}",
+                spareVerified.get("row_version").asInt(), 200);
+        assertThat(changed.get("is_verified").asBoolean()).isFalse();
+        assertThat(changed.get("masked_value").asString()).isEqualTo("+44*******998");
+        assertThat(changed.get("lookup_hash").asString()).isNotEqualTo(spareVerified.get("lookup_hash").asString());
+        assertThat(outbox("party.customer_contact.removed", spare)).isEqualTo(1);
+        JsonNode removedEvent = outboxPayload("party.customer_contact.removed", spare);
+        assertThat(removedEvent.has("phone")).isFalse();
+        assertThat(removedEvent.get("lookup_hash").asString()).isEqualTo(spareVerified.get("lookup_hash").asString());
+        assertThat(send("DELETE", "/v1/customers/" + alice + "/contacts/" + spare, null, null, TENANT, "u").statusCode()).isEqualTo(204);
+        assertThat(outbox("party.customer_contact.removed", spare)).isEqualTo(1); // no longer verified: nothing indexed
         assertThat(jdbc.sql("select count(*) from customer_credential where credential_type = 'SMS_OTP'")
                 .query(Integer.class).single()).isZero();
 
@@ -701,6 +733,12 @@ class CustomerFlowIT {
         Matcher m = Pattern.compile("(\\d{6})").matcher(sentMessages.getLast());
         assertThat(m.find()).isTrue();
         return m.group(1);
+    }
+
+    private JsonNode outboxPayload(String type, String aggregateId) {
+        return json.readTree(jdbc.sql("""
+                select payload::text from outbox where event_type = ? and aggregate_id = ?::uuid order by id desc limit 1""")
+                .params(type, aggregateId).query(String.class).single());
     }
 
     private int outbox(String type, String aggregateId) {

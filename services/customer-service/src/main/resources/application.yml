@@ -37,6 +37,10 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.party.v1
+  contact-lookup:
+    # Key of the contact lookup hash (customer_contact.lookup_hash): customer-service and search-service MUST share
+    # it (MERIDIAN_CONTACT_LOOKUP_KEY, from the vault outside the local stack); the default is for the local stack only.
+    key: ${MERIDIAN_CONTACT_LOOKUP_KEY:local-dev-only-contact-lookup-key}
   approvals:
     # KYC tier upgrades have no local approve endpoint: their checker always decides in workflow-service, so this
     # service defaults to central approvals (override with MERIDIAN_APPROVALS_MODE).

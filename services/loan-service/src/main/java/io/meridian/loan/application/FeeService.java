@@ -60,7 +60,7 @@ public class FeeService {
                 throw ApiException.unprocessable("invalid_installment", "The instalment must be an open instalment of the loan");
             }
         }
-        LocalDate date = Rows.date(req, "charge_date") != null ? Rows.date(req, "charge_date") : loans.today();
+        LocalDate date = Rows.date(req, "charge_date") != null ? Rows.date(req, "charge_date") : loans.today(loan);
         return charge(loan, type, amount, tax, date, inst, uuid(req, "fee_definition_id"), "manual:" + idempotencyKey);
     }
 
@@ -118,7 +118,7 @@ public class FeeService {
                 : unpaid.multiply(tax).divide(amount.add(tax), LoanSupport.scale(loan), java.math.RoundingMode.HALF_EVEN);
         loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-fee-waiver", feeId, null), "ADJUSTMENT",
                 "Fee waiver " + str(loan, "loan_number") + ": " + reason, str(loan, "currency"), "LOAN_FEE", feeId,
-                loans.today(), new LedgerPort.Legs().debit(loans.gl().feeIncome(), unpaid.subtract(taxPart), "Fee waived")
+                loans.today(loan), new LedgerPort.Legs().debit(loans.gl().feeIncome(), unpaid.subtract(taxPart), "Fee waived")
                 .debit(loans.gl().taxPayable(), taxPart, "Tax on waived fee")
                 .credit(loans.gl().feeReceivable(), unpaid, "Fee receivable").list()));
         UUID inst = uuid(fee, "schedule_installment_id");
@@ -130,7 +130,7 @@ public class FeeService {
             upd.put("waived_amount", decOr0(i, "waived_amount").add(unpaid).toPlainString());
             i.setAll(upd);
             if (LoanSupport.OPEN_INSTALLMENT.contains(str(i, "status"))) {
-                upd.put("status", LoanSupport.installmentStatus(i, loans.today()));
+                upd.put("status", LoanSupport.installmentStatus(i, loans.today(loan)));
             }
             rows.update(LoanSupport.INSTALLMENT, inst, upd);
         }
@@ -142,7 +142,7 @@ public class FeeService {
         Map<String, BigDecimal> deltas = new LinkedHashMap<>();
         deltas.put("outstanding_fees", unpaid.negate());
         loans.adjust(loan, deltas);
-        loans.delinquency(loan, loans.today(), "fee waived");
+        loans.delinquency(loan, loans.today(loan), "fee waived");
         loans.events().publish("lending.loan.fee_waived", TABLE, waived);
         return waived;
     }

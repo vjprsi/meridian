@@ -23,8 +23,8 @@ with `POST /v1/operations/eod-jobs/install-standard-pack` (idempotent upgrade; t
 A cross-tenant trigger (`eod_sweep`, `eod_trigger_policy`) lists ACTIVE tenants from tenant-service with the service token
 and starts EOD per legal entity once its local cut-off has passed (optional auto-roll after a fully successful EOD):
 scheduler `meridian.business-day.auto-eod.enabled` (off by default) or operator `POST /v1/operations/eod-sweeps/run`
-(`meridian:admin`). Remaining: ledger EOD needs a tenant-wide endpoint (pack job `LEDGER_EOD` needs `parameters.ledger_id`),
-no tenant EOD endpoints yet for reconciliation runs, fee/billing charging or GL period close; most domain EOD endpoints
+(`meridian:admin`). Ledger EOD is tenant-wide (`POST /v1/ledgers/end-of-day`, per legal entity of the EOD run; pack
+`LEDGER_EOD` ships active, an optional `parameters.ledger_id` still pins one book; done). Remaining: no tenant EOD endpoints yet for reconciliation runs, fee/billing charging or GL period close; most domain EOD endpoints
 are tenant-wide, not per legal entity; the generator cannot express operator-only reads of global tables.
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Done ([public]) |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
@@ -112,10 +112,22 @@ batch payloads, typed quote/balance responses, a gateway health endpoint.
   contact-directory changes from the e2e pass, or load flakiness: rerun alone first).
 - Done since resume: search indexing feed (97 event types, 17 kinds); per-tenant ledger settings in all services;
   X-Roles forwarding; BusinessDates (payment, deposit); EOD job results; missing ledger config is 422 everywhere.
+- Done (2026-10-07): BusinessDates in loan (per loan legal entity), wallet, billing, collections, treasury-deal (per deal
+  entity), statement, fx, routing, rewards, insights, campaign (card-clearing has no "today": scheme file dates only);
+  `lending.loan.status_changed` on every loan status transition (search maps it); customer contact search via
+  `party.customer_contact.verified` / `.removed` with masked value + keyed lookup hash (doc kind `customer_contact`,
+  entity type CUSTOMER_CONTACT); starter pack `for_each` repetition and placeholder object keys, fx-service routing per
+  `fx_currencies` in GENERIC and KE; tenant-wide ledger EOD (`POST /v1/ledgers/end-of-day`).
 - Done: tenant starter packs (tenant-service; generic + KE); service-on-behalf principal is the human (four-eyes safe in JWT mode).
-- Next: run e2e setup S live with the starter pack (untested live); starter pack gaps (fx routing keys, retire removed items, stale RUNNING runs, approver roles); search gaps (source backfill action,
-  dead-letter store, journal erasure, customer contact fields in events, loan status events, spec says OpenSearch but
-  service uses PostgreSQL FTS); BusinessDates in more services.
+- Next: run e2e setup S live with the starter pack (untested live); starter pack gaps (retire removed items, stale RUNNING
+  runs, approver roles); search gaps (source backfill action incl. re-publishing contacts verified before lookup_hash
+  existed, dead-letter store, journal erasure, spec says OpenSearch but service uses PostgreSQL FTS); BusinessDates in the
+  remaining services (agent-network, commission, crm, customer, disbursement, limits, sanctions, product-catalog, ...).
+- Generator defect found: two actions on one resource with the same last path segment (`POST /{id}/eod` and
+  `POST /eod`) generate the same `<Resource><Action>Request` schema and the second silently overwrites the first; the
+  generator should reject it (worked around by naming the tenant-wide action `/end-of-day`).
+- Contact lookup key rotation (`MERIDIAN_CONTACT_LOOKUP_KEY`, shared by customer-service and search-service) needs a
+  re-publish of verified contacts; national-format phone queries (0712...) do not match E.164 contacts.
 - E2E: `python tools/e2e/journeys.py` (all 8 journeys passed on a fresh tenant with the full stack up).
 
 ## Connection budget

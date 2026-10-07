@@ -13,7 +13,7 @@ public class Events {
             "lending.loan.created", "lending.loan.disbursed", "lending.loan.disbursement_failed",
             "lending.loan.repayment_received", "lending.loan.repayment_reversed", "lending.loan.installment_due",
             "lending.loan.installment_overdue", "lending.loan.installment_waived", "lending.loan.fee_charged",
-            "lending.loan.fee_waived", "lending.loan.delinquency_changed", "lending.loan.restructure_proposed",
+            "lending.loan.fee_waived", "lending.loan.delinquency_changed", "lending.loan.status_changed", "lending.loan.restructure_proposed",
             "lending.loan.restructure_approved", "lending.loan.restructure_rejected", "lending.loan.restructured",
             "lending.loan.rate_changed", "lending.loan.prepayment_quoted", "lending.loan.paid_off", "lending.loan.closed",
             "lending.loan.cancelled", "lending.loan.write_off_requested", "lending.loan.written_off",

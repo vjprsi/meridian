@@ -155,7 +155,7 @@ public class ReferralService {
             v.putNull("status_reason");
         }
         if ("end".equals(action) && text(p, "ends_on") == null) {
-            v.put("ends_on", rows.now().toLocalDate().toString());
+            v.put("ends_on", rows.today().toString());
         }
         ObjectNode row = rows.update(PROGRAM, id, v);
         events.publish(event, PROGRAM, row, ReferralProgram.class);
@@ -165,7 +165,7 @@ public class ReferralService {
     private ObjectNode activeProgram(UUID id) {
         ObjectNode p = rows.queryOne("select row_to_json(t)::text from referral_program t where t.id = ?", id)
                 .orElseThrow(() -> ApiException.unprocessable("program_not_found", "Referral program " + id + " does not exist"));
-        LocalDate today = rows.now().toLocalDate();
+        LocalDate today = rows.today();
         if (!"ACTIVE".equals(text(p, "status")) || today.isBefore(Json.date(p, "starts_on"))
                 || (Json.date(p, "ends_on") != null && today.isAfter(Json.date(p, "ends_on")))) {
             throw ApiException.unprocessable("program_not_active", "The referral program is not running");
@@ -452,7 +452,7 @@ public class ReferralService {
                     ObjectNode rewards = rows.get("rewards_program", rp);
                     ObjectNode entry = ledger.append(locked, new PointsLedger.Move("BONUS", points, "referral:" + id + ":" + party)
                             .source("REFERRAL", id).reason("Referral reward (" + party + ")")
-                            .expires(PointsLedger.expiry(rewards, rows.now().toLocalDate())).event("engagement.points.earned"));
+                            .expires(PointsLedger.expiry(rewards, rows.today())).event("engagement.points.earned"));
                     v.put(party + "_points_entry_id", text(entry, "id"));
                 } catch (ApiException e) {
                     failures.add(party + " points: " + e.code() + " - " + e.getMessage());

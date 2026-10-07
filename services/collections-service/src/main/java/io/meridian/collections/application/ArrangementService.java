@@ -66,7 +66,7 @@ public class ArrangementService {
         if (amount.compareTo(Rows.dec(c, "total_outstanding")) > 0) {
             throw ApiException.unprocessable("amount_exceeds_outstanding", "promised_amount exceeds the total outstanding");
         }
-        LocalDate today = rows.dbToday();
+        LocalDate today = rows.today();
         if (date.isBefore(today) || date.isAfter(today.plusDays(props.maxPromiseDays()))) {
             throw ApiException.unprocessable("invalid_promised_date",
                     "promised_date must be between today and " + props.maxPromiseDays() + " days ahead");
@@ -159,7 +159,7 @@ public class ArrangementService {
         if (amount.compareTo(Rows.dec(c, "total_outstanding")) > 0) {
             throw ApiException.unprocessable("amount_exceeds_outstanding", "total_amount exceeds the total outstanding");
         }
-        if (start.isBefore(rows.dbToday())) {
+        if (start.isBefore(rows.today())) {
             throw ApiException.unprocessable("invalid_start_date", "start_date must be today or later");
         }
         List<PaymentPlanCalculator.Instalment> plan = PaymentPlanCalculator.instalments(amount, currency, count, frequency, start);

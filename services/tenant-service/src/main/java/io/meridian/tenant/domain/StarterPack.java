@@ -24,6 +24,17 @@ import tools.jackson.databind.node.ObjectNode;
  * a parent's follow-up actions (submit, publish) run after all of its children. Item keys of children are
  * {@code parent-key/child-key}.
  *
+ * <p>Repetition over a list parameter (e.g. the currencies fx-service deals in):
+ * <ul>
+ *   <li>an item with {@code for_each: "${param.<list>}"} becomes one item per value, keyed {@code <key>.<value in lower
+ *       case>}; inside it {@code ${each}} is the value and {@code ${each.lower}} its lower-case form (also in object
+ *       keys and in references, e.g. {@code ${ref.ledger_book/fx_position.${each.lower}}});</li>
+ *   <li>an object with a {@code $for_each: "${param.<list>}"} entry becomes one copy of its other entries per value,
+ *       merged into one object, so map keys can be data: {@code {$for_each: "${param.fx_currencies}", "${each}": ...}}.</li>
+ * </ul>
+ * Repetition is expanded before parsing with the run's parameters ({@link #expand}); the catalog validates packs
+ * expanded with the parameter defaults. Nested repetition is not supported.
+ *
  * @param definition the merged source document (after {@code extends}), returned by the catalog API
  */
 public record StarterPack(String code, String version, String title, String market, String description,
@@ -171,8 +182,24 @@ public record StarterPack(String code, String version, String title, String mark
         return out;
     }
 
+    /**
+     * The pack with its {@code for_each} repetitions expanded for the given (resolved) parameters; the pack itself when
+     * it repeats nothing. Throws {@link InvalidPack} when a repetition's parameter is not a list of codes.
+     */
+    public StarterPack expand(Map<String, JsonNode> params) {
+        return repeats(definition) ? parse(definition, params) : this;
+    }
+
     /** Parses and validates a (merged) pack document; throws {@link InvalidPack} listing every problem. */
     public static StarterPack parse(JsonNode doc) {
+        return parse(doc, null);
+    }
+
+    /**
+     * Parses and validates a (merged) pack document with its repetitions expanded for {@code values} (null: the
+     * parameter defaults); throws {@link InvalidPack} listing every problem.
+     */
+    public static StarterPack parse(JsonNode doc, Map<String, JsonNode> values) {
         List<String> problems = new ArrayList<>();
         String code = doc.path("code").asString("");
         String version = doc.path("version").asString("");
@@ -200,10 +227,16 @@ public record StarterPack(String code, String version, String title, String mark
             params.put(e.getKey(), new Param(e.getKey(), type, p.get("default"), p.path("description").asString(""),
                     p.path("tenant_fact").asString(null)));
         });
+        Map<String, JsonNode> effective = new LinkedHashMap<>();
+        params.forEach((k, p) -> effective.put(k, p.defaultValue()));
+        if (values != null) {
+            effective.putAll(values);
+        }
+        JsonNode expanded = repeats(doc) ? expand(doc, effective, problems) : doc;
         List<Step> steps = new ArrayList<>();
         Set<String> stepCodes = new LinkedHashSet<>();
         Set<String> keys = new LinkedHashSet<>();
-        for (JsonNode s : doc.path("steps")) {
+        for (JsonNode s : expanded.path("steps")) {
             String sc = s.path("code").asString("");
             if (!STEP.matcher(sc).matches() || !stepCodes.add(sc)) {
                 problems.add("step code '" + sc + "' must be unique and match " + STEP.pattern());
@@ -330,6 +363,130 @@ public record StarterPack(String code, String version, String title, String mark
                 update, strings(i.path("update_exclude")), ready, strings(i.path("pending_status")),
                 i.path("status_field").asString("status"), List.copyOf(actions), i.path("adopt_children").asBoolean(false),
                 List.copyOf(children), i);
+    }
+
+    // ------------------------------------------------------------------ repetition (for_each)
+
+    static final String FOR_EACH = "for_each";
+    static final String MAP_FOR_EACH = "$for_each";
+    private static final Pattern EACH_VALUE = Pattern.compile("[A-Za-z0-9_]{1,40}");
+    private static final Pattern LIST_PARAM = Pattern.compile("\\$\\{param\\.([a-z][a-z0-9_]{0,63})}");
+
+    static boolean repeats(JsonNode doc) {
+        return doc.toString().contains("for_each\"");
+    }
+
+    /** A copy of the document's steps with every item and map repetition expanded. */
+    static JsonNode expand(JsonNode doc, Map<String, JsonNode> values, List<String> problems) {
+        ObjectNode out = ((ObjectNode) doc).deepCopy();
+        for (JsonNode s : out.path("steps")) {
+            if (s.isObject() && s.has("items")) {
+                ((ObjectNode) s).set("items", expandItems(s.get("items"), values, problems));
+            }
+        }
+        return out;
+    }
+
+    private static ArrayNode expandItems(JsonNode items, Map<String, JsonNode> values, List<String> problems) {
+        ArrayNode out = JsonNodeFactory.instance.arrayNode();
+        for (JsonNode i : items) {
+            if (!i.isObject() || !i.has(FOR_EACH)) {
+                out.add(expandItem(i, values, problems));
+                continue;
+            }
+            ObjectNode item = ((ObjectNode) i).deepCopy();
+            String key = item.path("key").asString("");
+            List<String> each = eachValues(item.remove(FOR_EACH), values, key, problems);
+            for (String v : each) {
+                ObjectNode copy = (ObjectNode) substitute(item, v);
+                copy.put("key", key + "." + v.toLowerCase(Locale.ROOT));
+                out.add(expandItem(copy, values, problems));
+            }
+        }
+        return out;
+    }
+
+    private static JsonNode expandItem(JsonNode item, Map<String, JsonNode> values, List<String> problems) {
+        if (!item.isObject()) {
+            return item;
+        }
+        ObjectNode out = JsonNodeFactory.instance.objectNode();
+        item.properties().forEach(e -> out.set(e.getKey(), "children".equals(e.getKey())
+                ? expandItems(e.getValue(), values, problems)
+                : expandMaps(e.getValue(), values, item.path("key").asString(""), problems)));
+        return out;
+    }
+
+    private static JsonNode expandMaps(JsonNode n, Map<String, JsonNode> values, String where, List<String> problems) {
+        if (n.isArray()) {
+            ArrayNode a = JsonNodeFactory.instance.arrayNode();
+            n.forEach(x -> a.add(expandMaps(x, values, where, problems)));
+            return a;
+        }
+        if (!n.isObject()) {
+            return n;
+        }
+        ObjectNode out = JsonNodeFactory.instance.objectNode();
+        if (n.has(MAP_FOR_EACH)) {
+            for (String v : eachValues(n.get(MAP_FOR_EACH), values, where, problems)) {
+                n.properties().forEach(e -> {
+                    if (!MAP_FOR_EACH.equals(e.getKey())) {
+                        out.set(substitute(e.getKey(), v), expandMaps(substitute(e.getValue(), v), values, where, problems));
+                    }
+                });
+            }
+            return out;
+        }
+        n.properties().forEach(e -> out.set(e.getKey(), expandMaps(e.getValue(), values, where, problems)));
+        return out;
+    }
+
+    /** The values a repetition runs over: {@code "${param.<name>}"} naming a list of codes. */
+    private static List<String> eachValues(JsonNode spec, Map<String, JsonNode> values, String where, List<String> problems) {
+        java.util.regex.Matcher m = LIST_PARAM.matcher(spec == null ? "" : spec.asString(""));
+        if (!m.matches()) {
+            problems.add(where + ": for_each must be \"${param.<list parameter>}\"");
+            return List.of();
+        }
+        JsonNode list = values.get(m.group(1));
+        if (list == null || !list.isArray()) {
+            problems.add(where + ": for_each parameter " + m.group(1) + " must be a declared list (array) parameter");
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonNode v : list) {
+            String s = v.isValueNode() ? v.asString("") : "";
+            if (!EACH_VALUE.matcher(s).matches()) {
+                problems.add(where + ": for_each value '" + v + "' of " + m.group(1) + " must be a code (letters, digits, _)");
+            } else if (out.contains(s)) {
+                problems.add(where + ": for_each value " + s + " of " + m.group(1) + " is repeated");
+            } else {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /** Replaces {@code ${each}} and {@code ${each.lower}} in string values and object keys. */
+    private static JsonNode substitute(JsonNode n, String value) {
+        if (n.isString()) {
+            return JsonNodeFactory.instance.stringNode(substitute(n.asString(), value));
+        }
+        if (n.isArray()) {
+            ArrayNode a = JsonNodeFactory.instance.arrayNode();
+            n.forEach(x -> a.add(substitute(x, value)));
+            return a;
+        }
+        if (n.isObject()) {
+            ObjectNode o = JsonNodeFactory.instance.objectNode();
+            n.properties().forEach(e -> o.set(substitute(e.getKey(), value), substitute(e.getValue(), value)));
+            return o;
+        }
+        return n;
+    }
+
+    private static String substitute(String s, String value) {
+        return s.replace("${each.lower}", value.toLowerCase(Locale.ROOT)).replace("${each}", value);
     }
 
     static List<String> strings(JsonNode n) {

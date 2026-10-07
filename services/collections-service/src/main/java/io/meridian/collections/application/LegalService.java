@@ -161,7 +161,7 @@ public class LegalService {
             throw ApiException.unprocessable("filing_details_required", "court and case_reference are required to file");
         }
         if ("FILED".equals(to) && value(v, l, "filed_at") == null) {
-            v.put("filed_at", rows.dbToday().toString());
+            v.put("filed_at", rows.today().toString());
         }
         if ("HEARING".equals(to) && value(v, l, "next_hearing_date") == null) {
             throw ApiException.unprocessable("hearing_date_required", "next_hearing_date is required for a hearing");

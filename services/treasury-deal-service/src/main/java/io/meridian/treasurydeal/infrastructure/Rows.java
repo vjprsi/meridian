@@ -30,11 +30,13 @@ public class Rows {
     private final JdbcClient jdbc;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;
+        this.businessDates = businessDates;
     }
 
     public JsonMapper json() {
@@ -46,8 +48,17 @@ public class Rows {
         return jdbc.sql("select to_json(now())#>>'{}'").query(String.class).single();
     }
 
-    /** Current date on the database clock (UTC session). */
+    /** The tenant's business date (business-day-service), else the current date on the database clock (UTC session). */
     public LocalDate today() {
+        return businessDates.today(this::dbToday);
+    }
+
+    /** The legal entity's business date (tenant-wide when {@code legalEntityId} is null), else the database date. */
+    public LocalDate today(UUID legalEntityId) {
+        return legalEntityId == null ? today() : businessDates.today(legalEntityId, this::dbToday);
+    }
+
+    private LocalDate dbToday() {
         return jdbc.sql("select current_date").query(LocalDate.class).single();
     }
 

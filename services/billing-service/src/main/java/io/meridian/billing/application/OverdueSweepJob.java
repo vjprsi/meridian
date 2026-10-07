@@ -22,18 +22,21 @@ public class OverdueSweepJob {
 
     private final InvoiceService invoices;
     private final BillingStore store;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public OverdueSweepJob(InvoiceService invoices, BillingStore store) {
+    public OverdueSweepJob(InvoiceService invoices, BillingStore store,
+                           io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.invoices = invoices;
         this.store = store;
     }
 
     @Scheduled(fixedDelayString = "${meridian.billing.overdue-sweep-interval-ms:3600000}", initialDelay = 60_000)
     public void sweep() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
         for (UUID tenant : store.tenantsWithActivity()) {
             try {
-                int n = TenantContext.callAs(tenant, "system", () -> invoices.markOverdue(today));
+                int n = TenantContext.callAs(tenant, "system", () -> invoices.markOverdue(
+                        businessDates.today(() -> LocalDate.now(ZoneOffset.UTC))));
                 if (n > 0) {
                     log.info("Tenant {}: {} subscription(s) with newly overdue invoices", tenant, n);
                 }

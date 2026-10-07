@@ -50,7 +50,7 @@ public class PrepaymentService {
         RepaymentService.requireServiceable(loan);
         String type = str(req, "quote_type");
         int scale = LoanSupport.scale(loan);
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         ProductTerms terms = ProductTerms.of(loan);
         BigDecimal principal;
         BigDecimal interest = BigDecimal.ZERO;
@@ -158,9 +158,9 @@ public class PrepaymentService {
                 .credit(loans.gl().feeIncome(), erc, "Early repayment charge");
         UUID je = loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-prepayment", quoteId, null), "PAYMENT",
                 (full ? "Pay-off " : "Partial prepayment ") + str(loan, "loan_number"), str(loan, "currency"), "LOAN_REPAYMENT",
-                id, loans.today(), legs.list()));
+                id, loans.today(loan), legs.list()));
         ArrayNode detail = rows.json().createArrayNode();
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         if (full) {
             for (ObjectNode i : loans.openInstallments(loanId)) {
                 boolean due = !Rows.date(i, "due_date").isAfter(today);

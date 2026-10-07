@@ -19,7 +19,11 @@ public class StatementJobs {
     private final ScheduleService schedules;
     private final Clock clock;
 
-    public StatementJobs(StatementProperties props, ScheduleService schedules, Clock clock) {
+    private final io.meridian.web.time.BusinessDates businessDates;
+
+    public StatementJobs(StatementProperties props, ScheduleService schedules, Clock clock,
+                         io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.props = props;
         this.schedules = schedules;
         this.clock = clock;
@@ -30,13 +34,17 @@ public class StatementJobs {
         if (!props.batchEnabled()) {
             return;
         }
-        LocalDate cycleEnd = LocalDate.now(clock).minusDays(1);
         for (UUID tenant : props.batchTenants()) {
             try {
-                int n = TenantContext.callAs(tenant, "system:statements", () -> schedules.runCycle(cycleEnd).size());
-                log.info("statement cycle {} for tenant {} produced {} statements", cycleEnd, tenant, n);
+                // the cycle ends the day before the tenant's business date (the clock's date when it has none)
+                TenantContext.callAs(tenant, "system:statements", () -> {
+                    LocalDate cycleEnd = businessDates.today(() -> LocalDate.now(clock)).minusDays(1);
+                    int n = schedules.runCycle(cycleEnd).size();
+                    log.info("statement cycle {} for tenant {} produced {} statements", cycleEnd, tenant, n);
+                    return n;
+                });
             } catch (Exception e) {
-                log.error("statement cycle {} failed for tenant {}", cycleEnd, tenant, e);
+                log.error("statement cycle failed for tenant {}", tenant, e);
             }
         }
     }

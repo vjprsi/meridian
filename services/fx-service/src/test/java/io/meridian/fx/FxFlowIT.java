@@ -71,6 +71,8 @@ class FxFlowIT {
         final Map<String, JsonNode> journals = new HashMap<>();
         final List<JsonNode> postings = Collections.synchronizedList(new ArrayList<>());
         final JsonMapper json;
+        /** Business date reported by business-day-service (null: none, the service clock applies). */
+        volatile LocalDate businessDate;
 
         Fakes(JsonMapper json) {
             this.json = json;
@@ -79,6 +81,10 @@ class FxFlowIT {
         synchronized JsonNode get(String service, String path) {
             if ("config-service".equals(service)) { // no tenant ledger settings: the deployment properties apply
                 return json.readTree("{\"namespace\":\"ledger\",\"values\":{}}");
+            }
+            if ("business-day-service".equals(service)) {
+                return businessDate == null ? null
+                        : json.readTree("{\"data\":[{\"business_date\":\"" + businessDate + "\",\"is_current\":true}]}");
             }
             assertThat(service).isEqualTo("reference-data-service");
             assertThat(path).startsWith("/v1/reference/fx-rates/latest?");
@@ -141,6 +147,9 @@ class FxFlowIT {
 
     @MockitoBean
     ServiceClient serviceClient;
+
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
 
     final HttpClient http = HttpClient.newHttpClient();
     Fakes fakes;
@@ -284,6 +293,22 @@ class FxFlowIT {
         assertThat(code(post("/v1/fx/deals/" + dealId + "/cancel", Map.of("reason", "late"), key())))
                 .isEqualTo("invalid_transition");
         assertThat(fakes.postings).hasSize(1);
+    }
+
+    @Test
+    @Order(11)
+    void spotValueDateCountsFromTheBusinessDate() throws Exception {
+        try {
+            fakes.businessDate = LocalDate.parse("2030-01-04"); // a Friday: T+2 skips the weekend
+            businessDates.invalidate();
+            String id = post("/v1/fx/quotes", Map.of("sell_currency", "EUR", "buy_currency", "USD", "sell_amount", "20.00"),
+                    key()).body().get("id").asString();
+            JsonNode deal = post("/v1/fx/quotes/" + id + "/accept", Map.of(), key()).body();
+            assertThat(deal.get("value_date").asString()).isEqualTo("2030-01-08");
+        } finally {
+            fakes.businessDate = null;
+            businessDates.invalidate();
+        }
     }
 
     @Test

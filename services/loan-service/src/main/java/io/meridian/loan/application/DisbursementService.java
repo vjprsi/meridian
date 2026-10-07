@@ -112,7 +112,7 @@ public class DisbursementService {
         if (loan.hasNonNull("merchant_id") && "MERCHANT_SETTLEMENT".equals(method)) {
             row.put("merchant_id", str(loan, "merchant_id"));
         }
-        boolean future = scheduled != null && scheduled.isAfter(loans.today());
+        boolean future = scheduled != null && scheduled.isAfter(loans.today(loan));
         if (scheduled != null) {
             row.put("scheduled_date", scheduled.toString());
         }
@@ -178,7 +178,7 @@ public class DisbursementService {
             je = loans.ledger().post(new LedgerPort.Posting(
                     LedgerPort.key("loan-disbursement", id, String.valueOf(d.path("attempts").asInt(1))), "LOAN",
                     "Disbursement " + str(loan, "loan_number") + " tranche " + d.path("tranche_no").asInt(1),
-                    str(loan, "currency"), "LOAN_DISBURSEMENT", id, loans.today(),
+                    str(loan, "currency"), "LOAN_DISBURSEMENT", id, loans.today(loan),
                     new LedgerPort.Legs().debit(receivable, amount, "Loan principal")
                             .credit(destination, amount.subtract(fee), "Disbursement " + method)
                             .credit(loans.gl().feeIncome(), fee, "Origination fee").list()));
@@ -206,7 +206,7 @@ public class DisbursementService {
 
     private void apply(ObjectNode loan, ObjectNode d) {
         UUID loanId = uuid(loan, "id");
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         BigDecimal amount = decOr0(d, "amount");
         BigDecimal fee = decOr0(d, "fees_deducted");
         if (fee.signum() > 0) {

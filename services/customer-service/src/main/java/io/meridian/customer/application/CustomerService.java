@@ -47,9 +47,12 @@ public class CustomerService {
     private final Events events;
     private final JsonMapper json;
     private final Approvals approvals;
+    private final ContactService contacts;
 
-    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, Approvals approvals) {
+    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, Approvals approvals,
+                           ContactService contacts) {
         this.rows = rows;
+        this.contacts = contacts;
         this.crud = crud;
         this.events = events;
         this.json = json;
@@ -489,6 +492,7 @@ public class CustomerService {
         }
         // Contacts: drop the duplicate's copies of contact points the survivor already has. Verification challenges
         // follow their contact; open ones are superseded (a code sent for the duplicate must not verify the survivor).
+        List<ObjectNode> verifiedContacts = contacts.verified(duplicateId);
         rows.execute("""
                 update contact_verification set customer_id = ?, status = case when status in ('PENDING', 'LOCKED')
                 then 'SUPERSEDED' else status end where customer_id = ?""", survivorId, duplicateId);
@@ -504,6 +508,7 @@ public class CustomerService {
                 and coalesce(s.phone, '') = coalesce(d.phone, '') and coalesce(lower(s.email), '') = coalesce(lower(d.email), ''))""",
                 duplicateId, survivorId);
         rows.execute("update customer_contact set customer_id = ?, is_primary = false where customer_id = ?", survivorId, duplicateId);
+        contacts.afterMerge(verifiedContacts); // search: moved contacts now point at the survivor, dropped ones go
         rows.execute("update customer_address set customer_id = ?, is_primary = false where customer_id = ?", survivorId, duplicateId);
         rows.execute("update customer_identifier set customer_id = ?, is_primary = false where customer_id = ?", survivorId, duplicateId);
         // Relationships: remove links between the two records and ones the survivor already has.

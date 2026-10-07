@@ -62,7 +62,7 @@ public class RestructureService {
             throw ApiException.unprocessable("rate_unchanged", "new_rate equals the current rate");
         }
         LocalDate last = Rows.date(loan, "last_accrual_date");
-        if (effective.isAfter(loans.today())) {
+        if (effective.isAfter(loans.today(loan))) {
             throw ApiException.unprocessable("future_rate_change_unsupported", "effective_date cannot be in the future");
         }
         if (last != null && !effective.isAfter(last)) {
@@ -135,8 +135,8 @@ public class RestructureService {
         if (rate != null && (rate.signum() < 0 || rate.compareTo(BigDecimal.ONE) > 0)) {
             throw ApiException.unprocessable("invalid_rate", "new_interest_rate must be between 0 and 1");
         }
-        LocalDate effective = Rows.date(values, "effective_date") != null ? Rows.date(values, "effective_date") : loans.today();
-        if (effective.isBefore(loans.today())) {
+        LocalDate effective = Rows.date(values, "effective_date") != null ? Rows.date(values, "effective_date") : loans.today(loan);
+        if (effective.isBefore(loans.today(loan))) {
             throw ApiException.unprocessable("invalid_effective_date", "effective_date cannot be in the past");
         }
         values.put("effective_date", effective.toString());
@@ -306,8 +306,8 @@ public class RestructureService {
         move(r, "APPLIED");
         RepaymentService.requireServiceable(loan);
         LocalDate effective = Rows.date(r, "effective_date");
-        if (effective == null || effective.isBefore(loans.today())) {
-            effective = loans.today();
+        if (effective == null || effective.isBefore(loans.today(loan))) {
+            effective = loans.today(loan);
             r.put("effective_date", effective.toString());
         }
         Plan plan = plan(loan, r);
@@ -343,7 +343,7 @@ public class RestructureService {
                     rateChange(loan, oldRate, plan.rate(), null, effective, "RESTRUCTURE", uuid(schedule, "id")));
         }
         loans.transition(loan, "RESTRUCTURED", str(r, "restructure_type") + ": " + str(r, "reason"), effective);
-        loans.delinquency(loan, loans.today(), "restructured");
+        loans.delinquency(loan, loans.today(loan), "restructured");
         ObjectNode ru = rows.object();
         ru.put("status", "APPLIED");
         ru.put("applied_at", loans.now().toString());

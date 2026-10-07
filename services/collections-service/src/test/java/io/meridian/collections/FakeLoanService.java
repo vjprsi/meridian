@@ -101,6 +101,9 @@ public class FakeLoanService {
     }
 
     public synchronized JsonNode get(String service, String path) {
+        if ("business-day-service".equals(service)) {
+            return null; // no business day opened: the database date applies
+        }
         calls.add("GET " + path);
         if (!"loan-service".equals(service)) {
             throw new IllegalArgumentException("unexpected service " + service);

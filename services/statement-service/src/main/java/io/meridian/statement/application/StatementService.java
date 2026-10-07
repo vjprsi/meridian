@@ -53,8 +53,11 @@ public class StatementService {
     private final OutboxWriter outbox;
     private final Clock clock;
     private final StatementProperties props;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public StatementService(Rows rows, BankData bank, OutboxWriter outbox, Clock clock, StatementProperties props) {
+    public StatementService(Rows rows, BankData bank, OutboxWriter outbox, Clock clock, StatementProperties props,
+                            io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.rows = rows;
         this.bank = bank;
         this.outbox = outbox;
@@ -62,8 +65,9 @@ public class StatementService {
         this.props = props;
     }
 
+    /** The tenant's business date (business-day-service), else the service clock's date. */
     LocalDate today() {
-        return LocalDate.now(clock);
+        return businessDates.today(() -> LocalDate.now(clock));
     }
 
     // ------------------------------------------------------------------ generate
