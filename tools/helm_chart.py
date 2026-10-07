@@ -41,9 +41,12 @@ SERVICE_SECRETS = {
     "file-gateway-service": {"MERIDIAN_FILES_SIGNING_KEY": "signing-key"},
     "fraud-service": {"MERIDIAN_FRAUD_PSEUDONYM_KEY": "pseudonym-key"},
     "identity-service": {"MERIDIAN_IDENTITY_MFA_SEED_KEY": "mfa-seed-key"},
+    # RECON-REAL-REFS: counterparty account pseudonyms; the two Secrets must hold the same value
+    "ledger-service": {"MERIDIAN_REFS_COUNTERPARTY_KEY": "counterparty-key"},
     "loan-origination-service": {"MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET": "callback-secret"},
     "onboarding-service": {"MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET": "otp-secret",
                            "MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET": "resume-token-secret"},
+    "reconciliation-service": {"MERIDIAN_REFS_COUNTERPARTY_KEY": "counterparty-key"},
     "routing-service": {"MERIDIAN_ROUTING_CALLBACK_SECRET": "callback-secret"},
     "search-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": "contact-lookup-key"},
     "statement-service": {"MERIDIAN_STATEMENT_DOWNLOAD_SECRET": "download-secret"},
