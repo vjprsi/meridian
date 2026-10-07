@@ -303,6 +303,219 @@ public class DataLifecycleService {
         return out;
     }
 
+    // ------------------------------------------------------------------ tenant moves (MR-GAME-DAY data mover)
+
+    /** Tables the data mover never copies: transport and per-cell technical state, not tenant data. */
+    static final Set<String> MOVE_EXCLUDED = Set.of("outbox", "idempotency_key", "callback_nonce", "flyway_schema_history");
+    static final int MAX_IMPORT = 5_000;
+
+    /**
+     * The tenant's tables of this service for a cell-to-cell copy: every table of the schema with {@code id} and
+     * {@code tenant_id} columns, parents before children (foreign keys), each with the tenant's row count, whether it
+     * is append-only, and the schema version (both cells must run the same migrations).
+     */
+    public ObjectNode moveTables() {
+        UUID tenant = TenantContext.require();
+        List<String> tables = jdbc.sql("""
+                select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname = current_schema() and c.relkind in ('r', 'p')
+                  and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'id' and not a.attisdropped)
+                  and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped)
+                order by c.relname""").query(String.class).list().stream()
+                .filter(t -> Selection.IDENT.matcher(t).matches() && !MOVE_EXCLUDED.contains(t)).toList();
+        Map<String, Set<String>> parents = new LinkedHashMap<>();
+        tables.forEach(t -> parents.put(t, new java.util.TreeSet<>()));
+        jdbc.sql("""
+                select ch.relname, pa.relname from pg_constraint k
+                join pg_class ch on ch.oid = k.conrelid join pg_class pa on pa.oid = k.confrelid
+                join pg_namespace n on n.oid = ch.relnamespace
+                where k.contype = 'f' and n.nspname = current_schema()""")
+                .query((rs, i) -> {
+                    String child = rs.getString(1);
+                    String parent = rs.getString(2);
+                    if (parents.containsKey(child) && parents.containsKey(parent) && !child.equals(parent)) {
+                        parents.get(child).add(parent);
+                    }
+                    return null;
+                }).list();
+        ObjectNode out = json.createObjectNode();
+        out.put("service", service);
+        out.put("tenant_id", tenant.toString());
+        boolean flyway = Boolean.TRUE.equals(jdbc.sql("select to_regclass('flyway_schema_history') is not null")
+                .query(Boolean.class).single());
+        String version = null;
+        if (flyway) {
+            try {
+                version = jdbc.sql("""
+                        select version from flyway_schema_history where success and version is not null
+                        order by installed_rank desc limit 1""").query(String.class).optional().orElse(null);
+            } catch (DataAccessException e) {
+                version = null;      // history not readable by the runtime role: no schema check
+            }
+        }
+        if (version == null) {
+            out.putNull("schema_version");
+        } else {
+            out.put("schema_version", version);
+        }
+        ArrayNode arr = out.putArray("tables");
+        for (String t : topological(parents)) {
+            ObjectNode n = arr.addObject();
+            n.put("table_name", t);
+            n.put("rows", jdbc.sql("select count(*) from " + t + " t where t.tenant_id = ?").param(tenant)
+                    .query(Long.class).single());
+            n.put("append_only", appendOnly(t));
+            ArrayNode p = n.putArray("parents");
+            parents.get(t).forEach(p::add);
+        }
+        return out;
+    }
+
+    /** Parents first; a cycle (rare: mutual references) keeps the remaining tables in name order. */
+    static List<String> topological(Map<String, Set<String>> parents) {
+        List<String> out = new ArrayList<>();
+        Set<String> placed = new java.util.HashSet<>();
+        boolean progressed = true;
+        while (progressed && out.size() < parents.size()) {
+            progressed = false;
+            for (var e : parents.entrySet()) {
+                if (!placed.contains(e.getKey()) && placed.containsAll(e.getValue())) {
+                    out.add(e.getKey());
+                    placed.add(e.getKey());
+                    progressed = true;
+                }
+            }
+        }
+        parents.keySet().stream().filter(t -> !placed.contains(t)).forEach(out::add);
+        return out;
+    }
+
+    /**
+     * One page of the tenant's rows of a table in id order ({@code after_id}, {@code limit} up to 5,000), every column
+     * (the copy must be exact), always restricted to the bound tenant even where a table has no RLS policy.
+     */
+    public ObjectNode moveExtract(JsonNode body) {
+        UUID tenant = TenantContext.require();
+        String table = moveTable(body);
+        int limit = Math.max(1, Math.min(MAX_EXTRACT, body.path("limit").asInt(1000)));
+        UUID after = uuid(body, "after_id");
+        List<Object> args = new ArrayList<>();
+        args.add(tenant);
+        String afterClause = "";
+        if (after != null) {
+            afterClause = " and t.id > ?";
+            args.add(after);
+        }
+        args.add(limit + 1);
+        List<String> rows = jdbc.sql("select row_to_json(t)::text from " + table + " t where t.tenant_id = ?" + afterClause
+                + " order by t.id limit ?").params(args).query(String.class).list();
+        ObjectNode out = json.createObjectNode();
+        out.put("table_name", table);
+        ArrayNode records = out.putArray("records");
+        rows.stream().limit(limit).forEach(r -> records.add(json.readTree(r)));
+        out.put("has_more", rows.size() > limit);
+        if (!records.isEmpty()) {
+            out.put("last_id", records.get(records.size() - 1).path("id").asString());
+        }
+        return out;
+    }
+
+    /**
+     * Bulk load of rows extracted from the source cell: {@code insert ... on conflict do nothing} (idempotent: a resumed
+     * or repeated page inserts nothing twice and never overwrites). Every record must belong to the bound tenant
+     * (row-level security checks it again). Rows whose parent row is not there yet (foreign key, e.g. a self-reference
+     * to a later id) are inserted one by one where possible and the rest returned as {@code deferred} for a retry.
+     */
+    public ObjectNode moveImport(JsonNode body) {
+        UUID tenant = TenantContext.require();
+        String table = moveTable(body);
+        JsonNode records = body.path("records");
+        if (!records.isArray()) {
+            throw ApiException.unprocessable("validation_failed", "records must be an array");
+        }
+        if (records.size() > MAX_IMPORT) {
+            throw ApiException.unprocessable("too_many_records", "At most " + MAX_IMPORT + " records per import");
+        }
+        for (JsonNode r : records) {
+            if (!r.isObject() || !tenant.toString().equals(r.path("tenant_id").asString(""))) {
+                throw ApiException.unprocessable("tenant_mismatch", "Every record must belong to tenant " + tenant);
+            }
+            if (r.path("id").asString("").isBlank()) {
+                throw ApiException.unprocessable("validation_failed", "Every record needs an id");
+            }
+        }
+        ObjectNode out = json.createObjectNode();
+        out.put("table_name", table);
+        ArrayNode deferred = out.putArray("deferred");
+        if (records.isEmpty()) {
+            out.put("inserted", 0);
+            out.put("existing", 0);
+            return out;
+        }
+        String cols = String.join(", ", jdbc.sql("""
+                select column_name from information_schema.columns
+                where table_schema = current_schema() and table_name = ? and is_generated = 'NEVER'
+                  and coalesce(identity_generation, '') <> 'ALWAYS' order by ordinal_position""")
+                .param(table).query(String.class).list());
+        String sql = "insert into " + table + " (" + cols + ") select " + cols
+                + " from json_populate_recordset(null::" + table + ", ?::json) on conflict do nothing";
+        int inserted;
+        try {
+            inserted = tx.execute(s -> jdbc.sql(sql).param(json.writeValueAsString(records)).update());
+        } catch (DataIntegrityViolationException e) {
+            if (!"23503".equals(sqlState(e))) {
+                throw ApiException.conflict("import_rejected", "Rows of " + table + " were rejected: " + rootMessage(e));
+            }
+            inserted = tx.execute(s -> {
+                int n = 0;
+                for (JsonNode r : records) {
+                    Object sp = s.createSavepoint();
+                    try {
+                        n += jdbc.sql(sql).param("[" + json.writeValueAsString(r) + "]").update();
+                        s.releaseSavepoint(sp);
+                    } catch (DataIntegrityViolationException fk) {
+                        s.rollbackToSavepoint(sp);
+                        if (!"23503".equals(sqlState(fk))) {
+                            throw ApiException.conflict("import_rejected", "Row " + r.path("id").asString() + " of "
+                                    + table + " was rejected: " + rootMessage(fk));
+                        }
+                        deferred.add(r.path("id").asString());
+                    }
+                }
+                return n;
+            });
+        }
+        out.put("inserted", inserted);
+        out.put("existing", records.size() - inserted - deferred.size());
+        return out;
+    }
+
+    private String moveTable(JsonNode body) {
+        String t = table(body);
+        if (MOVE_EXCLUDED.contains(t) || !columns(t).containsKey("tenant_id") || !columns(t).containsKey("id")) {
+            throw ApiException.unprocessable("not_movable", "Table " + t + " is not tenant data of " + service);
+        }
+        return t;
+    }
+
+    private static String sqlState(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException sql && sql.getSQLState() != null) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
+    }
+
+    private static String rootMessage(Throwable e) {
+        Throwable t = e;
+        while (t.getCause() != null) {
+            t = t.getCause();
+        }
+        String m = String.valueOf(t.getMessage());
+        return m.length() > 300 ? m.substring(0, 300) : m;
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private long count(String table, Selection.Sql s) {

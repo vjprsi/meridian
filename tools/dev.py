@@ -31,6 +31,9 @@ MANIFEST = json.loads((ROOT / "generated" / "services.json").read_text(encoding=
 SERVICES = {s["name"]: s for s in MANIFEST}
 GATEWAY = {"name": "gateway", "module": ":platform:edge-gateway", "port": 18000,
            "jar": ROOT / "platform" / "edge-gateway" / "build" / "libs"}
+# MR-GAME-DAY: the data mover (own progress database mover_db, Flyway inside the app)
+PLATFORM_APPS = {"data-mover": {"name": "data-mover", "module": ":platform:data-mover", "port": 18110, "health_port": 18111,
+                                "database": "mover_db", "jar": ROOT / "platform" / "data-mover" / "build" / "libs"}}
 JDK = Path(os.environ.get("MERIDIAN_JDK25", "D:/DevTools/jdk-25"))
 JAVA = str(JDK / "bin" / ("java.exe" if os.name == "nt" else "java"))
 DOCKER = os.environ.get("MERIDIAN_DOCKER", "wsl.exe -d Ubuntu-22.04 -e sg docker -c")
@@ -70,6 +73,8 @@ def ensure_app_role() -> None:
 def target(name: str) -> dict:
     if name == "gateway":
         return GATEWAY
+    if name in PLATFORM_APPS:
+        return PLATFORM_APPS[name]
     s = SERVICES.get(name)
     if not s:
         sys.exit(f"unknown service {name}; see generated/services.json")
@@ -157,7 +162,7 @@ def up(names: list[str], reset: bool = False) -> None:
         pid_file(t["name"]).write_text(str(proc.pid))
         print(f"  started {t['name']} (pid {proc.pid}, port {t['port']})")
     deadline = time.time() + int(os.environ.get("MERIDIAN_START_TIMEOUT", "420"))
-    pending = {t["name"]: t["port"] for t in targets}
+    pending = {t["name"]: t.get("health_port", t["port"]) for t in targets}
     while pending and time.time() < deadline:
         for n, port in list(pending.items()):
             if healthy(port):
@@ -186,7 +191,8 @@ def down(names: list[str]) -> None:
 def status() -> None:
     for pf in sorted(RUN.glob("*.pid")):
         n = pf.stem
-        port = GATEWAY["port"] if n == "gateway" else SERVICES[n]["port"]
+        port = GATEWAY["port"] if n == "gateway" else (PLATFORM_APPS[n]["health_port"] if n in PLATFORM_APPS
+                                                       else SERVICES[n]["port"])
         state = "UP" if healthy(port) else ("running" if running(n) else "stopped")
         print(f"  {n:32} {state:8} http://localhost:{port}")
 

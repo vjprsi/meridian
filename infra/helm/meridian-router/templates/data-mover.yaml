@@ -1,0 +1,143 @@
+{{- /* MR-GAME-DAY: data mover for live tenant moves (platform/data-mover). Regional like the router: it reads
+the source cell and writes the target cell through the services' internal data-lifecycle move API, so it needs network
+reach to both cells' services (private connectivity) and their document buckets. */ -}}
+{{- $m := .Values.dataMover -}}
+{{- if $m.enabled }}
+{{- if not $m.database.url }}{{ fail "dataMover.database.url (the mover's progress database) is required" }}{{ end }}
+{{- $gi := (.Values.global | default dict).image | default dict -}}
+{{- $digest := $m.image.digest | default (index ($gi.digests | default dict) "data-mover") | default "" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+data:
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  SPRING_DATASOURCE_URL: {{ $m.database.url | quote }}
+  MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" .Values.otel.endpoint | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME: "data-mover"
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ .Values.region | quote }}
+  # meridian.mover.* (cells: services URL template and document bucket per cell code; throttles; lease)
+  SPRING_APPLICATION_JSON: {{ dict "meridian" (dict "mover" (dict "registryUrl" ($m.registryUrl | default .Values.router.registryUrl) "operatorTenant" ($m.operatorTenant | default .Values.router.operatorTenant) "cells" $m.cells "rowsPerSecond" $m.rowsPerSecond "objectsPerSecond" $m.objectsPerSecond "pageSize" $m.pageSize "skipServices" $m.skipServices)) | toJson | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  selector: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  ports:
+    - {name: management, port: 9090, targetPort: management}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  replicas: {{ $m.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+      annotations:
+        checksum/config: {{ toJson $m | sha256sum }}
+    spec:
+      serviceAccountName: data-mover
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: app
+          {{- if $digest }}
+          image: {{ printf "%s/data-mover@%s" .Values.image.registry $digest }}
+          {{- else if .Values.image.requireDigest }}
+          {{- fail "dataMover.image.digest (or global.image.digests.data-mover) is required (image.requireDigest=true)" }}
+          {{- else }}
+          image: {{ printf "%s/data-mover:%s" .Values.image.registry (.Values.image.tag | default .Chart.AppVersion) }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: management, containerPort: 9090}
+          envFrom:
+            - configMapRef:
+                name: data-mover
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: {secretKeyRef: {name: {{ $m.database.secret }}, key: username}}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $m.database.secret }}, key: password}}
+            - name: MERIDIAN_MOVER_AUTH_TOKEN_URI
+              value: {{ $m.auth.tokenUri | quote }}
+            - name: MERIDIAN_MOVER_AUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $m.auth.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_MOVER_AUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $m.auth.clientSecret }}, key: client-secret}}
+            - name: MERIDIAN_MOVER_S3_CREDENTIALS_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: {{ $m.s3Secret }}, key: access-key, optional: true}}
+            - name: MERIDIAN_MOVER_S3_CREDENTIALS_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: {{ $m.s3Secret }}, key: secret-key, optional: true}}
+          resources:
+            requests: {cpu: {{ $m.resources.cpu | quote }}, memory: {{ $m.resources.memory | quote }}}
+            limits: {memory: {{ $m.resources.memory | quote }}}
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: management}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  policyTypes: [Ingress]
+  ingress:
+    {{- with .Values.networkPolicy.monitoringNamespace }}
+    # no routed API: management (metrics, /actuator/moves) only from monitoring / operators
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+{{- end }}
+{{- end }}

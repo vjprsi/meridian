@@ -14,6 +14,7 @@ include(":libs:meridian-test")
 include(":libs:meridian-web")
 
 include(":platform:cell-router")
+include(":platform:data-mover")
 include(":platform:edge-gateway")
 include(":platform:load-tests")
 

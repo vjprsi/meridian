@@ -47,6 +47,14 @@ global:
     id: ""                  # cell code, e.g. aws-euw1-c01 (empty: single-cell install)
     region: ""              # cloud region, e.g. eu-west-1
     role: primary           # primary | standby (warm DR standby: READ_ONLY in the registry until promoted)
+    promotion:              # MR-GAME-DAY: standby -> primary in place, no rolling restart
+      watchRegistry: true   # each service promotes itself once the registry shows this cell ACTIVE (/online)
+      pollInterval: 5s
+      registryUrl: ""       # control-plane tenant-service as seen from this cell (empty: the in-cell one)
+      replayOnPromote: 60s  # re-publish the last 60s of relayed outbox events on promotion (0s = off)
+      dbWait: 10m           # how long promotion waits for the database to accept writes
+  outbox:
+    retention: 72h          # MR-GAME-DAY: relayed outbox rows kept for replay (/v1/internal/ops/outbox/replay)
   trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress / cell router in front of the gateway
   callbacks:                # SEC-17: provider callback signatures
     acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2

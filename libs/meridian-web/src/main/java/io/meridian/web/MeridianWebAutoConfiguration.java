@@ -245,7 +245,55 @@ public class MeridianWebAutoConfiguration {
     io.meridian.web.lifecycle.DataLifecycleController dataLifecycleController(
             io.meridian.web.lifecycle.DataLifecycleService lifecycle, Environment env) {
         return new io.meridian.web.lifecycle.DataLifecycleController(lifecycle, java.util.Set.of(env.getProperty(
-                "meridian.data-lifecycle.callers", String[].class, new String[] {"archive-service", "customer-service"})));
+                "meridian.data-lifecycle.callers", String[].class, new String[] {"archive-service", "customer-service"})),
+                java.util.Set.of(env.getProperty("meridian.data-lifecycle.move-callers", String[].class,
+                        new String[] {"data-mover"})));
+    }
+
+    /**
+     * MR-GAME-DAY: operator switches (cell role promotion / demotion, outbox replay) and the registry watcher that
+     * promotes a standby service when its cell turns ACTIVE. Needs meridian-events (every service has it).
+     */
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(name = "io.meridian.events.StandbyGate")
+    static class CellOpsConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        io.meridian.common.cell.CellRole meridianCellRole(Environment env) {
+            return new io.meridian.common.cell.CellRole(env.getProperty("meridian.cell.id", ""),
+                    io.meridian.common.cell.CellRole.parse(env.getProperty("meridian.cell.role")));
+        }
+
+        @Bean
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "meridian.ops.enabled",
+                havingValue = "true", matchIfMissing = true)
+        io.meridian.web.ops.CellOpsController cellOpsController(io.meridian.common.cell.CellRole role,
+                org.springframework.beans.factory.ObjectProvider<io.meridian.events.StandbyGate> gate,
+                org.springframework.beans.factory.ObjectProvider<io.meridian.events.OutboxReplay> replay,
+                org.springframework.beans.factory.ObjectProvider<io.meridian.events.OutboxRelay> relay,
+                JsonMapper json, Environment env) {
+            return new io.meridian.web.ops.CellOpsController(role, gate, replay, relay, java.util.Set.of(env.getProperty(
+                    "meridian.ops.callers", String[].class, new String[] {"platform-ops", "tenant-service"})), json);
+        }
+
+        @Bean(destroyMethod = "close")
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+                name = "meridian.cell.promotion.watch-registry", havingValue = "true", matchIfMissing = true)
+        io.meridian.web.ops.CellPromotionWatcher cellPromotionWatcher(io.meridian.common.cell.CellRole role,
+                                                                      ServiceClient client, Environment env) {
+            String operator = env.getProperty("meridian.security.platform-operator-tenant", "");
+            java.util.UUID operatorTenant = null;
+            try {
+                operatorTenant = operator.isBlank() ? null : java.util.UUID.fromString(operator.trim());
+            } catch (IllegalArgumentException e) {
+                operatorTenant = null;
+            }
+            return new io.meridian.web.ops.CellPromotionWatcher(role,
+                    path -> ServiceClient.asService(() -> client.get("tenant-service", path)), operatorTenant,
+                    env.getProperty("meridian.cell.promotion.poll-interval", java.time.Duration.class,
+                            java.time.Duration.ofSeconds(5))).start();
+        }
     }
 
     @Bean

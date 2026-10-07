@@ -724,11 +724,21 @@ data:
   MERIDIAN_CELL_ROLE: {{ $g.cell.role | quote }}
   MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_MERIDIAN_CELL: {{ $g.cell.id | quote }}
   MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ $g.cell.region | quote }}
+  # MR-GAME-DAY: a warm standby (role standby) has a read-only replica database and replicated topics, so its
+  # services start with the outbox relay paused and every Kafka listener held (libs/meridian-events StandbyGate,
+  # driven by MERIDIAN_CELL_ROLE). Promotion happens in place, without a rolling restart: each service promotes itself
+  # when the registry shows this cell ACTIVE (POST /cells/{id}/online), or the operator calls
+  # POST /v1/internal/ops/cell-role/promote (tools/gameday/promote_cell.py); it waits for a writable database,
+  # re-publishes the last replayOnPromote of relayed events (consumers de-duplicate by ce_id), then resumes.
+  MERIDIAN_EVENTS_RETENTION_WINDOW: {{ $g.outbox.retention | quote }}
+  MERIDIAN_CELL_PROMOTION_WATCH_REGISTRY: {{ $g.cell.promotion.watchRegistry | quote }}
+  MERIDIAN_CELL_PROMOTION_POLL_INTERVAL: {{ $g.cell.promotion.pollInterval | quote }}
+  MERIDIAN_CELL_PROMOTION_DB_WAIT: {{ $g.cell.promotion.dbWait | quote }}
   {{- if eq $g.cell.role "standby" }}
-  # warm standby: its database is a read-only replica and its topics are replicated, so it neither relays outboxes
-  # nor consumes events (that would apply them twice); promotion = role primary (helm upgrade, rolling restart)
-  MERIDIAN_EVENTS_RELAY_ENABLED: "false"
-  SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+  MERIDIAN_EVENTS_RETENTION_REPLAY_ON_PROMOTE: {{ $g.cell.promotion.replayOnPromote | quote }}
+  {{- with $g.cell.promotion.registryUrl }}
+  MERIDIAN_SERVICES_TENANT_SERVICE_URL: {{ . | quote }}
+  {{- end }}
   {{- end }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
@@ -1180,6 +1190,151 @@ spec:
 {{- end }}
 '''
 
+DATA_MOVER_TPL = r'''{{- /* MR-GAME-DAY: data mover for live tenant moves (platform/data-mover). Regional like the router: it reads
+the source cell and writes the target cell through the services' internal data-lifecycle move API, so it needs network
+reach to both cells' services (private connectivity) and their document buckets. */ -}}
+{{- $m := .Values.dataMover -}}
+{{- if $m.enabled }}
+{{- if not $m.database.url }}{{ fail "dataMover.database.url (the mover's progress database) is required" }}{{ end }}
+{{- $gi := (.Values.global | default dict).image | default dict -}}
+{{- $digest := $m.image.digest | default (index ($gi.digests | default dict) "data-mover") | default "" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+data:
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  SPRING_DATASOURCE_URL: {{ $m.database.url | quote }}
+  MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" .Values.otel.endpoint | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME: "data-mover"
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ .Values.region | quote }}
+  # meridian.mover.* (cells: services URL template and document bucket per cell code; throttles; lease)
+  SPRING_APPLICATION_JSON: {{ dict "meridian" (dict "mover" (dict "registryUrl" ($m.registryUrl | default .Values.router.registryUrl) "operatorTenant" ($m.operatorTenant | default .Values.router.operatorTenant) "cells" $m.cells "rowsPerSecond" $m.rowsPerSecond "objectsPerSecond" $m.objectsPerSecond "pageSize" $m.pageSize "skipServices" $m.skipServices)) | toJson | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  selector: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  ports:
+    - {name: management, port: 9090, targetPort: management}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  replicas: {{ $m.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+      annotations:
+        checksum/config: {{ toJson $m | sha256sum }}
+    spec:
+      serviceAccountName: data-mover
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: app
+          {{- if $digest }}
+          image: {{ printf "%s/data-mover@%s" .Values.image.registry $digest }}
+          {{- else if .Values.image.requireDigest }}
+          {{- fail "dataMover.image.digest (or global.image.digests.data-mover) is required (image.requireDigest=true)" }}
+          {{- else }}
+          image: {{ printf "%s/data-mover:%s" .Values.image.registry (.Values.image.tag | default .Chart.AppVersion) }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: management, containerPort: 9090}
+          envFrom:
+            - configMapRef:
+                name: data-mover
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: {secretKeyRef: {name: {{ $m.database.secret }}, key: username}}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $m.database.secret }}, key: password}}
+            - name: MERIDIAN_MOVER_AUTH_TOKEN_URI
+              value: {{ $m.auth.tokenUri | quote }}
+            - name: MERIDIAN_MOVER_AUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $m.auth.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_MOVER_AUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $m.auth.clientSecret }}, key: client-secret}}
+            - name: MERIDIAN_MOVER_S3_CREDENTIALS_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: {{ $m.s3Secret }}, key: access-key, optional: true}}
+            - name: MERIDIAN_MOVER_S3_CREDENTIALS_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: {{ $m.s3Secret }}, key: secret-key, optional: true}}
+          resources:
+            requests: {cpu: {{ $m.resources.cpu | quote }}, memory: {{ $m.resources.memory | quote }}}
+            limits: {memory: {{ $m.resources.memory | quote }}}
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: management}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-mover
+  labels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/part-of: meridian, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: data-mover, app.kubernetes.io/instance: {{ .Release.Name }}}
+  policyTypes: [Ingress]
+  ingress:
+    {{- with .Values.networkPolicy.monitoringNamespace }}
+    # no routed API: management (metrics, /actuator/moves) only from monitoring / operators
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+{{- end }}
+{{- end }}
+'''
+
 ROUTER_NOTES = r'''Meridian cell router {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" ({{ .Values.region | default "no region set" }}).
 
 Tenant registry: {{ .Values.router.registryUrl }}
@@ -1255,6 +1410,28 @@ router:
     enabled: true
     topic: meridian.platform.v1
   cellOverrides: {}              # break-glass when the control plane is unreachable, e.g. {aws-euw1-c01: OFFLINE}
+
+# MR-GAME-DAY: data mover for live tenant moves (consumes platform.tenant_move.copy_requested; docs/MULTI_REGION.md)
+dataMover:
+  enabled: false
+  replicas: 2                    # any instance resumes a run whose lease expired
+  image: {digest: ""}            # default: global.image.digests.data-mover
+  resources: {cpu: 500m, memory: 768Mi}
+  database:
+    url: ""                      # its own small progress database, e.g. jdbc:postgresql://<aurora>:5432/mover_db
+    secret: "meridian-data-mover-db"     # username / password
+  auth:
+    tokenUri: ""                 # OIDC token endpoint
+    clientSecret: "meridian-data-mover-client"   # client-id / client-secret of svc-data-mover (meridian:internal, platform:operator)
+  s3Secret: "meridian-data-mover-s3"    # optional access-key / secret-key used for the cells' document buckets
+  registryUrl: ""                # default: router.registryUrl (confirm-copy)
+  operatorTenant: ""             # default: router.operatorTenant
+  rowsPerSecond: 5000            # throttle per instance (copy and verification reads)
+  objectsPerSecond: 50
+  pageSize: 1000
+  skipServices: [tenant-service]
+  cells: {}                      # per cell code, e.g. aws-euw1-c01: {servicesUrlTemplate: "http://{name}.meridian.svc.cluster.local",
+                                 #   s3: {endpoint: "https://s3.eu-west-1.amazonaws.com", bucket: "...", region: eu-west-1}}
 """
 
 
@@ -1272,6 +1449,7 @@ kubeVersion: ">=1.30.0-0"
         "values.yaml": ROUTER_VALUES,
         "templates/_helpers.tpl": ROUTER_HELPERS,
         "templates/router.yaml": ROUTER_TPL,
+        "templates/data-mover.yaml": DATA_MOVER_TPL,
         "templates/NOTES.txt": ROUTER_NOTES,
         ".helmignore": ".git/\n*.md.bak\n",
     }
@@ -1375,6 +1553,14 @@ def values_yaml(rows, app_version):
         '    id: ""                  # cell code, e.g. aws-euw1-c01 (empty: single-cell install)',
         '    region: ""              # cloud region, e.g. eu-west-1',
         "    role: primary           # primary | standby (warm DR standby: READ_ONLY in the registry until promoted)",
+        "    promotion:              # MR-GAME-DAY: standby -> primary in place, no rolling restart",
+        "      watchRegistry: true   # each service promotes itself once the registry shows this cell ACTIVE (/online)",
+        "      pollInterval: 5s",
+        '      registryUrl: ""       # control-plane tenant-service as seen from this cell (empty: the in-cell one)',
+        "      replayOnPromote: 60s  # re-publish the last 60s of relayed outbox events on promotion (0s = off)",
+        "      dbWait: 10m           # how long promotion waits for the database to accept writes",
+        "  outbox:",
+        "    retention: 72h          # MR-GAME-DAY: relayed outbox rows kept for replay (/v1/internal/ops/outbox/replay)",
         "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress / cell router in front of the gateway",
         "  callbacks:                # SEC-17: provider callback signatures",
         "    acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2",

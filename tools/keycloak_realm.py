@@ -547,6 +547,20 @@ def main():
     staff_flows, staff_flow_configs = staff_browser_flows()
     svc_clients, svc_users = service_clients(set(scope_names + [CHANNELS_ADMIN_SCOPE, operator, ROUTING_SCOPE]),
                                              tenant_mapper)
+    # MR-GAME-DAY platform identities (not in the services manifest): the data mover (data-lifecycle move API of
+    # every service, /confirm-copy in tenant-service) and the operator tooling of tools/gameday (cell-role promotion,
+    # outbox replay: /v1/internal/ops/*). Internal tokens of the platform-operator tenant; azp svc-<name> proves them.
+    for name in ("data-mover", "platform-ops"):
+        cid = f"svc-{name}"
+        svc_clients.append({
+            "clientId": cid, "name": f"{name} (platform identity)",
+            "description": "MR-GAME-DAY platform identity: client credentials, azp proves the calling component",
+            "publicClient": False, "secret": f"{cid}-secret", "serviceAccountsEnabled": True,
+            "standardFlowEnabled": False, "directAccessGrantsEnabled": False, "implicitFlowEnabled": False,
+            "fullScopeAllowed": False, "protocolMappers": [router_tenant_mapper, audience_mapper()],
+            "defaultClientScopes": ["meridian:internal", operator], "optionalClientScopes": []})
+        svc_users.append({"username": f"service-account-{cid}", "enabled": True, "serviceAccountClientId": cid,
+                          "realmRoles": ["platform-operator"]})
     realm = {
         "realm": "meridian",
         "enabled": True,

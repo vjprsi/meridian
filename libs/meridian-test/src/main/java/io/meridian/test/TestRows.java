@@ -34,6 +34,19 @@ public final class TestRows implements AutoCloseable {
         this.tenant = tenant;
     }
 
+    /**
+     * Rows in any database (e.g. one of two cells in a tenant-move test): {@code jdbcUrl} must select the schema and
+     * connect as a role that bypasses row-level security (the owner).
+     */
+    public TestRows(String jdbcUrl, String user, String password, UUID tenant) {
+        try {
+            this.c = DriverManager.getConnection(jdbcUrl, user, password);
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+        this.tenant = tenant;
+    }
+
     /** Inserts a row into {@code table} and returns its id. */
     public UUID insert(String table, Map<String, Object> overrides) {
         return insert(table, overrides, 0);

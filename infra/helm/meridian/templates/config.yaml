@@ -62,11 +62,21 @@ data:
   MERIDIAN_CELL_ROLE: {{ $g.cell.role | quote }}
   MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_MERIDIAN_CELL: {{ $g.cell.id | quote }}
   MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ $g.cell.region | quote }}
+  # MR-GAME-DAY: a warm standby (role standby) has a read-only replica database and replicated topics, so its
+  # services start with the outbox relay paused and every Kafka listener held (libs/meridian-events StandbyGate,
+  # driven by MERIDIAN_CELL_ROLE). Promotion happens in place, without a rolling restart: each service promotes itself
+  # when the registry shows this cell ACTIVE (POST /cells/{id}/online), or the operator calls
+  # POST /v1/internal/ops/cell-role/promote (tools/gameday/promote_cell.py); it waits for a writable database,
+  # re-publishes the last replayOnPromote of relayed events (consumers de-duplicate by ce_id), then resumes.
+  MERIDIAN_EVENTS_RETENTION_WINDOW: {{ $g.outbox.retention | quote }}
+  MERIDIAN_CELL_PROMOTION_WATCH_REGISTRY: {{ $g.cell.promotion.watchRegistry | quote }}
+  MERIDIAN_CELL_PROMOTION_POLL_INTERVAL: {{ $g.cell.promotion.pollInterval | quote }}
+  MERIDIAN_CELL_PROMOTION_DB_WAIT: {{ $g.cell.promotion.dbWait | quote }}
   {{- if eq $g.cell.role "standby" }}
-  # warm standby: its database is a read-only replica and its topics are replicated, so it neither relays outboxes
-  # nor consumes events (that would apply them twice); promotion = role primary (helm upgrade, rolling restart)
-  MERIDIAN_EVENTS_RELAY_ENABLED: "false"
-  SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+  MERIDIAN_EVENTS_RETENTION_REPLAY_ON_PROMOTE: {{ $g.cell.promotion.replayOnPromote | quote }}
+  {{- with $g.cell.promotion.registryUrl }}
+  MERIDIAN_SERVICES_TENANT_SERVICE_URL: {{ . | quote }}
+  {{- end }}
   {{- end }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}

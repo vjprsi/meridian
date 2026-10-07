@@ -175,7 +175,7 @@ def journey_rules():
 
 def saturation_rules():
     return {"groups": [{"name": "meridian-saturation", "rules": [
-        alert("MeridianTargetDown", 'up{job=~".+-service|edge-gateway|cell-router"} == 0', "page",
+        alert("MeridianTargetDown", 'up{job=~".+-service|edge-gateway|cell-router|data-mover"} == 0', "page",
               "{{ $labels.job }} {{ $labels.instance }} cannot be scraped", "#3-deployment-rollback"),
         alert("MeridianHttp5xxHigh",
               f'sum by (job, cell) (rate({HTTP}_count{{status=~"5.."}}[5m]))\n'
@@ -206,6 +206,14 @@ def saturation_rules():
         alert("MeridianOutboxRelayFailing", "sum by (job) (increase(meridian_outbox_relay_failures_total[5m])) > 0",
               "ticket", "{{ $labels.job }} cannot publish outbox events to Kafka",
               "#7-kafka-consumer-lag-audit-catch-up", for_="10m"),
+        # MR-GAME-DAY: tenant moves and standby promotion
+        alert("MeridianDataMoverRunFailed",
+              'sum(increase(meridian_mover_runs_total{outcome="failed"}[15m])) > 0', "ticket",
+              "A tenant move copy FAILED in the data mover (schema drift, target not empty or verification mismatch)",
+              "#9-tenant-move-and-cell-failover", for_="0m"),
+        alert("MeridianOutboxRelayPausedLong", "max by (job, cell) (meridian_outbox_relay_paused) == 1", "ticket",
+              "{{ $labels.job }} relay paused for 30 min (expected only in a warm standby cell; after a promotion "
+              "it means the promotion is stuck)", "#9-tenant-move-and-cell-failover", for_="30m"),
         alert("MeridianJvmHeapHigh",
               'sum by (job, instance) (jvm_memory_used_bytes{area="heap"})\n'
               '/\nsum by (job, instance) (jvm_memory_max_bytes{area="heap"} > 0) > 0.9',
@@ -304,7 +312,7 @@ def overview():
                           f'sum(rate({HTTP}_count{{{sel}}}[$__rate_interval]))', "")], "percentunit",
            thresholds=[(None, "green"), (0.001, "orange"), (0.01, "red")])
     d.stat("p99 latency (all)", [(q(0.99, HTTP, sel), "")], "s")
-    d.stat("Targets down", [('count(up{job=~".+-service|edge-gateway|cell-router"} == 0) or vector(0)', "")],
+    d.stat("Targets down", [('count(up{job=~".+-service|edge-gateway|cell-router|data-mover"} == 0) or vector(0)', "")],
            thresholds=[(None, "green"), (1, "red")])
     d.ts("Requests / s by service", [(f"sum by (job) (rate({HTTP}_count{{{sel}}}[$__rate_interval]))", "{{job}}")],
          "reqps")
@@ -506,8 +514,44 @@ def db_pool():
     return d
 
 
+def gameday():
+    """MR-GAME-DAY: the RTO timeline of a regional failover on one screen (detection, reads moved, writes back),
+    standby promotion state and tenant-move copies. Annotate T0 by hand; the RPO number comes from
+    tools/gameday/rpo_probe.py check."""
+    d = Dashboard("meridian-gameday", "Meridian / Game day (failover timeline)",
+                  "Region failover and tenant moves: router view of the cells, failover traffic, front-door errors, "
+                  "standby relay state, outbox backlog, data mover progress (docs/MULTI_REGION.md section 5)",
+                  variables=())
+    d.row("Detection and routing (router)")
+    d.ts("Cell healthy (router health checks)", [("max by (cell) (meridian_router_cell_healthy)", "{{cell}}")],
+         description="0 after 3 failed probes (~15 s): detection")
+    d.ts("Cell serving (registry status / overrides)", [("max by (cell) (meridian_router_cell_serving)", "{{cell}}")])
+    d.ts("Failover requests / s", [("sum by (from_cell, to_cell) (rate(meridian_router_failover_requests_total"
+                                    "[$__rate_interval]))", "{{from_cell}} -> {{to_cell}}")], "reqps",
+         description="reads moved: the standby serves the home cell's tenants")
+    d.ts("Front door by outcome / s", [("sum by (outcome) (rate(meridian_router_requests_total"
+                                        "[$__rate_interval]))", "{{outcome}}")], "reqps",
+         description="writes back when cell_read_only / cell_unavailable answers stop")
+    d.row("Standby promotion and events")
+    d.ts("Outbox relay paused (1 = standby hold)", [("max by (cell, job) (meridian_outbox_relay_paused)",
+                                                     "{{cell}} {{job}}")], w=24,
+         description="drops to 0 per service when its promotion completes (no restart)")
+    d.ts("Outbox backlog", [("sum by (cell) (meridian_outbox_backlog)", "{{cell}}")])
+    d.ts("Replayed events / s", [("sum by (cell, job) (rate(meridian_outbox_replayed_total[$__rate_interval]))",
+                                  "{{cell}} {{job}}")], "ops",
+         description="replay-on-promote of the last window, or an operator replay")
+    d.row("Tenant moves (data mover)")
+    d.ts("Rows copied / s", [("sum by (service) (rate(meridian_mover_rows_copied_total[$__rate_interval]))",
+                              "{{service}}")], "ops")
+    d.stat("Copies failed (24 h)", [('sum(increase(meridian_mover_runs_total{outcome="failed"}[24h])) or vector(0)', "")],
+           thresholds=[(None, "green"), (1, "red")])
+    d.stat("Copies completed (24 h)", [('sum(increase(meridian_mover_runs_total{outcome="completed"}[24h])) '
+                                        'or vector(0)', "")])
+    return d
+
+
 def dashboards():
-    return [overview(), slo_dashboard(), payments(), ledger(), cards(), eod(), kafka(), db_pool()]
+    return [overview(), slo_dashboard(), payments(), ledger(), cards(), eod(), kafka(), db_pool(), gameday()]
 
 
 # ---------------------------------------------------------------------------------------------------- output

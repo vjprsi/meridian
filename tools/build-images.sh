@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 TAG="${1:-$(git rev-parse --short HEAD)}"
 REGISTRY="${2:-ghcr.io/meridian}"
 ./gradlew bootJar --console=plain -q
-for jar in services/*/build/libs/*.jar platform/edge-gateway/build/libs/*.jar platform/cell-router/build/libs/*.jar; do
+for jar in services/*/build/libs/*.jar platform/edge-gateway/build/libs/*.jar platform/cell-router/build/libs/*.jar platform/data-mover/build/libs/*.jar; do
   case "$jar" in *-plain.jar) continue;; esac
   name="$(basename "$(dirname "$(dirname "$(dirname "$jar")")")")"
   docker build -q -f infra/docker/Dockerfile --build-arg JAR="$jar" -t "$REGISTRY/$name:$TAG" . >/dev/null

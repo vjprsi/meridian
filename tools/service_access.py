@@ -38,6 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CLIENT_PREFIX = "svc-"
 INTERNAL_SCOPE = "meridian:internal"
+ROUTING_SCOPE = "platform:routing-read"
 CHANNEL_SCOPES = {"channels:customer", "channels:agent", "channels:business", "channels:merchant"}
 # Services every service calls through libs/: central approvals, tenant settings, business date.
 LIBRARY_CALLS = ["workflow-service", "config-service", "business-day-service"]
@@ -130,6 +131,9 @@ def http_scopes(service: str, realm_scopes: set[str] | None = None) -> list[str]
                 if not (s.endswith(":read") or s.endswith(":write")):
                     scopes.add(s)
     scopes.update(EXTRA_SCOPES.get(service, []))
+    # MR-GAME-DAY: every service reads its own cell's status from the registry (libs/meridian-web
+    # CellPromotionWatcher: a standby service promotes itself when its cell turns ACTIVE)
+    scopes.add(ROUTING_SCOPE)
     scopes -= CHANNEL_SCOPES
     scopes.discard("meridian:admin")
     if realm_scopes is not None:

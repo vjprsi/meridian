@@ -1,0 +1,59 @@
+# Data mover (MR-GAME-DAY): live tenant moves between cells. Internal only: no routed API; progress and retry on the
+# management port (/actuator/moves).
+server:
+  port: 18110
+  shutdown: graceful
+
+spring:
+  application:
+    name: data-mover
+  threads:
+    virtual:
+      enabled: true
+  datasource:                                      # the mover's own progress database (not a service database)
+    url: jdbc:postgresql://localhost:15432/mover_db
+    username: meridian
+    password: meridian
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: localhost:19092
+    consumer:
+      auto-offset-reset: earliest                  # a copy request published while the mover was down is not lost
+
+meridian:
+  mover:
+    registry-url: http://localhost:9124            # tenant-service (control plane): /confirm-copy
+    operator-tenant: ""                            # SEC-15: platform-operator tenant id
+    auth:                                          # svc-data-mover (client credentials); empty token-uri = dev mode
+      token-uri: ""
+      client-id: svc-data-mover
+      client-secret: ""
+      scope: ""
+    page-size: 1000
+    rows-per-second: 5000                          # copy + verify throttle per instance (0 = unlimited)
+    objects-per-second: 50
+    lease: PT2M
+    resume-interval: PT30S
+    confirm: true
+    skip-services: [tenant-service]                # control-plane registry, not cell data
+    cells: {}
+      # aws-euw1-c01:
+      #   services-url-template: http://{name}.meridian.svc.cluster.local:{port}
+      #   s3: {endpoint: https://s3.eu-west-1.amazonaws.com, bucket: meridian-euw1c01-documents, region: eu-west-1,
+      #        access-key: ..., secret-key: ...}
+    events:
+      enabled: true
+      topic: meridian.platform.v1
+
+management:
+  server:
+    port: 18111
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,moves
+  endpoint:
+    health:
+      probes:
+        enabled: true

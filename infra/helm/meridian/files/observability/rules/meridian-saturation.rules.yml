@@ -4,7 +4,7 @@ groups:
   - name: "meridian-saturation"
     rules:
       - alert: "MeridianTargetDown"
-        expr: "up{job=~\".+-service|edge-gateway|cell-router\"} == 0"
+        expr: "up{job=~\".+-service|edge-gateway|cell-router|data-mover\"} == 0"
         for: "5m"
         labels:
           severity: "page"
@@ -85,6 +85,22 @@ groups:
         annotations:
           summary: "{{ $labels.job }} cannot publish outbox events to Kafka"
           runbook: "docs/operations/RUNBOOKS.md#7-kafka-consumer-lag-audit-catch-up"
+      - alert: "MeridianDataMoverRunFailed"
+        expr: "sum(increase(meridian_mover_runs_total{outcome=\"failed\"}[15m])) > 0"
+        for: "0m"
+        labels:
+          severity: "ticket"
+        annotations:
+          summary: "A tenant move copy FAILED in the data mover (schema drift, target not empty or verification mismatch)"
+          runbook: "docs/operations/RUNBOOKS.md#9-tenant-move-and-cell-failover"
+      - alert: "MeridianOutboxRelayPausedLong"
+        expr: "max by (job, cell) (meridian_outbox_relay_paused) == 1"
+        for: "30m"
+        labels:
+          severity: "ticket"
+        annotations:
+          summary: "{{ $labels.job }} relay paused for 30 min (expected only in a warm standby cell; after a promotion it means the promotion is stuck)"
+          runbook: "docs/operations/RUNBOOKS.md#9-tenant-move-and-cell-failover"
       - alert: "MeridianJvmHeapHigh"
         expr: |-
           sum by (job, instance) (jvm_memory_used_bytes{area="heap"})
