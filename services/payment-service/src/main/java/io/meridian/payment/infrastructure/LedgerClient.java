@@ -58,9 +58,44 @@ public class LedgerClient {
         return client.post(LEDGER, "/v1/holds", body, key(key));
     }
 
+    /**
+     * Payment references of a posting ({@code external_refs}): the payment's ISO 20022 ids, the clearing-system and rail
+     * references, the bulk payment it belongs to, the purpose and the counterparty (the creditor of an outbound or book
+     * transfer, the debtor of an inbound payment). ledger-service stores them on the journal entry and every ledger
+     * entry (the counterparty account only as a keyed pseudonym + last 4), so reconciliation of the settlement / nostro
+     * account matches statement lines on UETR, end-to-end id and bank reference (RECON-REAL-REFS).
+     */
+    public ObjectNode refs(JsonNode payment, boolean counterpartyIsCreditor) {
+        ObjectNode r = json.createObjectNode();
+        putRef(r, "uetr", payment, "uetr", 36);
+        putRef(r, "end_to_end_id", payment, "end_to_end_id", 35);
+        putRef(r, "instruction_id", payment, "instruction_id", 35);
+        putRef(r, "bank_reference", payment, "clearing_system_ref", 64);
+        putRef(r, "scheme_reference", payment, "transaction_id", 64);
+        putRef(r, "batch_id", payment, "bulk_payment_id", 64);
+        String party = counterpartyIsCreditor ? "creditor" : "debtor";
+        putRef(r, "counterparty_name", payment, party + "_name", 140);
+        putRef(r, "counterparty_account", payment, party + "_account_number", 64);
+        putRef(r, "purpose_code", payment, payment.hasNonNull("purpose_code") ? "purpose_code" : "category_purpose", 35);
+        return r;
+    }
+
+    /** Sets {@code key} from {@code source.field} (trimmed to the ledger column length) when present. */
+    public static void putRef(ObjectNode refs, String key, JsonNode source, String field, int max) {
+        if (source != null && source.hasNonNull(field) && !source.get(field).asString().isBlank()) {
+            refs.put(key, trim(source.get(field).asString().strip(), max));
+        }
+    }
+
     /** Captures part or all of a hold: debit the held account, credit {@code counterAccount}. */
     public JsonNode capture(UUID holdId, BigDecimal amount, UUID counterAccount, String description,
                             boolean releaseRemainder, String key) {
+        return capture(holdId, amount, counterAccount, description, releaseRemainder, key, null, null);
+    }
+
+    /** Capture whose journal entry carries the payment reference and {@link #refs payment references}. */
+    public JsonNode capture(UUID holdId, BigDecimal amount, UUID counterAccount, String description,
+                            boolean releaseRemainder, String key, String reference, JsonNode externalRefs) {
         if (counterAccount == null) {
             throw new ApiException(422, "ledger_account_not_configured",
                     "A ledger account required for settlement is not configured");
@@ -70,6 +105,12 @@ public class LedgerClient {
         body.put("counter_account_id", counterAccount.toString());
         body.put("description", trim(description, 500));
         body.put("release_remainder", releaseRemainder);
+        if (reference != null) {
+            body.put("reference", trim(reference, 128));
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
+        }
         return client.post(LEDGER, "/v1/holds/" + holdId + "/capture", body, key(key));
     }
 
@@ -101,6 +142,12 @@ public class LedgerClient {
     /** Posts a balanced journal entry and returns its id. */
     public UUID post(String key, String entryType, String description, String currency, String sourceType,
                      UUID sourceId, List<Leg> legs) {
+        return post(key, entryType, description, currency, sourceType, sourceId, null, null, legs);
+    }
+
+    /** Posts a balanced journal entry carrying the payment reference and {@link #refs payment references}. */
+    public UUID post(String key, String entryType, String description, String currency, String sourceType,
+                     UUID sourceId, String reference, JsonNode externalRefs, List<Leg> legs) {
         if (props.ledgerId() == null) {
             throw new ApiException(422, "ledger_not_configured", "meridian.payment.ledger-id is not configured");
         }
@@ -110,6 +157,12 @@ public class LedgerClient {
         body.put("description", trim(description, 500));
         body.put("source_type", sourceType);
         body.put("source_id", sourceId.toString());
+        if (reference != null) {
+            body.put("reference", trim(reference, 128));
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
+        }
         ArrayNode entries = body.putArray("entries");
         for (Leg leg : legs) {
             if (leg.account() == null) {

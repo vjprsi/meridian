@@ -235,11 +235,13 @@ public class MandateService {
                         str(c, "currency"), "Direct debit " + str(m, "mandate_reference"), paymentId);
                 holdId = UUID.fromString(hold.path("id").asString());
                 ledger.capture(holdId, amount, clearing, "Direct debit " + str(m, "mandate_reference") + " to "
-                        + str(m, "creditor_name"), true, "pay-capture:" + paymentId);
+                        + str(m, "creditor_name"), true, "pay-capture:" + paymentId, str(payment, "end_to_end_id"),
+                        ledger.refs(payment, true));
                 je = ledger.captureJournalEntry(holdId);
             } else {
                 je = ledger.post("pay-credit:" + paymentId, "TRANSFER", "Direct debit collected " + str(m, "mandate_reference"),
-                        str(c, "currency"), "PAYMENT", paymentId, List.of(
+                        str(c, "currency"), "PAYMENT", paymentId, str(payment, "end_to_end_id"),
+                        ledger.refs(payment, false), List.of(
                                 LedgerClient.Leg.debit(clearing, amount, "Collection from " + str(m, "debtor_name")),
                                 LedgerClient.Leg.credit(uuid(account, "ledger_account_id"), amount, "Direct debit " + str(m, "mandate_reference"))));
             }

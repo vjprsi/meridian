@@ -1212,11 +1212,14 @@ public class PaymentProcessor {
         UUID holdId = uuid(p, "hold_id");
         BigDecimal fee = decOr0(p, "fee_amount");
         boolean shared = sharedBulkHold(p) != null && sharedBulkHold(p).equals(holdId);
+        // RECON-REAL-REFS: the settlement posting carries the payment's references (creditor = counterparty)
+        JsonNode refs = ledger.refs(p, true);
         ledger.capture(holdId, dec(p, "amount"), counterAccount, description, !shared && fee.signum() == 0,
-                "pay-capture:" + id);
+                "pay-capture:" + id, str(p, "end_to_end_id"), refs);
         UUID principal = ledger.captureJournalEntry(holdId);
         if (fee.signum() > 0 && !shared) {
-            ledger.capture(holdId, fee, props.gl().feeIncome(), "Fee " + str(p, "end_to_end_id"), true, "pay-fee:" + id);
+            ledger.capture(holdId, fee, props.gl().feeIncome(), "Fee " + str(p, "end_to_end_id"), true, "pay-fee:" + id,
+                    str(p, "end_to_end_id"), refs);
         }
         return principal;
     }
@@ -1254,6 +1257,9 @@ public class PaymentProcessor {
                 UUID settlementAccount = routing.rail(uuid(p, "rail_id"))
                         .map(r -> uuid(r, "settlement_account_id")).orElse(null);
                 UUID counter = settlementAccount != null ? settlementAccount : props.gl().clearing();
+                if (clearingRef != null) {
+                    p.put("clearing_system_ref", clearingRef); // the settlement posting's bank reference
+                }
                 UUID je = captureFunds(p, counter, "Settlement " + str(p, "end_to_end_id") + " via " + str(p, "rail_code"));
                 return inTx(() -> {
                     ObjectNode locked = records.lock(id);
@@ -1436,7 +1442,7 @@ public class PaymentProcessor {
         UUID je;
         try {
             je = ledger.post("pay-credit:" + id, "TRANSFER", "Incoming payment " + str(p, "end_to_end_id"),
-                    str(p, "currency"), "PAYMENT", id, List.of(
+                    str(p, "currency"), "PAYMENT", id, str(p, "end_to_end_id"), ledger.refs(p, false), List.of(
                             LedgerClient.Leg.debit(settlement, dec(p, "amount"), "Inbound " + str(p, "rail_code")),
                             LedgerClient.Leg.credit(uuid(account, "ledger_account_id"), dec(p, "amount"),
                                     "From " + str(p, "debtor_name"))));
