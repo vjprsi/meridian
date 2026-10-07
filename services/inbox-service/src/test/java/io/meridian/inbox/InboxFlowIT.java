@@ -406,9 +406,17 @@ class InboxFlowIT {
     @Test
     @Order(11)
     void scheduledAnnouncementGoesLiveOnRefresh() throws Exception {
-        Thread.sleep(3500);
-        JsonNode r = post("/v1/inbox/announcements/refresh-status", null, 200);
-        assertThat(r.get("went_live").asInt()).isEqualTo(1);
+        // poll instead of a fixed sleep: the announcement starts a few seconds after it was scheduled, and the
+        // database clock decides (a fixed sleep was flaky under load)
+        int wentLive = 0;
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+        while (wentLive == 0 && System.nanoTime() < deadline) {
+            wentLive += post("/v1/inbox/announcements/refresh-status", null, 200).get("went_live").asInt();
+            if (wentLive == 0) {
+                Thread.sleep(250);
+            }
+        }
+        assertThat(wentLive).isEqualTo(1);
         assertThat(get("/v1/inbox/announcements/" + later).get("status").asString()).isEqualTo("LIVE");
         assertThat(outbox("engagement.announcement.live", later)).isEqualTo(1);
         assertThat(post("/v1/inbox/announcements/refresh-status", null, 200).get("went_live").asInt()).isZero();
