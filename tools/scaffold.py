@@ -83,7 +83,7 @@ public class {app} {{
 ''')
 
         created += write_if_absent(base / "src" / "main" / "resources" / "application.yml", f'''# {name} ({s["domain_title"]}). Defaults target the local stack in infra/local; override with env vars in
-# other environments (e.g. SPRING_DATASOURCE_URL, MERIDIAN_SECURITY_MODE=jwt).
+# other environments (e.g. SPRING_DATASOURCE_URL). Security mode is jwt unless MERIDIAN_SECURITY_MODE=dev.
 server:
   port: {s["port"]}
   shutdown: graceful
@@ -118,7 +118,8 @@ spring:
           issuer-uri: http://localhost:15180/realms/meridian
 
 meridian:
-  security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
+  security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
+                              # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
   events:
     topic: meridian.{s["domain"]}.v1
 

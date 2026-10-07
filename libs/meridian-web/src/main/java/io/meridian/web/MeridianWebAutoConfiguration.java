@@ -57,6 +57,12 @@ public class MeridianWebAutoConfiguration {
         return new io.meridian.web.security.RequiredSecrets();
     }
 
+    /** Dev security mode only when chosen explicitly, never inside Kubernetes by accident (SEC-13). */
+    @Bean
+    static io.meridian.web.security.SecurityModeGuard meridianSecurityModeGuard() {
+        return new io.meridian.web.security.SecurityModeGuard();
+    }
+
     /** Outbound policy for tenant-supplied URLs (SEC-08/09): https, public addresses only, pinned resolution. */
     @Bean
     @ConditionalOnMissingBean

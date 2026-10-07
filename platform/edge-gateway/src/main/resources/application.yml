@@ -2,6 +2,9 @@
 server:
   port: 18000
   shutdown: graceful
+  tomcat:
+    max-swallow-size: 2MB          # SEC-26: do not drain huge rejected bodies
+    max-http-form-post-size: 2MB
 
 spring:
   application:
@@ -11,8 +14,21 @@ spring:
       enabled: true
 
 meridian:
+  # SEC-13: jwt (default) drops internal identity headers (X-Tenant-Id, X-User, X-Roles, X-MFA-Verified,
+  # X-Customer-Id, X-On-Behalf-Of-Customer, X-Meridian-Service, ...) from every request. dev (set by tools/dev.py via
+  # MERIDIAN_SECURITY_MODE=dev) forwards them, which is how the local stack and tools/e2e authenticate.
+  security-mode: jwt
   gateway:
     timeout: 30s
+    # SEC-16: load balancers / ingress controllers in front of the gateway (IPs or CIDRs). Only their
+    # X-Forwarded-For / -Proto / -Host are believed; the reported client is the right-most untrusted hop.
+    trusted-proxies: []
+    # SEC-26: request body caps (Content-Length checked up front, chunked bodies counted while streaming).
+    max-body-size: 16MB
+    service-max-body-size:
+      file-gateway-service: 64MB
+      document-service: 64MB
+      archive-service: 64MB
     # services:
     #   ledger-service: http://ledger-service.meridian.svc:8080   # override per environment
 
@@ -20,4 +36,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info          # SEC-31: no metrics through the ingress (scrape the services directly)
+  endpoint:
+    health:
+      probes:
+        enabled: true
