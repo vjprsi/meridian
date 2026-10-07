@@ -1,0 +1,6064 @@
+openapi: 3.1.0
+info:
+  title: Meridian Core — merchant-channel-service
+  version: 1.0.0
+  description: 'Experience APIs for the bank''s own apps. Customer apps (web banking, mobile) use /v1/me: every operation
+    acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer),
+    never from a path, query or body. The service calls the domain services with its own service identity and the customer''s
+    tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification
+    and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and
+    requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the
+    same way (agent_id claim, scope channels:agent; see agent-channel-service), the business banking portal uses /v1/business
+    (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service), and the merchant
+    app uses /v1/merchant (merchant_id and merchant_user_id claims, scope channels:merchant; see merchant-channel-service).
+    Domain services keep their operator APIs; customer, agent, business and merchant tokens carry no domain scope and are
+    rejected there.
+
+    '
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+- url: https://api.meridian.example
+  description: Production
+- url: https://sandbox.api.meridian.example
+  description: Sandbox
+security:
+- oauth2: []
+tags:
+- name: Merchant App Me
+  description: The signed-in merchant user
+- name: Merchant App Stores
+  description: Stores of the merchant the user may work in
+- name: Merchant App Terminals
+  description: Terminals (tills) of the stores the user may work in
+- name: Merchant App Sales
+  description: Sales collected with a dynamic EMVCo QR code per sale
+- name: Merchant App Transactions
+  description: Payments received and other wallet transactions of the merchant
+- name: Merchant App Payment Links
+  description: Payment links of the merchant
+- name: Merchant App Refunds
+  description: Refund requests with four-eyes approval
+- name: Merchant App Settlements
+  description: Settlements of the merchant's collections (OWNER, MANAGER or VIEWER)
+- name: Merchant App Fees
+  description: Fee (MDR) statement of the merchant (OWNER, MANAGER or VIEWER)
+- name: Merchant App Payout Account
+  description: The merchant's payout (settlement) bank account (OWNER or MANAGER)
+- name: Merchant App Payout Changes
+  description: Payout account changes, requested by an OWNER and approved by another OWNER or MANAGER (both with step-up)
+- name: Merchant App Staff
+  description: Users of the merchant, their roles and store scopes (changes by OWNER users only)
+- name: Merchant App Api Clients
+  description: API clients and keys of the merchant (OWNER users only)
+- name: Merchant App Webhooks
+  description: Webhook endpoints of the merchant; subscriptions only ever deliver the merchant's own events
+- name: Merchant App Activity
+  description: The merchant's app activity (security log)
+paths:
+  /v1/merchant/me:
+    get:
+      operationId: merchantAppMeGet
+      summary: 'The signed-in user, the merchant (code, trading name, currency, status) and the stores the user may work in:
+        {user, merchant, stores[]}'
+      tags:
+      - Merchant App Me
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/stores:
+    get:
+      operationId: merchantAppStoresList
+      summary: 'Stores the user may work in (OWNER and all-stores users: every store of the merchant)'
+      tags:
+      - Merchant App Stores
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantStorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/stores/{store_id}:
+    get:
+      operationId: merchantAppStoresGet
+      summary: One store
+      tags:
+      - Merchant App Stores
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: store_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantStore'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/terminals:
+    get:
+      operationId: merchantAppTerminalsList
+      summary: Terminals of the stores the user may work in
+      tags:
+      - Merchant App Terminals
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: store_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantTerminalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/terminals/{terminal_id}:
+    get:
+      operationId: merchantAppTerminalsGet
+      summary: One terminal
+      tags:
+      - Merchant App Terminals
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: terminal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantTerminal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/terminals/{terminal_id}/deactivate:
+    post:
+      operationId: merchantAppTerminalsDeactivate
+      summary: Deactivate a lost or retired terminal (OWNER or MANAGER of its store; step-up)
+      tags:
+      - Merchant App Terminals
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: terminal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantTerminal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppTerminalsDeactivateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/sales:
+    get:
+      operationId: merchantAppSalesList
+      summary: Sales of the stores the user may work in, newest first
+      tags:
+      - Merchant App Sales
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: store_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - EXPIRED
+          - CANCELLED
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSalePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_sale
+    post:
+      operationId: merchantAppSalesCreate
+      summary: 'Start a sale in a store the user works in (OWNER, MANAGER or CASHIER): merchant-service issues a dynamic EMVCo
+        QR for exactly the amount, in the merchant''s currency'
+      tags:
+      - Merchant App Sales
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSale'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppSalesCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_sale
+  /v1/merchant/sales/{sale_id}:
+    get:
+      operationId: merchantAppSalesGet
+      summary: One sale; while PENDING its status is refreshed from merchant-service (poll it to see the payment arrive)
+      tags:
+      - Merchant App Sales
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: sale_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSale'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_sale
+  /v1/merchant/sales/{sale_id}/cancel:
+    post:
+      operationId: merchantAppSalesCancel
+      summary: Cancel a pending sale (its QR is deactivated; a sale paid meanwhile is returned PAID)
+      tags:
+      - Merchant App Sales
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: sale_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSale'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_sale
+  /v1/merchant/transactions:
+    get:
+      operationId: merchantAppTransactionsList
+      summary: 'Wallet transactions of the merchant in the stores the user may work in (transactions not attributable to a
+        store: OWNER and all-stores users only), newest first'
+      tags:
+      - Merchant App Transactions
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: store_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: txn_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - PENDING_CONFIRMATION
+          - PENDING_APPROVAL
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          - EXPIRED
+          - CANCELLED
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransactionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/transactions/{transaction_id}:
+    get:
+      operationId: merchantAppTransactionsGet
+      summary: One transaction
+      tags:
+      - Merchant App Transactions
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/transactions/{transaction_id}/refundable:
+    get:
+      operationId: merchantAppTransactionsRefundable
+      summary: 'What can still be refunded on one payment: {transaction_id, currency, amount, refunded, pending, refundable}'
+      tags:
+      - Merchant App Transactions
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/payment-links:
+    get:
+      operationId: merchantAppPaymentLinksList
+      summary: Payment links of the merchant (OWNER, MANAGER or VIEWER)
+      tags:
+      - Merchant App Payment Links
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: is_active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPaymentLinkPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+    post:
+      operationId: merchantAppPaymentLinksCreate
+      summary: Create a payment link in the merchant's currency (OWNER or MANAGER)
+      tags:
+      - Merchant App Payment Links
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPaymentLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppPaymentLinksCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/payment-links/{link_id}:
+    get:
+      operationId: merchantAppPaymentLinksGet
+      summary: One payment link
+      tags:
+      - Merchant App Payment Links
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: link_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPaymentLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/payment-links/{link_id}/cancel:
+    post:
+      operationId: merchantAppPaymentLinksCancel
+      summary: Cancel (deactivate) a payment link (OWNER or MANAGER)
+      tags:
+      - Merchant App Payment Links
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: link_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantPaymentLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/refunds:
+    get:
+      operationId: merchantAppRefundsList
+      summary: Refund requests of the stores the user may work in, newest first
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - COMPLETED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+      - name: store_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+    post:
+      operationId: merchantAppRefundsCreate
+      summary: Request a refund of a completed payment of a store the user works in (OWNER, MANAGER or CASHIER); the amount
+        may not exceed what remains of the payment after completed and pending refunds
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppRefundsCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+  /v1/merchant/refunds/{refund_id}:
+    get:
+      operationId: merchantAppRefundsGet
+      summary: One refund request
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: refund_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+  /v1/merchant/refunds/{refund_id}/approve:
+    post:
+      operationId: merchantAppRefundsApprove
+      summary: Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created
+        in merchant-service as the requester and approved there as the approver
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: refund_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppRefundsApproveRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+  /v1/merchant/refunds/{refund_id}/reject:
+    post:
+      operationId: merchantAppRefundsReject
+      summary: Reject a refund request (OWNER or MANAGER of the store, never the requester)
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: refund_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppRefundsRejectRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+  /v1/merchant/refunds/{refund_id}/cancel:
+    post:
+      operationId: merchantAppRefundsCancel
+      summary: Withdraw a pending refund request (requester, OWNER or MANAGER)
+      tags:
+      - Merchant App Refunds
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: refund_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRefundRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_refund_request
+  /v1/merchant/settlements:
+    get:
+      operationId: merchantAppSettlementsList
+      summary: Settlements of the merchant, newest first
+      tags:
+      - Merchant App Settlements
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CALCULATED
+          - APPROVED
+          - PAID
+          - FAILED
+          - REJECTED
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSettlementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/settlements/{settlement_id}:
+    get:
+      operationId: merchantAppSettlementsGet
+      summary: One settlement
+      tags:
+      - Merchant App Settlements
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: settlement_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/settlements/{settlement_id}/report:
+    get:
+      operationId: merchantAppSettlementsReport
+      summary: Settlement report (CSV)
+      tags:
+      - Merchant App Settlements
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: settlement_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/fees:
+    get:
+      operationId: merchantAppFeesGet
+      summary: 'Fee statement: the fee plan and, per settlement whose period ends in the range, payments, gross, MDR fees,
+        refunds and net, with totals: {fee_plan, from, to, currency, settlements[], totals}'
+      tags:
+      - Merchant App Fees
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/fees/statement:
+    get:
+      operationId: merchantAppFeesStatement
+      summary: Fee statement as CSV
+      tags:
+      - Merchant App Fees
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/payout-account:
+    get:
+      operationId: merchantAppPayoutAccountGet
+      summary: 'Current payout account (masked number, currency, status), settlement frequency and the pending change if any:
+        {settlement_account, settlement_frequency, pending_change}'
+      tags:
+      - Merchant App Payout Account
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-account/eligible-accounts:
+    get:
+      operationId: merchantAppPayoutAccountEligibleAccounts
+      summary: Active accounts of the merchant's business customer in the merchant's currency that can receive payouts (OWNER)
+      tags:
+      - Merchant App Payout Account
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositAccountPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-changes:
+    get:
+      operationId: merchantAppPayoutChangesList
+      summary: Payout account changes, newest first (OWNER or MANAGER)
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPLIED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+    post:
+      operationId: merchantAppPayoutChangesCreate
+      summary: Request a new payout account (OWNER; step-up; one pending change at a time; an active account of the merchant's
+        business customer in the merchant's currency)
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppPayoutChangesCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-changes/{change_id}:
+    get:
+      operationId: merchantAppPayoutChangesGet
+      summary: One payout account change
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: change_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-changes/{change_id}/approve:
+    post:
+      operationId: merchantAppPayoutChangesApprove
+      summary: Approve and apply a payout account change (another OWNER or MANAGER; step-up)
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: change_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppPayoutChangesApproveRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-changes/{change_id}/reject:
+    post:
+      operationId: merchantAppPayoutChangesReject
+      summary: Reject a payout account change (another OWNER or MANAGER)
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: change_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppPayoutChangesRejectRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/payout-changes/{change_id}/cancel:
+    post:
+      operationId: merchantAppPayoutChangesCancel
+      summary: Withdraw a pending payout account change (its requester)
+      tags:
+      - Merchant App Payout Changes
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: change_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantChangeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_change_request
+  /v1/merchant/staff:
+    get:
+      operationId: merchantAppStaffList
+      summary: Users of the merchant (OWNER and MANAGER)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUserPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+    post:
+      operationId: merchantAppStaffCreate
+      summary: Add a user (OWNER; step-up); the returned id is set as the person's merchant_user_id attribute in the identity
+        provider
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppStaffCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/staff/{user_id}:
+    get:
+      operationId: merchantAppStaffGet
+      summary: One user of the merchant
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+    patch:
+      operationId: merchantAppStaffUpdate
+      summary: Change a user's name, role or all-stores scope (OWNER; step-up; owners cannot change their own role)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppStaffUpdateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/staff/{user_id}/stores:
+    get:
+      operationId: merchantAppStaffStores
+      summary: Stores assigned to a user
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUserStorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+    put:
+      operationId: merchantAppStaffReplaceStores
+      summary: Replace the stores assigned to a user (OWNER; step-up; stores of the merchant only)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUserStorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppStaffReplaceStoresRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/staff/{user_id}/suspend:
+    post:
+      operationId: merchantAppStaffSuspend
+      summary: Suspend a user (OWNER; step-up; not oneself)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppStaffSuspendRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/staff/{user_id}/reactivate:
+    post:
+      operationId: merchantAppStaffReactivate
+      summary: Reactivate a suspended user (OWNER; step-up)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/staff/{user_id}/remove:
+    post:
+      operationId: merchantAppStaffRemove
+      summary: Remove a user for good (OWNER; step-up; not oneself; store assignments are deleted)
+      tags:
+      - Merchant App Staff
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppStaffRemoveRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_user
+  /v1/merchant/api-clients:
+    get:
+      operationId: merchantAppApiClientsList
+      summary: API clients of the merchant
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+    post:
+      operationId: merchantAppApiClientsCreate
+      summary: Create an API client for the merchant (OWNER; step-up); scopes are limited to the bank's allow-list for merchant
+        integrations
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppApiClientsCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/api-clients/{client_id}:
+    get:
+      operationId: merchantAppApiClientsGet
+      summary: One API client of the merchant
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/api-clients/{client_id}/suspend:
+    post:
+      operationId: merchantAppApiClientsSuspend
+      summary: Suspend an API client (OWNER)
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppApiClientsSuspendRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/api-clients/{client_id}/keys:
+    get:
+      operationId: merchantAppApiClientsKeys
+      summary: Keys of one API client
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+    post:
+      operationId: merchantAppApiClientsAddKeys
+      summary: Create an API key (shown once; OWNER; step-up)
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppApiClientsAddKeysRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/api-clients/{client_id}/keys/{key_id}/revoke:
+    post:
+      operationId: merchantAppApiClientsKeysRevoke
+      summary: Revoke an API key (OWNER)
+      tags:
+      - Merchant App Api Clients
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppApiClientsKeysRevokeRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints:
+    get:
+      operationId: merchantAppWebhooksList
+      summary: Webhook endpoints of the merchant
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+    post:
+      operationId: merchantAppWebhooksCreate
+      summary: Register an HTTPS endpoint for one of the merchant's API clients (OWNER; step-up)
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppWebhooksCreateRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints/{endpoint_id}:
+    get:
+      operationId: merchantAppWebhooksGet
+      summary: One endpoint of the merchant
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+    delete:
+      operationId: merchantAppWebhooksDelete
+      summary: Delete an endpoint (OWNER)
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints/{endpoint_id}/disable:
+    post:
+      operationId: merchantAppWebhooksDisable
+      summary: Disable an endpoint (OWNER)
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppWebhooksDisableRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints/{endpoint_id}/enable:
+    post:
+      operationId: merchantAppWebhooksEnable
+      summary: Re-enable an endpoint (OWNER)
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints/{endpoint_id}/subscriptions:
+    get:
+      operationId: merchantAppWebhooksSubscriptions
+      summary: Event subscriptions of one endpoint
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscriptionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+    post:
+      operationId: merchantAppWebhooksAddSubscriptions
+      summary: Subscribe to an allowed event type; the filter merchant_id == <the merchant> is always added (OWNER)
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantAppWebhooksAddSubscriptionsRequest'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/webhook-endpoints/{endpoint_id}/deliveries:
+    get:
+      operationId: merchantAppWebhooksDeliveries
+      summary: Deliveries to one endpoint
+      tags:
+      - Merchant App Webhooks
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - name: endpoint_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_object
+  /v1/merchant/activity:
+    get:
+      operationId: merchantAppActivityList
+      summary: 'What users of the merchant did or were refused, newest first (OWNER: every user; others: their own)'
+      tags:
+      - Merchant App Activity
+      security:
+      - oauth2:
+        - channels:merchant
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantActionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: merchant-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:merchant")'
+      x-required-scope: channels:merchant
+      x-table: merchant_action
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+          description: Stable machine-readable error code
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+    DepositAccountPage:
+      type: object
+      description: One page of DepositAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepositAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTransactionPage:
+      type: object
+      description: One page of WalletTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApiClientPage:
+      type: object
+      description: One page of ApiClient results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiClient'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApiKeyPage:
+      type: object
+      description: One page of ApiKey results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKey'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookEndpointPage:
+      type: object
+      description: One page of WebhookEndpoint results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpoint'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookSubscriptionPage:
+      type: object
+      description: One page of WebhookSubscription results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookSubscription'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDeliveryPage:
+      type: object
+      description: One page of WebhookDelivery results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantStorePage:
+      type: object
+      description: One page of MerchantStore results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantStore'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantTerminalPage:
+      type: object
+      description: One page of MerchantTerminal results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantTerminal'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppTerminalsDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    MerchantSalePage:
+      type: object
+      description: One page of MerchantSale results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantSale'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppSalesCreateRequest:
+      type: object
+      properties:
+        store_id:
+          type: string
+          format: uuid
+        terminal_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reference:
+          type: string
+          maxLength: 25
+      required:
+      - store_id
+      - amount
+    MerchantPaymentLinkPage:
+      type: object
+      description: One page of MerchantPaymentLink results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantPaymentLink'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppPaymentLinksCreateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        description:
+          type: string
+          maxLength: 255
+        reference:
+          type: string
+          maxLength: 64
+        max_uses:
+          type: integer
+          format: int32
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - description
+    MerchantRefundRequestPage:
+      type: object
+      description: One page of MerchantRefundRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantRefundRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppRefundsCreateRequest:
+      type: object
+      properties:
+        original_transaction_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - original_transaction_id
+      - amount
+      - reason
+    MerchantAppRefundsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    MerchantAppRefundsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    MerchantSettlementPage:
+      type: object
+      description: One page of MerchantSettlement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantSettlement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantChangeRequestPage:
+      type: object
+      description: One page of MerchantChangeRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantChangeRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppPayoutChangesCreateRequest:
+      type: object
+      properties:
+        settlement_account_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - settlement_account_id
+    MerchantAppPayoutChangesApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    MerchantAppPayoutChangesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    MerchantUserPage:
+      type: object
+      description: One page of MerchantUser results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantUser'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppStaffCreateRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 160
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MANAGER
+          - CASHIER
+          - VIEWER
+        all_stores:
+          type: boolean
+        store_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - display_name
+      - email
+      - role
+    MerchantAppStaffUpdateRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 160
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MANAGER
+          - CASHIER
+          - VIEWER
+        all_stores:
+          type: boolean
+    MerchantUserStorePage:
+      type: object
+      description: One page of MerchantUserStore results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantUserStore'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantAppStaffReplaceStoresRequest:
+      type: object
+      properties:
+        store_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - store_ids
+    MerchantAppStaffSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    MerchantAppStaffRemoveRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    MerchantAppApiClientsCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 500
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+        owner_email:
+          type: string
+          format: email
+          maxLength: 320
+      required:
+      - name
+    MerchantAppApiClientsSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    MerchantAppApiClientsAddKeysRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - name
+    MerchantAppApiClientsKeysRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    MerchantAppWebhooksCreateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          maxLength: 1000
+        description:
+          type: string
+          maxLength: 500
+        api_client_id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+      required:
+      - url
+      - api_client_id
+    MerchantAppWebhooksDisableRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    MerchantAppWebhooksAddSubscriptionsRequest:
+      type: object
+      properties:
+        event_type:
+          type: string
+          maxLength: 128
+      required:
+      - event_type
+    MerchantActionPage:
+      type: object
+      description: One page of MerchantAction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantAction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApiClient:
+      type: object
+      description: An OAuth 2.1 client (server integration, app, partner or open banking TPP)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+          description: Client name
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Purpose
+        client_type:
+          type: string
+          enum:
+          - SERVER
+          - PUBLIC_APP
+          - PARTNER
+          - TPP
+          - INTERNAL
+          description: Kind of client
+        client_id:
+          type: string
+          maxLength: 64
+          description: Public client identifier
+          readOnly: true
+        auth_method:
+          type: string
+          enum:
+          - CLIENT_SECRET_BASIC
+          - CLIENT_SECRET_POST
+          - PRIVATE_KEY_JWT
+          - TLS_CLIENT_AUTH
+          - NONE
+          description: Token endpoint authentication
+        jwks_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: JWKS URL for private_key_jwt
+        mtls_cert_thumbprint:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Bound certificate (RFC 8705)
+        redirect_uris:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Allowed redirect URIs
+        allowed_scopes:
+          type: array
+          items: {}
+          description: Scopes this client may request
+        allowed_ip_ranges:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: CIDR allow-list
+        rate_limit_policy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rate limits
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          description: Sandbox or production
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          description: Status (changed by /suspend, /reactivate)
+          readOnly: true
+        owner_email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Technical owner
+        tpp_registration_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Open banking TPP registration / eIDAS id
+        fapi_profile:
+          type: boolean
+          description: Enforce FAPI 2.0 security profile
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last token issued
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        client_secret:
+          type: string
+          maxLength: 128
+          description: Plaintext client secret for CLIENT_SECRET_* clients (on create and rotate-secret) (returned once; never
+            stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - client_type
+      - client_id
+      - auth_method
+      - allowed_scopes
+      - environment
+      - status
+      - fapi_profile
+    ApiKey:
+      type: object
+      description: Secret API key for an API client (shown once at creation; stored hashed)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        api_client_id:
+          type: string
+          format: uuid
+          description: Client
+        name:
+          type: string
+          maxLength: 120
+          description: Key label
+        key_prefix:
+          type: string
+          maxLength: 16
+          description: Visible prefix, e.g. mk_live_4f9a
+          readOnly: true
+        scopes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Scopes (subset of the client's)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - ROTATING
+          - REVOKED
+          - EXPIRED
+          description: Status
+          readOnly: true
+        rotated_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Key this one replaced
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last use
+          readOnly: true
+        last_used_ip:
+          type:
+          - string
+          - 'null'
+          description: Last caller IP (IPv4 or IPv6 address)
+          readOnly: true
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Revocation time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        api_key:
+          type: string
+          maxLength: 128
+          description: Plaintext key (on create and rotate) (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - api_client_id
+      - name
+      - key_prefix
+      - status
+    DepositAccount:
+      type: object
+      description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        account_number:
+          type: string
+          maxLength: 34
+          description: Bank account number (server-generated in the booking legal entity's national format or IBAN account
+            part, check digit per country)
+          readOnly: true
+        iban:
+          type:
+          - string
+          - 'null'
+          maxLength: 34
+          description: IBAN where applicable
+        bban:
+          type:
+          - string
+          - 'null'
+          maxLength: 34
+          description: Basic bank account number
+        routing_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+          description: 'Sort code / routing number / IFSC / CLABE prefix (default: from the legal entity''s numbering, e.g.
+            KE bank + branch code)'
+        bic:
+          type:
+          - string
+          - 'null'
+          maxLength: 11
+          description: BIC of the booking legal entity (numbering settings or the legal entity's swift_bic)
+          readOnly: true
+        account_type:
+          type: string
+          enum:
+          - CURRENT
+          - SAVINGS
+          - CALL
+          - NOTICE
+          - MONEY_MARKET
+          - ESCROW
+          - BASIC
+          - STUDENT
+          - MINOR
+          - PAYROLL
+          - NOSTRO
+          - VOSTRO
+          - SUSPENSE
+          - SETTLEMENT
+          description: Account type
+        nickname:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Customer-chosen name
+        customer_id:
+          type: string
+          format: uuid
+          description: Primary customer
+        product_id:
+          type: string
+          format: uuid
+          description: Product
+        product_version_id:
+          type: string
+          format: uuid
+          description: Product version pinned at opening
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Booking legal entity
+        branch_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Home branch
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger account holding the balance
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - PENDING_FUNDING
+          - ACTIVE
+          - DORMANT
+          - INACTIVE
+          - FROZEN
+          - BLOCKED_DEBIT
+          - BLOCKED_CREDIT
+          - BLOCKED
+          - CLOSING
+          - CLOSED
+          - REJECTED
+          description: Lifecycle status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        mandate_rule:
+          type: string
+          enum:
+          - ANY_ONE
+          - ANY_TWO
+          - ALL
+          - PRIMARY_ONLY
+          - PRIMARY_PLUS_ONE
+          - CUSTOM
+          description: Signing rule for joint/business accounts
+        opened_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the account became active
+          readOnly: true
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Closing time
+          readOnly: true
+        last_customer_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last customer-initiated transaction (dormancy clock)
+          readOnly: true
+        dormant_since:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date the account became dormant
+          readOnly: true
+        overdraft_limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Active arranged overdraft limit
+          readOnly: true
+        minimum_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance to keep
+        notice_period_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Notice period for NOTICE accounts
+        accrued_credit_interest:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Accrued, not yet capitalised credit interest
+          readOnly: true
+        accrued_debit_interest:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Accrued, not yet charged debit interest
+          readOnly: true
+        interest_paid_ytd:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Interest paid this tax year
+          readOnly: true
+        tax_withheld_ytd:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax withheld this tax year
+          readOnly: true
+        next_capitalisation_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next interest posting date
+          readOnly: true
+        statement_frequency:
+          type: string
+          enum:
+          - ONCE
+          - DAILY
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          description: Statement frequency
+        statement_cycle_day:
+          type: integer
+          format: int32
+          description: Day of month the statement cycle ends
+        bundle_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product bundle membership
+        opening_channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Channel used to open
+        purpose:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Declared account purpose
+        source_of_funds:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Declared source of funds
+        expected_monthly_volume:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Declared expected monthly turnover (AML profile)
+        external_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client or migration reference
+        product_terms:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Product terms pinned from the catalog at opening or product change (interest_rates with tiers, fees,
+            withholding_tax_rate, overdraft)
+          readOnly: true
+        pending_product_change:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Scheduled product change (product_id, product_version_id, effective_date, product_terms)
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - account_number
+      - account_type
+      - customer_id
+      - product_id
+      - product_version_id
+      - legal_entity_id
+      - currency
+      - status
+      - mandate_rule
+      - overdraft_limit
+      - minimum_balance
+      - accrued_credit_interest
+      - accrued_debit_interest
+      - interest_paid_ytd
+      - tax_withheld_ytd
+      - statement_frequency
+      - statement_cycle_day
+    MerchantAction:
+      type: object
+      description: Audit trail of merchant users' actions through the app, including object-level, store-scope and role denials
+        and step-up refusals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant (from the token)
+        merchant_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant user (from the token)
+        action:
+          type: string
+          maxLength: 64
+          description: Operation (operation id of the /v1/merchant endpoint)
+        object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: STORE, TERMINAL, SALE, TRANSACTION, REFUND, PAYMENT_LINK, SETTLEMENT, PAYOUT_CHANGE, ACCOUNT, USER,
+            API_CLIENT, API_KEY, WEBHOOK_ENDPOINT
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object acted on, or the object id that was refused
+        outcome:
+          type: string
+          enum:
+          - SUCCEEDED
+          - DENIED
+          - STEP_UP_REQUIRED
+          - FAILED
+          description: Result
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Problem code when not SUCCEEDED
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the record created (sale, refund, change...)
+        auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the user's last authentication when the action ran
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Authentication context class of the token
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address (right-most X-Forwarded-For hop) (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent
+      required:
+      - id
+      - created_at
+      - merchant_id
+      - action
+      - outcome
+    MerchantChangeRequest:
+      type: object
+      description: A change of the merchant's payout (settlement) bank account, applied only after a second user approved
+        it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        change_type:
+          type: string
+          enum:
+          - PAYOUT_ACCOUNT
+          description: What is changed
+          readOnly: true
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: New payout account (an account of the merchant's business customer)
+        account_number_masked:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: New account number, masked
+          readOnly: true
+        previous_settlement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payout account before the change
+          readOnly: true
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the account changes
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPLIED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+          description: PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        requested_by:
+          type: string
+          format: uuid
+          description: OWNER that requested the change
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver or rejecter
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Approval comment or rejection reason
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Problem when applying the change failed
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - change_type
+      - settlement_account_id
+      - status
+      - requested_by
+    MerchantPaymentLink:
+      type: object
+      description: A shareable link that lets anyone pay a merchant
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        link_code:
+          type: string
+          maxLength: 32
+          description: Short code in the URL (server-generated)
+          readOnly: true
+        url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Full payment URL
+          readOnly: true
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fixed amount (empty = payer enters it)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: What is being paid for
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant order reference
+        max_uses:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum payments (empty = unlimited)
+        use_count:
+          type: integer
+          format: int32
+          description: Payments received
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry
+        is_active:
+          type: boolean
+          description: Active (deactivated by /deactivate or when max_uses is reached)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - link_code
+      - currency
+      - use_count
+      - is_active
+    MerchantRefundRequest:
+      type: object
+      description: A refund requested in the merchant app, executed in merchant-service only after a second user approved
+        it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_store_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Store of the refunded payment (empty = not attributable to a store)
+          readOnly: true
+        original_transaction_id:
+          type: string
+          format: uuid
+          description: Payment refunded
+        merchant_sale_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Sale of the payment, when it was started in the app
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Refund amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the payment (ISO 4217)
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 255
+          description: Reason
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - COMPLETED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+          description: PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        requested_by:
+          type: string
+          format: uuid
+          description: User that requested the refund
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver or rejecter
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Approval comment or rejection reason
+          readOnly: true
+        approver_auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the approver's last authentication
+          readOnly: true
+        merchant_refund_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Refund created in merchant-service on approval
+          readOnly: true
+        refund_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Refund wallet transaction
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Problem when the refund failed
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - original_transaction_id
+      - amount
+      - currency
+      - reason
+      - status
+      - requested_by
+    MerchantSale:
+      type: object
+      description: A sale started in the merchant app, collected with one dynamic EMVCo QR code
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_store_id:
+          type: string
+          format: uuid
+          description: Store of the sale
+        merchant_terminal_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Terminal (till) of the sale
+        cashier_user_id:
+          type: string
+          format: uuid
+          description: User that started the sale
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount to pay
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Merchant acceptance currency (ISO 4217)
+          readOnly: true
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 25
+          description: Bill / order reference embedded in the QR
+        merchant_qr_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Dynamic QR issued by merchant-service
+          readOnly: true
+        qr_payload:
+          type:
+          - string
+          - 'null'
+          description: EMVCo QR payload to display
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - EXPIRED
+          - CANCELLED
+          description: PENDING until paid, expired or cancelled (refreshed from merchant-service)
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry of the QR
+          readOnly: true
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Payment time
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payment received
+          readOnly: true
+        cancelled_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: User that cancelled the sale
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - merchant_store_id
+      - cashier_user_id
+      - amount
+      - currency
+      - status
+    MerchantSettlement:
+      type: object
+      description: Periodic settlement of merchant collections net of fees and refunds
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        period_start:
+          type: string
+          format: date
+          description: From
+        period_end:
+          type: string
+          format: date
+          description: To (inclusive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payment_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Payments included
+          readOnly: true
+        gross_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross collections
+          readOnly: true
+        mdr_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Merchant discount fees
+          readOnly: true
+        refund_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Refunds
+          readOnly: true
+        net_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net payable
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CALCULATED
+          - APPROVED
+          - PAID
+          - FAILED
+          - REJECTED
+          description: Status (REJECTED releases its payments for a new settlement)
+          readOnly: true
+        settlement_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet the collections sit in
+          readOnly: true
+        settlement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank account paid (empty = net stays in the wallet)
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the settlement
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the settlement was rejected
+          readOnly: true
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank payment when settled to bank
+          readOnly: true
+        fee_wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: MDR fee transaction
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement transaction to the bank account
+          readOnly: true
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Payment time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
+        report_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement report
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - period_start
+      - period_end
+      - currency
+      - status
+    MerchantStore:
+      type: object
+      description: A physical or online store of a merchant
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        store_code:
+          type: string
+          maxLength: 32
+          description: Store code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        mcc:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: MCC override for this store
+        address:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Address
+        city:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+          description: City
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        latitude:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Latitude
+        longitude:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Longitude
+        contact_msisdn:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Store phone (E.164)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          description: Status
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - store_code
+      - name
+      - country
+      - status
+    MerchantTerminal:
+      type: object
+      description: A POS, soft-POS, e-commerce or vending terminal of a merchant
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_store_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Store
+        terminal_id:
+          type: string
+          maxLength: 16
+          description: Terminal id
+        terminal_type:
+          type: string
+          maxLength: 32
+          description: POS, SOFT_POS, ECOMMERCE, VENDING
+        serial_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Serial number
+        app_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: App version
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - LOST
+          - RETIRED
+          description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        last_seen_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last heartbeat
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - terminal_id
+      - terminal_type
+      - status
+    MerchantUser:
+      type: object
+      description: A person using the merchant app for one merchant, with a role and a store scope
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant the user works for
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to colleagues
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Contact e-mail (identity provider login is bound through the merchant_user_id attribute)
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MANAGER
+          - CASHIER
+          - VIEWER
+          description: OWNER manages staff, payout account and integrations; MANAGER approves refunds and runs stores; CASHIER
+            sells and requests refunds; VIEWER reads
+        all_stores:
+          type: boolean
+          description: Works in every store of the merchant (always true in effect for OWNER)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Changed by suspend, reactivate and remove
+          readOnly: true
+        last_login_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last time the user opened the app
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last suspension or removal
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - display_name
+      - role
+      - all_stores
+      - status
+    MerchantUserStore:
+      type: object
+      description: A store a merchant user may work in (store scope of users without all_stores)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_user_id:
+          type: string
+          format: uuid
+          description: User
+        merchant_store_id:
+          type: string
+          format: uuid
+          description: Store of the merchant
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - merchant_user_id
+      - merchant_store_id
+    WalletTransaction:
+      type: object
+      description: A wallet money movement of any type, with its full lifecycle
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable transaction reference shown on receipts (server-generated)
+          readOnly: true
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - PENDING_CONFIRMATION
+          - PENDING_APPROVAL
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          - EXPIRED
+          - CANCELLED
+          description: Lifecycle status
+          readOnly: true
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        payer_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Debited wallet
+        payee_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Credited wallet
+        payee_msisdn:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Payee mobile number as entered (E.164)
+        payee_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Payee name shown for confirmation
+          readOnly: true
+        payee_external_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: External account / meter / bank reference
+        counterparty_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal ledger account on the other side when the counterparty is not a wallet (switch settlement,
+            bank clearing, deposit account)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Principal amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the payer
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        commission_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total commission generated
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the payer
+          readOnly: true
+        fx_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: FX rate applied for cross-currency transfers
+          readOnly: true
+        settlement_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount credited in the payee currency
+          readOnly: true
+        settlement_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Payee currency (ISO 4217)
+          readOnly: true
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that initiated the transaction
+          readOnly: true
+        kyc_tier:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Payer KYC tier at initiation
+          readOnly: true
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent involved (cash-in / cash-out)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the transaction took place
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant paid
+        biller_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Biller paid
+        bill_payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bill payment
+        disbursement_beneficiary_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bulk disbursement line
+        interop_transfer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Interoperable transfer
+        wallet_bank_link_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Linked bank account (wallet-to-bank / bank-to-wallet)
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank payment (wallet-to-bank / bank-to-wallet)
+          readOnly: true
+        loan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Nano-loan disbursed or repaid
+        original_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Transaction reversed or refunded
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting
+          readOnly: true
+        hold_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Funds hold while pending confirmation
+          readOnly: true
+        limit_check_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Limit reservation in limits-service
+          readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud evaluation
+          readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Fraud decision (ALLOW, REVIEW, BLOCK, STEP_UP)
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        customer_note:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Note from payer to payee
+        confirmation_method:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PIN
+          - OTP
+          - SYSTEM
+          description: How a pending transaction must be confirmed
+          readOnly: true
+        confirmation_attempts:
+          type: integer
+          format: int32
+          description: Failed confirmation attempts
+          readOnly: true
+        confirmation_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Deadline for PIN/OTP confirmation
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        failure_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Stable failure code
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure description
+          readOnly: true
+        reversed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount reversed so far
+          readOnly: true
+        reversal_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of a pending reversal request
+          readOnly: true
+        reversal_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the reversal was requested
+          readOnly: true
+        reversal_requested_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount requested for reversal
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the reversal request
+          readOnly: true
+        risk_score:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fraud score 0..1
+          readOnly: true
+        device_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Device used
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Source IP (app / web) (IPv4 or IPv6 address)
+        geo_lat:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Latitude at initiation
+        geo_lon:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Longitude at initiation
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - txn_type
+      - status
+      - channel
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - commission_amount
+      - initiator_type
+      - idempotency_key
+      - confirmation_attempts
+      - reversed_amount
+    WebhookDelivery:
+      type: object
+      description: Delivery of one event to one endpoint, with retry state
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_id:
+          type: string
+          maxLength: 64
+          description: CloudEvents id
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type
+        ordering_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Aggregate id used for ordering
+        payload:
+          type: object
+          additionalProperties: true
+          description: Payload sent
+        status:
+          type: string
+          enum:
+          - PENDING
+          - RETRYING
+          - SUCCEEDED
+          - FAILED
+          - ABANDONED
+          description: Status
+          readOnly: true
+        attempt_count:
+          type: integer
+          format: int32
+          description: Attempts made
+          readOnly: true
+        next_attempt_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next retry
+          readOnly: true
+        last_status_code:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Last HTTP status
+          readOnly: true
+        last_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Last error
+          readOnly: true
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Success time
+          readOnly: true
+        replay_job_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Replay job that produced it
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - webhook_endpoint_id
+      - event_id
+      - event_type
+      - payload
+      - status
+      - attempt_count
+    WebhookEndpoint:
+      type: object
+      description: A client HTTPS endpoint receiving events
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        url:
+          type: string
+          maxLength: 1000
+          description: HTTPS URL
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Description
+        api_client_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning API client
+        environment:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          description: Sandbox or production
+        api_version:
+          type: string
+          maxLength: 16
+          description: Payload version
+        signing_secret_version:
+          type: integer
+          format: int32
+          description: Secret version (rotation)
+          readOnly: true
+        previous_secret_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the 24 h rotation grace period
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - DISABLED
+          - FAILING
+          description: Status (changed by /enable, /disable and delivery health)
+          readOnly: true
+        max_requests_per_second:
+          type: integer
+          format: int32
+          description: Delivery rate cap
+        mtls_enabled:
+          type: boolean
+          description: Present a client certificate
+        custom_headers:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Extra headers sent with each delivery
+        consecutive_failures:
+          type: integer
+          format: int32
+          description: Consecutive failures (auto-disable at threshold)
+          readOnly: true
+        last_success_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last successful delivery
+          readOnly: true
+        last_failure_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last failed delivery
+          readOnly: true
+        disabled_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was disabled
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        signing_secret:
+          type: string
+          maxLength: 255
+          description: Plaintext signing secret; returned only by create and rotate-secret (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - url
+      - environment
+      - api_version
+      - signing_secret_version
+      - status
+      - max_requests_per_second
+      - mtls_enabled
+      - consecutive_failures
+    WebhookSubscription:
+      type: object
+      description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        webhook_endpoint_id:
+          type: string
+          format: uuid
+          description: Endpoint
+        event_type:
+          type: string
+          maxLength: 128
+          description: Event type or wildcard, e.g. payments.*
+        filter_expression:
+          type:
+          - string
+          - 'null'
+          description: CEL filter on the payload
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - webhook_endpoint_id
+      - event_type
+      - is_active
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key per logical request; replays return the original response for 24h
+      schema:
+        type: string
+        maxLength: 128
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not allowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Version or idempotency conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Business rule violation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            channels:customer: Customer, Agent, Business and Merchant Channels (signed-in customer)
+            channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
+            channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
+            channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          tokenUrl: https://auth.meridian.example/oauth2/token
+          scopes:
+            channels:customer: Customer, Agent, Business and Merchant Channels (signed-in customer)
+            channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
+            channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
+            channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)

@@ -8,9 +8,11 @@ info:
     tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification
     and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and
     requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the
-    same way (agent_id claim, scope channels:agent; see agent-channel-service), and the business banking portal uses /v1/business
-    (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service). Domain services
-    keep their operator APIs; customer, agent and business tokens carry no domain scope and are rejected there.
+    same way (agent_id claim, scope channels:agent; see agent-channel-service), the business banking portal uses /v1/business
+    (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service), and the merchant
+    app uses /v1/merchant (merchant_id and merchant_user_id claims, scope channels:merchant; see merchant-channel-service).
+    Domain services keep their operator APIs; customer, agent, business and merchant tokens carry no domain scope and are
+    rejected there.
 
     '
   license:
@@ -12492,13 +12494,15 @@ components:
         clientCredentials:
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
-            channels:customer: Customer, Agent and Business Channels (signed-in customer)
-            channels:agent: Customer, Agent and Business Channels (signed-in agent)
-            channels:business: Customer, Agent and Business Channels (signed-in business)
+            channels:customer: Customer, Agent, Business and Merchant Channels (signed-in customer)
+            channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
+            channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
+            channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
-            channels:customer: Customer, Agent and Business Channels (signed-in customer)
-            channels:agent: Customer, Agent and Business Channels (signed-in agent)
-            channels:business: Customer, Agent and Business Channels (signed-in business)
+            channels:customer: Customer, Agent, Business and Merchant Channels (signed-in customer)
+            channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
+            channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
+            channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)

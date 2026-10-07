@@ -173,7 +173,7 @@ channels:
         $ref: '#/components/messages/CardsCardDisputeClosed'
   channels:
     address: meridian.channels.v1
-    description: Customer, Agent and Business Channels events
+    description: Customer, Agent, Business and Merchant Channels events
     messages:
       ChannelsCustomerActionDenied:
         $ref: '#/components/messages/ChannelsCustomerActionDenied'
@@ -199,6 +199,26 @@ channels:
         $ref: '#/components/messages/ChannelsBusinessPaymentReleased'
       ChannelsBusinessPaymentRejected:
         $ref: '#/components/messages/ChannelsBusinessPaymentRejected'
+      ChannelsMerchantActionDenied:
+        $ref: '#/components/messages/ChannelsMerchantActionDenied'
+      ChannelsMerchantUserChanged:
+        $ref: '#/components/messages/ChannelsMerchantUserChanged'
+      ChannelsMerchantSaleCreated:
+        $ref: '#/components/messages/ChannelsMerchantSaleCreated'
+      ChannelsMerchantSalePaid:
+        $ref: '#/components/messages/ChannelsMerchantSalePaid'
+      ChannelsMerchantRefundRequestRequested:
+        $ref: '#/components/messages/ChannelsMerchantRefundRequestRequested'
+      ChannelsMerchantRefundRequestCompleted:
+        $ref: '#/components/messages/ChannelsMerchantRefundRequestCompleted'
+      ChannelsMerchantRefundRequestRejected:
+        $ref: '#/components/messages/ChannelsMerchantRefundRequestRejected'
+      ChannelsMerchantChangeRequestRequested:
+        $ref: '#/components/messages/ChannelsMerchantChangeRequestRequested'
+      ChannelsMerchantChangeRequestApplied:
+        $ref: '#/components/messages/ChannelsMerchantChangeRequestApplied'
+      ChannelsMerchantChangeRequestRejected:
+        $ref: '#/components/messages/ChannelsMerchantChangeRequestRejected'
   engagement:
     address: meridian.engagement.v1
     description: 'Engagement: Rewards, Insights and Campaigns events'
@@ -3762,6 +3782,228 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/BusinessPayment'
+    ChannelsMerchantActionDenied:
+      name: channels.merchant_action.denied
+      title: A merchant user referenced an object of another merchant or outside their stores, lacked the role, or was refused
+        step-up
+      summary: A merchant user referenced an object of another merchant or outside their stores, lacked the role, or was refused
+        step-up
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_action.denied
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantAction'
+    ChannelsMerchantUserChanged:
+      name: channels.merchant_user.changed
+      title: A merchant user was added, bootstrapped, changed, suspended, reactivated, removed or had their stores changed
+      summary: A merchant user was added, bootstrapped, changed, suspended, reactivated, removed or had their stores changed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_user.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantUser'
+    ChannelsMerchantSaleCreated:
+      name: channels.merchant_sale.created
+      title: A sale was started and its dynamic QR issued
+      summary: A sale was started and its dynamic QR issued
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_sale.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantSale'
+    ChannelsMerchantSalePaid:
+      name: channels.merchant_sale.paid
+      title: A sale's QR was paid
+      summary: A sale's QR was paid
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_sale.paid
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantSale'
+    ChannelsMerchantRefundRequestRequested:
+      name: channels.merchant_refund_request.requested
+      title: A refund was requested in the merchant app
+      summary: A refund was requested in the merchant app
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_refund_request.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantRefundRequest'
+    ChannelsMerchantRefundRequestCompleted:
+      name: channels.merchant_refund_request.completed
+      title: A refund request was approved and the refund executed
+      summary: A refund request was approved and the refund executed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_refund_request.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantRefundRequest'
+    ChannelsMerchantRefundRequestRejected:
+      name: channels.merchant_refund_request.rejected
+      title: A refund request was rejected
+      summary: A refund request was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_refund_request.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantRefundRequest'
+    ChannelsMerchantChangeRequestRequested:
+      name: channels.merchant_change_request.requested
+      title: A payout account change was requested
+      summary: A payout account change was requested
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_change_request.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantChangeRequest'
+    ChannelsMerchantChangeRequestApplied:
+      name: channels.merchant_change_request.applied
+      title: A payout account change was approved and applied
+      summary: A payout account change was approved and applied
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_change_request.applied
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantChangeRequest'
+    ChannelsMerchantChangeRequestRejected:
+      name: channels.merchant_change_request.rejected
+      title: A payout account change was rejected
+      summary: A payout account change was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_change_request.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantChangeRequest'
     EngagementRewardsProgramActivated:
       name: engagement.rewards_program.activated
       title: A rewards program went live
@@ -27659,6 +27901,614 @@ components:
       - required_approvals
       - approval_order
       - approvals_received
+    MerchantAction:
+      type: object
+      description: Audit trail of merchant users' actions through the app, including object-level, store-scope and role denials
+        and step-up refusals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant (from the token)
+        merchant_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant user (from the token)
+        action:
+          type: string
+          maxLength: 64
+          description: Operation (operation id of the /v1/merchant endpoint)
+        object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: STORE, TERMINAL, SALE, TRANSACTION, REFUND, PAYMENT_LINK, SETTLEMENT, PAYOUT_CHANGE, ACCOUNT, USER,
+            API_CLIENT, API_KEY, WEBHOOK_ENDPOINT
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object acted on, or the object id that was refused
+        outcome:
+          type: string
+          enum:
+          - SUCCEEDED
+          - DENIED
+          - STEP_UP_REQUIRED
+          - FAILED
+          description: Result
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Problem code when not SUCCEEDED
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the record created (sale, refund, change...)
+        auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the user's last authentication when the action ran
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Authentication context class of the token
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address (right-most X-Forwarded-For hop) (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent
+      required:
+      - id
+      - created_at
+      - merchant_id
+      - action
+      - outcome
+    MerchantUser:
+      type: object
+      description: A person using the merchant app for one merchant, with a role and a store scope
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant the user works for
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to colleagues
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Contact e-mail (identity provider login is bound through the merchant_user_id attribute)
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MANAGER
+          - CASHIER
+          - VIEWER
+          description: OWNER manages staff, payout account and integrations; MANAGER approves refunds and runs stores; CASHIER
+            sells and requests refunds; VIEWER reads
+        all_stores:
+          type: boolean
+          description: Works in every store of the merchant (always true in effect for OWNER)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Changed by suspend, reactivate and remove
+          readOnly: true
+        last_login_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last time the user opened the app
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last suspension or removal
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - display_name
+      - role
+      - all_stores
+      - status
+    MerchantSale:
+      type: object
+      description: A sale started in the merchant app, collected with one dynamic EMVCo QR code
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_store_id:
+          type: string
+          format: uuid
+          description: Store of the sale
+        merchant_terminal_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Terminal (till) of the sale
+        cashier_user_id:
+          type: string
+          format: uuid
+          description: User that started the sale
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount to pay
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Merchant acceptance currency (ISO 4217)
+          readOnly: true
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 25
+          description: Bill / order reference embedded in the QR
+        merchant_qr_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Dynamic QR issued by merchant-service
+          readOnly: true
+        qr_payload:
+          type:
+          - string
+          - 'null'
+          description: EMVCo QR payload to display
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - EXPIRED
+          - CANCELLED
+          description: PENDING until paid, expired or cancelled (refreshed from merchant-service)
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Expiry of the QR
+          readOnly: true
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Payment time
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payment received
+          readOnly: true
+        cancelled_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: User that cancelled the sale
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - merchant_store_id
+      - cashier_user_id
+      - amount
+      - currency
+      - status
+    MerchantRefundRequest:
+      type: object
+      description: A refund requested in the merchant app, executed in merchant-service only after a second user approved
+        it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        merchant_store_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Store of the refunded payment (empty = not attributable to a store)
+          readOnly: true
+        original_transaction_id:
+          type: string
+          format: uuid
+          description: Payment refunded
+        merchant_sale_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Sale of the payment, when it was started in the app
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Refund amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the payment (ISO 4217)
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 255
+          description: Reason
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - COMPLETED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+          description: PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        requested_by:
+          type: string
+          format: uuid
+          description: User that requested the refund
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver or rejecter
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Approval comment or rejection reason
+          readOnly: true
+        approver_auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the approver's last authentication
+          readOnly: true
+        merchant_refund_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Refund created in merchant-service on approval
+          readOnly: true
+        refund_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Refund wallet transaction
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Problem when the refund failed
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - original_transaction_id
+      - amount
+      - currency
+      - reason
+      - status
+      - requested_by
+    MerchantChangeRequest:
+      type: object
+      description: A change of the merchant's payout (settlement) bank account, applied only after a second user approved
+        it
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant
+        change_type:
+          type: string
+          enum:
+          - PAYOUT_ACCOUNT
+          description: What is changed
+          readOnly: true
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: New payout account (an account of the merchant's business customer)
+        account_number_masked:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: New account number, masked
+          readOnly: true
+        previous_settlement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payout account before the change
+          readOnly: true
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the account changes
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPLIED
+          - REJECTED
+          - CANCELLED
+          - FAILED
+          description: PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        requested_by:
+          type: string
+          format: uuid
+          description: OWNER that requested the change
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver or rejecter
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Approval comment or rejection reason
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Problem when applying the change failed
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - merchant_id
+      - change_type
+      - settlement_account_id
+      - status
+      - requested_by
     RewardsProgram:
       type: object
       description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings

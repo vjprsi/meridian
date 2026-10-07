@@ -270,7 +270,7 @@
   {
     "name": "customer-channel-service",
     "domain": "channels",
-    "domain_title": "Customer, Agent and Business Channels",
+    "domain_title": "Customer, Agent, Business and Merchant Channels",
     "phase": 3,
     "database": "customer_channel_db",
     "schema": "customer_channel",
@@ -309,7 +309,7 @@
   {
     "name": "agent-channel-service",
     "domain": "channels",
-    "domain_title": "Customer, Agent and Business Channels",
+    "domain_title": "Customer, Agent, Business and Merchant Channels",
     "phase": 3,
     "database": "agent_channel_db",
     "schema": "agent_channel",
@@ -345,7 +345,7 @@
   {
     "name": "business-channel-service",
     "domain": "channels",
-    "domain_title": "Customer, Agent and Business Channels",
+    "domain_title": "Customer, Agent, Business and Merchant Channels",
     "phase": 3,
     "database": "business_channel_db",
     "schema": "business_channel",
@@ -387,6 +387,48 @@
       "channels.business_payment.rejected"
     ],
     "scope": "channels:business"
+  },
+  {
+    "name": "merchant-channel-service",
+    "domain": "channels",
+    "domain_title": "Customer, Agent, Business and Merchant Channels",
+    "phase": 3,
+    "database": "merchant_channel_db",
+    "schema": "merchant_channel",
+    "package": "io.meridian.merchantchannel",
+    "port": 9167,
+    "description": "Merchant app BFF behind /v1/merchant. Every operation acts for the signed-in merchant user only: the merchant (a merchant of merchant-service) and the user come from the access token (merchant_id and merchant_user_id claims, scope channels:merchant), never from a path, query or body. Owns the merchant-user model: users with roles (OWNER, MANAGER, CASHIER, VIEWER) and store scoping (OWNER and all-stores users work in every store, others only in their assigned stores), sales started from the app (one dynamic EMVCo QR per sale, issued by merchant-service, with live status), refund requests with four-eyes approval (a cashier requests, a manager or owner other than the requester approves with a recent authentication; the cumulative refunds of a payment never exceed it) and payout (settlement) account changes (owner request, approval by another owner or manager, both with step-up). Calls the domain services with its own service identity and the merchant's tenant, checks that every referenced store, terminal, sale, transaction, refund, payment link, settlement, payout account, API client and webhook endpoint belongs to the merchant and to the user's stores (404 otherwise, audited and published), and rebuilds request bodies server-side.",
+    "tags": [
+      "Merchant App Activity",
+      "Merchant App Api Clients",
+      "Merchant App Fees",
+      "Merchant App Me",
+      "Merchant App Payment Links",
+      "Merchant App Payout Account",
+      "Merchant App Payout Changes",
+      "Merchant App Refunds",
+      "Merchant App Sales",
+      "Merchant App Settlements",
+      "Merchant App Staff",
+      "Merchant App Stores",
+      "Merchant App Terminals",
+      "Merchant App Transactions",
+      "Merchant App Webhooks"
+    ],
+    "tables": 7,
+    "events": [
+      "channels.merchant_action.denied",
+      "channels.merchant_user.changed",
+      "channels.merchant_sale.created",
+      "channels.merchant_sale.paid",
+      "channels.merchant_refund_request.requested",
+      "channels.merchant_refund_request.completed",
+      "channels.merchant_refund_request.rejected",
+      "channels.merchant_change_request.requested",
+      "channels.merchant_change_request.applied",
+      "channels.merchant_change_request.rejected"
+    ],
+    "scope": "channels:merchant"
   },
   {
     "name": "rewards-service",

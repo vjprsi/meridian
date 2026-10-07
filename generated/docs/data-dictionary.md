@@ -2027,9 +2027,9 @@ API: internal only · Requirements: CRD-08
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
-## Customer, Agent and Business Channels (`channels`)
+## Customer, Agent, Business and Merchant Channels (`channels`)
 
-Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see agent-channel-service), and the business banking portal uses /v1/business (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service). Domain services keep their operator APIs; customer, agent and business tokens carry no domain scope and are rejected there.
+Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see agent-channel-service), the business banking portal uses /v1/business (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service), and the merchant app uses /v1/merchant (merchant_id and merchant_user_id claims, scope channels:merchant; see merchant-channel-service). Domain services keep their operator APIs; customer, agent, business and merchant tokens carry no domain scope and are rejected there.
 
 
 ### Service `customer-channel-service` — database `customer_channel_db`
@@ -2338,6 +2338,189 @@ API: /v1/business/accounts, /v1/business/activity, /v1/business/card-products, /
 | outcome | varchar(40) (BusinessActionOutcome) | no |  | outcome | Result |
 | error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
 | result_id | uuid | yes |  | result_id | Id of the record created (payment, approval, card...) |
+| auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the user's last authentication when the action ran |
+| acr | varchar(64) | yes |  | acr | Authentication context class of the token |
+| ip_address | inet | yes |  | ip_address | Client address (right-most X-Forwarded-For hop) |
+| user_agent | varchar(255) | yes |  | user_agent | Client user agent |
+
+### Service `merchant-channel-service` — database `merchant_channel_db`
+
+Merchant app BFF behind /v1/merchant. Every operation acts for the signed-in merchant user only: the merchant (a merchant of merchant-service) and the user come from the access token (merchant_id and merchant_user_id claims, scope channels:merchant), never from a path, query or body. Owns the merchant-user model: users with roles (OWNER, MANAGER, CASHIER, VIEWER) and store scoping (OWNER and all-stores users work in every store, others only in their assigned stores), sales started from the app (one dynamic EMVCo QR per sale, issued by merchant-service, with live status), refund requests with four-eyes approval (a cashier requests, a manager or owner other than the requester approves with a recent authentication; the cumulative refunds of a payment never exceed it) and payout (settlement) account changes (owner request, approval by another owner or manager, both with step-up). Calls the domain services with its own service identity and the merchant's tenant, checks that every referenced store, terminal, sale, transaction, refund, payment link, settlement, payout account, API client and webhook endpoint belongs to the merchant and to the user's stores (404 otherwise, audited and published), and rebuilds request bodies server-side.
+
+
+#### `merchant_user`
+
+A person using the merchant app for one merchant, with a role and a store scope
+
+API: /v1/merchant/fees, /v1/merchant/me, /v1/merchant/payment-links, /v1/merchant/settlements, /v1/merchant/staff, /v1/merchant/stores, /v1/merchant/terminals, /v1/merchant/transactions
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant the user works for |
+| display_name | varchar(160) | no |  | display_name | Name shown to colleagues |
+| email | varchar(320) | yes |  | email | Contact e-mail (identity provider login is bound through the merchant_user_id attribute) |
+| role | varchar(40) (MerchantUserRole) | no |  | role | OWNER manages staff, payout account and integrations; MANAGER approves refunds and runs stores; CASHIER sells and requests refunds; VIEWER reads |
+| all_stores | boolean | no |  | all_stores | Works in every store of the merchant (always true in effect for OWNER) |
+| status | varchar(40) (MerchantUserStatus) | no |  | status (read-only) | Changed by suspend, reactivate and remove |
+| last_login_at | timestamptz | yes |  | last_login_at (read-only) | Last time the user opened the app |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last suspension or removal |
+
+#### `merchant_user_store`
+
+A store a merchant user may work in (store scope of users without all_stores)
+
+API: internal only
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| merchant_user_id | uuid | no | FK → merchant_user | merchant_user_id | User |
+| merchant_store_id | uuid | no | ref → merchant_store | merchant_store_id | Store of the merchant |
+
+#### `merchant_sale`
+
+A sale started in the merchant app, collected with one dynamic EMVCo QR code
+
+API: /v1/merchant/sales
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| merchant_store_id | uuid | no | ref → merchant_store | merchant_store_id | Store of the sale |
+| merchant_terminal_id | uuid | yes | ref → merchant_terminal | merchant_terminal_id | Terminal (till) of the sale |
+| cashier_user_id | uuid | no | FK → merchant_user | cashier_user_id (read-only) | User that started the sale |
+| amount | numeric(28,8) | no |  | amount | Amount to pay |
+| currency | char(3) | no |  | currency (read-only) | Merchant acceptance currency |
+| reference | varchar(25) | yes |  | reference | Bill / order reference embedded in the QR |
+| merchant_qr_id | uuid | yes | ref → merchant_qr | merchant_qr_id (read-only) | Dynamic QR issued by merchant-service |
+| qr_payload | text | yes |  | qr_payload (read-only) | EMVCo QR payload to display |
+| status | varchar(40) (MerchantSaleStatus) | no |  | status (read-only) | PENDING until paid, expired or cancelled (refreshed from merchant-service) |
+| expires_at | timestamptz | yes |  | expires_at (read-only) | Expiry of the QR |
+| paid_at | timestamptz | yes |  | paid_at (read-only) | Payment time |
+| wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id (read-only) | Payment received |
+| cancelled_by | uuid | yes |  | cancelled_by (read-only) | User that cancelled the sale |
+
+#### `merchant_refund_request`
+
+A refund requested in the merchant app, executed in merchant-service only after a second user approved it
+
+API: /v1/merchant/refunds
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| merchant_store_id | uuid | yes | ref → merchant_store | merchant_store_id (read-only) | Store of the refunded payment (empty = not attributable to a store) |
+| original_transaction_id | uuid | no | ref → wallet_transaction | original_transaction_id | Payment refunded |
+| merchant_sale_id | uuid | yes | FK → merchant_sale | merchant_sale_id (read-only) | Sale of the payment, when it was started in the app |
+| amount | numeric(28,8) | no |  | amount | Refund amount |
+| currency | char(3) | no |  | currency (read-only) | Currency of the payment |
+| reason | varchar(255) | no |  | reason | Reason |
+| status | varchar(40) (MerchantRefundRequestStatus) | no |  | status (read-only) | PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED |
+| requested_by | uuid | no | FK → merchant_user | requested_by (read-only) | User that requested the refund |
+| decided_by | uuid | yes |  | decided_by (read-only) | Approver or rejecter |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| decision_comment | varchar(500) | yes |  | decision_comment (read-only) | Approval comment or rejection reason |
+| approver_auth_age_seconds | integer | yes |  | approver_auth_age_seconds (read-only) | Seconds since the approver's last authentication |
+| merchant_refund_id | uuid | yes | ref → merchant_refund | merchant_refund_id (read-only) | Refund created in merchant-service on approval |
+| refund_transaction_id | uuid | yes | ref → wallet_transaction | refund_transaction_id (read-only) | Refund wallet transaction |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Problem when the refund failed |
+
+#### `merchant_change_request`
+
+A change of the merchant's payout (settlement) bank account, applied only after a second user approved it
+
+API: /v1/merchant/payout-account, /v1/merchant/payout-changes
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| change_type | varchar(40) (MerchantChangeType) | no |  | change_type (read-only) | What is changed |
+| settlement_account_id | uuid | no | ref → deposit_account | settlement_account_id | New payout account (an account of the merchant's business customer) |
+| account_number_masked | varchar(40) | yes |  | account_number_masked (read-only) | New account number, masked |
+| previous_settlement_account_id | uuid | yes |  | previous_settlement_account_id (read-only) | Payout account before the change |
+| reason | varchar(255) | yes |  | reason | Why the account changes |
+| status | varchar(40) (MerchantChangeStatus) | no |  | status (read-only) | PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED |
+| requested_by | uuid | no | FK → merchant_user | requested_by (read-only) | OWNER that requested the change |
+| decided_by | uuid | yes |  | decided_by (read-only) | Approver or rejecter |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| decision_comment | varchar(500) | yes |  | decision_comment (read-only) | Approval comment or rejection reason |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Problem when applying the change failed |
+
+#### `merchant_object`
+
+Integration objects created through the merchant app (API clients, webhook endpoints) whose owning service does not record the merchant
+
+API: /v1/merchant/api-clients, /v1/merchant/webhook-endpoints
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant |
+| object_type | varchar(40) (MerchantObjectType) | no |  | object_type | Kind of object |
+| object_id | uuid | no | UQ | object_id | Object id in its owning service |
+| label | varchar(160) | yes |  | label | Name shown in the app |
+
+#### `merchant_action` (append-only)
+
+Audit trail of merchant users' actions through the app, including object-level, store-scope and role denials and step-up refusals
+
+API: /v1/merchant/activity
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| merchant_id | uuid | no | ref → merchant | merchant_id | Merchant (from the token) |
+| merchant_user_id | uuid | yes |  | merchant_user_id | Merchant user (from the token) |
+| action | varchar(64) | no |  | action | Operation (operation id of the /v1/merchant endpoint) |
+| object_type | varchar(40) | yes |  | object_type | STORE, TERMINAL, SALE, TRANSACTION, REFUND, PAYMENT_LINK, SETTLEMENT, PAYOUT_CHANGE, ACCOUNT, USER, API_CLIENT, API_KEY, WEBHOOK_ENDPOINT |
+| object_id | uuid | yes |  | object_id | Object acted on, or the object id that was refused |
+| outcome | varchar(40) (MerchantActionOutcome) | no |  | outcome | Result |
+| error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
+| result_id | uuid | yes |  | result_id | Id of the record created (sale, refund, change...) |
 | auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the user's last authentication when the action ran |
 | acr | varchar(64) | yes |  | acr | Authentication context class of the token |
 | ip_address | inet | yes |  | ip_address | Client address (right-most X-Forwarded-For hop) |
