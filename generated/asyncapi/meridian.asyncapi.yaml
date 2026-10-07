@@ -449,6 +449,20 @@ channels:
         $ref: '#/components/messages/LedgerReconExceptionRaised'
       LedgerReconExceptionResolved:
         $ref: '#/components/messages/LedgerReconExceptionResolved'
+      LedgerReconRuleSetSubmitted:
+        $ref: '#/components/messages/LedgerReconRuleSetSubmitted'
+      LedgerReconRuleSetPublished:
+        $ref: '#/components/messages/LedgerReconRuleSetPublished'
+      LedgerReconRuleSetRejected:
+        $ref: '#/components/messages/LedgerReconRuleSetRejected'
+      LedgerReconAdjustmentRequested:
+        $ref: '#/components/messages/LedgerReconAdjustmentRequested'
+      LedgerReconAdjustmentApproved:
+        $ref: '#/components/messages/LedgerReconAdjustmentApproved'
+      LedgerReconAdjustmentRejected:
+        $ref: '#/components/messages/LedgerReconAdjustmentRejected'
+      LedgerReconEodCompleted:
+        $ref: '#/components/messages/LedgerReconEodCompleted'
   lending:
     address: meridian.lending.v1
     description: Lending and Collections events
@@ -6476,6 +6490,160 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReconException'
+    LedgerReconRuleSetSubmitted:
+      name: ledger.recon_rule_set.submitted
+      title: A rule set version was submitted for approval
+      summary: A rule set version was submitted for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_rule_set.submitted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconRuleSet'
+    LedgerReconRuleSetPublished:
+      name: ledger.recon_rule_set.published
+      title: A rule set version was approved and published
+      summary: A rule set version was approved and published
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_rule_set.published
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconRuleSet'
+    LedgerReconRuleSetRejected:
+      name: ledger.recon_rule_set.rejected
+      title: A submitted rule set version was rejected
+      summary: A submitted rule set version was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_rule_set.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconRuleSet'
+    LedgerReconAdjustmentRequested:
+      name: ledger.recon_adjustment.requested
+      title: An adjustment or write-off was requested for a break
+      summary: An adjustment or write-off was requested for a break
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_adjustment.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconAdjustment'
+    LedgerReconAdjustmentApproved:
+      name: ledger.recon_adjustment.approved
+      title: An adjustment or write-off was approved and posted
+      summary: An adjustment or write-off was approved and posted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_adjustment.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconAdjustment'
+    LedgerReconAdjustmentRejected:
+      name: ledger.recon_adjustment.rejected
+      title: An adjustment or write-off request was rejected
+      summary: An adjustment or write-off request was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_adjustment.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconAdjustment'
+    LedgerReconEodCompleted:
+      name: ledger.recon_eod.completed
+      title: End-of-day reconciliation finished for a business date (counts and auto-match rate)
+      summary: End-of-day reconciliation finished for a business date (counts and auto-match rate)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_eod.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconRun'
     LendingLoanApplicationCreated:
       name: lending.loan_application.created
       title: An application was started
@@ -35051,6 +35219,36 @@ components:
           - 'null'
           description: Parsing error
           readOnly: true
+        statement_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:)
+          readOnly: true
+        sequence_no:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement
+          readOnly: true
+        account_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Account identification stated in the file (IBAN, MT940 :25:)
+          readOnly: true
+        movements_total:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net of the parsed lines (credits - debits), checked against opening and closing balances
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -35180,6 +35378,50 @@ components:
           format: date-time
           description: End
           readOnly: true
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version applied (empty = legacy rules)
+          readOnly: true
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date when started by end of day
+          readOnly: true
+        external_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records considered
+          readOnly: true
+        suggested_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records with a suggestion below the auto-match threshold
+          readOnly: true
+        auto_match_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Auto-matched / considered external records
+          readOnly: true
+        metrics:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-rule counts, confidence statistics and break reasons
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -35295,6 +35537,27 @@ components:
           - 'null'
           format: date-time
           description: Set via a new compensating match record when undone
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version that produced it
+          readOnly: true
+        rule_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Rule of the rule set
+          readOnly: true
+        explanation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Why: rule, matched keys and score components (amount, date, name, reference)'
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -35383,6 +35646,7 @@ components:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
           description: Break reason
         status:
@@ -35487,6 +35751,368 @@ components:
       - amount
       - currency
       - age_days
+    ReconRuleSet:
+      type: object
+      description: 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many
+        / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central
+        approvals; a published version is immutable and supersedes the previous one of its scope.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        version:
+          type: integer
+          format: int32
+          description: Version within the scope, assigned on create
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type:
+          - string
+          - 'null'
+          description: Notes
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the configuration (approval fingerprint)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted it
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who published it
+          readOnly: true
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
+        superseded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When a newer version replaced it
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected it
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - version
+      - status
+      - auto_match_threshold
+      - suggest_threshold
+    ReconAdjustment:
+      type: object
+      description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+        approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break
+        closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_exception_id:
+          type: string
+          format: uuid
+          description: Break
+        kind:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+          description: Adjustment (books the missing side) or write-off
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount adjusted or written off
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Ledger to post into (empty: write-off without a posting)'
+        entries:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Balanced journal lines [{ledger_account_id, direction, amount, currency}]
+        reason:
+          type: string
+          description: Justification
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Posted journal entry
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_exception_id
+      - kind
+      - status
+      - amount
+      - currency
+      - reason
     LoanApplication:
       type: object
       description: An application for a loan, credit line, BNPL plan or nano-loan

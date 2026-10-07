@@ -554,6 +554,13 @@ tags:
 - name: Recon Rules
   description: Matching rule, evaluated in priority order
   x-domain: Ledger and Accounting
+- name: Recon Rule Sets
+  description: 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many /
+    many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central
+    approvals; a published version is immutable and supersedes the previous one of its scope.
+
+    '
+  x-domain: Ledger and Accounting
 - name: Recon Runs
   description: A matching run over a source and date range
   x-domain: Ledger and Accounting
@@ -562,6 +569,13 @@ tags:
   x-domain: Ledger and Accounting
 - name: Recon Exceptions
   description: A reconciliation break awaiting investigation
+  x-domain: Ledger and Accounting
+- name: Recon Adjustments
+  description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+    approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes
+    (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+    '
   x-domain: Ledger and Accounting
 - name: Loan Applications
   description: An application for a loan, credit line, BNPL plan or nano-loan
@@ -43463,6 +43477,374 @@ paths:
       x-table: recon_rule
       x-crud: true
       x-crud-delete: true
+  /v1/reconciliation/rule-sets:
+    get:
+      operationId: reconRuleSetsList
+      summary: List recon rule sets
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recon_source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: reconRuleSetsCreate
+      summary: Create recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetCreate'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-create: true
+  /v1/reconciliation/rule-sets/{id}:
+    get:
+      operationId: reconRuleSetsGet
+      summary: Retrieve recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id066
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: reconRuleSetsUpdate
+      summary: Update recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id066
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetUpdate'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-update: true
+  /v1/reconciliation/rule-sets/{id}/submit:
+    post:
+      operationId: reconRuleSetsSubmit
+      summary: Submit a DRAFT (or REJECTED) version for four-eyes approval through central approvals
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/approve:
+    post:
+      operationId: reconRuleSetsApprove
+      summary: Publish a submitted version (approver must differ from the submitter); the published version of the same scope
+        is superseded
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/reject:
+    post:
+      operationId: reconRuleSetsReject
+      summary: Reject a submitted version back to the maker
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetsRejectRequest'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/simulate:
+    post:
+      operationId: reconRuleSetsSimulate
+      summary: 'Dry-run this version over a source and value-date range without storing anything: auto-match rate, suggestions
+        and per-rule counts'
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetsSimulateRequest'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
   /v1/reconciliation/runs:
     get:
       operationId: reconRunsList
@@ -43493,6 +43875,11 @@ paths:
           - FAILED
           - CANCELLED
           - PARTIALLY_SUCCEEDED
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
       - name: custom_field_1
         in: query
         schema:
@@ -43616,6 +44003,100 @@ paths:
       x-table: recon_run
       x-crud: true
       x-crud-get: true
+  /v1/reconciliation/runs/eod:
+    post:
+      operationId: reconRunsEod
+      summary: End of day - reconcile every active source linked to a ledger account over its look-back window ending on business_date
+        (idempotent per business date and source); returns records_processed, records_failed, auto-match rate and breaks raised
+      tags:
+      - Recon Runs
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-01
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_run
+  /v1/reconciliation/runs/metrics:
+    get:
+      operationId: reconRunsMetrics
+      summary: Auto-match rate per run, source and rule, and open-break ageing (0-1, 2-7, 8-30, 31+ days) by reason
+      tags:
+      - Recon Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: from_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: recon_source_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-01
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_run
   /v1/reconciliation/matches:
     get:
       operationId: reconMatchesList
@@ -43845,6 +44326,7 @@ paths:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
       - name: status
         in: query
@@ -43916,7 +44398,7 @@ paths:
       - oauth2:
         - ledger:read
       parameters:
-      - &id066
+      - &id067
         name: id
         in: path
         required: true
@@ -43954,7 +44436,7 @@ paths:
       - oauth2:
         - ledger:write
       parameters:
-      - *id066
+      - *id067
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -44038,7 +44520,8 @@ paths:
   /v1/reconciliation/exceptions/{id}/resolve:
     post:
       operationId: reconExceptionsResolve
-      summary: Resolve with a note, optionally posting an adjustment
+      summary: Resolve with a note, without a posting (adjustments and write-offs go through /v1/reconciliation/adjustments
+        with four-eyes)
       tags:
       - Recon Exceptions
       security:
@@ -44085,7 +44568,7 @@ paths:
   /v1/reconciliation/exceptions/{id}/accept-suggestion:
     post:
       operationId: reconExceptionsAcceptSuggestion
-      summary: Confirm the AI-suggested match
+      summary: Confirm the suggested match
       tags:
       - Recon Exceptions
       security:
@@ -44123,6 +44606,246 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-required-scope: ledger:write
       x-table: recon_exception
+  /v1/reconciliation/adjustments:
+    get:
+      operationId: reconAdjustmentsList
+      summary: List recon adjustments
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recon_exception_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: reconAdjustmentsCreate
+      summary: Create recon adjustment
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconAdjustmentCreate'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-create: true
+  /v1/reconciliation/adjustments/{id}:
+    get:
+      operationId: reconAdjustmentsGet
+      summary: Retrieve recon adjustment
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-get: true
+  /v1/reconciliation/adjustments/{id}/approve:
+    post:
+      operationId: reconAdjustmentsApprove
+      summary: 'Approve (approver must differ from the requester): posts the journal entry and closes the break'
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
+  /v1/reconciliation/adjustments/{id}/reject:
+    post:
+      operationId: reconAdjustmentsReject
+      summary: Reject the request; the break stays open
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconAdjustmentsRejectRequest'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
   /v1/loan-applications:
     get:
       operationId: loanApplicationsList
@@ -44300,7 +45023,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id067
+      - &id068
         name: id
         in: path
         required: true
@@ -44339,7 +45062,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id067
+      - *id068
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -45030,7 +45753,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id068
+      - &id069
         name: loan_application_id
         in: path
         required: true
@@ -45108,7 +45831,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id068
+      - *id069
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -45149,15 +45872,15 @@ paths:
       security:
       - oauth2:
         - lending:read
-      parameters: &id071
-      - &id069
+      parameters: &id072
+      - &id070
         name: loan_application_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id070
+      - &id071
         name: id
         in: path
         required: true
@@ -45195,8 +45918,8 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id069
       - *id070
+      - *id071
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -45238,7 +45961,7 @@ paths:
       security:
       - oauth2:
         - lending:write
-      parameters: *id071
+      parameters: *id072
       responses:
         '204':
           description: No content
@@ -45267,7 +45990,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id072
+      - &id073
         name: loan_application_id
         in: path
         required: true
@@ -45356,7 +46079,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id072
+      - *id073
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -45396,15 +46119,15 @@ paths:
       security:
       - oauth2:
         - lending:read
-      parameters: &id075
-      - &id073
+      parameters: &id076
+      - &id074
         name: loan_application_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id074
+      - &id075
         name: id
         in: path
         required: true
@@ -45441,8 +46164,8 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id073
       - *id074
+      - *id075
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -45483,7 +46206,7 @@ paths:
       security:
       - oauth2:
         - lending:write
-      parameters: *id075
+      parameters: *id076
       responses:
         '204':
           description: No content
@@ -45511,7 +46234,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id076
+      - &id077
         name: loan_application_id
         in: path
         required: true
@@ -45601,7 +46324,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id076
+      - *id077
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -45643,14 +46366,14 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id077
+      - &id078
         name: loan_application_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id078
+      - &id079
         name: id
         in: path
         required: true
@@ -45688,8 +46411,8 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id077
       - *id078
+      - *id079
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -46113,7 +46836,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id079
+      - &id080
         name: id
         in: path
         required: true
@@ -46152,7 +46875,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id079
+      - *id080
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -46197,7 +46920,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id080
+      - &id081
         name: scorecard_id
         in: path
         required: true
@@ -46273,7 +46996,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id080
+      - *id081
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -46315,14 +47038,14 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id081
+      - &id082
         name: scorecard_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id082
+      - &id083
         name: id
         in: path
         required: true
@@ -46360,8 +47083,8 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id081
       - *id082
+      - *id083
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -47959,7 +48682,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id083
+      - &id084
         name: id
         in: path
         required: true
@@ -48000,7 +48723,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id083
+      - *id084
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -49590,8 +50313,8 @@ paths:
       security:
       - oauth2:
         - lending:read
-      parameters: &id085
-      - &id084
+      parameters: &id086
+      - &id085
         name: id
         in: path
         required: true
@@ -49628,7 +50351,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id084
+      - *id085
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -49669,7 +50392,7 @@ paths:
       security:
       - oauth2:
         - lending:write
-      parameters: *id085
+      parameters: *id086
       responses:
         '204':
           description: No content
@@ -51122,7 +51845,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id086
+      - &id087
         name: id
         in: path
         required: true
@@ -51161,7 +51884,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id086
+      - *id087
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -52480,7 +53203,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id087
+      - &id088
         name: id
         in: path
         required: true
@@ -52517,7 +53240,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id087
+      - *id088
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -52988,7 +53711,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id088
+      - &id089
         name: collateral_id
         in: path
         required: true
@@ -53057,7 +53780,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id088
+      - *id089
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -53270,7 +53993,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id089
+      - &id090
         name: id
         in: path
         required: true
@@ -53307,7 +54030,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id089
+      - *id090
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -53538,7 +54261,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id090
+      - &id091
         name: id
         in: path
         required: true
@@ -53575,7 +54298,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id090
+      - *id091
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -53729,7 +54452,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id091
+      - &id092
         name: id
         in: path
         required: true
@@ -53766,7 +54489,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id091
+      - *id092
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -53809,7 +54532,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id092
+      - &id093
         name: collection_strategy_id
         in: path
         required: true
@@ -53888,7 +54611,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id092
+      - *id093
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -53928,15 +54651,15 @@ paths:
       security:
       - oauth2:
         - lending:read
-      parameters: &id095
-      - &id093
+      parameters: &id096
+      - &id094
         name: collection_strategy_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id094
+      - &id095
         name: id
         in: path
         required: true
@@ -53973,8 +54696,8 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id093
       - *id094
+      - *id095
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -54015,7 +54738,7 @@ paths:
       security:
       - oauth2:
         - lending:write
-      parameters: *id095
+      parameters: *id096
       responses:
         '204':
           description: No content
@@ -54144,7 +54867,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id096
+      - &id097
         name: id
         in: path
         required: true
@@ -54181,7 +54904,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id096
+      - *id097
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -54422,7 +55145,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id097
+      - &id098
         name: id
         in: path
         required: true
@@ -54461,7 +55184,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id097
+      - *id098
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -55396,7 +56119,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id098
+      - &id099
         name: id
         in: path
         required: true
@@ -55433,7 +56156,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id098
+      - *id099
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -55596,7 +56319,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id099
+      - &id100
         name: id
         in: path
         required: true
@@ -55634,7 +56357,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id099
+      - *id100
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -56059,7 +56782,7 @@ paths:
       - oauth2:
         - lending:read
       parameters:
-      - &id100
+      - &id101
         name: id
         in: path
         required: true
@@ -56097,7 +56820,7 @@ paths:
       - oauth2:
         - lending:write
       parameters:
-      - *id100
+      - *id101
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -56395,7 +57118,7 @@ paths:
       - oauth2:
         - openbanking:read
       parameters:
-      - &id101
+      - &id102
         name: id
         in: path
         required: true
@@ -56432,7 +57155,7 @@ paths:
       - oauth2:
         - openbanking:write
       parameters:
-      - *id101
+      - *id102
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -56633,7 +57356,7 @@ paths:
       - oauth2:
         - openbanking:read
       parameters:
-      - &id102
+      - &id103
         name: id
         in: path
         required: true
@@ -56670,7 +57393,7 @@ paths:
       - oauth2:
         - openbanking:write
       parameters:
-      - *id102
+      - *id103
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -58787,8 +59510,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id104
-      - &id103
+      parameters: &id105
+      - &id104
         name: id
         in: path
         required: true
@@ -58827,7 +59550,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id103
+      - *id104
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -58870,7 +59593,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id104
+      parameters: *id105
       responses:
         '204':
           description: No content
@@ -59173,8 +59896,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id106
-      - &id105
+      parameters: &id107
+      - &id106
         name: id
         in: path
         required: true
@@ -59211,7 +59934,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id105
+      - *id106
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -59252,7 +59975,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id106
+      parameters: *id107
       responses:
         '204':
           description: No content
@@ -60138,8 +60861,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id108
-      - &id107
+      parameters: &id109
+      - &id108
         name: id
         in: path
         required: true
@@ -60176,7 +60899,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id107
+      - *id108
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -60217,7 +60940,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id108
+      parameters: *id109
       responses:
         '204':
           description: No content
@@ -60697,7 +61420,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id109
+      - &id110
         name: id
         in: path
         required: true
@@ -60734,7 +61457,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id109
+      - *id110
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -61071,7 +61794,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id110
+      - &id111
         name: id
         in: path
         required: true
@@ -61109,7 +61832,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id110
+      - *id111
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -61312,8 +62035,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id112
-      - &id111
+      parameters: &id113
+      - &id112
         name: id
         in: path
         required: true
@@ -61350,7 +62073,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id111
+      - *id112
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -61391,7 +62114,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id112
+      parameters: *id113
       responses:
         '204':
           description: No content
@@ -62645,7 +63368,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id113
+      - &id114
         name: id
         in: path
         required: true
@@ -62682,7 +63405,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id113
+      - *id114
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -63116,8 +63839,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id115
-      - &id114
+      parameters: &id116
+      - &id115
         name: id
         in: path
         required: true
@@ -63154,7 +63877,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id114
+      - *id115
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -63195,7 +63918,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id115
+      parameters: *id116
       responses:
         '204':
           description: No content
@@ -63333,8 +64056,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id117
-      - &id116
+      parameters: &id118
+      - &id117
         name: id
         in: path
         required: true
@@ -63371,7 +64094,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id116
+      - *id117
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -63412,7 +64135,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id117
+      parameters: *id118
       responses:
         '204':
           description: No content
@@ -63612,7 +64335,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id118
+      - &id119
         name: id
         in: path
         required: true
@@ -63649,7 +64372,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id118
+      - *id119
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -63849,7 +64572,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id119
+      - &id120
         name: id
         in: path
         required: true
@@ -63886,7 +64609,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id119
+      - *id120
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -64529,7 +65252,7 @@ paths:
       - oauth2:
         - operations:read
       parameters:
-      - &id120
+      - &id121
         name: id
         in: path
         required: true
@@ -64567,7 +65290,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id120
+      - *id121
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -65294,7 +66017,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id121
+      - &id122
         name: id
         in: path
         required: true
@@ -65333,7 +66056,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id121
+      - *id122
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -65994,7 +66717,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id122
+      - &id123
         name: customer_id
         in: path
         required: true
@@ -66081,7 +66804,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id122
+      - *id123
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -66122,15 +66845,15 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id125
-      - &id123
+      parameters: &id126
+      - &id124
         name: customer_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id124
+      - &id125
         name: id
         in: path
         required: true
@@ -66168,8 +66891,8 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id123
       - *id124
+      - *id125
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -66211,7 +66934,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id125
+      parameters: *id126
       responses:
         '204':
           description: No content
@@ -66240,7 +66963,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id126
+      - &id127
         name: customer_id
         in: path
         required: true
@@ -66320,7 +67043,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id126
+      - *id127
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -66360,15 +67083,15 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id129
-      - &id127
+      parameters: &id130
+      - &id128
         name: customer_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id128
+      - &id129
         name: id
         in: path
         required: true
@@ -66405,8 +67128,8 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id127
       - *id128
+      - *id129
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -66447,7 +67170,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id129
+      parameters: *id130
       responses:
         '204':
           description: No content
@@ -66475,7 +67198,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id130
+      - &id131
         name: customer_id
         in: path
         required: true
@@ -66550,7 +67273,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id130
+      - *id131
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -66591,15 +67314,15 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id133
-      - &id131
+      parameters: &id134
+      - &id132
         name: customer_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id132
+      - &id133
         name: id
         in: path
         required: true
@@ -66637,8 +67360,8 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id131
       - *id132
+      - *id133
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -66680,7 +67403,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id133
+      parameters: *id134
       responses:
         '204':
           description: No content
@@ -66983,8 +67706,8 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id135
-      - &id134
+      parameters: &id136
+      - &id135
         name: id
         in: path
         required: true
@@ -67022,7 +67745,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id134
+      - *id135
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -67064,7 +67787,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id135
+      parameters: *id136
       responses:
         '204':
           description: No content
@@ -67208,8 +67931,8 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id137
-      - &id136
+      parameters: &id138
+      - &id137
         name: id
         in: path
         required: true
@@ -67246,7 +67969,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id136
+      - *id137
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -67287,7 +68010,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id137
+      parameters: *id138
       responses:
         '204':
           description: No content
@@ -67582,8 +68305,8 @@ paths:
       security:
       - oauth2:
         - party:read
-      parameters: &id139
-      - &id138
+      parameters: &id140
+      - &id139
         name: id
         in: path
         required: true
@@ -67621,7 +68344,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id138
+      - *id139
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -67663,7 +68386,7 @@ paths:
       security:
       - oauth2:
         - party:write
-      parameters: *id139
+      parameters: *id140
       responses:
         '204':
           description: No content
@@ -67735,7 +68458,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id140
+      - &id141
         name: customer_id
         in: path
         required: true
@@ -67804,7 +68527,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id140
+      - *id141
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -67884,7 +68607,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id141
+      - &id142
         name: customer_id
         in: path
         required: true
@@ -67968,7 +68691,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id141
+      - *id142
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -68010,14 +68733,14 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id142
+      - &id143
         name: customer_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-      - &id143
+      - &id144
         name: id
         in: path
         required: true
@@ -68055,8 +68778,8 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id142
       - *id143
+      - *id144
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -68973,7 +69696,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id144
+      - &id145
         name: id
         in: path
         required: true
@@ -69010,7 +69733,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id144
+      - *id145
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -69313,7 +70036,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id145
+      - &id146
         name: id
         in: path
         required: true
@@ -69350,7 +70073,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id145
+      - *id146
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -69728,7 +70451,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id146
+      - &id147
         name: id
         in: path
         required: true
@@ -69766,7 +70489,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id146
+      - *id147
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -70998,7 +71721,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id147
+      - &id148
         name: id
         in: path
         required: true
@@ -71036,7 +71759,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id147
+      - *id148
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -72572,7 +73295,7 @@ paths:
       - oauth2:
         - party:read
       parameters:
-      - &id148
+      - &id149
         name: id
         in: path
         required: true
@@ -72609,7 +73332,7 @@ paths:
       - oauth2:
         - party:write
       parameters:
-      - *id148
+      - *id149
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -74964,8 +75687,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id150
-      - &id149
+      parameters: &id151
+      - &id150
         name: id
         in: path
         required: true
@@ -75003,7 +75726,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id149
+      - *id150
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -75045,7 +75768,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id150
+      parameters: *id151
       responses:
         '204':
           description: No content
@@ -75386,7 +76109,7 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id151
+      parameters: &id152
       - name: id
         in: path
         required: true
@@ -75423,7 +76146,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id151
+      parameters: *id152
       responses:
         '204':
           description: No content
@@ -76406,7 +77129,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id152
+      - &id153
         name: id
         in: path
         required: true
@@ -76443,7 +77166,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id152
+      - *id153
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -76631,7 +77354,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id153
+      - &id154
         name: id
         in: path
         required: true
@@ -76668,7 +77391,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id153
+      - *id154
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -77624,7 +78347,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id154
+      - &id155
         name: id
         in: path
         required: true
@@ -77662,7 +78385,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id154
+      - *id155
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -78273,7 +78996,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id155
+      - &id156
         name: id
         in: path
         required: true
@@ -78311,7 +79034,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id155
+      - *id156
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -78766,7 +79489,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id156
+      - &id157
         name: id
         in: path
         required: true
@@ -78803,7 +79526,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id156
+      - *id157
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -79059,8 +79782,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id158
-      - &id157
+      parameters: &id159
+      - &id158
         name: id
         in: path
         required: true
@@ -79097,7 +79820,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id157
+      - *id158
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -79138,7 +79861,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id158
+      parameters: *id159
       responses:
         '204':
           description: No content
@@ -79278,8 +80001,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id160
-      - &id159
+      parameters: &id161
+      - &id160
         name: id
         in: path
         required: true
@@ -79317,7 +80040,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id159
+      - *id160
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -79359,7 +80082,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id160
+      parameters: *id161
       responses:
         '204':
           description: No content
@@ -80101,7 +80824,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id161
+      - &id162
         name: id
         in: path
         required: true
@@ -80139,7 +80862,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id161
+      - *id162
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -80537,7 +81260,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id162
+      - &id163
         name: id
         in: path
         required: true
@@ -80575,7 +81298,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id162
+      - *id163
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -81251,8 +81974,8 @@ paths:
       security:
       - oauth2:
         - payments:read
-      parameters: &id164
-      - &id163
+      parameters: &id165
+      - &id164
         name: id
         in: path
         required: true
@@ -81290,7 +82013,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id163
+      - *id164
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -81332,7 +82055,7 @@ paths:
       security:
       - oauth2:
         - payments:write
-      parameters: *id164
+      parameters: *id165
       responses:
         '204':
           description: No content
@@ -81467,7 +82190,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id165
+      - &id166
         name: id
         in: path
         required: true
@@ -81504,7 +82227,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id165
+      - *id166
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -81679,7 +82402,7 @@ paths:
       - oauth2:
         - payments:read
       parameters:
-      - &id166
+      - &id167
         name: id
         in: path
         required: true
@@ -81717,7 +82440,7 @@ paths:
       - oauth2:
         - payments:write
       parameters:
-      - *id166
+      - *id167
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -82036,7 +82759,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - &id167
+      - &id168
         name: id
         in: path
         required: true
@@ -82073,7 +82796,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id167
+      - *id168
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -82439,7 +83162,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - &id168
+      - &id169
         name: id
         in: path
         required: true
@@ -82476,7 +83199,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id168
+      - *id169
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -83766,7 +84489,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id169
+      - &id170
         name: id
         in: path
         required: true
@@ -83803,7 +84526,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id169
+      - *id170
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -84060,7 +84783,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id170
+      - &id171
         name: id
         in: path
         required: true
@@ -84098,7 +84821,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id170
+      - *id171
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -84278,7 +85001,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id171
+      - &id172
         name: id
         in: path
         required: true
@@ -84315,7 +85038,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id171
+      - *id172
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -84510,8 +85233,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id173
-      - &id172
+      parameters: &id174
+      - &id173
         name: id
         in: path
         required: true
@@ -84548,7 +85271,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id172
+      - *id173
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -84589,7 +85312,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id173
+      parameters: *id174
       responses:
         '204':
           description: No content
@@ -84722,8 +85445,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id175
-      - &id174
+      parameters: &id176
+      - &id175
         name: id
         in: path
         required: true
@@ -84760,7 +85483,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id174
+      - *id175
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -84801,7 +85524,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id175
+      parameters: *id176
       responses:
         '204':
           description: No content
@@ -84985,7 +85708,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id176
+      - &id177
         name: id
         in: path
         required: true
@@ -85022,7 +85745,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id176
+      - *id177
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -85245,7 +85968,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id177
+      - &id178
         name: id
         in: path
         required: true
@@ -85282,7 +86005,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id177
+      - *id178
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -85773,7 +86496,7 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id178
+      parameters: &id179
       - name: id
         in: path
         required: true
@@ -85810,7 +86533,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id178
+      parameters: *id179
       responses:
         '204':
           description: No content
@@ -85992,8 +86715,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id180
-      - &id179
+      parameters: &id181
+      - &id180
         name: id
         in: path
         required: true
@@ -86030,7 +86753,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id179
+      - *id180
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -86071,7 +86794,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id180
+      parameters: *id181
       responses:
         '204':
           description: No content
@@ -86294,7 +87017,7 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id181
+      parameters: &id182
       - name: id
         in: path
         required: true
@@ -86330,7 +87053,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id181
+      parameters: *id182
       responses:
         '204':
           description: No content
@@ -86574,8 +87297,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id183
-      - &id182
+      parameters: &id184
+      - &id183
         name: id
         in: path
         required: true
@@ -86612,7 +87335,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id182
+      - *id183
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -86653,7 +87376,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id183
+      parameters: *id184
       responses:
         '204':
           description: No content
@@ -86835,8 +87558,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id185
-      - &id184
+      parameters: &id186
+      - &id185
         name: id
         in: path
         required: true
@@ -86873,7 +87596,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id184
+      - *id185
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -86914,7 +87637,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id185
+      parameters: *id186
       responses:
         '204':
           description: No content
@@ -86984,7 +87707,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id186
+      - &id187
         name: user_id
         in: path
         required: true
@@ -87066,7 +87789,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id186
+      - *id187
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -87106,7 +87829,7 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id187
+      parameters: &id188
       - name: user_id
         in: path
         required: true
@@ -87148,7 +87871,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id187
+      parameters: *id188
       responses:
         '204':
           description: No content
@@ -87548,7 +88271,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id188
+      - &id189
         name: id
         in: path
         required: true
@@ -87586,7 +88309,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id188
+      - *id189
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -87809,7 +88532,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id189
+      - &id190
         name: api_client_id
         in: path
         required: true
@@ -87882,7 +88605,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id189
+      - *id190
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '201':
@@ -88279,8 +89002,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id191
-      - &id190
+      parameters: &id192
+      - &id191
         name: id
         in: path
         required: true
@@ -88317,7 +89040,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id190
+      - *id191
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -88358,7 +89081,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id191
+      parameters: *id192
       responses:
         '204':
           description: No content
@@ -88630,8 +89353,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id193
-      - &id192
+      parameters: &id194
+      - &id193
         name: id
         in: path
         required: true
@@ -88668,7 +89391,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id192
+      - *id193
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -88709,7 +89432,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id193
+      parameters: *id194
       responses:
         '204':
           description: No content
@@ -89601,7 +90324,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id194
+      - &id195
         name: id
         in: path
         required: true
@@ -89638,7 +90361,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id194
+      - *id195
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -89896,8 +90619,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id196
-      - &id195
+      parameters: &id197
+      - &id196
         name: id
         in: path
         required: true
@@ -89934,7 +90657,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id195
+      - *id196
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -89975,7 +90698,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id196
+      parameters: *id197
       responses:
         '204':
           description: No content
@@ -90157,7 +90880,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id197
+      - &id198
         name: id
         in: path
         required: true
@@ -90195,7 +90918,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id197
+      - *id198
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -90323,7 +91046,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id198
+      - &id199
         name: id
         in: path
         required: true
@@ -90360,7 +91083,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id198
+      - *id199
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -90504,7 +91227,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id199
+      - &id200
         name: id
         in: path
         required: true
@@ -90541,7 +91264,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id199
+      - *id200
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -90704,7 +91427,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id200
+      - &id201
         name: id
         in: path
         required: true
@@ -90742,7 +91465,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id200
+      - *id201
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -91047,8 +91770,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id202
-      - &id201
+      parameters: &id203
+      - &id202
         name: id
         in: path
         required: true
@@ -91086,7 +91809,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id201
+      - *id202
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -91128,7 +91851,7 @@ paths:
       security:
       - oauth2:
         - platform:operator
-      parameters: *id202
+      parameters: *id203
       responses:
         '204':
           description: No content
@@ -91260,7 +91983,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id203
+      - &id204
         name: id
         in: path
         required: true
@@ -91298,7 +92021,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id203
+      - *id204
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -92178,8 +92901,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id205
-      - &id204
+      parameters: &id206
+      - &id205
         name: id
         in: path
         required: true
@@ -92218,7 +92941,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id204
+      - *id205
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -92261,7 +92984,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id205
+      parameters: *id206
       responses:
         '204':
           description: No content
@@ -92647,7 +93370,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id206
+      - &id207
         name: id
         in: path
         required: true
@@ -92685,7 +93408,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id206
+      - *id207
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -93473,8 +94196,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id208
-      - &id207
+      parameters: &id209
+      - &id208
         name: id
         in: path
         required: true
@@ -93511,7 +94234,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id207
+      - *id208
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -93552,7 +94275,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id208
+      parameters: *id209
       responses:
         '204':
           description: No content
@@ -94124,7 +94847,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id209
+      - &id210
         name: id
         in: path
         required: true
@@ -94162,7 +94885,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id209
+      - *id210
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -94741,7 +95464,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id210
+      - &id211
         name: id
         in: path
         required: true
@@ -94780,7 +95503,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id210
+      - *id211
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -95641,7 +96364,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id211
+      - &id212
         name: id
         in: path
         required: true
@@ -95678,7 +96401,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id211
+      - *id212
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -95972,8 +96695,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id213
-      - &id212
+      parameters: &id214
+      - &id213
         name: id
         in: path
         required: true
@@ -96010,7 +96733,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id212
+      - *id213
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -96051,7 +96774,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id213
+      parameters: *id214
       responses:
         '204':
           description: No content
@@ -96243,8 +96966,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id215
-      - &id214
+      parameters: &id216
+      - &id215
         name: id
         in: path
         required: true
@@ -96281,7 +97004,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id214
+      - *id215
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -96322,7 +97045,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id215
+      parameters: *id216
       responses:
         '204':
           description: No content
@@ -96485,7 +97208,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id216
+      - &id217
         name: id
         in: path
         required: true
@@ -96522,7 +97245,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id216
+      - *id217
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -96681,8 +97404,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id218
-      - &id217
+      parameters: &id219
+      - &id218
         name: id
         in: path
         required: true
@@ -96719,7 +97442,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id217
+      - *id218
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -96760,7 +97483,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id218
+      parameters: *id219
       responses:
         '204':
           description: No content
@@ -97070,8 +97793,8 @@ paths:
       security:
       - oauth2:
         - platform:read
-      parameters: &id220
-      - &id219
+      parameters: &id221
+      - &id220
         name: id
         in: path
         required: true
@@ -97108,7 +97831,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id219
+      - *id220
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -97149,7 +97872,7 @@ paths:
       security:
       - oauth2:
         - platform:write
-      parameters: *id220
+      parameters: *id221
       responses:
         '204':
           description: No content
@@ -97905,7 +98628,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id221
+      - &id222
         name: id
         in: path
         required: true
@@ -97942,7 +98665,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id221
+      - *id222
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -98356,7 +99079,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id222
+      - &id223
         name: id
         in: path
         required: true
@@ -98393,7 +99116,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id222
+      - *id223
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -98634,7 +99357,7 @@ paths:
       - oauth2:
         - platform:read
       parameters:
-      - &id223
+      - &id224
         name: id
         in: path
         required: true
@@ -98671,7 +99394,7 @@ paths:
       - oauth2:
         - platform:write
       parameters:
-      - *id223
+      - *id224
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -99509,7 +100232,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id224
+      - &id225
         name: id
         in: path
         required: true
@@ -99546,7 +100269,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id224
+      - *id225
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -99750,7 +100473,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id225
+      - &id226
         name: id
         in: path
         required: true
@@ -99788,7 +100511,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id225
+      - *id226
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -100355,7 +101078,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id226
+      - &id227
         name: id
         in: path
         required: true
@@ -100394,7 +101117,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id226
+      - *id227
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -101067,8 +101790,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id228
-      - &id227
+      parameters: &id229
+      - &id228
         name: id
         in: path
         required: true
@@ -101105,7 +101828,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id227
+      - *id228
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -101146,7 +101869,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id228
+      parameters: *id229
       responses:
         '204':
           description: No content
@@ -101302,8 +102025,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id230
-      - &id229
+      parameters: &id231
+      - &id230
         name: id
         in: path
         required: true
@@ -101341,7 +102064,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id229
+      - *id230
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -101383,7 +102106,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id230
+      parameters: *id231
       responses:
         '204':
           description: No content
@@ -101600,8 +102323,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id232
-      - &id231
+      parameters: &id233
+      - &id232
         name: id
         in: path
         required: true
@@ -101638,7 +102361,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id231
+      - *id232
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -101679,7 +102402,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id232
+      parameters: *id233
       responses:
         '204':
           description: No content
@@ -101818,7 +102541,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id233
+      - &id234
         name: id
         in: path
         required: true
@@ -101855,7 +102578,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id233
+      - *id234
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -102142,8 +102865,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id235
-      - &id234
+      parameters: &id236
+      - &id235
         name: id
         in: path
         required: true
@@ -102182,7 +102905,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id234
+      - *id235
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -102225,7 +102948,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id235
+      parameters: *id236
       responses:
         '204':
           description: No content
@@ -102484,8 +103207,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id237
-      - &id236
+      parameters: &id238
+      - &id237
         name: id
         in: path
         required: true
@@ -102522,7 +103245,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id236
+      - *id237
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -102563,7 +103286,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id237
+      parameters: *id238
       responses:
         '204':
           description: No content
@@ -102708,8 +103431,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id239
-      - &id238
+      parameters: &id240
+      - &id239
         name: id
         in: path
         required: true
@@ -102747,7 +103470,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id238
+      - *id239
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -102789,7 +103512,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id239
+      parameters: *id240
       responses:
         '204':
           description: No content
@@ -102946,7 +103669,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id240
+      - &id241
         name: id
         in: path
         required: true
@@ -102983,7 +103706,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id240
+      - *id241
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -103158,8 +103881,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id242
-      - &id241
+      parameters: &id243
+      - &id242
         name: id
         in: path
         required: true
@@ -103197,7 +103920,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id241
+      - *id242
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -103239,7 +103962,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id242
+      parameters: *id243
       responses:
         '204':
           description: No content
@@ -103386,8 +104109,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id244
-      - &id243
+      parameters: &id245
+      - &id244
         name: id
         in: path
         required: true
@@ -103425,7 +104148,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id243
+      - *id244
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -103467,7 +104190,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id244
+      parameters: *id245
       responses:
         '204':
           description: No content
@@ -103607,7 +104330,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id245
+      - &id246
         name: id
         in: path
         required: true
@@ -103644,7 +104367,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id245
+      - *id246
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -103830,8 +104553,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id247
-      - &id246
+      parameters: &id248
+      - &id247
         name: id
         in: path
         required: true
@@ -103868,7 +104591,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id246
+      - *id247
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -103909,7 +104632,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id247
+      parameters: *id248
       responses:
         '204':
           description: No content
@@ -104074,7 +104797,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id248
+      - &id249
         name: id
         in: path
         required: true
@@ -104111,7 +104834,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id248
+      - *id249
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -104767,7 +105490,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id249
+      - &id250
         name: id
         in: path
         required: true
@@ -104804,7 +105527,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id249
+      - *id250
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -105009,8 +105732,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id251
-      - &id250
+      parameters: &id252
+      - &id251
         name: id
         in: path
         required: true
@@ -105047,7 +105770,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id250
+      - *id251
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -105088,7 +105811,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id251
+      parameters: *id252
       responses:
         '204':
           description: No content
@@ -105240,8 +105963,8 @@ paths:
       security:
       - oauth2:
         - product:read
-      parameters: &id253
-      - &id252
+      parameters: &id254
+      - &id253
         name: id
         in: path
         required: true
@@ -105278,7 +106001,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id252
+      - *id253
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -105319,7 +106042,7 @@ paths:
       security:
       - oauth2:
         - product:write
-      parameters: *id253
+      parameters: *id254
       responses:
         '204':
           description: No content
@@ -105466,7 +106189,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id254
+      - &id255
         name: id
         in: path
         required: true
@@ -105503,7 +106226,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id254
+      - *id255
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -105669,7 +106392,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id255
+      - &id256
         name: id
         in: path
         required: true
@@ -105706,7 +106429,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id255
+      - *id256
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -105987,7 +106710,7 @@ paths:
       - oauth2:
         - product:read
       parameters:
-      - &id256
+      - &id257
         name: id
         in: path
         required: true
@@ -106025,7 +106748,7 @@ paths:
       - oauth2:
         - product:write
       parameters:
-      - *id256
+      - *id257
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -106741,7 +107464,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id257
+      - &id258
         name: id
         in: path
         required: true
@@ -106778,7 +107501,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id257
+      - *id258
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -107323,8 +108046,8 @@ paths:
       security:
       - oauth2:
         - reporting:read
-      parameters: &id259
-      - &id258
+      parameters: &id260
+      - &id259
         name: id
         in: path
         required: true
@@ -107361,7 +108084,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id258
+      - *id259
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -107402,7 +108125,7 @@ paths:
       security:
       - oauth2:
         - reporting:write
-      parameters: *id259
+      parameters: *id260
       responses:
         '204':
           description: No content
@@ -108931,7 +109654,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id260
+      - &id261
         name: id
         in: path
         required: true
@@ -108968,7 +109691,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id260
+      - *id261
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -109512,7 +110235,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id261
+      - &id262
         name: id
         in: path
         required: true
@@ -109547,7 +110270,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id261
+      - *id262
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -109885,8 +110608,8 @@ paths:
       security:
       - oauth2:
         - reporting:read
-      parameters: &id263
-      - &id262
+      parameters: &id264
+      - &id263
         name: id
         in: path
         required: true
@@ -109921,7 +110644,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id262
+      - *id263
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -109960,7 +110683,7 @@ paths:
       security:
       - oauth2:
         - reporting:write
-      parameters: *id263
+      parameters: *id264
       responses:
         '204':
           description: No content
@@ -110260,8 +110983,8 @@ paths:
       security:
       - oauth2:
         - reporting:read
-      parameters: &id265
-      - &id264
+      parameters: &id266
+      - &id265
         name: id
         in: path
         required: true
@@ -110296,7 +111019,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id264
+      - *id265
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -110335,7 +111058,7 @@ paths:
       security:
       - oauth2:
         - reporting:write
-      parameters: *id265
+      parameters: *id266
       responses:
         '204':
           description: No content
@@ -110633,8 +111356,8 @@ paths:
       security:
       - oauth2:
         - reporting:read
-      parameters: &id267
-      - &id266
+      parameters: &id268
+      - &id267
         name: id
         in: path
         required: true
@@ -110669,7 +111392,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id266
+      - *id267
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -110708,7 +111431,7 @@ paths:
       security:
       - oauth2:
         - reporting:write
-      parameters: *id267
+      parameters: *id268
       responses:
         '204':
           description: No content
@@ -111176,8 +111899,8 @@ paths:
       security:
       - oauth2:
         - reporting:read
-      parameters: &id269
-      - &id268
+      parameters: &id270
+      - &id269
         name: id
         in: path
         required: true
@@ -111212,7 +111935,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id268
+      - *id269
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -111251,7 +111974,7 @@ paths:
       security:
       - oauth2:
         - reporting:write
-      parameters: *id269
+      parameters: *id270
       responses:
         '204':
           description: No content
@@ -111730,7 +112453,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id270
+      - &id271
         name: id
         in: path
         required: true
@@ -111767,7 +112490,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id270
+      - *id271
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -112005,7 +112728,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id271
+      - &id272
         name: id
         in: path
         required: true
@@ -112043,7 +112766,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id271
+      - *id272
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -112453,7 +113176,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id272
+      - &id273
         name: id
         in: path
         required: true
@@ -112490,7 +113213,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id272
+      - *id273
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -113074,7 +113797,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id273
+      - &id274
         name: id
         in: path
         required: true
@@ -113111,7 +113834,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id273
+      - *id274
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -113280,7 +114003,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id274
+      - &id275
         name: id
         in: path
         required: true
@@ -113318,7 +114041,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id274
+      - *id275
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -113999,7 +114722,7 @@ paths:
       - oauth2:
         - reporting:read
       parameters:
-      - &id275
+      - &id276
         name: id
         in: path
         required: true
@@ -114036,7 +114759,7 @@ paths:
       - oauth2:
         - reporting:write
       parameters:
-      - *id275
+      - *id276
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -114737,7 +115460,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id276
+      - &id277
         name: id
         in: path
         required: true
@@ -114774,7 +115497,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id276
+      - *id277
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -115243,7 +115966,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id277
+      - &id278
         name: id
         in: path
         required: true
@@ -115280,7 +116003,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id277
+      - *id278
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -115442,7 +116165,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id278
+      - &id279
         name: id
         in: path
         required: true
@@ -115480,7 +116203,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id278
+      - *id279
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -115793,7 +116516,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id279
+      - &id280
         name: id
         in: path
         required: true
@@ -115830,7 +116553,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id279
+      - *id280
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -116333,8 +117056,8 @@ paths:
       security:
       - oauth2:
         - risk:read
-      parameters: &id281
-      - &id280
+      parameters: &id282
+      - &id281
         name: id
         in: path
         required: true
@@ -116372,7 +117095,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id280
+      - *id281
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -116414,7 +117137,7 @@ paths:
       security:
       - oauth2:
         - risk:write
-      parameters: *id281
+      parameters: *id282
       responses:
         '204':
           description: No content
@@ -116643,7 +117366,7 @@ paths:
       security:
       - oauth2:
         - risk:read
-      parameters: &id282
+      parameters: &id283
       - name: id
         in: path
         required: true
@@ -116679,7 +117402,7 @@ paths:
       security:
       - oauth2:
         - risk:write
-      parameters: *id282
+      parameters: *id283
       responses:
         '204':
           description: No content
@@ -117378,7 +118101,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id283
+      - &id284
         name: id
         in: path
         required: true
@@ -117415,7 +118138,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id283
+      - *id284
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -118181,7 +118904,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id284
+      - &id285
         name: id
         in: path
         required: true
@@ -118218,7 +118941,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id284
+      - *id285
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -118757,7 +119480,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id285
+      - &id286
         name: id
         in: path
         required: true
@@ -118795,7 +119518,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id285
+      - *id286
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -119515,7 +120238,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id286
+      - &id287
         name: id
         in: path
         required: true
@@ -119553,7 +120276,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id286
+      - *id287
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -119856,7 +120579,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id287
+      - &id288
         name: id
         in: path
         required: true
@@ -119894,7 +120617,7 @@ paths:
       - oauth2:
         - platform:operator
       parameters:
-      - *id287
+      - *id288
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -120527,7 +121250,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id288
+      - &id289
         name: id
         in: path
         required: true
@@ -120564,7 +121287,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id288
+      - *id289
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -120725,7 +121448,7 @@ paths:
       security:
       - oauth2:
         - risk:read
-      parameters: &id289
+      parameters: &id290
       - name: id
         in: path
         required: true
@@ -120761,7 +121484,7 @@ paths:
       security:
       - oauth2:
         - risk:write
-      parameters: *id289
+      parameters: *id290
       responses:
         '204':
           description: No content
@@ -121052,7 +121775,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id290
+      - &id291
         name: id
         in: path
         required: true
@@ -121090,7 +121813,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id290
+      - *id291
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -121692,7 +122415,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id291
+      - &id292
         name: id
         in: path
         required: true
@@ -121729,7 +122452,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id291
+      - *id292
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -122306,7 +123029,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id292
+      - &id293
         name: id
         in: path
         required: true
@@ -122343,7 +123066,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id292
+      - *id293
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -122906,7 +123629,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id293
+      - &id294
         name: id
         in: path
         required: true
@@ -122944,7 +123667,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id293
+      - *id294
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -124138,7 +124861,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id294
+      - &id295
         name: id
         in: path
         required: true
@@ -124175,7 +124898,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id294
+      - *id295
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -124457,8 +125180,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id296
-      - &id295
+      parameters: &id297
+      - &id296
         name: id
         in: path
         required: true
@@ -124495,7 +125218,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id295
+      - *id296
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -124536,7 +125259,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id296
+      parameters: *id297
       responses:
         '204':
           description: No content
@@ -124679,7 +125402,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id297
+      - &id298
         name: id
         in: path
         required: true
@@ -124716,7 +125439,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id297
+      - *id298
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -124969,7 +125692,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id298
+      - &id299
         name: id
         in: path
         required: true
@@ -125006,7 +125729,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id298
+      - *id299
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -125493,7 +126216,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id299
+      - &id300
         name: id
         in: path
         required: true
@@ -125531,7 +126254,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id299
+      - *id300
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -126321,7 +127044,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id300
+      - &id301
         name: id
         in: path
         required: true
@@ -126358,7 +127081,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id300
+      - *id301
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -127335,7 +128058,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id301
+      - &id302
         name: id
         in: path
         required: true
@@ -127373,7 +128096,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id301
+      - *id302
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -127529,8 +128252,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id303
-      - &id302
+      parameters: &id304
+      - &id303
         name: id
         in: path
         required: true
@@ -127568,7 +128291,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id302
+      - *id303
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -127610,7 +128333,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id303
+      parameters: *id304
       responses:
         '204':
           description: No content
@@ -127898,7 +128621,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id304
+      - &id305
         name: id
         in: path
         required: true
@@ -127935,7 +128658,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id304
+      - *id305
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -128399,8 +129122,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id306
-      - &id305
+      parameters: &id307
+      - &id306
         name: id
         in: path
         required: true
@@ -128438,7 +129161,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id305
+      - *id306
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -128480,7 +129203,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id306
+      parameters: *id307
       responses:
         '204':
           description: No content
@@ -128953,7 +129676,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id307
+      - &id308
         name: id
         in: path
         required: true
@@ -128991,7 +129714,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id307
+      - *id308
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -129325,7 +130048,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id308
+      - &id309
         name: id
         in: path
         required: true
@@ -129362,7 +130085,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id308
+      - *id309
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -129579,7 +130302,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id309
+      - &id310
         name: id
         in: path
         required: true
@@ -129616,7 +130339,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id309
+      - *id310
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -130050,7 +130773,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id310
+      - &id311
         name: id
         in: path
         required: true
@@ -130088,7 +130811,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id310
+      - *id311
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -130661,7 +131384,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id311
+      - &id312
         name: id
         in: path
         required: true
@@ -130699,7 +131422,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id311
+      - *id312
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -131351,7 +132074,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id312
+      - &id313
         name: id
         in: path
         required: true
@@ -131388,7 +132111,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id312
+      - *id313
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -134006,7 +134729,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id313
+      - &id314
         name: id
         in: path
         required: true
@@ -134043,7 +134766,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id313
+      - *id314
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -134732,7 +135455,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id314
+      - &id315
         name: id
         in: path
         required: true
@@ -134770,7 +135493,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id314
+      - *id315
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -135451,7 +136174,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id315
+      - &id316
         name: id
         in: path
         required: true
@@ -135488,7 +136211,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id315
+      - *id316
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -135850,8 +136573,8 @@ paths:
       security:
       - oauth2:
         - treasury:read
-      parameters: &id317
-      - &id316
+      parameters: &id318
+      - &id317
         name: id
         in: path
         required: true
@@ -135888,7 +136611,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id316
+      - *id317
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -135929,7 +136652,7 @@ paths:
       security:
       - oauth2:
         - treasury:write
-      parameters: *id317
+      parameters: *id318
       responses:
         '204':
           description: No content
@@ -136077,8 +136800,8 @@ paths:
       security:
       - oauth2:
         - treasury:read
-      parameters: &id319
-      - &id318
+      parameters: &id320
+      - &id319
         name: id
         in: path
         required: true
@@ -136115,7 +136838,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id318
+      - *id319
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -136156,7 +136879,7 @@ paths:
       security:
       - oauth2:
         - treasury:write
-      parameters: *id319
+      parameters: *id320
       responses:
         '204':
           description: No content
@@ -136559,7 +137282,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id320
+      - &id321
         name: id
         in: path
         required: true
@@ -136598,7 +137321,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id320
+      - *id321
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138612,8 +139335,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id322
-      - &id321
+      parameters: &id323
+      - &id322
         name: id
         in: path
         required: true
@@ -138652,7 +139375,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id321
+      - *id322
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138695,7 +139418,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id322
+      parameters: *id323
       responses:
         '204':
           description: No content
@@ -138877,8 +139600,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id324
-      - &id323
+      parameters: &id325
+      - &id324
         name: id
         in: path
         required: true
@@ -138916,7 +139639,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id323
+      - *id324
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138958,7 +139681,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id324
+      parameters: *id325
       responses:
         '204':
           description: No content
@@ -139105,7 +139828,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id325
+      - &id326
         name: id
         in: path
         required: true
@@ -139143,7 +139866,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id325
+      - *id326
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -139682,8 +140405,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id327
-      - &id326
+      parameters: &id328
+      - &id327
         name: id
         in: path
         required: true
@@ -139721,7 +140444,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id326
+      - *id327
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -139763,7 +140486,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id327
+      parameters: *id328
       responses:
         '204':
           description: No content
@@ -139940,7 +140663,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id328
+      - &id329
         name: id
         in: path
         required: true
@@ -139979,7 +140702,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id328
+      - *id329
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -140591,7 +141314,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id329
+      - &id330
         name: id
         in: path
         required: true
@@ -140628,7 +141351,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id329
+      - *id330
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -140798,7 +141521,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id330
+      - &id331
         name: id
         in: path
         required: true
@@ -140836,7 +141559,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id330
+      - *id331
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -141106,7 +141829,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id331
+      - &id332
         name: id
         in: path
         required: true
@@ -141143,7 +141866,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id331
+      - *id332
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -141917,7 +142640,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id332
+      - &id333
         name: id
         in: path
         required: true
@@ -141955,7 +142678,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id332
+      - *id333
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -142252,7 +142975,7 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id333
+      parameters: &id334
       - name: id
         in: path
         required: true
@@ -142289,7 +143012,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id333
+      parameters: *id334
       responses:
         '204':
           description: No content
@@ -142485,7 +143208,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id334
+      - &id335
         name: id
         in: path
         required: true
@@ -142522,7 +143245,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id334
+      - *id335
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -142824,7 +143547,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id335
+      - &id336
         name: id
         in: path
         required: true
@@ -142861,7 +143584,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id335
+      - *id336
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -143352,8 +144075,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id337
-      - &id336
+      parameters: &id338
+      - &id337
         name: id
         in: path
         required: true
@@ -143390,7 +144113,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id336
+      - *id337
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -143431,7 +144154,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id337
+      parameters: *id338
       responses:
         '204':
           description: No content
@@ -144166,7 +144889,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id338
+      - &id339
         name: id
         in: path
         required: true
@@ -144203,7 +144926,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id338
+      - *id339
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -144526,7 +145249,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id339
+      - &id340
         name: id
         in: path
         required: true
@@ -144563,7 +145286,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id339
+      - *id340
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -145712,7 +146435,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id340
+      - &id341
         name: id
         in: path
         required: true
@@ -145750,7 +146473,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id340
+      - *id341
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146224,7 +146947,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id341
+      - &id342
         name: id
         in: path
         required: true
@@ -146261,7 +146984,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id341
+      - *id342
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146425,7 +147148,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id342
+      - &id343
         name: id
         in: path
         required: true
@@ -146462,7 +147185,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id342
+      - *id343
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146949,7 +147672,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id343
+      - &id344
         name: id
         in: path
         required: true
@@ -146987,7 +147710,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id343
+      - *id344
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -147232,7 +147955,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id344
+      - &id345
         name: id
         in: path
         required: true
@@ -147270,7 +147993,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id344
+      - *id345
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -147997,7 +148720,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id345
+      - &id346
         name: id
         in: path
         required: true
@@ -148034,7 +148757,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id345
+      - *id346
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148458,8 +149181,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id347
-      - &id346
+      parameters: &id348
+      - &id347
         name: id
         in: path
         required: true
@@ -148496,7 +149219,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id346
+      - *id347
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148537,7 +149260,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id347
+      parameters: *id348
       responses:
         '204':
           description: No content
@@ -148919,8 +149642,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id349
-      - &id348
+      parameters: &id350
+      - &id349
         name: id
         in: path
         required: true
@@ -148957,7 +149680,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id348
+      - *id349
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148998,7 +149721,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id349
+      parameters: *id350
       responses:
         '204':
           description: No content
@@ -149368,7 +150091,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id350
+      - &id351
         name: id
         in: path
         required: true
@@ -149405,7 +150128,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id350
+      - *id351
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150359,7 +151082,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id351
+      - &id352
         name: id
         in: path
         required: true
@@ -150396,7 +151119,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id351
+      - *id352
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150559,7 +151282,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id352
+      - &id353
         name: id
         in: path
         required: true
@@ -150596,7 +151319,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id352
+      - *id353
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150872,7 +151595,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id353
+      - &id354
         name: id
         in: path
         required: true
@@ -150909,7 +151632,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id353
+      - *id354
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -201013,6 +201736,48 @@ components:
       required:
       - data
       - has_more
+    ReconRuleSetPage:
+      type: object
+      description: One page of ReconRuleSet results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRuleSet'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRuleSetsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    ReconRuleSetsSimulateRequest:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+      required:
+      - recon_source_id
+      - from_date
+      - to_date
     ReconRunPage:
       type: object
       description: One page of ReconRun results (newest first)
@@ -201088,11 +201853,34 @@ components:
       properties:
         resolution_note:
           type: string
-        adjustment:
-          type: object
-          additionalProperties: true
       required:
       - resolution_note
+    ReconAdjustmentPage:
+      type: object
+      description: One page of ReconAdjustment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconAdjustment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconAdjustmentsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     AccountingPeriod:
       type: object
       description: Accounting period per legal entity; closing is a logical cut-off with no downtime
@@ -204438,6 +205226,234 @@ components:
       - row_version
       - accounting_period_id
       - status
+    ReconAdjustment:
+      type: object
+      description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+        approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break
+        closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_exception_id:
+          type: string
+          format: uuid
+          description: Break
+        kind:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+          description: Adjustment (books the missing side) or write-off
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount adjusted or written off
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Ledger to post into (empty: write-off without a posting)'
+        entries:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Balanced journal lines [{ledger_account_id, direction, amount, currency}]
+        reason:
+          type: string
+          description: Justification
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Posted journal entry
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_exception_id
+      - kind
+      - status
+      - amount
+      - currency
+      - reason
+    ReconAdjustmentCreate:
+      type: object
+      properties:
+        recon_exception_id:
+          type: string
+          format: uuid
+          description: Break
+        kind:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+          description: Adjustment (books the missing side) or write-off
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount adjusted or written off
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_id:
+          type: string
+          format: uuid
+          description: 'Ledger to post into (empty: write-off without a posting)'
+        entries:
+          type: array
+          items: {}
+          description: Balanced journal lines [{ledger_account_id, direction, amount, currency}]
+        reason:
+          type: string
+          description: Justification
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - recon_exception_id
+      - kind
+      - amount
+      - currency
+      - reason
     ReconException:
       type: object
       description: A reconciliation break awaiting investigation
@@ -204489,6 +205505,7 @@ components:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
           description: Break reason
         status:
@@ -204609,6 +205626,7 @@ components:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
           description: Break reason
         status:
@@ -204766,6 +205784,36 @@ components:
           - 'null'
           description: Parsing error
           readOnly: true
+        statement_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:)
+          readOnly: true
+        sequence_no:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement
+          readOnly: true
+        account_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Account identification stated in the file (IBAN, MT940 :25:)
+          readOnly: true
+        movements_total:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net of the parsed lines (credits - debits), checked against opening and closing balances
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -204882,6 +205930,27 @@ components:
           - 'null'
           format: date-time
           description: Set via a new compensating match record when undone
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version that produced it
+          readOnly: true
+        rule_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Rule of the rule set
+          readOnly: true
+        explanation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Why: rule, matched keys and score components (amount, date, name, reference)'
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -205076,6 +206145,67 @@ components:
           - 'null'
           additionalProperties: true
           description: Original parsed line
+        line_no:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Position of the line in the file
+        instruction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Instruction id (ISO 20022 InstrId)
+        uetr:
+          type:
+          - string
+          - 'null'
+          maxLength: 36
+          description: Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR)
+        counterparty_account:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Counterparty IBAN / account number
+        transaction_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Bank transaction code (camt BkTxCd, MT940 transaction type)
+        is_reversal:
+          type: boolean
+          description: Reversal of an earlier booking (camt RvslInd, MT940 RC / RD)
+        charges_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Charges deducted by the bank, when stated
+        original_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Instructed amount before charges / FX conversion, when stated
+        original_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of original_amount (ISO 4217)
+        batch_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Transactions summarised by a batch booking
         custom_field_1:
           type:
           - string
@@ -205115,6 +206245,7 @@ components:
       - direction
       - amount
       - currency
+      - is_reversal
     ReconRule:
       type: object
       description: Matching rule, evaluated in priority order
@@ -205371,6 +206502,304 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ReconRuleSet:
+      type: object
+      description: 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many
+        / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central
+        approvals; a published version is immutable and supersedes the previous one of its scope.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        version:
+          type: integer
+          format: int32
+          description: Version within the scope, assigned on create
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type:
+          - string
+          - 'null'
+          description: Notes
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the configuration (approval fingerprint)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted it
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who published it
+          readOnly: true
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
+        superseded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When a newer version replaced it
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected it
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - version
+      - status
+      - auto_match_threshold
+      - suggest_threshold
+    ReconRuleSetCreate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type: array
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type: string
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+    ReconRuleSetUpdate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type: array
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type: string
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     ReconRun:
       type: object
       description: A matching run over a source and date range
@@ -205459,6 +206888,50 @@ components:
           - 'null'
           format: date-time
           description: End
+          readOnly: true
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version applied (empty = legacy rules)
+          readOnly: true
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date when started by end of day
+          readOnly: true
+        external_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records considered
+          readOnly: true
+        suggested_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records with a suggestion below the auto-match threshold
+          readOnly: true
+        auto_match_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Auto-matched / considered external records
+          readOnly: true
+        metrics:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-rule counts, confidence statistics and break reasons
           readOnly: true
         custom_field_1:
           type:

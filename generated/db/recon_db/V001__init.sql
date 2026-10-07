@@ -89,12 +89,17 @@ CREATE TABLE recon_file (
   record_count                 integer,
   status                       varchar(40) NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED', 'PARSING', 'PARSED', 'FAILED', 'MATCHED')),
   error                        text,
+  statement_id                 varchar(64),
+  sequence_no                  varchar(32),
+  account_id                   varchar(64),
+  movements_total              numeric(28,8),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
-  CONSTRAINT uq_recon_file_1 UNIQUE (tenant_id, checksum)
+  CONSTRAINT uq_recon_file_1 UNIQUE (tenant_id, checksum),
+  CONSTRAINT uq_recon_file_2 UNIQUE (tenant_id, recon_source_id, statement_id, sequence_no)
 );
 COMMENT ON TABLE recon_file IS 'An imported statement or settlement file';
 COMMENT ON COLUMN recon_file.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -114,6 +119,10 @@ COMMENT ON COLUMN recon_file.closing_balance IS 'Closing balance stated in the f
 COMMENT ON COLUMN recon_file.record_count IS 'Lines parsed';
 COMMENT ON COLUMN recon_file.status IS 'Processing status';
 COMMENT ON COLUMN recon_file.error IS 'Parsing error';
+COMMENT ON COLUMN recon_file.statement_id IS 'Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:)';
+COMMENT ON COLUMN recon_file.sequence_no IS 'Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement';
+COMMENT ON COLUMN recon_file.account_id IS 'Account identification stated in the file (IBAN, MT940 :25:)';
+COMMENT ON COLUMN recon_file.movements_total IS 'Net of the parsed lines (credits - debits), checked against opening and closing balances';
 COMMENT ON COLUMN recon_file.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_file.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_file.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -143,6 +152,16 @@ CREATE TABLE recon_record (
   counterparty                 varchar(255),
   narrative                    varchar(500),
   raw                          jsonb,
+  line_no                      integer,
+  instruction_id               varchar(64),
+  uetr                         varchar(36),
+  counterparty_account         varchar(64),
+  transaction_code             varchar(32),
+  is_reversal                  boolean NOT NULL DEFAULT false,
+  charges_amount               numeric(28,8),
+  original_amount              numeric(28,8),
+  original_currency            char(3),
+  batch_count                  integer,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -166,6 +185,16 @@ COMMENT ON COLUMN recon_record.currency IS 'Currency';
 COMMENT ON COLUMN recon_record.counterparty IS 'Counterparty name / account';
 COMMENT ON COLUMN recon_record.narrative IS 'Description';
 COMMENT ON COLUMN recon_record.raw IS 'Original parsed line';
+COMMENT ON COLUMN recon_record.line_no IS 'Position of the line in the file';
+COMMENT ON COLUMN recon_record.instruction_id IS 'Instruction id (ISO 20022 InstrId)';
+COMMENT ON COLUMN recon_record.uetr IS 'Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR)';
+COMMENT ON COLUMN recon_record.counterparty_account IS 'Counterparty IBAN / account number';
+COMMENT ON COLUMN recon_record.transaction_code IS 'Bank transaction code (camt BkTxCd, MT940 transaction type)';
+COMMENT ON COLUMN recon_record.is_reversal IS 'Reversal of an earlier booking (camt RvslInd, MT940 RC / RD)';
+COMMENT ON COLUMN recon_record.charges_amount IS 'Charges deducted by the bank, when stated';
+COMMENT ON COLUMN recon_record.original_amount IS 'Instructed amount before charges / FX conversion, when stated';
+COMMENT ON COLUMN recon_record.original_currency IS 'Currency of original_amount';
+COMMENT ON COLUMN recon_record.batch_count IS 'Transactions summarised by a batch booking';
 COMMENT ON COLUMN recon_record.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_record.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_record.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -175,6 +204,7 @@ CREATE INDEX ix_recon_record_tenant ON recon_record (tenant_id, created_at);
 CREATE INDEX ix_recon_record_recon_file_id ON recon_record (recon_file_id);
 CREATE INDEX ix_recon_record_recon_source_id ON recon_record (recon_source_id);
 CREATE INDEX ix_recon_record_end_to_end_id ON recon_record (end_to_end_id);
+CREATE INDEX ix_recon_record_uetr ON recon_record (uetr);
 ALTER TABLE recon_record ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_record USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_record_append_only BEFORE UPDATE OR DELETE ON recon_record FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -231,6 +261,77 @@ ALTER TABLE recon_rule ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_rule_touch BEFORE UPDATE ON recon_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- recon_rule_set: Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central approvals; a published version is immutable and supersedes the previous one of its scope.
+
+CREATE TABLE recon_rule_set (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  recon_source_id              uuid REFERENCES recon_source(id),
+  name                         varchar(120) NOT NULL,
+  version                      integer NOT NULL DEFAULT 1,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'PUBLISHED', 'SUPERSEDED', 'REJECTED')),
+  auto_match_threshold         numeric(18,10) NOT NULL DEFAULT 0.9,
+  suggest_threshold            numeric(18,10) NOT NULL DEFAULT 0.5,
+  rules                        jsonb,
+  description                  text,
+  checksum                     varchar(64),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  published_at                 timestamptz,
+  superseded_at                timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_recon_rule_set_1 UNIQUE (tenant_id, recon_source_id, version)
+);
+COMMENT ON TABLE recon_rule_set IS 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central approvals; a published version is immutable and supersedes the previous one of its scope.
+';
+COMMENT ON COLUMN recon_rule_set.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN recon_rule_set.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN recon_rule_set.created_at IS 'Creation time';
+COMMENT ON COLUMN recon_rule_set.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN recon_rule_set.updated_at IS 'Last update time';
+COMMENT ON COLUMN recon_rule_set.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN recon_rule_set.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN recon_rule_set.recon_source_id IS 'Source (empty = tenant default for every source)';
+COMMENT ON COLUMN recon_rule_set.name IS 'Name';
+COMMENT ON COLUMN recon_rule_set.version IS 'Version within the scope, assigned on create';
+COMMENT ON COLUMN recon_rule_set.status IS 'Lifecycle';
+COMMENT ON COLUMN recon_rule_set.auto_match_threshold IS 'Minimum confidence to auto-confirm a match';
+COMMENT ON COLUMN recon_rule_set.suggest_threshold IS 'Minimum confidence to propose a match for review';
+COMMENT ON COLUMN recon_rule_set.rules IS 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR';
+COMMENT ON COLUMN recon_rule_set.description IS 'Notes';
+COMMENT ON COLUMN recon_rule_set.checksum IS 'SHA-256 of the configuration (approval fingerprint)';
+COMMENT ON COLUMN recon_rule_set.submitted_by IS 'Maker who submitted it';
+COMMENT ON COLUMN recon_rule_set.submitted_at IS 'Submission time';
+COMMENT ON COLUMN recon_rule_set.approval_request_id IS 'Central approval request';
+COMMENT ON COLUMN recon_rule_set.approved_by IS 'Checker who published it';
+COMMENT ON COLUMN recon_rule_set.published_at IS 'Publication time';
+COMMENT ON COLUMN recon_rule_set.superseded_at IS 'When a newer version replaced it';
+COMMENT ON COLUMN recon_rule_set.rejected_by IS 'Checker who rejected it';
+COMMENT ON COLUMN recon_rule_set.rejection_reason IS 'Why it was rejected';
+COMMENT ON COLUMN recon_rule_set.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_rule_set.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_rule_set.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_rule_set.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_rule_set.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_recon_rule_set_tenant ON recon_rule_set (tenant_id, created_at);
+CREATE INDEX ix_recon_rule_set_recon_source_id ON recon_rule_set (recon_source_id);
+ALTER TABLE recon_rule_set ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON recon_rule_set USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_recon_rule_set_touch BEFORE UPDATE ON recon_rule_set FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- recon_run: A matching run over a source and date range
 CREATE TABLE recon_run (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -248,6 +349,12 @@ CREATE TABLE recon_run (
   exception_count              integer,
   started_at                   timestamptz,
   finished_at                  timestamptz,
+  recon_rule_set_id            uuid REFERENCES recon_rule_set(id),
+  business_date                date,
+  external_count               integer,
+  suggested_count              integer,
+  auto_match_rate              numeric(18,10),
+  metrics                      jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -270,6 +377,12 @@ COMMENT ON COLUMN recon_run.matched_count IS 'Records matched';
 COMMENT ON COLUMN recon_run.exception_count IS 'Breaks raised';
 COMMENT ON COLUMN recon_run.started_at IS 'Start';
 COMMENT ON COLUMN recon_run.finished_at IS 'End';
+COMMENT ON COLUMN recon_run.recon_rule_set_id IS 'Rule set version applied (empty = legacy rules)';
+COMMENT ON COLUMN recon_run.business_date IS 'Business date when started by end of day';
+COMMENT ON COLUMN recon_run.external_count IS 'External records considered';
+COMMENT ON COLUMN recon_run.suggested_count IS 'External records with a suggestion below the auto-match threshold';
+COMMENT ON COLUMN recon_run.auto_match_rate IS 'Auto-matched / considered external records';
+COMMENT ON COLUMN recon_run.metrics IS 'Per-rule counts, confidence statistics and break reasons';
 COMMENT ON COLUMN recon_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -277,6 +390,7 @@ COMMENT ON COLUMN recon_run.custom_field_4 IS 'Tenant-defined custom field 4; la
 COMMENT ON COLUMN recon_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_recon_run_tenant ON recon_run (tenant_id, created_at);
 CREATE INDEX ix_recon_run_recon_source_id ON recon_run (recon_source_id);
+CREATE INDEX ix_recon_run_recon_rule_set_id ON recon_run (recon_rule_set_id);
 ALTER TABLE recon_run ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_run_touch BEFORE UPDATE ON recon_run FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -296,6 +410,9 @@ CREATE TABLE recon_match (
   confidence                   numeric(18,10),
   confirmed_by                 varchar(64),
   unmatched_at                 timestamptz,
+  recon_rule_set_id            uuid REFERENCES recon_rule_set(id),
+  rule_code                    varchar(64),
+  explanation                  jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -316,6 +433,9 @@ COMMENT ON COLUMN recon_match.difference IS 'Residual difference within toleranc
 COMMENT ON COLUMN recon_match.confidence IS 'AI / rule confidence 0..1';
 COMMENT ON COLUMN recon_match.confirmed_by IS 'Who confirmed a manual or suggested match';
 COMMENT ON COLUMN recon_match.unmatched_at IS 'Set via a new compensating match record when undone';
+COMMENT ON COLUMN recon_match.recon_rule_set_id IS 'Rule set version that produced it';
+COMMENT ON COLUMN recon_match.rule_code IS 'Rule of the rule set';
+COMMENT ON COLUMN recon_match.explanation IS 'Why: rule, matched keys and score components (amount, date, name, reference)';
 COMMENT ON COLUMN recon_match.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_match.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recon_match.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -324,6 +444,7 @@ COMMENT ON COLUMN recon_match.custom_field_5 IS 'Tenant-defined custom field 5; 
 CREATE INDEX ix_recon_match_tenant ON recon_match (tenant_id, created_at);
 CREATE INDEX ix_recon_match_recon_run_id ON recon_match (recon_run_id);
 CREATE INDEX ix_recon_match_recon_rule_id ON recon_match (recon_rule_id);
+CREATE INDEX ix_recon_match_recon_rule_set_id ON recon_match (recon_rule_set_id);
 ALTER TABLE recon_match ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_match USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_match_append_only BEFORE UPDATE OR DELETE ON recon_match FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -338,7 +459,7 @@ CREATE TABLE recon_exception (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   recon_run_id                 uuid NOT NULL REFERENCES recon_run(id),
-  reason                       varchar(40) NOT NULL CHECK (reason IN ('MISSING_INTERNAL', 'MISSING_EXTERNAL', 'AMOUNT_MISMATCH', 'DATE_MISMATCH', 'DUPLICATE', 'CURRENCY_MISMATCH', 'OTHER')),
+  reason                       varchar(40) NOT NULL CHECK (reason IN ('MISSING_INTERNAL', 'MISSING_EXTERNAL', 'AMOUNT_MISMATCH', 'DATE_MISMATCH', 'DUPLICATE', 'CURRENCY_MISMATCH', 'AMBIGUOUS', 'OTHER')),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'INVESTIGATING', 'RESOLVED', 'WRITTEN_OFF', 'IGNORED')),
   external_record_id           uuid REFERENCES recon_record(id),
   internal_entry_id            uuid,
@@ -388,6 +509,72 @@ CREATE INDEX ix_recon_exception_assigned_to ON recon_exception (assigned_to);
 ALTER TABLE recon_exception ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_exception USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_exception_touch BEFORE UPDATE ON recon_exception FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- recon_adjustment: A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+CREATE TABLE recon_adjustment (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  recon_exception_id           uuid NOT NULL REFERENCES recon_exception(id),
+  kind                         varchar(40) NOT NULL CHECK (kind IN ('ADJUSTMENT', 'WRITE_OFF')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  ledger_id                    uuid,
+  entries                      jsonb,
+  reason                       text NOT NULL,
+  requested_by                 varchar(64),
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  decided_at                   timestamptz,
+  rejection_reason             varchar(500),
+  journal_entry_id             uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE recon_adjustment IS 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+';
+COMMENT ON COLUMN recon_adjustment.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN recon_adjustment.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN recon_adjustment.created_at IS 'Creation time';
+COMMENT ON COLUMN recon_adjustment.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN recon_adjustment.updated_at IS 'Last update time';
+COMMENT ON COLUMN recon_adjustment.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN recon_adjustment.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN recon_adjustment.recon_exception_id IS 'Break';
+COMMENT ON COLUMN recon_adjustment.kind IS 'Adjustment (books the missing side) or write-off';
+COMMENT ON COLUMN recon_adjustment.status IS 'Lifecycle';
+COMMENT ON COLUMN recon_adjustment.amount IS 'Amount adjusted or written off';
+COMMENT ON COLUMN recon_adjustment.currency IS 'Currency';
+COMMENT ON COLUMN recon_adjustment.ledger_id IS 'Ledger to post into (empty: write-off without a posting)';
+COMMENT ON COLUMN recon_adjustment.entries IS 'Balanced journal lines [{ledger_account_id, direction, amount, currency}]';
+COMMENT ON COLUMN recon_adjustment.reason IS 'Justification';
+COMMENT ON COLUMN recon_adjustment.requested_by IS 'Maker';
+COMMENT ON COLUMN recon_adjustment.approval_request_id IS 'Central approval request';
+COMMENT ON COLUMN recon_adjustment.approved_by IS 'Checker';
+COMMENT ON COLUMN recon_adjustment.decided_at IS 'Decision time';
+COMMENT ON COLUMN recon_adjustment.rejection_reason IS 'Why it was rejected';
+COMMENT ON COLUMN recon_adjustment.journal_entry_id IS 'Posted journal entry';
+COMMENT ON COLUMN recon_adjustment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_adjustment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_adjustment.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_adjustment.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_adjustment.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_recon_adjustment_tenant ON recon_adjustment (tenant_id, created_at);
+CREATE INDEX ix_recon_adjustment_recon_exception_id ON recon_adjustment (recon_exception_id);
+CREATE INDEX ix_recon_adjustment_ledger_id ON recon_adjustment (ledger_id);
+CREATE INDEX ix_recon_adjustment_journal_entry_id ON recon_adjustment (journal_entry_id);
+ALTER TABLE recon_adjustment ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON recon_adjustment USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_recon_adjustment_touch BEFORE UPDATE ON recon_adjustment FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

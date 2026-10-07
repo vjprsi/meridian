@@ -61,12 +61,24 @@ tags:
   description: An imported statement or settlement file
 - name: Recon Rules
   description: Matching rule, evaluated in priority order
+- name: Recon Rule Sets
+  description: 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many /
+    many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central
+    approvals; a published version is immutable and supersedes the previous one of its scope.
+
+    '
 - name: Recon Runs
   description: A matching run over a source and date range
 - name: Recon Matches
   description: A confirmed link between external records and internal ledger entries. Append-only.
 - name: Recon Exceptions
   description: A reconciliation break awaiting investigation
+- name: Recon Adjustments
+  description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+    approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes
+    (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+    '
 paths:
   /v1/ledgers:
     get:
@@ -4734,6 +4746,374 @@ paths:
       x-table: recon_rule
       x-crud: true
       x-crud-delete: true
+  /v1/reconciliation/rule-sets:
+    get:
+      operationId: reconRuleSetsList
+      summary: List recon rule sets
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recon_source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: reconRuleSetsCreate
+      summary: Create recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetCreate'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-create: true
+  /v1/reconciliation/rule-sets/{id}:
+    get:
+      operationId: reconRuleSetsGet
+      summary: Retrieve recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id013
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: reconRuleSetsUpdate
+      summary: Update recon rule set
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id013
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetUpdate'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+      x-crud: true
+      x-crud-update: true
+  /v1/reconciliation/rule-sets/{id}/submit:
+    post:
+      operationId: reconRuleSetsSubmit
+      summary: Submit a DRAFT (or REJECTED) version for four-eyes approval through central approvals
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/approve:
+    post:
+      operationId: reconRuleSetsApprove
+      summary: Publish a submitted version (approver must differ from the submitter); the published version of the same scope
+        is superseded
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/reject:
+    post:
+      operationId: reconRuleSetsReject
+      summary: Reject a submitted version back to the maker
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetsRejectRequest'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
+  /v1/reconciliation/rule-sets/{id}/simulate:
+    post:
+      operationId: reconRuleSetsSimulate
+      summary: 'Dry-run this version over a source and value-date range without storing anything: auto-match rate, suggestions
+        and per-rule counts'
+      tags:
+      - Recon Rule Sets
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetsSimulateRequest'
+      x-requirements:
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_rule_set
   /v1/reconciliation/runs:
     get:
       operationId: reconRunsList
@@ -4764,6 +5144,11 @@ paths:
           - FAILED
           - CANCELLED
           - PARTIALLY_SUCCEEDED
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
       - name: custom_field_1
         in: query
         schema:
@@ -4887,6 +5272,100 @@ paths:
       x-table: recon_run
       x-crud: true
       x-crud-get: true
+  /v1/reconciliation/runs/eod:
+    post:
+      operationId: reconRunsEod
+      summary: End of day - reconcile every active source linked to a ledger account over its look-back window ending on business_date
+        (idempotent per business date and source); returns records_processed, records_failed, auto-match rate and breaks raised
+      tags:
+      - Recon Runs
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-01
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_run
+  /v1/reconciliation/runs/metrics:
+    get:
+      operationId: reconRunsMetrics
+      summary: Auto-match rate per run, source and rule, and open-break ageing (0-1, 2-7, 8-30, 31+ days) by reason
+      tags:
+      - Recon Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: from_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: recon_source_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-01
+      - REC-02
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_run
   /v1/reconciliation/matches:
     get:
       operationId: reconMatchesList
@@ -5116,6 +5595,7 @@ paths:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
       - name: status
         in: query
@@ -5187,7 +5667,7 @@ paths:
       - oauth2:
         - ledger:read
       parameters:
-      - &id013
+      - &id014
         name: id
         in: path
         required: true
@@ -5225,7 +5705,7 @@ paths:
       - oauth2:
         - ledger:write
       parameters:
-      - *id013
+      - *id014
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -5309,7 +5789,8 @@ paths:
   /v1/reconciliation/exceptions/{id}/resolve:
     post:
       operationId: reconExceptionsResolve
-      summary: Resolve with a note, optionally posting an adjustment
+      summary: Resolve with a note, without a posting (adjustments and write-offs go through /v1/reconciliation/adjustments
+        with four-eyes)
       tags:
       - Recon Exceptions
       security:
@@ -5356,7 +5837,7 @@ paths:
   /v1/reconciliation/exceptions/{id}/accept-suggestion:
     post:
       operationId: reconExceptionsAcceptSuggestion
-      summary: Confirm the AI-suggested match
+      summary: Confirm the suggested match
       tags:
       - Recon Exceptions
       security:
@@ -5394,6 +5875,246 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-required-scope: ledger:write
       x-table: recon_exception
+  /v1/reconciliation/adjustments:
+    get:
+      operationId: reconAdjustmentsList
+      summary: List recon adjustments
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recon_exception_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: reconAdjustmentsCreate
+      summary: Create recon adjustment
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconAdjustmentCreate'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-create: true
+  /v1/reconciliation/adjustments/{id}:
+    get:
+      operationId: reconAdjustmentsGet
+      summary: Retrieve recon adjustment
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_adjustment
+      x-crud: true
+      x-crud-get: true
+  /v1/reconciliation/adjustments/{id}/approve:
+    post:
+      operationId: reconAdjustmentsApprove
+      summary: 'Approve (approver must differ from the requester): posts the journal entry and closes the break'
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
+  /v1/reconciliation/adjustments/{id}/reject:
+    post:
+      operationId: reconAdjustmentsReject
+      summary: Reject the request; the break stays open
+      tags:
+      - Recon Adjustments
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconAdjustmentsRejectRequest'
+      x-requirements:
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_adjustment
 components:
   schemas:
     Problem:
@@ -6120,6 +6841,48 @@ components:
       required:
       - data
       - has_more
+    ReconRuleSetPage:
+      type: object
+      description: One page of ReconRuleSet results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRuleSet'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRuleSetsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    ReconRuleSetsSimulateRequest:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+      required:
+      - recon_source_id
+      - from_date
+      - to_date
     ReconRunPage:
       type: object
       description: One page of ReconRun results (newest first)
@@ -6195,11 +6958,34 @@ components:
       properties:
         resolution_note:
           type: string
-        adjustment:
-          type: object
-          additionalProperties: true
       required:
       - resolution_note
+    ReconAdjustmentPage:
+      type: object
+      description: One page of ReconAdjustment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconAdjustment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconAdjustmentsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     AccountBalance:
       type: object
       description: Current balances per ledger account, updated in the same transaction as each posting
@@ -9892,6 +10678,234 @@ components:
       - row_version
       - accounting_period_id
       - status
+    ReconAdjustment:
+      type: object
+      description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+        approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break
+        closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_exception_id:
+          type: string
+          format: uuid
+          description: Break
+        kind:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+          description: Adjustment (books the missing side) or write-off
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount adjusted or written off
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Ledger to post into (empty: write-off without a posting)'
+        entries:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Balanced journal lines [{ledger_account_id, direction, amount, currency}]
+        reason:
+          type: string
+          description: Justification
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Posted journal entry
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_exception_id
+      - kind
+      - status
+      - amount
+      - currency
+      - reason
+    ReconAdjustmentCreate:
+      type: object
+      properties:
+        recon_exception_id:
+          type: string
+          format: uuid
+          description: Break
+        kind:
+          type: string
+          enum:
+          - ADJUSTMENT
+          - WRITE_OFF
+          description: Adjustment (books the missing side) or write-off
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount adjusted or written off
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        ledger_id:
+          type: string
+          format: uuid
+          description: 'Ledger to post into (empty: write-off without a posting)'
+        entries:
+          type: array
+          items: {}
+          description: Balanced journal lines [{ledger_account_id, direction, amount, currency}]
+        reason:
+          type: string
+          description: Justification
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - recon_exception_id
+      - kind
+      - amount
+      - currency
+      - reason
     ReconException:
       type: object
       description: A reconciliation break awaiting investigation
@@ -9943,6 +10957,7 @@ components:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
           description: Break reason
         status:
@@ -10063,6 +11078,7 @@ components:
           - DATE_MISMATCH
           - DUPLICATE
           - CURRENCY_MISMATCH
+          - AMBIGUOUS
           - OTHER
           description: Break reason
         status:
@@ -10220,6 +11236,36 @@ components:
           - 'null'
           description: Parsing error
           readOnly: true
+        statement_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:)
+          readOnly: true
+        sequence_no:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement
+          readOnly: true
+        account_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Account identification stated in the file (IBAN, MT940 :25:)
+          readOnly: true
+        movements_total:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net of the parsed lines (credits - debits), checked against opening and closing balances
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -10336,6 +11382,27 @@ components:
           - 'null'
           format: date-time
           description: Set via a new compensating match record when undone
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version that produced it
+          readOnly: true
+        rule_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Rule of the rule set
+          readOnly: true
+        explanation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Why: rule, matched keys and score components (amount, date, name, reference)'
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -10530,6 +11597,67 @@ components:
           - 'null'
           additionalProperties: true
           description: Original parsed line
+        line_no:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Position of the line in the file
+        instruction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Instruction id (ISO 20022 InstrId)
+        uetr:
+          type:
+          - string
+          - 'null'
+          maxLength: 36
+          description: Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR)
+        counterparty_account:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Counterparty IBAN / account number
+        transaction_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Bank transaction code (camt BkTxCd, MT940 transaction type)
+        is_reversal:
+          type: boolean
+          description: Reversal of an earlier booking (camt RvslInd, MT940 RC / RD)
+        charges_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Charges deducted by the bank, when stated
+        original_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Instructed amount before charges / FX conversion, when stated
+        original_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of original_amount (ISO 4217)
+        batch_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Transactions summarised by a batch booking
         custom_field_1:
           type:
           - string
@@ -10569,6 +11697,7 @@ components:
       - direction
       - amount
       - currency
+      - is_reversal
     ReconRule:
       type: object
       description: Matching rule, evaluated in priority order
@@ -10825,6 +11954,304 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ReconRuleSet:
+      type: object
+      description: 'Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many
+        / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central
+        approvals; a published version is immutable and supersedes the previous one of its scope.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        version:
+          type: integer
+          format: int32
+          description: Version within the scope, assigned on create
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - SUPERSEDED
+          - REJECTED
+          description: Lifecycle
+          readOnly: true
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type:
+          - string
+          - 'null'
+          description: Notes
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the configuration (approval fingerprint)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted it
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who published it
+          readOnly: true
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
+        superseded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When a newer version replaced it
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected it
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why it was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - version
+      - status
+      - auto_match_threshold
+      - suggest_threshold
+    ReconRuleSetCreate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type: array
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type: string
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+    ReconRuleSetUpdate:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+          description: Source (empty = tenant default for every source)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        auto_match_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to auto-confirm a match
+        suggest_threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum confidence to propose a match for review
+        rules:
+          type: array
+          items: {}
+          description: 'Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY,
+            REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR'
+        description:
+          type: string
+          description: Notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     ReconRun:
       type: object
       description: A matching run over a source and date range
@@ -10913,6 +12340,50 @@ components:
           - 'null'
           format: date-time
           description: End
+          readOnly: true
+        recon_rule_set_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule set version applied (empty = legacy rules)
+          readOnly: true
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date when started by end of day
+          readOnly: true
+        external_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records considered
+          readOnly: true
+        suggested_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: External records with a suggestion below the auto-match threshold
+          readOnly: true
+        auto_match_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Auto-matched / considered external records
+          readOnly: true
+        metrics:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-rule counts, confidence statistics and break reasons
           readOnly: true
         custom_field_1:
           type:

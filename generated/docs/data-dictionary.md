@@ -4494,6 +4494,10 @@ API: /v1/reconciliation/files · Requirements: REC-01
 | record_count | integer | yes |  | record_count (read-only) | Lines parsed |
 | status | varchar(40) (ReconFileStatus) | no |  | status (read-only) | Processing status |
 | error | text | yes |  | error (read-only) | Parsing error |
+| statement_id | varchar(64) | yes |  | statement_id (read-only) | Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:) |
+| sequence_no | varchar(32) | yes |  | sequence_no (read-only) | Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement |
+| account_id | varchar(64) | yes |  | account_id (read-only) | Account identification stated in the file (IBAN, MT940 :25:) |
+| movements_total | numeric(28,8) | yes |  | movements_total (read-only) | Net of the parsed lines (credits - debits), checked against opening and closing balances |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4524,6 +4528,16 @@ API: internal only · Requirements: REC-01
 | counterparty | varchar(255) | yes |  | counterparty | Counterparty name / account |
 | narrative | varchar(500) | yes |  | narrative | Description |
 | raw | jsonb | yes |  | raw | Original parsed line |
+| line_no | integer | yes |  | line_no | Position of the line in the file |
+| instruction_id | varchar(64) | yes |  | instruction_id | Instruction id (ISO 20022 InstrId) |
+| uetr | varchar(36) | yes |  | uetr | Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR) |
+| counterparty_account | varchar(64) | yes |  | counterparty_account | Counterparty IBAN / account number |
+| transaction_code | varchar(32) | yes |  | transaction_code | Bank transaction code (camt BkTxCd, MT940 transaction type) |
+| is_reversal | boolean | no |  | is_reversal | Reversal of an earlier booking (camt RvslInd, MT940 RC / RD) |
+| charges_amount | numeric(28,8) | yes |  | charges_amount | Charges deducted by the bank, when stated |
+| original_amount | numeric(28,8) | yes |  | original_amount | Instructed amount before charges / FX conversion, when stated |
+| original_currency | char(3) | yes |  | original_currency | Currency of original_amount |
+| batch_count | integer | yes |  | batch_count | Transactions summarised by a batch booking |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4560,6 +4574,45 @@ API: /v1/reconciliation/rules · Requirements: REC-02
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `recon_rule_set`
+
+Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central approvals; a published version is immutable and supersedes the previous one of its scope.
+
+
+API: /v1/reconciliation/rule-sets · Requirements: REC-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| recon_source_id | uuid | yes | FK → recon_source | recon_source_id | Source (empty = tenant default for every source) |
+| name | varchar(120) | no |  | name | Name |
+| version | integer | no |  | version (read-only) | Version within the scope, assigned on create |
+| status | varchar(40) (ReconRuleSetStatus) | no |  | status (read-only) | Lifecycle |
+| auto_match_threshold | numeric(18,10) | no |  | auto_match_threshold | Minimum confidence to auto-confirm a match |
+| suggest_threshold | numeric(18,10) | no |  | suggest_threshold | Minimum confidence to propose a match for review |
+| rules | jsonb | yes |  | rules | Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR |
+| description | text | yes |  | description | Notes |
+| checksum | varchar(64) | yes |  | checksum (read-only) | SHA-256 of the configuration (approval fingerprint) |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted it |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approval_request_id | uuid | yes |  | approval_request_id (read-only) | Central approval request |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who published it |
+| published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
+| superseded_at | timestamptz | yes |  | superseded_at (read-only) | When a newer version replaced it |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected it |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why it was rejected |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `recon_run`
 
 A matching run over a source and date range
@@ -4583,6 +4636,12 @@ API: /v1/reconciliation/runs · Requirements: REC-01, REC-02
 | exception_count | integer | yes |  | exception_count (read-only) | Breaks raised |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| recon_rule_set_id | uuid | yes | FK → recon_rule_set | recon_rule_set_id (read-only) | Rule set version applied (empty = legacy rules) |
+| business_date | date | yes |  | business_date (read-only) | Business date when started by end of day |
+| external_count | integer | yes |  | external_count (read-only) | External records considered |
+| suggested_count | integer | yes |  | suggested_count (read-only) | External records with a suggestion below the auto-match threshold |
+| auto_match_rate | numeric(18,10) | yes |  | auto_match_rate (read-only) | Auto-matched / considered external records |
+| metrics | jsonb | yes |  | metrics (read-only) | Per-rule counts, confidence statistics and break reasons |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4610,6 +4669,9 @@ API: /v1/reconciliation/matches · Requirements: REC-02, REC-03
 | confidence | numeric(18,10) | yes |  | confidence | AI / rule confidence 0..1 |
 | confirmed_by | varchar(64) | yes |  | confirmed_by | Who confirmed a manual or suggested match |
 | unmatched_at | timestamptz | yes |  | unmatched_at | Set via a new compensating match record when undone |
+| recon_rule_set_id | uuid | yes | FK → recon_rule_set | recon_rule_set_id (read-only) | Rule set version that produced it |
+| rule_code | varchar(64) | yes |  | rule_code (read-only) | Rule of the rule set |
+| explanation | jsonb | yes |  | explanation (read-only) | Why: rule, matched keys and score components (amount, date, name, reference) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4643,6 +4705,42 @@ API: /v1/reconciliation/exceptions · Requirements: REC-02, REC-03
 | suggested_match | jsonb | yes |  | suggested_match (read-only) | AI-suggested counterpart records with confidence |
 | resolution_note | text | yes |  | resolution_note | How it was resolved |
 | resolved_at | timestamptz | yes |  | resolved_at (read-only) | Resolution time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `recon_adjustment`
+
+A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+
+
+API: /v1/reconciliation/adjustments · Requirements: REC-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| recon_exception_id | uuid | no | FK → recon_exception | recon_exception_id | Break |
+| kind | varchar(40) (ReconAdjustmentKind) | no |  | kind | Adjustment (books the missing side) or write-off |
+| status | varchar(40) (ReconAdjustmentStatus) | no |  | status (read-only) | Lifecycle |
+| amount | numeric(28,8) | no |  | amount | Amount adjusted or written off |
+| currency | char(3) | no |  | currency | Currency |
+| ledger_id | uuid | yes | ref → ledger | ledger_id | Ledger to post into (empty: write-off without a posting) |
+| entries | jsonb | yes |  | entries | Balanced journal lines [{ledger_account_id, direction, amount, currency}] |
+| reason | text | no |  | reason | Justification |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Maker |
+| approval_request_id | uuid | yes |  | approval_request_id (read-only) | Central approval request |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why it was rejected |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Posted journal entry |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
