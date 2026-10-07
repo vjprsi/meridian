@@ -348,8 +348,8 @@ class AuditFlowIT {
         assertThat(v.get("valid").asBoolean()).isFalse();
         assertThat(v.get("first_broken_sequence").asLong()).isEqualTo(3L);
         assertThat(v.get("reason").asString()).isEqualTo("HASH_MISMATCH");
-        assertThat(jdbc.sql("select count(*) from outbox where event_type = 'platform.audit_chain.broken'")
-                .query(Long.class).single()).isEqualTo(1L);
+        assertThat(jdbc.sql("select count(*) from outbox where event_type = 'platform.audit_chain.broken' and tenant_id = ?::uuid")
+                .param(TENANT).query(Long.class).single()).isEqualTo(1L);
         // Later links still verify against the stored hash; other tenants are unaffected.
         assertThat(post("/v1/audit-events/verify-chain", "{\"from_sequence\":4,\"to_sequence\":5}", 200, TENANT)
                 .get("valid").asBoolean()).isTrue();

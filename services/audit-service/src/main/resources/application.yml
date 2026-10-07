@@ -40,8 +40,26 @@ meridian:
   # refuses to start when one is missing, short or a committed development default (RequiredSecrets).
   required-secrets:
     - meridian.audit.download-signing-key
+    - meridian.audit.pseudonym-key
+    - meridian.audit.worm.secret-key
   events:
     topic: meridian.platform.v1
+  audit:
+    # GAP-07: personal data in stored before/after states is replaced by tenant-keyed psn: pseudonyms (spec pii columns
+    # of every service + personal field names). MERIDIAN_AUDIT_PSEUDONYM_KEY from the vault outside the local stack.
+    pseudonym-key: ${MERIDIAN_AUDIT_PSEUDONYM_KEY:dev-only-audit-pseudonym-key-not-for-production}
+    integrity:
+      enabled: true                 # daily per tenant: incremental hash-chain verification, then seal of yesterday
+      cron: "0 15 1 * * *"          # UTC
+    worm:
+      # Sealed daily batches (events + manifest) on S3 with Object Lock (bucket created with object lock enabled:
+      # infra/tofu module cell, aws_s3_bucket.audit). Local stack: SeaweedFS (no object lock -> NONE).
+      endpoint: ${MERIDIAN_AUDIT_WORM_ENDPOINT:http://localhost:19000}
+      bucket: ${MERIDIAN_AUDIT_WORM_BUCKET:meridian-audit}
+      region: ${MERIDIAN_AUDIT_WORM_REGION:us-east-1}
+      access-key: ${MERIDIAN_AUDIT_WORM_ACCESS_KEY:meridian}
+      secret-key: ${MERIDIAN_AUDIT_WORM_SECRET_KEY:meridian-secret}
+      object-lock-mode: ${MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE:COMPLIANCE}
 
 management:
   endpoints:

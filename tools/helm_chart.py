@@ -27,7 +27,11 @@ HOT = {"ledger-service": (3, "1", "1Gi"), "payment-service": (3, "1", "1Gi"),
 # committed development default (libs/meridian-web RequiredSecrets, card-vault MasterKeyProviders).
 SERVICE_SECRETS = {
     "analytics-service": {"MERIDIAN_ANALYTICS_EMBED_SECRET": "embed-secret"},
-    "audit-service": {"MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY": "download-signing-key"},
+    # GAP-07: PII pseudonym key of stored audit states; credentials of the Object Lock bucket for sealed daily batches
+    "audit-service": {"MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY": "download-signing-key",
+                      "MERIDIAN_AUDIT_PSEUDONYM_KEY": "pseudonym-key",
+                      "MERIDIAN_AUDIT_WORM_ACCESS_KEY": "worm-access-key",
+                      "MERIDIAN_AUDIT_WORM_SECRET_KEY": "worm-secret-key"},
     "card-authorization-service": {"MERIDIAN_CARDS_AUTH_JIT_SECRET": "jit-secret"},
     "card-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret"},
     "card-threeds-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret",
@@ -54,6 +58,13 @@ SERVICE_SECRETS = {
     "routing-service": {"MERIDIAN_ROUTING_CALLBACK_SECRET": "callback-secret"},
     "statement-service": {"MERIDIAN_STATEMENT_DOWNLOAD_SECRET": "download-secret"},
     "webhook-service": {"MERIDIAN_WEBHOOKS_KEY": "encryption-key"},
+}
+
+# Non-secret per-service environment rendered into values.yaml (services[].env); override per environment.
+SERVICE_ENV = {
+    # GAP-07: sealed audit batches go to the cell's Object Lock bucket (infra/tofu cell output audit_bucket); set
+    # MERIDIAN_AUDIT_WORM_ENDPOINT (https://s3.<region>.amazonaws.com), _BUCKET and _REGION per environment
+    "audit-service": {"MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE": "COMPLIANCE"},
 }
 
 # Secrets that several services MUST share, as {service: {ENV_VAR: (Secret name, key)}}: one Secret referenced by
@@ -842,6 +853,8 @@ def services_values(manifest):
             r["secretEnv"] = dict(sorted(SERVICE_SECRETS[s["name"]].items()))
         if s["name"] in SHARED_SECRETS:
             r["sharedSecretEnv"] = dict(sorted(SHARED_SECRETS[s["name"]].items()))
+        if s["name"] in SERVICE_ENV:
+            r["env"] = dict(sorted(SERVICE_ENV[s["name"]].items()))
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
                  "replicas": 3, "cpu": "500m", "memory": "512Mi"})
@@ -929,6 +942,10 @@ def values_yaml(rows, app_version):
             lines.append("    secretEnv:")
             for env, key in r["secretEnv"].items():
                 lines.append(f"      {env}: {yaml_value(key)}")
+        if "env" in r:
+            lines.append("    env:")
+            for env, val in r["env"].items():
+                lines.append(f"      {env}: {yaml_value(val)}")
         if "sharedSecretEnv" in r:
             lines.append("    sharedSecretEnv:")
             for env, (secret, key) in r["sharedSecretEnv"].items():

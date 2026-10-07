@@ -342,6 +342,69 @@ resource "aws_s3_bucket_object_lock_configuration" "documents" {
   }
 }
 
+# ---------------------------------------------------------------- audit WORM storage (GAP-07)
+# Sealed daily audit batches (events + manifest) written by audit-service with x-amz-object-lock-mode COMPLIANCE:
+# no principal, the root account included, can delete or overwrite a locked version before its retain-until date.
+# Object Lock can only be enabled when the bucket is created.
+
+resource "aws_s3_bucket" "audit" {
+  bucket              = "${local.name}-audit-${data.aws_caller_identity.current.account_id}"
+  object_lock_enabled = true
+  tags                = local.tags
+}
+
+resource "aws_s3_bucket_versioning" "audit" {
+  bucket = aws_s3_bucket.audit.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+  rule {
+    default_retention {
+      mode  = "COMPLIANCE"
+      years = var.audit_retention_years
+    }
+  }
+  depends_on = [aws_s3_bucket_versioning.audit]
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.cell.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "audit" {
+  bucket                  = aws_s3_bucket.audit.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+  rule {
+    id     = "seals-to-cold-storage"
+    status = "Enabled"
+    filter {
+      prefix = "audit/"
+    }
+    transition {
+      days          = var.audit_cold_after_days
+      storage_class = "GLACIER_IR"
+    }
+  }
+}
+
 # ---------------------------------------------------------------- secrets for the Helm chart
 
 resource "random_password" "db_app" {

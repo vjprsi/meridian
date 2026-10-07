@@ -20,6 +20,15 @@ output "documents_bucket" {
   value = aws_s3_bucket.documents.bucket
 }
 
+output "audit_bucket" {
+  description = "Object Lock bucket of sealed audit batches: MERIDIAN_AUDIT_WORM_BUCKET of audit-service"
+  value       = aws_s3_bucket.audit.bucket
+}
+
+output "audit_bucket_arn" {
+  value = aws_s3_bucket.audit.arn
+}
+
 output "documents_bucket_arn" {
   value = aws_s3_bucket.documents.arn
 }
