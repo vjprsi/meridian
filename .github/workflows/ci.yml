@@ -3,6 +3,9 @@ name: ci
 on:
   push:
     branches: [main]
+    # PLT-GITOPS: a merged promotion PR only changes deploy/ - it must not build and publish a new release (which would
+    # open the next dev promotion PR, and so on). Pull requests always run the full workflow (required checks).
+    paths-ignore: ["deploy/**"]
   pull_request:
 
 concurrency:
@@ -113,6 +116,14 @@ jobs:
             --set global.auth.idpEvents.enabled=true --set global.auth.platformOperatorTenant=0199a000-0000-7000-8000-0000000000f0 \
             --set global.auth.sharedServiceClient=true --set 'global.auth.legacyServiceClients={meridian-service}' > rendered-iam.yaml
           ./kubeconform -strict -summary -kubernetes-version 1.33.0 rendered-iam.yaml
+      - name: Deploy tree (PLT-GITOPS) - consistency, every environment and cell rendered, kubeconform, Kyverno
+        run: |
+          pip install pyyaml
+          curl -sSL https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz | tar xz kyverno
+          export PATH="$PWD:$PATH"
+          python tools/release.py check
+          python tools/release.py render --env all --out rendered-deploy --kubeconform --policies
+          kyverno test deploy/policies/tests
       - name: Render with monitoring enabled (ServiceMonitor, PrometheusRule, dashboards; CRDs from the catalog)
         run: |
           helm template ci infra/helm/meridian --set global.serviceMonitor.enabled=true \
@@ -346,3 +357,13 @@ jobs:
         with:
           name: image-sbom-${{ matrix.component.name }}
           path: image.cdx.json
+      - name: Record the signed digest for the promotion pipeline (PLT-GITOPS, .github/workflows/promote.yml)
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+          NAME: ${{ matrix.component.name }}
+        run: mkdir -p digest && echo "${REF#*@}" > "digest/$NAME.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.component.name }}
+          path: digest/
+          retention-days: 30

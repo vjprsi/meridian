@@ -1,0 +1,194 @@
+# PLT-GITOPS / GAP-05: Argo CD AppProjects - what each environment may deploy, where, who may sync, and when.
+# Argo CD RBAC is deny-by-default (argocd-rbac-cm policy.default must stay empty or role:readonly); the groups below
+# are GitHub teams via Dex / SSO (PLACEHOLDERS, same names as .github/CODEOWNERS). Nobody gets `update`, `delete` or
+# `override` on prod Applications: the desired state changes only through git (promotion PRs), and an Application's
+# parameters cannot be overridden in the UI.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: meridian-dev
+  namespace: argocd
+spec:
+  description: Meridian dev cells - continuous delivery of every green main build (auto-sync, self-heal)
+  sourceRepos: [https://github.com/meridian-org/meridian.git]
+  destinations:
+    - {name: aws-euw1-d01, namespace: meridian}
+    - {name: aws-euw1-d01, namespace: meridian-cde}
+    - {name: aws-euw1-d01, namespace: meridian-edge}
+  clusterResourceWhitelist: []                 # the charts render no cluster-scoped objects
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}                  # <service>-migrate (PreSync hooks)
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: networking.k8s.io, kind: Ingress}
+    - {group: monitoring.coreos.com, kind: ServiceMonitor}
+    - {group: monitoring.coreos.com, kind: PrometheusRule}
+  orphanedResources: {warn: true}
+  roles:
+    - name: developer
+      description: Engineers - view, sync and restart in dev
+      policies:
+        - p, proj:meridian-dev:developer, applications, get, meridian-dev/*, allow
+        - p, proj:meridian-dev:developer, applications, sync, meridian-dev/*, allow
+        - p, proj:meridian-dev:developer, applications, action/apps/Deployment/restart, meridian-dev/*, allow
+        - p, proj:meridian-dev:developer, logs, get, meridian-dev/*, allow
+      groups: [meridian-org:platform-engineering]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: meridian-staging
+  namespace: argocd
+spec:
+  description: Meridian staging cells - releases promoted from dev with the same digests (auto-sync after the PR checks)
+  sourceRepos: [https://github.com/meridian-org/meridian.git]
+  destinations:
+    - {name: aws-euw1-s01, namespace: meridian}
+    - {name: aws-euw1-s01, namespace: meridian-cde}
+    - {name: aws-euw1-s01, namespace: meridian-edge}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}                  # <service>-migrate (PreSync hooks)
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: networking.k8s.io, kind: Ingress}
+    - {group: monitoring.coreos.com, kind: ServiceMonitor}
+    - {group: monitoring.coreos.com, kind: PrometheusRule}
+  orphanedResources: {warn: true}
+  roles:
+    - name: sre
+      description: SRE - view, sync, restart
+      policies:
+        - p, proj:meridian-staging:sre, applications, get, meridian-staging/*, allow
+        - p, proj:meridian-staging:sre, applications, sync, meridian-staging/*, allow
+        - p, proj:meridian-staging:sre, applications, action/apps/Deployment/restart, meridian-staging/*, allow
+        - p, proj:meridian-staging:sre, logs, get, meridian-staging/*, allow
+      groups: [meridian-org:sre]
+    - name: viewer
+      policies:
+        - p, proj:meridian-staging:viewer, applications, get, meridian-staging/*, allow
+      groups: [meridian-org:platform-engineering]
+  syncWindows:
+    # nightly e2e journeys (tools/e2e) run 02:00-03:00 UTC against staging: no automated syncs underneath them
+    - kind: deny
+      schedule: "0 2 * * *"
+      duration: 1h
+      timeZone: UTC
+      applications: ["*"]
+      manualSync: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: meridian-prod
+  namespace: argocd
+spec:
+  description: >-
+    Meridian production cells (region pair prod-eu1). Releases arrive only through promotion PRs (same digests as
+    staging, two approvals); a release manager syncs each cell manually inside the allow window, never during EOD
+    or month-end close.
+  sourceRepos: [https://github.com/meridian-org/meridian.git]
+  destinations:
+    - {name: aws-euw1-c01, namespace: meridian}
+    - {name: aws-euw1-c01, namespace: meridian-cde}
+    - {name: aws-euw1-c01, namespace: meridian-edge}
+    - {name: aws-euw2-c01, namespace: meridian}
+    - {name: aws-euw2-c01, namespace: meridian-cde}
+    - {name: aws-euw2-c01, namespace: meridian-edge}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}                  # <service>-migrate (PreSync hooks)
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: networking.k8s.io, kind: Ingress}
+    - {group: monitoring.coreos.com, kind: ServiceMonitor}
+    - {group: monitoring.coreos.com, kind: PrometheusRule}
+  orphanedResources: {warn: true}
+  roles:
+    - name: release-manager
+      description: Release managers - sync prod cells inside the sync windows (after the promotion PR is merged)
+      policies:
+        - p, proj:meridian-prod:release-manager, applications, get, meridian-prod/*, allow
+        - p, proj:meridian-prod:release-manager, applications, sync, meridian-prod/*, allow
+        - p, proj:meridian-prod:release-manager, logs, get, meridian-prod/*, allow
+      groups: [meridian-org:release-managers]
+    - name: sre-oncall
+      description: On-call SRE - view, restart and read logs; no sync (a sync is a release-manager decision)
+      policies:
+        - p, proj:meridian-prod:sre-oncall, applications, get, meridian-prod/*, allow
+        - p, proj:meridian-prod:sre-oncall, applications, action/apps/Deployment/restart, meridian-prod/*, allow
+        - p, proj:meridian-prod:sre-oncall, logs, get, meridian-prod/*, allow
+      groups: [meridian-org:sre]
+    - name: auditor
+      description: Read-only (sync history is the deploy record per cell)
+      policies:
+        - p, proj:meridian-prod:auditor, applications, get, meridian-prod/*, allow
+      groups: [meridian-org:compliance]
+  syncWindows:
+    # Manual syncs only Monday-Thursday 08:00-16:00 London (staffed hours, never into a weekend). Outside an active
+    # allow window every sync is refused, manual ones included (manualSync: false).
+    - kind: allow
+      schedule: "0 8 * * 1-4"
+      duration: 8h
+      timeZone: Europe/London
+      applications: ["*"]
+      manualSync: false
+    # End-of-day batch (business-day-service EOD, statements, interest accrual): no syncs 20:00-02:00 London.
+    - kind: deny
+      schedule: "0 20 * * *"
+      duration: 6h
+      timeZone: Europe/London
+      applications: ["*"]
+      manualSync: false
+    # Month-end close and regulatory reporting: the first two days of every month are frozen.
+    - kind: deny
+      schedule: "0 0 1 * *"
+      duration: 48h
+      timeZone: Europe/London
+      applications: ["*"]
+      manualSync: false
+    # Break-glass (RUNBOOKS section 1): an Argo CD admin runs `argocd proj windows enable-manual-sync meridian-prod <id>`
+    # for the incident, records it in the change record, and disables it again afterwards.
+---
+# Cluster-wide platform objects every cell needs before the Meridian charts: the Kyverno admission policies and the
+# ApplicationSets / AppProjects themselves (deploy/argocd/bootstrap.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: meridian-platform
+  namespace: argocd
+spec:
+  description: Meridian GitOps bootstrap (AppProjects, ApplicationSets) and admission policies on every cell
+  sourceRepos: [https://github.com/meridian-org/meridian.git]
+  destinations:
+    - {name: in-cluster, namespace: argocd}
+    - {name: "aws-*", namespace: kyverno}      # cluster-scoped Kyverno ClusterPolicies on every cell
+  clusterResourceWhitelist:
+    - {group: kyverno.io, kind: ClusterPolicy}
+  namespaceResourceWhitelist:
+    - {group: argoproj.io, kind: AppProject}
+    - {group: argoproj.io, kind: ApplicationSet}
+    - {group: argoproj.io, kind: Application}
+  orphanedResources: {warn: true}
+  roles:
+    - name: devsecops
+      description: DevSecOps - view and sync the platform objects (policy changes still come from PRs)
+      policies:
+        - p, proj:meridian-platform:devsecops, applications, get, meridian-platform/*, allow
+        - p, proj:meridian-platform:devsecops, applications, sync, meridian-platform/*, allow
+      groups: [meridian-org:devsecops]

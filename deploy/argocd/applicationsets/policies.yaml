@@ -1,0 +1,40 @@
+# PLT-GITOPS: the Kyverno admission policies (deploy/policies, tests excluded) on every cell of every environment,
+# synced automatically from main - a policy change is a reviewed PR owned by @meridian-org/devsecops. Kyverno itself
+# is a cluster add-on installed with the cell (outside this repository).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: meridian-policies
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - git:
+        repoURL: https://github.com/meridian-org/meridian.git
+        revision: main
+        files:
+          - path: deploy/*/cells/*/cell.yaml
+  template:
+    metadata:
+      name: "{{ .cell }}-policies"
+      labels:
+        meridian.io/environment: "{{ .environment }}"
+        meridian.io/cell: "{{ .cell }}"
+    spec:
+      project: meridian-platform
+      source:
+        repoURL: https://github.com/meridian-org/meridian.git
+        targetRevision: main
+        path: deploy/policies
+        directory:
+          recurse: false
+          exclude: "tests/*"
+      destination:
+        name: "{{ .cluster }}"
+        namespace: kyverno
+      syncPolicy:
+        automated: {prune: false, selfHeal: true}   # deleting a policy is a manual, reviewed action
+        syncOptions: [ServerSideApply=true]

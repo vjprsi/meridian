@@ -1,0 +1,61 @@
+# PLT-GITOPS / GAP-04 residual / GAP-05: admission-time supply-chain check (Kyverno >= 1.13). Every Meridian image
+# admitted into a Meridian namespace must be
+#   - pulled by digest (verifyDigest) and
+#   - signed keylessly by .github/workflows/ci.yml of this repository on main (Fulcio certificate, Rekor entry), and
+#   - carry a CycloneDX SBOM attestation from the same identity.
+# The signer identity is deploy/pipeline.yaml signer.identity (`python tools/release.py check` keeps them in sync).
+# Render-validated by kubeconform (CRD schema); not exercised by `kyverno apply` offline because it needs registry
+# and Rekor access - tools/release.py verify performs the same checks in the promote workflow.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: meridian-verify-images
+  annotations:
+    policies.kyverno.io/title: Meridian images are signed by CI and carry an SBOM
+    policies.kyverno.io/category: Supply chain (SOC 2 CC8.1, PCI DSS 6.5, ISO 27001 8.32)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+spec:
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: signed-by-meridian-ci-with-sbom
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      verifyImages:
+        - imageReferences: ["ghcr.io/meridian-org/*"]
+          failureAction: Enforce
+          mutateDigest: false        # digests come from git (deploy/<env>/images.yaml), never resolved at admission
+          verifyDigest: true         # a tag-only reference is rejected
+          required: true
+          useCache: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/meridian-org/meridian/.github/workflows/ci.yml@refs/heads/main
+                    additionalExtensions:
+                      githubWorkflowRepository: meridian-org/meridian
+                      githubWorkflowTrigger: push
+                      githubWorkflowRef: refs/heads/main
+                    rekor:
+                      url: https://rekor.sigstore.dev
+          attestations:
+            - predicateType: https://cyclonedx.org/bom
+              attestors:
+                - count: 1
+                  entries:
+                    - keyless:
+                        issuer: https://token.actions.githubusercontent.com
+                        subject: https://github.com/meridian-org/meridian/.github/workflows/ci.yml@refs/heads/main
+                        rekor:
+                          url: https://rekor.sigstore.dev
+              conditions:
+                - all:
+                    - key: "{{ bomFormat }}"
+                      operator: Equals
+                      value: CycloneDX

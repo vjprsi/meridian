@@ -1,0 +1,78 @@
+# Fixtures for `kyverno test deploy/policies/tests`: one compliant pod shaped like the chart's output and one pod per
+# violation the policies must reject.
+apiVersion: v1
+kind: Pod
+metadata: {name: good, namespace: meridian}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: app
+      image: ghcr.io/meridian-org/ledger-service@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 250m, memory: 640Mi}, limits: {memory: 640Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: latest-tag, namespace: tools}
+spec:
+  containers:
+    - name: app
+      image: busybox:latest
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: tag-only, namespace: meridian}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: app
+      image: ghcr.io/meridian-org/ledger-service:main
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 250m, memory: 640Mi}, limits: {memory: 640Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: foreign-registry, namespace: meridian}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: app
+      image: docker.io/evil/ledger-service@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 250m, memory: 640Mi}, limits: {memory: 640Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: root-writable, namespace: meridian}
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: app
+      image: ghcr.io/meridian-org/ledger-service@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      securityContext: {readOnlyRootFilesystem: false}
+      resources: {requests: {cpu: 250m, memory: 640Mi}, limits: {memory: 640Mi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: no-limits, namespace: meridian-edge}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: app
+      image: ghcr.io/meridian-org/cell-router@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: token-mounted, namespace: meridian-cde}
+spec:
+  securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: app
+      image: ghcr.io/meridian-org/card-vault-service@sha256:1111111111111111111111111111111111111111111111111111111111111111
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      resources: {requests: {cpu: 250m, memory: 640Mi}, limits: {memory: 640Mi}}

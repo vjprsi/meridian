@@ -108,7 +108,7 @@ card authorisation, (7) audit trail.
 | T | Tenant move / cell status abuse | Tenant moves maker-checker (`tenant_move`); cell `/offline` single-operator break-glass, audited | Break-glass by design; needs alerting (GAP-06) |
 | R | Operator denies change | Approval records, audit chain, EKS audit logs | No central log store (GAP-06) |
 | I | Staff bulk data access (PAN reveal, exports) | Exact `cards:pan_reveal` + step-up + access log; audit / DSAR exports under four-eyes | Reads of personal data via operator APIs not audited (GAP-07) |
-| D | Destructive infra change | tofu `deletion_protection` in prod; PDBs | Manual Helm deploys (GAP-05) |
+| D | Destructive infra change | tofu `deletion_protection` in prod; PDBs; deployments only via reviewed promotion PRs, prod manual sync in windows, ApplicationSets never delete prod Applications, Argo CD project kind allow-list | GitOps not yet installed (GAP-05 residual) |
 | E | kubectl / DB superuser access | EKS private endpoint option (`eks_public_endpoint`), IRSA | No documented privileged-access process (GAP-24); MFA at IdP not enforced (GAP-13) |
 | E | Supply chain (dependency / image / CI) | Pinned versions, CI checks, SBOM + Trivy SCA, image scan, cosign signatures + SBOM attestations, CODEOWNERS, Dependabot | No admission-time signature verification; branch protection not evidenced (GAP-04 residual) |
 

@@ -1,0 +1,11 @@
+# PLT-GITOPS: values shared by every deployed environment of infra/helm/meridian. Layering (later files win):
+#   deploy/base/meridian.yaml -> deploy/<env>/images.yaml -> deploy/<env>/meridian.yaml -> deploy/<env>/cells/<cell>/meridian.yaml
+global:
+  image:
+    registry: "ghcr.io/meridian-org"     # deploy/pipeline.yaml registry
+    requireDigests: true                 # every component must be pinned by digest (deploy/<env>/images.yaml)
+    pullPolicy: IfNotPresent
+  logging: {format: json}
+  networkPolicy: {enabled: true, monitoringNamespace: monitoring}
+  migrations:
+    enabled: true                        # <service>-migrate Jobs: Helm pre-install / pre-upgrade hooks = Argo CD PreSync

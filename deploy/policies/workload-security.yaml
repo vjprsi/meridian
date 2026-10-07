@@ -1,0 +1,85 @@
+# PLT-GITOPS: what infra/helm/meridian and infra/helm/meridian-router already render, enforced at admission so a
+# hand-applied or drifted workload cannot weaken it:
+#   - Pod Security Standard "restricted" (non-root, RuntimeDefault seccomp, no privilege escalation, drop ALL, no host
+#     namespaces / hostPath / privileged);
+#   - read-only root filesystem in every container (the image writes only to the /tmp emptyDir);
+#   - CPU and memory requests and a memory limit (the charts deliberately set no CPU limit: CPU throttling of the JVM
+#     hurts latency more than it protects neighbours; requests + HPA bound the usage);
+#   - no service-account token mounted (services authenticate with their own OAuth client, GAP-16).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: meridian-workload-security
+  annotations:
+    policies.kyverno.io/title: Meridian workloads are restricted, read-only and resource-bounded
+    policies.kyverno.io/category: Pod security (SOC 2 CC6.8, PCI DSS 2.2, ISO 27001 8.9)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+spec:
+  background: true
+  rules:
+    - name: pod-security-restricted
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      validate:
+        failureAction: Enforce
+        podSecurity:
+          level: restricted
+          version: latest
+    - name: read-only-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      validate:
+        failureAction: Enforce
+        message: "Every container must run with securityContext.readOnlyRootFilesystem: true (write to the /tmp emptyDir)."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+            =(initContainers):
+              - securityContext:
+                  readOnlyRootFilesystem: true
+    - name: requests-and-memory-limit
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      validate:
+        failureAction: Enforce
+        message: "Every container needs CPU and memory requests and a memory limit."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+            =(initContainers):
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+    - name: no-service-account-token
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      validate:
+        failureAction: Enforce
+        message: "Meridian pods do not mount a Kubernetes service-account token (automountServiceAccountToken: false)."
+        pattern:
+          spec:
+            automountServiceAccountToken: false

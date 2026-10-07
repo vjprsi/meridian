@@ -1,0 +1,27 @@
+# prod (region pair prod-eu1, infra/tofu/envs/prod-eu1): receives exactly the release pinned in staging (same digests)
+# through a promotion PR with two approvals; Argo CD never syncs it automatically - a release manager syncs each cell
+# inside the AppProject sync windows (deploy/argocd/projects.yaml), primary cell first, then the standby.
+# Changes to this directory need @meridian-org/release-managers (CODEOWNERS) and the `prod` GitHub environment.
+global:
+  replicas: 3
+  autoscaling: {enabled: true, maxReplicas: 12, targetCpu: 70}
+  auth:
+    issuerUri: "https://auth.meridian.example/realms/meridian"
+    idpEvents: {enabled: true}
+    platformOperatorTenant: "0199a000-0000-7000-8000-0000000000f0"
+  kafka:
+    iam: {enabled: true}
+  serviceMonitor: {enabled: true}
+  otel:
+    samplingProbability: 0.05
+observability:
+  prometheusRule: {enabled: true, labels: {release: kube-prometheus-stack}}
+  dashboards: {enabled: true}
+ingress:
+  enabled: true
+  className: alb
+  host: "api.meridian.example"
+cde:
+  namespace: meridian-cde              # GAP-02: CDE members in their own namespace (Secrets created there)
+  egress:
+    enabled: true                      # CDE pods reach only DNS, Meridian pods, monitoring and the cell VPC

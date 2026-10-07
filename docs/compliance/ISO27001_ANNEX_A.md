@@ -103,7 +103,7 @@ apply to Meridian's own premises and are organisational.
 | 8.6 Capacity management | Yes | HPA / PDB; ledger benchmark; pool sizing | Partial | GAP-12, GAP-10 |
 | 8.7 Protection against malware | Yes | File-gateway scanning of inbound files; read-only container root FS; document virus-scan status | Partial | GAP-04 (image scanning); document fields do not check scan status ([SPEC_BACKLOG customer channel](../SPEC_BACKLOG.md#customer-channel-security-critical-in-progress)) |
 | 8.8 Management of technical vulnerabilities | Yes | Static security review with remediation tracking; Semgrep, Trivy (dependencies, images) and gitleaks in CI; Dependabot | Partial | GAP-25; no patch SLA defined |
-| 8.9 Configuration management | Yes | Generated Helm chart diffed in CI; IaC in OpenTofu with locked providers; per-tenant config in config-service with approvals | Implemented | GAP-05 |
+| 8.9 Configuration management | Yes | Generated Helm chart diffed in CI; desired state per environment in `deploy/` (digest-pinned, Argo CD, drift self-healed in dev / staging, admission policies); IaC in OpenTofu with locked providers; per-tenant config in config-service with approvals | Implemented | GAP-05 residual |
 | 8.10 Information deletion | Yes | DSAR erasure (customer-service), purge requests with certificates, idempotency TTL | Partial | GAP-08, GAP-27 |
 | 8.11 Data masking | Yes | Masked contact values in search, masked customer lookup in agent channel, card `last4` / tokens only outside the vault, fraud pseudonyms, OTP redaction (SEC-10), ISO 8583 `raw_message` sanitised | Partial | GAP-07, GAP-09 |
 | 8.12 Data leakage prevention | Yes | No API returns `secret` columns; SSRF read-back removed (SEC-08/09); webhook log stores status only | Partial | GAP-23 (egress) |
@@ -126,7 +126,7 @@ apply to Meridian's own premises and are organisational.
 | 8.29 Security testing in development and acceptance | Yes | Security regression tests per finding (see SECURITY_REVIEW Regression tests column); e2e journeys (`tools/e2e/journeys.py`) | Partial | GAP-25, GAP-04 |
 | 8.30 Outsourced development | Conditional | Applies if contractors / AI agents contribute; same CI gates; contributor agreements TBD | Partial | GAP-24 |
 | 8.31 Separation of development, test and production | Yes | Dev mode (headers) only with explicit flag and refused inside Kubernetes (SEC-13); separate tofu envs (`staging-eu1a`, `prod-eu1`) and state keys | Implemented | |
-| 8.32 Change management | Yes | CI gates; business configuration changes under maker-checker | Partial | GAP-05 |
+| 8.32 Change management | Yes | CI gates; GitOps promotion PRs with signature / SBOM / vulnerability gates, generated change records (risk, rollback plan), two approvals and sync windows for prod (`deploy/`, `.github/workflows/promote.yml`); business configuration changes under maker-checker | Partial (designed, not yet operating) | GAP-05 residual |
 | 8.33 Test information | Yes | Synthetic data generators (`ReconBenchmarkGenerator`, load test random accounts), demo tenant / starter packs; no rule forbidding production data in test | Partial | GAP-24 (policy) |
 | 8.34 Protection of information systems during audit testing | Yes | Pen test rules of engagement ([PEN_TEST_SCOPE.md](PEN_TEST_SCOPE.md)) | Partial | |
 
@@ -146,7 +146,7 @@ Mixed rows (for example "Inherited / Gap") are counted by their first status; re
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
 | GAP-24 | ISMS clauses 4-10, policy set, HR, supplier management, physical (offices) | TBD (CISO) | Proposed |
-| GAP-04 | Residual: branch protection evidence, admission-time signature verification, IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
+| GAP-04 | Residual: branch protection evidence, admission policies installed in clusters (written: `deploy/policies`), IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
 | GAP-06 / GAP-10 | Logging and monitoring | TBD (SecOps / SRE) | PLT-OBSERVABILITY |
 | GAP-08 / GAP-27 | Information deletion across services | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes), [resume point](../SPEC_BACKLOG.md#resume-point-paused-2026-10-07) |
 | GAP-09 | Field-level encryption / masking of `pii` columns | TBD (Platform) | Proposed |

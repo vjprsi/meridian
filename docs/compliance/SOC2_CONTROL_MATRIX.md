@@ -39,7 +39,7 @@ listed at the end.
 |---|---|---|---|---|
 | CC3.1-CC3.2 Objectives, risk identification | Risks section of the plan; STRIDE threat model | `spec/plan.yaml` (risks), [THREAT_MODEL.md](THREAT_MODEL.md) | Partial | GAP-24 (formal risk register, annual assessment) |
 | CC3.3 Fraud risk | Fraud scoring of every outbound payment and card auth, transaction monitoring, sanctions; internal fraud via four-eyes | `docs/SERVICE_IMPLEMENTATION_GUIDE.md` "Fraud scoring of payments"; `FourEyes.require`; SEC-03/12/20/21 fixes | Implemented | |
-| CC3.4 Change impact | Security review re-run after major changes; perf re-run after hardening | `docs/SECURITY_REVIEW.md`, `docs/PERFORMANCE.md` "Re-run after security hardening" | Partial | GAP-05 |
+| CC3.4 Change impact | Security review re-run after major changes; perf re-run after hardening; every release's change record classifies its risk (chart, CDE, auth, ledger / payments, contract migrations) and states the rollback plan | `docs/SECURITY_REVIEW.md`, `docs/PERFORMANCE.md` "Re-run after security hardening", `tools/release.py change-record`, `deploy/change-records/` | Partial | GAP-05 residual |
 
 ### CC4 Monitoring activities
 
@@ -83,7 +83,9 @@ listed at the end.
 
 | Criterion | Meridian control | Evidence | Status | Gap |
 |---|---|---|---|---|
-| CC8.1 Authorised, tested, approved changes | PR-based workflow with CI (spec validation, generated artefacts up to date, OpenAPI/AsyncAPI lint, DDL on PostgreSQL 18, full build with Testcontainers ITs, Helm lint/kubeconform, image build, SAST, secret scan, SBOM + SCA, image scan; signed and attested images on main); code owners per area; forward-only migrations; business configuration changes (products, pricing, rules, regulatory packs, EOD jobs) through maker-checker | `.github/workflows/ci.yml`; `.github/CODEOWNERS`; `docs/CONVENTIONS.md` section 3; G11 notes in `docs/SPEC_BACKLOG.md` | Partial | GAP-04 residual (branch protection requiring CI + code-owner review not evidenced; placeholder teams), GAP-05 (no deploy approvals or release log) |
+| CC8.1 Authorised, tested, approved changes (code) | PR-based workflow with CI (spec validation, generated artefacts up to date, OpenAPI/AsyncAPI lint, DDL on PostgreSQL 18, full build with Testcontainers ITs, Helm lint/kubeconform, deploy tree render + Kyverno, image build, SAST, secret scan, SBOM + SCA, image scan; signed and attested images on main); code owners per area; forward-only, expand / contract migrations; business configuration changes (products, pricing, rules, regulatory packs, EOD jobs) through maker-checker | `.github/workflows/ci.yml`; `.github/CODEOWNERS`; `docs/CONVENTIONS.md` section 3; G11 notes in `docs/SPEC_BACKLOG.md` | Partial | GAP-04 residual (branch protection requiring CI + code-owner review not evidenced; placeholder teams) |
+| CC8.1 Authorised, tested, approved changes (deployments) | GitOps (PLT-GITOPS): environments change only by PR against `deploy/<env>` synced by Argo CD; releases promoted dev -> staging -> prod with identical revision and image digests (provenance check rejects edited pins); before the PR and again on it: CI success for the revision, cosign keyless signature + SBOM attestation bound to `ci.yml@refs/heads/main` and the commit, Trivy re-scan, render + kubeconform + Kyverno for every cell; generated change record per release (commits, tickets, risk, migrations, rollback plan, evidence); prod: `prod` GitHub environment reviewers, two PR approvals excluding author and requester, release-manager code owners, manual Argo CD sync inside sync windows by the `release-manager` project role | `deploy/` ([README](../../deploy/README.md)); `.github/workflows/promote.yml`, `deploy-check.yml`; `tools/release.py`; `deploy/argocd/projects.yaml`; `deploy/change-records/`; [RUNBOOKS 1](../operations/RUNBOOKS.md#1-deploy-and-rollback-gitops) | Designed (in repo; not yet operating) | GAP-05 residual (repository settings, Argo CD / Kyverno install, no deploy evidence yet) |
+| CC8.1 Infrastructure / admission | Kyverno admission policies: only Meridian-CI-signed, SBOM-attested, digest-pinned images from the Meridian registry; no `:latest`; PSS restricted, read-only root filesystem, requests + memory limit, no service-account token; Argo CD AppProjects restrict repositories, clusters, namespaces and resource kinds | `deploy/policies` (+ `tests`, run in CI), `deploy/argocd/projects.yaml` | Designed (not installed) | GAP-05 / GAP-04 residual |
 
 ### CC9 Risk mitigation
 
@@ -142,7 +144,7 @@ listed at the end.
 
 | Control area | Evidence artefact | Source |
 |---|---|---|
-| Change management | Merged PRs with green CI runs, deploy records per environment | GitHub, deployment pipeline (GAP-05) |
+| Change management | Merged PRs with green CI runs; promotion PRs with their change records, `deploy-check` results and approvals; `prod` environment approvals; Argo CD sync history and deploy notifications per cell; Kyverno policy reports | GitHub (PRs, environments, Actions artifacts `promotion-evidence-*`), `deploy/change-records/<env>/CHANGELOG.md`, Argo CD, Kyverno |
 | Maker-checker | Sample of `approval_request` rows with distinct maker / checker and decision times | workflow-service `GET /v1/approval-requests` |
 | Privileged access | `privileged_change` records and elevation expiries; session revocations | identity-service |
 | Audit integrity | Scheduled `verify-chain` results per tenant (none broken), ledger `ledger_verification` results | audit-service, ledger-service |
@@ -155,8 +157,8 @@ listed at the end.
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-04 | Closed in CI (SAST, secrets, SBOM, SCA, image scan, signing, CODEOWNERS); residual: branch protection evidence, admission-time signature verification, IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
-| GAP-05 | No deployment pipeline or change records | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS |
+| GAP-04 | Closed in CI (SAST, secrets, SBOM, SCA, image scan, signing, CODEOWNERS); admission-time signature verification written (Kyverno, PLT-GITOPS), not installed; residual: branch protection evidence, IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
+| GAP-05 | Pipeline, approvals, change records and admission policies exist in the repo (2026-10-07); residual: GitHub settings, Argo CD / Kyverno installation, operating evidence | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS (Done in repo); PLT-IAC |
 | GAP-06 | No central logging / SIEM, IdP events off in shipped realm | TBD (SecOps) | Proposed; PLT-OBSERVABILITY |
 | GAP-07 | Partially closed 2026-10-07 (masking, daily verification, WORM seals); open: read auditing | TBD (Platform) | Proposed; [SPEC_BACKLOG per-domain platform](../SPEC_BACKLOG.md#per-domain-notes) |
 | GAP-08 | Largely closed 2026-10-07; residuals: S3 file content, search journal, Kafka retention, services outside the DSAR fan-out | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes) |

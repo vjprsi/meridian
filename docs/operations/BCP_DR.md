@@ -34,7 +34,7 @@ Other scenarios:
 | Pod / node failure | Readiness probes, PDB, HPA | Kubernetes reschedules (zone / host spread, maxUnavailable 0) | Seconds / 0 |
 | AZ loss | Aurora reader promotion, MSK ISR | Automatic | ~30 s / 0 |
 | Cell control plane (tenant-service) down | Router `placement.lookups{result="stale"}` rising | Router serves cached placements up to 15 min; break-glass `cellOverrides` via Helm | Routing unaffected for 15 min; no new placements |
-| Bad release | Error budget burn, e2e journeys | `helm rollback` ([RUNBOOKS section 1](RUNBOOKS.md#1-deploy-and-rollback-helm)) | Minutes / 0 |
+| Bad release | Error budget burn, e2e journeys | Rollback PR via the `promote` workflow, `mode=rollback` ([RUNBOOKS section 1](RUNBOOKS.md#1-deploy-and-rollback-gitops)) | Minutes / 0 |
 | Logical data corruption (bug, operator error, ransomware) | Ledger `verify`, audit `verify-chain`, recon breaks | Aurora point-in-time restore to a new cluster, extract affected rows, correct through compensating postings (financial tables are append-only; never overwrite) | Hours / restore point chosen (PITR within retention: 35 d prod, 7 d other) |
 | KMS key deletion / loss | Decrypt failures | KMS keys have a 30-day deletion window (`deletion_window_in_days = 30`); cancel deletion | Minutes / 0 |
 | Card-vault master key loss | Vault refuses to start / decrypt | `aws-kms`: the CDE key is a multi-region key with a replica in the DR cell (tofu `cde_kms_replica_of`), deletion has a 30-day window (cancel it); data keys replicate with the database and unwrap in either region (`mrk-` reference). `software`: restore the master key from the secret store. `pkcs11`: HSM backup / cluster restore **[GAP-01: no HSM key backup ceremony documented]** | Minutes / 0 |

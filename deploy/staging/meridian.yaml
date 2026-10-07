@@ -1,0 +1,20 @@
+# staging: production-like (MSK IAM principals, IdP events, monitoring, KMS-backed CDE keys); receives exactly the
+# release pinned in dev (same digests) through a promotion PR; Argo CD auto-syncs once that PR is merged.
+global:
+  replicas: 2
+  auth:
+    issuerUri: "https://auth.staging.meridian.example/realms/meridian"
+    idpEvents: {enabled: true}
+    platformOperatorTenant: "0199a000-0000-7000-8000-0000000000f0"
+  kafka:
+    iam:
+      enabled: true
+      roleArnTemplate: "arn:aws:iam::111111111111:role/meridian-eu1a-kafka-{name}"   # tofu kafka_service_role_arns
+  serviceMonitor: {enabled: true}
+observability:
+  prometheusRule: {enabled: true, labels: {release: kube-prometheus-stack}}
+  dashboards: {enabled: true}
+ingress:
+  enabled: true
+  className: alb
+  host: "api.staging.meridian.example"

@@ -1,0 +1,22 @@
+# PLT-GITOPS bootstrap: apply once per Argo CD instance (`kubectl apply -n argocd -f deploy/argocd/bootstrap.yaml`)
+# after registering every cell cluster under its cell id (`argocd cluster add <context> --name aws-euw1-c01`).
+# From then on Argo CD manages its own AppProjects and ApplicationSets from deploy/argocd (app of apps).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: meridian-bootstrap
+  namespace: argocd
+spec:
+  project: meridian-platform
+  source:
+    repoURL: https://github.com/meridian-org/meridian.git
+    targetRevision: main
+    path: deploy/argocd
+    directory:
+      recurse: true
+  destination:
+    name: in-cluster
+    namespace: argocd
+  syncPolicy:
+    automated: {prune: false, selfHeal: true}
+    syncOptions: [ServerSideApply=true]

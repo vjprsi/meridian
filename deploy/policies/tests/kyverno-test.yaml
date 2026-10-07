@@ -1,0 +1,26 @@
+# kyverno test deploy/policies/tests  (offline; verify-images.yaml needs registry + Rekor access and is covered by
+# tools/release.py verify in the promote workflow)
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: meridian-admission-policies
+policies:
+  - ../image-references.yaml
+  - ../workload-security.yaml
+resources:
+  - resources.yaml
+results:
+  # compliant pod (shape of the chart's Deployments / migration Jobs)
+  - {policy: meridian-image-references, rule: meridian-registry-and-digest, resources: [good], kind: Pod, result: pass}
+  - {policy: meridian-image-references, rule: disallow-latest-tag, resources: [good], kind: Pod, result: pass}
+  - {policy: meridian-workload-security, rule: pod-security-restricted, resources: [good], kind: Pod, result: pass}
+  - {policy: meridian-workload-security, rule: read-only-root-filesystem, resources: [good], kind: Pod, result: pass}
+  - {policy: meridian-workload-security, rule: requests-and-memory-limit, resources: [good], kind: Pod, result: pass}
+  - {policy: meridian-workload-security, rule: no-service-account-token, resources: [good], kind: Pod, result: pass}
+  # violations
+  - {policy: meridian-image-references, rule: disallow-latest-tag, resources: [latest-tag], kind: Pod, result: fail}
+  - {policy: meridian-image-references, rule: meridian-registry-and-digest, resources: [tag-only, foreign-registry], kind: Pod, result: fail}
+  - {policy: meridian-workload-security, rule: pod-security-restricted, resources: [root-writable], kind: Pod, result: fail}
+  - {policy: meridian-workload-security, rule: read-only-root-filesystem, resources: [root-writable], kind: Pod, result: fail}
+  - {policy: meridian-workload-security, rule: requests-and-memory-limit, resources: [no-limits], kind: Pod, result: fail}
+  - {policy: meridian-workload-security, rule: no-service-account-token, resources: [token-mounted], kind: Pod, result: fail}

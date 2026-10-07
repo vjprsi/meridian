@@ -1,0 +1,14 @@
+# dev: every green build of main lands here automatically (promotion PR from .github/workflows/promote.yml, Argo CD
+# auto-sync with self-heal). Small footprint, same security settings as production.
+global:
+  replicas: 1
+  autoscaling: {enabled: false, maxReplicas: 2, targetCpu: 70}
+  resources: {cpu: 100m, memory: 512Mi}
+  auth:
+    issuerUri: "https://auth.dev.meridian.example/realms/meridian"
+  otel:
+    samplingProbability: 1.0
+  serviceMonitor: {enabled: true}
+cde:
+  keys:
+    mode: software                       # dev only: no KMS / HSM

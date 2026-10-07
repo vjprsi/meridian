@@ -83,7 +83,7 @@ spec:
             matchLabels: {{- include "router.selector" . | nindent 14 }}
       containers:
         - name: app
-          image: {{ printf "%s/cell-router:%s" .Values.image.registry (.Values.image.tag | default .Chart.AppVersion) }}
+          image: {{ include "router.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - {name: http, containerPort: 8080}

@@ -3,7 +3,9 @@
 global:
   image:
     registry: "ghcr.io/meridian"
-    tag: ""                # defaults to the chart appVersion
+    tag: ""                # defaults to the chart appVersion (used only for images without a digest)
+    digests: {}            # PLT-GITOPS: component -> sha256:... (deploy/<env>/images.yaml, tools/release.py)
+    requireDigests: false  # true in GitOps environments: a component without a digest fails the render
     pullPolicy: IfNotPresent
   imagePullSecrets: []
   replicas: 2

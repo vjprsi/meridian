@@ -1,0 +1,67 @@
+# PLT-GITOPS: one Application per (prod cell x chart) - prod-eu1: aws-euw1-c01 (primary) and aws-euw2-c01 (standby).
+# prod: NO automated sync. After a promotion PR (same digests as staging, two approvals) is merged the Applications
+# show OutOfSync; a release manager syncs them inside the meridian-prod sync windows, primary cell first:
+#   argocd app sync -l meridian.io/environment=prod,meridian.io/cell=aws-euw1-c01 --prune --timeout 1800
+# then, once healthy, the standby cell. Pruning is part of the reviewed manual sync only.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: meridian-prod
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    applicationsSync: create-update     # the ApplicationSet never deletes a prod Application
+    preserveResourcesOnDeletion: true
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/meridian-org/meridian.git
+              revision: main
+              files:
+                - path: deploy/prod/cells/*/cell.yaml
+          - list:
+              elements:
+                - {chart: meridian, release: meridian, nsKey: namespace}
+                - {chart: meridian-router, release: router, nsKey: routerNamespace}
+  template:
+    metadata:
+      name: "{{ .cell }}-{{ .chart }}"
+      labels:
+        meridian.io/environment: "{{ .environment }}"
+        meridian.io/cell: "{{ .cell }}"
+        meridian.io/role: "{{ .role }}"
+        meridian.io/chart: "{{ .chart }}"
+        meridian.io/sync-wave: "{{ .syncWave }}"
+      annotations:
+        notifications.argoproj.io/subscribe.on-deployed.slack: meridian-deploys
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: meridian-deploys
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: meridian-deploys
+    spec:
+      project: meridian-prod
+      sources:
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: "{{ .revision }}"
+          path: "infra/helm/{{ .chart }}"
+          helm:
+            releaseName: "{{ .release }}"
+            valueFiles:
+              - "$values/deploy/base/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/images.yaml"
+              - "$values/deploy/{{ .environment }}/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/cells/{{ .cell }}/{{ .chart }}.yaml"
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{ .cluster }}"
+        namespace: "{{ index . .nsKey }}"
+      revisionHistoryLimit: 50
+      syncPolicy:
+        # no `automated`: manual sync only
+        syncOptions: [CreateNamespace=false, PruneLast=true, ServerSideApply=true]
+        retry:
+          limit: 2
+          backoff: {duration: 1m, factor: 2, maxDuration: 5m}

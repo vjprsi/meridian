@@ -20,6 +20,7 @@ wallets and mobile money, card issuing and processing, risk and compliance, with
 | `generated/asyncapi/meridian.asyncapi.yaml` | AsyncAPI 3.0 event catalogue |
 | `generated/docs/data-dictionary.md` | Every table and column, with API field mapping |
 | `tracker/Meridian_Tracker.xlsx` | Project tracker (dashboard, roadmap, backlog, inventory, traceability) |
+| `deploy/` | Deployed environments (Argo CD), pinned releases, admission policies, change records (`tools/release.py`) |
 
 ## Commands
 
@@ -333,7 +334,8 @@ One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gat
 - Images: `tools/build-images.sh <tag> <registry>` (set `PUSH=1` to push) builds one image per component from
   `infra/docker/Dockerfile`: layered jar, JRE 25, non-root uid 10001, read-only root filesystem with `/tmp` as the only
   writable path.
-- Install: `helm upgrade --install meridian infra/helm/meridian -n meridian -f values-<env>.yaml`.
+- Install: deployed environments are managed by Argo CD from `deploy/` (next section); for a local or lab cluster,
+  `helm upgrade --install meridian infra/helm/meridian -n meridian -f values-<env>.yaml`.
   PostgreSQL, Kafka, the OIDC provider and the OTel collector are external; point `global.*` at them. Create the
   secrets listed in the chart notes first (runtime DB role, schema-owner role for Flyway, service client, per-service
   secrets `meridian-<service>-secrets`, and shared secrets such as `meridian-contact-lookup` used by both
@@ -359,6 +361,31 @@ One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gat
   (CI runs both and checks the chart matches the manifest).
 - Cell identity (S20): `global.cell.id` (the cell code in the tenant registry), `global.cell.region` and
   `global.cell.role` (`primary`, or `standby` for a warm DR standby: no outbox relay, no event consumers until promoted).
+
+### Environments, promotion and change records (PLT-GITOPS)
+
+Deployed environments are git: `deploy/<env>` holds the values and the pinned release of each environment, Argo CD
+syncs it, and every change is a pull request with a generated change record. Details, required repository settings
+and cluster prerequisites: [deploy/README.md](deploy/README.md); procedures: [RUNBOOKS section 1](docs/operations/RUNBOOKS.md#1-deploy-and-rollback-gitops).
+
+- Environments: `dev` (`aws-euw1-d01`), `staging` (`aws-euw1-s01`), `prod` = region pair prod-eu1 (`aws-euw1-c01`
+  primary, `aws-euw2-c01` warm standby). Values layer `deploy/base` -> `<env>/images.yaml` -> `<env>` ->
+  `<env>/cells/<cell>`; `deploy/argocd` has the AppProjects (RBAC roles, allowed clusters / kinds, prod sync windows)
+  and one ApplicationSet per environment (an Application per cell x chart; dev and staging auto-sync, prod manual).
+- Images are pinned by digest (`global.image.digests`; `requireDigests` makes a missing digest a render error). A
+  release (git revision + 69 digests) moves dev -> staging -> prod unchanged.
+- `.github/workflows/promote.yml`: after every green `ci` run on main it opens / auto-merges the dev PR with the
+  digests CI signed; `workflow_dispatch` promotes to staging or prod (or rolls back, `mode=rollback`) by PR. Gates:
+  cosign keyless signature + CycloneDX attestation from `ci.yml@refs/heads/main` built from the commit, Trivy, render
+  + kubeconform + Kyverno of every cell, change record (`deploy/change-records/<env>/`: commits, tickets, risk,
+  migrations, rollback plan). `.github/workflows/deploy-check.yml` repeats the gates on the PR, rejects pins that did
+  not come from the previous environment and requires two approvals for `deploy/prod/`.
+- Admission: Kyverno policies in `deploy/policies` (signature + SBOM from the CI identity, digest-only images from the
+  Meridian registry, no `:latest`, PSS restricted, read-only root filesystem, requests + memory limit).
+- Tooling: `python tools/release.py check | render --env all --kubeconform --policies | change-record | promote |
+  rollback | verify` (helm, kubeconform, kyverno, cosign, trivy on PATH as needed).
+- Migrations stay forward-only: expand in release N, stop reading in N+1, contract no earlier than N+2; a release
+  with a contract step is rolled forward, never back.
 
 ### Multi-region cells (S20)
 

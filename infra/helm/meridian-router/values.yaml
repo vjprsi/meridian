@@ -4,7 +4,9 @@
 region: ""                       # cloud region of this router deployment, e.g. eu-west-1
 image:
   registry: "ghcr.io/meridian"
-  tag: ""                        # defaults to the chart appVersion
+  tag: ""                        # defaults to the chart appVersion (used only without a digest)
+  digest: ""                     # sha256:... (PLT-GITOPS; default: global.image.digests.cell-router)
+  requireDigest: false           # true in GitOps environments: no digest = render error, never a mutable tag
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 replicas: 3                      # one per AZ at least: the router is the front door of every cell in the region

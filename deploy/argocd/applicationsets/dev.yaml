@@ -1,0 +1,58 @@
+# PLT-GITOPS: one Application per (dev cell x chart). Cells come from deploy/dev/cells/*/cell.yaml; the charts are
+# rendered at the cell's pinned `revision` (so a chart change on main reaches an environment only with a promotion),
+# the values from main (deploy/base -> deploy/dev/images.yaml -> deploy/dev -> deploy/dev/cells/<cell>).
+# dev: automated sync with prune and self-heal - every merged promotion PR (opened after each green CI run on main)
+# is live within minutes.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: meridian-dev
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/meridian-org/meridian.git
+              revision: main
+              files:
+                - path: deploy/dev/cells/*/cell.yaml
+          - list:
+              elements:
+                - {chart: meridian, release: meridian, nsKey: namespace}
+                - {chart: meridian-router, release: router, nsKey: routerNamespace}
+  template:
+    metadata:
+      name: "{{ .cell }}-{{ .chart }}"
+      labels:
+        meridian.io/environment: "{{ .environment }}"
+        meridian.io/cell: "{{ .cell }}"
+        meridian.io/chart: "{{ .chart }}"
+    spec:
+      project: meridian-dev
+      sources:
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: "{{ .revision }}"
+          path: "infra/helm/{{ .chart }}"
+          helm:
+            releaseName: "{{ .release }}"
+            valueFiles:
+              - "$values/deploy/base/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/images.yaml"
+              - "$values/deploy/{{ .environment }}/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/cells/{{ .cell }}/{{ .chart }}.yaml"
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{ .cluster }}"
+        namespace: "{{ index . .nsKey }}"
+      revisionHistoryLimit: 20
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=false, PruneLast=true, ServerSideApply=true]
+        retry:
+          limit: 5
+          backoff: {duration: 30s, factor: 2, maxDuration: 10m}

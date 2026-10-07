@@ -1,0 +1,29 @@
+# PLT-GITOPS / GAP-05: identity of this repository and the promotion order. tools/release.py reads this file and
+# `tools/release.py check` fails when the Argo CD manifests, the admission policies or the base values disagree with it.
+# PLACEHOLDERS: replace meridian-org/meridian with the real GitHub owner/repository (and the registry owner) in one
+# commit, then run `python tools/release.py check`.
+repository: meridian-org/meridian
+gitUrl: https://github.com/meridian-org/meridian.git
+registry: ghcr.io/meridian-org                  # ci.yml pushes ghcr.io/<owner>/<component>
+# Keyless signing identity (Fulcio certificate SAN) of images built by .github/workflows/ci.yml on main.
+signer:
+  issuer: https://token.actions.githubusercontent.com
+  identity: https://github.com/meridian-org/meridian/.github/workflows/ci.yml@refs/heads/main
+  sbomPredicateType: https://cyclonedx.org/bom   # cosign attest --type cyclonedx
+# Promotion order: an environment only accepts the release that is currently pinned in the one before it.
+environments:
+  - name: dev
+    githubEnvironment: dev
+    from: ci                # pinned automatically after every green CI run on main
+    sync: automated
+  - name: staging
+    githubEnvironment: staging
+    from: dev
+    sync: automated         # after the promotion PR's checks (verify, render, policy) are green and it is merged
+  - name: prod
+    githubEnvironment: prod
+    from: staging
+    sync: manual            # Argo CD manual sync inside the AppProject sync windows; 2 approvals on the PR
+    region: eu1             # region pair prod-eu1 (infra/tofu/envs/prod-eu1): primary + warm standby cell
+# Components that get an image (same list as ci.yml image-matrix): generated/services.json + these platform apps.
+platformComponents: [edge-gateway, cell-router]

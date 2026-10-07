@@ -1,0 +1,12 @@
+replicas: 3
+serviceMonitor: {enabled: true}
+service:
+  type: LoadBalancer                   # Route 53 failover record points at the router NLB (tofu prod-eu1 router_lb_*)
+router:
+  registryUrl: "http://tenant-service.meridian.svc"
+  operatorTenant: "0199a000-0000-7000-8000-0000000000f0"
+  auth:
+    tokenUri: "https://auth.meridian.example/realms/meridian/protocol/openid-connect/token"
+  jwt:
+    jwkSetUri: "https://auth.meridian.example/realms/meridian/protocol/openid-connect/certs"
+    issuer: "https://auth.meridian.example/realms/meridian"

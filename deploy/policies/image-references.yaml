@@ -1,0 +1,56 @@
+# PLT-GITOPS: image reference hygiene.
+#   - cluster-wide: no `:latest` and no untagged images (system namespaces excluded);
+#   - Meridian namespaces: only this repository's registry, and only by digest (the chart renders
+#     <registry>/<component>@sha256:... when global.image.digests is set; deploy/base sets requireDigests).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: meridian-image-references
+  annotations:
+    policies.kyverno.io/title: No latest tag; Meridian images from the Meridian registry, pinned by digest
+    policies.kyverno.io/category: Supply chain (SOC 2 CC8.1)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+spec:
+  background: true
+  rules:
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, kube-node-lease, kyverno]
+      validate:
+        failureAction: Enforce
+        message: "Images must not use the mutable `latest` tag (or no tag at all): pin a version or, better, a digest."
+        foreach:
+          - list: "request.object.spec.[containers, initContainers, ephemeralContainers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ contains(element.image, ':') }}"
+                    operator: Equals
+                    value: false
+    - name: meridian-registry-and-digest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [meridian, meridian-cde, meridian-edge]
+      validate:
+        failureAction: Enforce
+        message: "Meridian namespaces run only ghcr.io/meridian-org/<component>@sha256:<digest> images (deploy/<env>/images.yaml)."
+        foreach:
+          - list: "request.object.spec.[containers, initContainers, ephemeralContainers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/meridian-org/*@sha256:*"

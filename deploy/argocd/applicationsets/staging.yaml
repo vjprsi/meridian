@@ -1,0 +1,63 @@
+# PLT-GITOPS: one Application per (staging cell x chart); same layout as dev.yaml.
+# staging: automated sync AFTER the checks - a release reaches deploy/staging only through a promotion PR whose
+# required checks (promote: cosign signature + SBOM attestation + Trivy per digest, helm template + kubeconform +
+# Kyverno for every cell) are green and which code owners approved. Self-heal on; pruning on.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: meridian-staging
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true   # removing a cell file never deletes running workloads
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/meridian-org/meridian.git
+              revision: main
+              files:
+                - path: deploy/staging/cells/*/cell.yaml
+          - list:
+              elements:
+                - {chart: meridian, release: meridian, nsKey: namespace}
+                - {chart: meridian-router, release: router, nsKey: routerNamespace}
+  template:
+    metadata:
+      name: "{{ .cell }}-{{ .chart }}"
+      labels:
+        meridian.io/environment: "{{ .environment }}"
+        meridian.io/cell: "{{ .cell }}"
+        meridian.io/chart: "{{ .chart }}"
+      annotations:
+        # deploy record per sync (SOC 2 CC8.1 evidence); needs argocd-notifications with a `meridian-deploys` service
+        notifications.argoproj.io/subscribe.on-deployed.slack: meridian-deploys
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: meridian-deploys
+    spec:
+      project: meridian-staging
+      sources:
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: "{{ .revision }}"
+          path: "infra/helm/{{ .chart }}"
+          helm:
+            releaseName: "{{ .release }}"
+            valueFiles:
+              - "$values/deploy/base/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/images.yaml"
+              - "$values/deploy/{{ .environment }}/{{ .chart }}.yaml"
+              - "$values/deploy/{{ .environment }}/cells/{{ .cell }}/{{ .chart }}.yaml"
+        - repoURL: https://github.com/meridian-org/meridian.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{ .cluster }}"
+        namespace: "{{ index . .nsKey }}"
+      revisionHistoryLimit: 20
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=false, PruneLast=true, ServerSideApply=true]
+        retry:
+          limit: 3
+          backoff: {duration: 1m, factor: 2, maxDuration: 10m}

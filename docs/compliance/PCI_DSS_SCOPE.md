@@ -112,7 +112,7 @@ internal BFF yet (GAP-20), and the segmentation has not been tested (GAP-25).
 | 6.2 | Bespoke software developed securely | Conventions, security review, regression tests per finding | Partial | GAP-04 |
 | 6.3 | Vulnerabilities identified and patched | SBOM-based SCA and image scanning in CI (fixable CRITICAL blocks), Dependabot; no patch SLA yet | Partial | GAP-04 residual (patch SLA) |
 | 6.4 | Public-facing web apps protected | No WAF; CSP / frame headers on staff apps (SEC-22, no script-src yet) | Gap | GAP-17 |
-| 6.5 | Change management | CI gates; no deploy pipeline or separation of duties on deploys | Partial | GAP-05 |
+| 6.5 | Change management | CI gates; GitOps promotion with change records (impact, rollback), signature / SBOM / vulnerability gates and separation of duties on prod (two approvals excluding author and requester, release-manager sync role) - `deploy/README.md`; not yet operating | Partial | GAP-05 residual |
 | 7 | Restrict access by need to know | Exact scopes `cards:pan_reveal` / `cards:vault_admin`, service-only lookup / verify / tokenize / PIN, named callers per vault operation, `allowed-clients` | Partial | GAP-16, GAP-13 (role reviews, 7.2.4) |
 | 8 | Identify and authenticate | OIDC, step-up (`auth_time` / `acr` / `amr`) for reveal; MFA for all CDE access (8.4.2) not enforced in the shipped IdP | Partial | GAP-13 |
 | 9 | Physical access | AWS | Inherited | |
@@ -156,7 +156,7 @@ internal BFF yet (GAP-20), and the segmentation has not been tested (GAP-25).
 | GAP-01 | Residual: key ceremony, dual control / split knowledge, HSM image variant, key import under a ZMK in envelope modes, payment-HSM adapter (scheme CVV, PVV) | TBD (Cards platform) | [SPEC_BACKLOG Wave B - Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-02 | Residual: dedicated node pool, mTLS inside the CDE, default-deny egress on by default, segmentation test | TBD (Platform / Cards) | Proposed |
 | GAP-03 | Closed 2026-10-07 (CVV2 derived, PIN blocks under the PIN key) | - | - |
-| GAP-04 | Residual: patch SLA, admission-time signature verification, branch protection evidence | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
+| GAP-04 | Residual: patch SLA, admission policies installed (written: `deploy/policies`), branch protection evidence | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
 | GAP-06 / GAP-07 | Central logging, log retention, audit integrity checks | TBD (SecOps) | Proposed |
 | GAP-13 | MFA for all CDE access, access reviews | TBD (IAM) | Proposed |
 | GAP-16 | Per-service identity for CDE callers | TBD (Platform) | [SPEC_BACKLOG wave A](../SPEC_BACKLOG.md#cross-cutting-items-raised-in-wave-a-open) |

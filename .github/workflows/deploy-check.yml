@@ -1,0 +1,111 @@
+name: deploy-check
+
+# PLT-GITOPS / GAP-05: required status checks for every pull request (branch protection / ruleset on main must
+# require `deploy-check / release gates` and `deploy-check / prod approvals`). Both pass immediately when the pull
+# request does not touch deploy/<env>/, so they can be required on every PR.
+#
+#   release gates   for each environment whose pins changed: provenance (the pins existed unchanged in the previous
+#                   environment, or in the environment's own history for a rollback - never hand-edited), cosign
+#                   signature + SBOM attestation + Trivy per digest, helm template + kubeconform + Kyverno
+#   prod approvals  a PR touching deploy/prod/ needs two approvals on its latest commit from two people other than
+#                   its author and the person who dispatched the promotion (separation of duties). Code-owner review
+#                   (CODEOWNERS deploy/prod/ -> release-managers) is enforced by branch protection.
+
+on:
+  pull_request:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: deploy-check-${{ github.event.pull_request.number }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: release gates
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ENVS=$(git diff --name-only "$BASE"...HEAD -- 'deploy/*/images.yaml' 'deploy/*/cells/*/cell.yaml' \
+                 | cut -d/ -f2 | sort -u | tr '\n' ' ')
+          echo "envs=$ENVS" >> "$GITHUB_OUTPUT"
+          echo "pins changed in: ${ENVS:-none}"
+      - uses: actions/setup-python@v5
+        if: steps.changed.outputs.envs != ''
+        with: { python-version: "3.13" }
+      - if: steps.changed.outputs.envs != ''
+        run: pip install pyyaml
+      - uses: azure/setup-helm@v4
+        if: steps.changed.outputs.envs != ''
+      - uses: sigstore/cosign-installer@v4.1.2
+        if: steps.changed.outputs.envs != ''
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        if: steps.changed.outputs.envs != ''
+        with: { version: v0.75.0, cache: true }
+      - name: kubeconform and Kyverno CLI
+        if: steps.changed.outputs.envs != ''
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          curl -sSL https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz | tar xz -C "$HOME/bin" kyverno
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Provenance, signatures, SBOM, Trivy and render per changed environment
+        if: steps.changed.outputs.envs != ''
+        env:
+          ENVS: ${{ steps.changed.outputs.envs }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python tools/release.py check
+          for env in $ENVS; do
+            [ -f "deploy/$env/images.yaml" ] || continue
+            python tools/release.py provenance --env "$env" --base "$BASE"
+            python tools/release.py verify --env "$env" --evidence "verify-$env.json"
+            python tools/release.py render --env "$env" --out "rendered-$env" --kubeconform --policies
+          done
+
+  prod-approvals:
+    name: prod approvals
+    runs-on: ubuntu-latest
+    steps:
+      - name: Two approvals on the latest commit, excluding the author and the promotion's requester
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          REQUIRED: "2"
+        run: |
+          if ! gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -q '^deploy/prod/'; then
+            echo "no deploy/prod/ changes: no extra approvals needed"; exit 0
+          fi
+          export REQUESTER; REQUESTER=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""' | sed -n 's/.*<!-- promote-actor: \([^ ]*\) -->.*/\1/p' | head -1)
+          gh api --paginate --slurp "repos/$REPO/pulls/$PR/reviews" > reviews.json
+          python3 - <<'EOF'
+          import json, os, sys
+          reviews = [r for page in json.load(open("reviews.json")) for r in page]
+          latest = {}
+          for r in reviews:                       # chronological: keep each reviewer's latest decisive review
+              if r["state"] in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
+                  latest[r["user"]["login"]] = r
+          excluded = {os.environ["AUTHOR"], os.environ.get("REQUESTER") or ""}
+          ok = sorted(u for u, r in latest.items()
+                      if r["state"] == "APPROVED" and r["commit_id"] == os.environ["HEAD_SHA"] and u not in excluded)
+          blocked = sorted(u for u, r in latest.items() if r["state"] == "CHANGES_REQUESTED")
+          need = int(os.environ["REQUIRED"])
+          print(f"approvals on {os.environ['HEAD_SHA'][:12]} (excluding {sorted(e for e in excluded if e)}): {ok}")
+          if blocked:
+              print(f"::error::changes requested by {blocked}"); sys.exit(1)
+          if len(ok) < need:
+              print(f"::error::deploy/prod needs {need} approvals on the latest commit, has {len(ok)}"); sys.exit(1)
+          EOF

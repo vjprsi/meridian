@@ -1,0 +1,213 @@
+name: promote
+
+# PLT-GITOPS / GAP-05 (SOC 2 CC8.1, ISO 27001 8.32, PCI DSS 6.5): every change to a deployed environment is a pull
+# request against deploy/<env>, opened by this workflow with a generated change record.
+#
+#   dev      after every successful `ci` run on main: pin the digests ci.yml just signed (artifacts digest-*)
+#   staging  workflow_dispatch: promote exactly the release pinned in dev (same revision, same digests)
+#   prod     workflow_dispatch: promote exactly the release pinned in staging; job gated by the `prod` GitHub
+#            environment (required reviewers), PR needs two approvals (deploy-check.yml `prod approvals`)
+#   rollback workflow_dispatch mode=rollback: restore an environment's pins as they were at `rollback_to`
+#
+# Every run, before the PR exists: CI succeeded for the revision; per digest cosign verify (keyless, identity of
+# ci.yml on main, certificate bound to the revision) + verify-attestation (CycloneDX SBOM) + Trivy (fixable CRITICAL
+# = fail); helm template of every cell + kubeconform -strict + Kyverno policies; change record generated.
+#
+# Repository settings this workflow relies on (cannot be set from code; deploy/README.md "Repository settings"):
+#   - GitHub App `meridian-promotion` (contents + pull-requests write) -> vars.PROMOTION_APP_ID,
+#     secrets.PROMOTION_APP_PRIVATE_KEY. PRs opened with GITHUB_TOKEN would not trigger the required checks.
+#   - Environments dev, staging, prod (prod: 2 required reviewers from release-managers, prevent self-review,
+#     deployment branches: main only).
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, prod]
+        required: true
+      mode:
+        description: promote (from the previous environment) or rollback (restore earlier pins)
+        type: choice
+        options: [promote, rollback]
+        default: promote
+      rollback_to:
+        description: "mode=rollback: git commit whose deploy/<env>/images.yaml is restored (e.g. the merge before the bad release)"
+        required: false
+      ticket:
+        description: Change ticket (e.g. CHG-1234); required for staging and prod
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.plan.outputs.env }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          TARGET: ${{ inputs.environment }}
+          MODE: ${{ inputs.mode }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          TICKET: ${{ inputs.ticket }}
+        run: |
+          if [ "$EVENT" = "workflow_run" ]; then
+            echo "env=dev" >> "$GITHUB_OUTPUT"; echo "mode=promote" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$MODE" = "rollback" ] && [ -z "$ROLLBACK_TO" ]; then echo "::error::mode=rollback needs rollback_to"; exit 1; fi
+          if ! echo "$TICKET" | grep -Eq '^[A-Z][A-Z0-9]+-[0-9]+$'; then echo "::error::ticket must look like CHG-1234"; exit 1; fi
+          echo "env=$TARGET" >> "$GITHUB_OUTPUT"; echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+  promote:
+    name: ${{ needs.plan.outputs.mode }} ${{ needs.plan.outputs.env }}
+    needs: plan
+    runs-on: ubuntu-latest
+    # GitHub environment protection: prod requires reviewers before this job (and therefore the PR) runs
+    environment: ${{ needs.plan.outputs.env }}
+    permissions:
+      contents: read
+      actions: read          # digest artifacts of the triggering ci run; ci run lookup
+    env:
+      ENV_NAME: ${{ needs.plan.outputs.env }}
+      MODE: ${{ needs.plan.outputs.mode }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main, fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install pyyaml
+      - uses: azure/setup-helm@v4
+      - uses: sigstore/cosign-installer@v4.1.2
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        with: { version: v0.75.0, cache: true }
+      - name: kubeconform and Kyverno CLI
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          curl -sSL https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz | tar xz -C "$HOME/bin" kyverno
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      # ---------------------------------------------------------------- dev: pin the build ci.yml just signed
+      - name: Download the signed digests of the triggering ci run
+        if: env.ENV_NAME == 'dev'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          merge-multiple: true
+          path: digests
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Pin dev
+        if: env.ENV_NAME == 'dev'
+        env:
+          REVISION: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          if [ "$(python tools/release.py current --env dev --field revision)" = "$REVISION" ]; then
+            echo "dev already pins $REVISION"; echo "SKIP=1" >> "$GITHUB_ENV"; exit 0
+          fi
+          python tools/release.py pin --env dev --revision "$REVISION" --digests-dir digests --source "ci run $RUN_URL"
+
+      # ---------------------------------------------------------------- staging / prod: promote or roll back
+      - name: Promote from the previous environment
+        if: env.ENV_NAME != 'dev' && env.MODE == 'promote'
+        run: |
+          FROM=$(python -c "import yaml; print({e['name']: e['from'] for e in yaml.safe_load(open('deploy/pipeline.yaml'))['environments']}['$ENV_NAME'])")
+          python tools/release.py promote --from "$FROM" --to "$ENV_NAME"
+      - name: Roll back to earlier pins
+        if: env.ENV_NAME != 'dev' && env.MODE == 'rollback'
+        env:
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+        run: python tools/release.py rollback --env "$ENV_NAME" --to "$ROLLBACK_TO"
+      - name: CI succeeded for the release revision
+        if: env.SKIP != '1'
+        run: |
+          REV=$(python tools/release.py current --env "$ENV_NAME" --field revision)
+          OK=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$REV&event=push&status=success" --jq '.total_count')
+          if [ "${OK:-0}" -lt 1 ]; then echo "::error::no successful ci run on main for $REV"; exit 1; fi
+          echo "REVISION=$REV" >> "$GITHUB_ENV"
+
+      # ---------------------------------------------------------------- gates
+      - name: Verify signatures, SBOM attestations and Trivy for every digest
+        if: env.SKIP != '1'
+        run: python tools/release.py verify --env "$ENV_NAME" --evidence verify-evidence.json
+      - name: Render every cell (helm template, digest pins, kubeconform -strict, Kyverno)
+        if: env.SKIP != '1'
+        run: |
+          python tools/release.py check
+          python tools/release.py render --env "$ENV_NAME" --out rendered --kubeconform --policies
+      - name: Change record
+        id: record
+        if: env.SKIP != '1'
+        env:
+          TICKET: ${{ inputs.ticket }}
+          ACTOR: ${{ github.triggering_actor }}
+        run: |
+          python tools/release.py change-record --env "$ENV_NAME" --mode "$MODE" --evidence verify-evidence.json \
+            ${TICKET:+--ticket "$TICKET"} --actor "$ACTOR" --list-files
+          {
+            cat "$(grep '^record=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+            echo
+            echo "<!-- promote-actor: $ACTOR -->"
+          } > pr-body.md
+      - uses: actions/upload-artifact@v4
+        if: always() && env.SKIP != '1'
+        with:
+          name: promotion-evidence-${{ env.ENV_NAME }}-${{ github.run_id }}
+          path: |
+            verify-evidence.json
+            rendered/policy-report.yaml
+            pr-body.md
+          retention-days: 90
+
+      # ---------------------------------------------------------------- pull request
+      - uses: actions/create-github-app-token@v3
+        id: app
+        if: env.SKIP != '1'
+        with:
+          app-id: ${{ vars.PROMOTION_APP_ID }}
+          private-key: ${{ secrets.PROMOTION_APP_PRIVATE_KEY }}
+      - uses: peter-evans/create-pull-request@v8
+        id: pr
+        if: env.SKIP != '1'
+        with:
+          token: ${{ steps.app.outputs.token }}
+          branch: ${{ env.ENV_NAME == 'dev' && 'promote/dev' || format('promote/{0}-{1}', env.ENV_NAME, steps.record.outputs.short) }}
+          base: main
+          add-paths: deploy/
+          commit-message: |
+            ${{ env.MODE == 'rollback' && 'Rollback' || 'Promote' }} ${{ env.ENV_NAME }} to ${{ steps.record.outputs.short }} (risk ${{ steps.record.outputs.risk }})
+
+            Change record: ${{ steps.record.outputs.record }}
+          title: "${{ env.MODE == 'rollback' && 'Rollback' || 'Promote' }} ${{ env.ENV_NAME }} to ${{ steps.record.outputs.short }} (risk: ${{ steps.record.outputs.risk }})${{ inputs.ticket && format(' [{0}]', inputs.ticket) || '' }}"
+          body-path: pr-body.md
+          labels: |
+            release
+            env:${{ env.ENV_NAME }}
+            risk:${{ steps.record.outputs.risk }}
+          delete-branch: true
+      - name: dev - merge automatically once the required checks pass
+        if: env.SKIP != '1' && env.ENV_NAME == 'dev' && steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR" --auto --squash

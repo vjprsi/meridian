@@ -9,32 +9,51 @@ to the cell gateway (or through the router) with an operator token unless stated
 **[4-eyes]**. Steps that rely on something not built yet are marked **[gap]** with the gap id from
 [docs/compliance/README.md](../compliance/README.md#gap-register).
 
-## 1. Deploy and rollback (Helm)
+## 1. Deploy and rollback (GitOps)
 
-Pre-deploy checklist:
+Deployed environments are changed only through pull requests against `deploy/<env>` that Argo CD syncs
+(PLT-GITOPS, GAP-05; design, gates and repository settings in [deploy/README.md](../../deploy/README.md)). A release is
+one git revision plus 69 image digests (`deploy/<env>/images.yaml`) and moves dev -> staging -> prod unchanged.
 
-1. CI green on the release commit (spec, DDL on PostgreSQL 18, build + ITs, chart lint / kubeconform, image build).
-2. Images built and pushed for the tag: `PUSH=1 tools/build-images.sh <tag> <registry>`.
-3. Chart rendered and diffed against the running release:
-   `helm diff upgrade $REL infra/helm/meridian -n $NS -f values-<env>.yaml --set global.image.tag=<tag>` (helm-diff plugin).
-4. Migrations: Flyway runs forward-only, expand-and-contract (`docs/CONVENTIONS.md` section 3). A release must not
-   contain a "contract" step (drop / rename) for a column that the previous release still reads. Migrations run in the
-   `<service>-migrate` hook Jobs before any Deployment changes (GAP-22, see below), so the previous pods keep serving
-   on the migrated schema while the new ones roll out.
-5. Change record with approver **[gap: GAP-05, no pipeline; record in the ticket]**.
+Pre-deploy checklist (the pipeline enforces 1-4; the release manager confirms 5-7 on the PR):
+
+1. CI green on main for the revision (spec, DDL on PostgreSQL 18, build + ITs, chart / deploy-tree render + kubeconform
+   + Kyverno, SAST, secrets, SBOM, image scan; images signed and SBOM-attested).
+2. Every digest verified at promotion: cosign keyless signature from `ci.yml@refs/heads/main` built from the revision,
+   CycloneDX SBOM attestation, Trivy (fixable CRITICAL fails).
+3. Staging / prod pins identical to the previous environment's (`deploy-check / release gates`: provenance).
+4. Change record generated (`deploy/change-records/<env>/`), linked from `images.yaml`, in the PR body.
+5. Risk level and the **Schema migrations** section of the record read: a contract step (DROP / RENAME / type change)
+   is allowed only if the release before it, already in prod in both cells, no longer reads the object
+   (`deploy/README.md` "Database migrations"). Migrations run in the `<service>-migrate` Jobs (Argo CD PreSync,
+   GAP-22) before any Deployment changes, so the previous pods keep serving on the migrated schema.
+6. Staging: `python tools/e2e/journeys.py` green against staging on the same revision.
+7. Prod only: two approvals on the PR (not the author, not the person who dispatched the promotion); the `prod`
+   GitHub environment approval; inside the sync window (Mon-Thu 08:00-16:00 London; never 20:00-02:00 EOD or on the
+   1st / 2nd of the month).
 
 Deploy:
 
+| Environment | How |
+|---|---|
+| dev | Automatic: green `ci` on main -> `promote` opens / updates PR `promote/dev` with auto-merge -> Argo CD auto-sync |
+| staging | GitHub Actions -> `promote` -> `environment=staging`, `mode=promote`, `ticket=CHG-...`; review and merge the PR -> Argo CD auto-sync |
+| prod | `promote` with `environment=prod` (job waits for the `prod` environment reviewers) -> PR with two approvals -> merge -> manual sync per cell |
+
+Prod sync (release manager, inside the window), primary cell first, standby right after it is healthy so a failover
+never changes versions:
+
 ```bash
-helm upgrade --install $REL infra/helm/meridian -n $NS -f values-<env>.yaml --set global.image.tag=<tag> \
-  --atomic --timeout 20m --history-max 20
-kubectl -n $NS rollout status deploy --timeout=15m          # every Deployment: maxUnavailable 0, maxSurge 1
+argocd app diff  aws-euw1-c01-meridian                     # review: images and config only what the record says
+argocd app sync  -l meridian.io/environment=prod,meridian.io/cell=aws-euw1-c01 --prune --timeout 1800
+argocd app wait  -l meridian.io/environment=prod,meridian.io/cell=aws-euw1-c01 --health --timeout 1800
+argocd app sync  -l meridian.io/environment=prod,meridian.io/cell=aws-euw2-c01 --prune --timeout 1800   # standby
 ```
 
-Migration Jobs (GAP-22): `helm upgrade` first runs one `<service>-migrate` Job per service (hook `pre-upgrade`,
-weight -10; Flyway as `meridian-db-owner`, then the process exits). Hooks run one after another, and `--timeout`
-applies to each hook. If one fails, Helm stops before touching any Deployment (with `--atomic` the release is rolled
-back; the schema change of an already finished Job stays, which is safe because migrations are expand-only):
+Migration Jobs (GAP-22): the sync first runs one `<service>-migrate` Job per service (PreSync, from the Helm hook
+`pre-install` / `pre-upgrade`, weight -10; Flyway as `meridian-db-owner`, then the process exits). If one fails, the
+sync stops before any Deployment is touched (the schema change of an already finished Job stays, which is safe
+because a release's migrations are expand-only for the previous release):
 
 ```bash
 kubectl -n $NS get jobs -l app.kubernetes.io/component=db-migration
@@ -42,23 +61,36 @@ kubectl -n $NS logs job/<service>-migrate           # Flyway output: "Migrate-on
 ```
 
 Fix the cause (lock held by a long transaction, owner password rotated without updating the Secret, failed
-statement) and re-run `helm upgrade`; the hook policy `before-hook-creation` replaces the failed Job. To migrate one
+statement) and sync again; the hook delete policy `before-hook-creation` replaces the failed Job. To migrate one
 service on its own, run its image with the argument `migrate` and the same three variables (`SPRING_DATASOURCE_URL`,
 `SPRING_FLYWAY_USER`, `SPRING_FLYWAY_PASSWORD`). Running pods never migrate (`SPRING_FLYWAY_ENABLED=false`) and never
 hold the owner credentials.
 
-Verify: router `meridian.router.requests{outcome}` error share back to baseline; `http.server.requests` 5xx per
-service; `GET /actuator/health/readiness` of changed services; run `python tools/e2e/journeys.py` against staging (all
-8 journeys) before production.
+Verify: Argo CD Applications Synced / Healthy; router `meridian.router.requests{outcome}` error share back to
+baseline; `http.server.requests` 5xx per service; `GET /actuator/health/readiness` of changed services; Kyverno policy
+reports clean (`kubectl get policyreport -n $NS`).
 
-Rollback:
+Rollback (the change record of the release has the exact plan and the previous digests):
 
-- Application only (no schema change): `helm rollback $REL <previous revision> -n $NS --wait` (`helm history $REL -n $NS`).
-- With a migration: forward-only, so rolling back the image is safe only if the migration was additive (expand). If not,
-  roll **forward** with a fix. Never run down-migrations by hand.
-- Router: `helm rollback router <rev> -n meridian-edge`; routers are stateless.
-- Standby cells: deploy the same tag to the standby (`global.cell.role=standby`) right after the primary so a failover
-  does not change versions.
+- No contract migration in the release: GitHub Actions -> `promote` -> `mode=rollback`, `environment=<env>`,
+  `rollback_to=<commit on main before the bad promotion merged>`, `ticket=<incident>`. It restores the earlier pins
+  (`tools/release.py rollback`), runs the same gates (the old release is still signed), writes a rollback change
+  record and opens the PR; prod still needs two approvals, then sync as above. Locally:
+  `python tools/release.py rollback --env prod --to <commit>` + PR, or `git revert -m 1 <merge commit>`.
+- Contract migration in the release (record says "do not roll the image back"): roll **forward** with a fix through
+  the pipeline. Flyway is forward-only; never run down-migrations or hand-written DDL to undo a release.
+- Expand-only migrations stay applied on rollback; the previous images ignore the new objects.
+- Router: part of the same release (`<cell>-meridian-router` Applications); routers are stateless.
+- Break-glass (customer impact outside a prod sync window): an Argo CD admin enables manual sync on the blocking
+  window (`argocd proj windows list meridian-prod`, `argocd proj windows enable-manual-sync meridian-prod <id>`), a
+  release manager syncs the rollback PR's pins, the admin disables it again
+  (`argocd proj windows disable-manual-sync meridian-prod <id>`), and the incident ticket plus the change record note
+  the exception. Approvals on the rollback PR are not skipped; an expedited review by two release managers is.
+- Argo CD's "rollback to previous sync" is unavailable for these multi-source Applications by design: git is the
+  only rollback path, so the desired state never drifts from the repository.
+
+Local / non-GitOps clusters (development, kind, a lab) can still use the chart directly:
+`helm upgrade --install meridian infra/helm/meridian -n meridian -f values-<env>.yaml --atomic --timeout 20m`.
 
 ## 2. Secret and key rotation
 
@@ -358,7 +390,6 @@ wired]**. Escalation: primary 5 min -> secondary 10 min -> IC 15 min -> CTO 30 m
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-05 | No deploy pipeline / change records | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS |
 | GAP-01 | Residual: HSM image variant and key ceremony / dual control, key import under a ZMK in envelope modes, payment-HSM adapter (PIN verification by PVV, CVV under the scheme algorithm) | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-19 | No resolve action for in-doubt returns / wallet reversals | TBD (Payments / Wallets) | [SECURITY_REVIEW SEC-06 / SEC-07](../SECURITY_REVIEW.md#remediation-status) |
 | GAP-21 | Webhook encryption key and MFA seed key cannot be rotated | TBD (Platform) | Proposed |

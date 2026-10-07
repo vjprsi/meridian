@@ -1,0 +1,17 @@
+# From `tofu output helm_values` (secondary) of infra/tofu/envs/prod-eu1 (placeholders until the region is applied).
+global:
+  cell: {id: aws-euw2-c01, region: eu-west-2, role: standby}
+  replicas: 2
+  postgres:
+    host: "meridian-euw2c01.cluster-example.eu-west-2.rds.amazonaws.com"
+  kafka:
+    bootstrapServers: "b-1.meridian-euw2c01.example.kafka.eu-west-2.amazonaws.com:9098"
+    iam:
+      roleArnTemplate: "arn:aws:iam::222222222222:role/meridian-euw2c01-kafka-{name}"
+cde:
+  egress:
+    allowedCidrs: ["10.60.0.0/16"]
+  keys:
+    mode: aws-kms
+    kmsKeyId: "alias/meridian-euw2c01-cde"
+    serviceAccountRoleArn: "arn:aws:iam::222222222222:role/meridian-euw2c01-card-vault"
