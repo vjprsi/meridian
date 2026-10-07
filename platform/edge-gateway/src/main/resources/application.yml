@@ -33,11 +33,26 @@ meridian:
     #   ledger-service: http://ledger-service.meridian.svc:8080   # override per environment
 
 management:
+  server:
+    port: 18001                       # SEC-31: actuator (metrics) off the routed port; Helm uses 9090. The routed
+                                      # port keeps status-only /actuator/health[/readiness|/liveness] (RoutedHealthController)
   endpoints:
     web:
       exposure:
-        include: health,info          # SEC-31: no metrics through the ingress (scrape the services directly)
+        include: health,info,prometheus   # GAP-10: scraped on the management port only, never through the ingress
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      cell: ${meridian.cell.id:local}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 25ms,50ms,100ms,250ms,500ms,1s,2s,5s
+      minimum-expected-value:
+        http.server.requests: 1ms
+      maximum-expected-value:
+        http.server.requests: 30s

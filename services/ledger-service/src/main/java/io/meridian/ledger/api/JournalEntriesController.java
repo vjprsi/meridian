@@ -42,8 +42,11 @@ public class JournalEntriesController implements JournalEntriesApi {
     private final LedgerStore store;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
-    public JournalEntriesController(PostingService posting, LedgerStore store, CrudEngine crud, JsonMapper json) {
+    public JournalEntriesController(PostingService posting, LedgerStore store, CrudEngine crud, JsonMapper json,
+                                    io.micrometer.core.instrument.MeterRegistry meters) {
+        this.meters = meters;
         this.posting = posting;
         this.store = store;
         this.crud = crud;
@@ -53,7 +56,26 @@ public class JournalEntriesController implements JournalEntriesApi {
     @Override
     public ResponseEntity<JournalEntry> journalEntriesCreate(String idempotencyKey, JournalEntryCreate body) {
         TenantContext.require();
-        return respond(posting.post(toPosting(json.valueToTree(body), idempotencyKey)));
+        return respond(timedPost("single", () -> posting.post(toPosting(json.valueToTree(body), idempotencyKey))));
+    }
+
+    /**
+     * GAP-10 / SLO J3: posting latency including the commit ({@code meridian.ledger.posting.duration}, tags
+     * {@code path} single|batch and {@code outcome} posted|replayed|rejected|error).
+     */
+    private PostingService.Posted timedPost(String path, java.util.function.Supplier<PostingService.Posted> call) {
+        io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start(meters);
+        String outcome = "error";
+        try {
+            PostingService.Posted p = call.get();
+            outcome = p.replayed() ? "replayed" : "posted";
+            return p;
+        } catch (ApiException e) {
+            outcome = e.status() >= 500 ? "error" : "rejected";
+            throw e;
+        } finally {
+            sample.stop(meters.timer("meridian.ledger.posting.duration", "path", path, "outcome", outcome));
+        }
     }
 
     /**
@@ -83,7 +105,8 @@ public class JournalEntriesController implements JournalEntriesApi {
                 if (!item.isObject()) {
                     throw ApiException.badRequest("validation_failed", "Each batch item must be a journal entry object");
                 }
-                PostingService.Posted p = posting.post(toPosting(item, prefix + ":" + i));
+                String key = prefix + ":" + i;
+                PostingService.Posted p = timedPost("batch", () -> posting.post(toPosting(item, key)));
                 r.put("status", p.replayed() ? 200 : 201);
                 r.set("journal_entry", json.readTree(p.json()));
                 if (p.replayed()) {

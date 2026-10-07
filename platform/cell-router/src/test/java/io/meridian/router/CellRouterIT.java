@@ -199,6 +199,23 @@ class CellRouterIT {
         assertThat(send("POST", "/v1/accounts", estate.token(t), "{}").statusCode()).isEqualTo(503);
     }
 
+    /** GAP-10: request and upstream latency histograms on the management port (J6), nothing on the routed port. */
+    @Test
+    void prometheusOnTheManagementPortHasLatencyHistograms() throws Exception {
+        UUID t = UUID.randomUUID();
+        estate.place(t, "cell-a", null, "NORMAL");
+        assertThat(send("GET", "/v1/accounts", estate.token(t), null).statusCode()).isEqualTo(200);
+        HttpResponse<String> res = http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + managementPort + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(res.body()).contains("http_server_requests_seconds_bucket")
+                .contains("meridian_router_upstream_seconds_bucket");
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${local.management.port}")
+    int managementPort;
+
     private HttpRequest.Builder base(String path) {
         return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path));
     }

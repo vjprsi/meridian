@@ -172,6 +172,21 @@ class CustomerChannelJwtIT {
         assertThat(call("customer-sid-" + sid1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
     }
 
+    /** GAP-10: the Prometheus scrape needs no token (jwt mode) and carries histograms and step-up challenges. */
+    @Test
+    void prometheusIsScrapableWithoutATokenAndCountsStepUps() throws Exception {
+        String transfer = "{\"kind\":\"OWN_TRANSFER\",\"from_account_id\":\"%s\",\"to_account_id\":\"%s\",\"amount\":\"5\"}"
+                .formatted(accountA, accountA2);
+        assertThat(call("customer-weak", "POST", "/v1/me/payments", transfer, null).statusCode()).isEqualTo(401);
+        HttpResponse<String> scrape = call(null, "GET", "/actuator/prometheus", null, null);
+        assertThat(scrape.statusCode()).isEqualTo(200);
+        assertThat(scrape.body())
+                .contains("http_server_requests_seconds_bucket")
+                .containsPattern("meridian_auth_step_up_challenges_total\\{[^}]*channel=\"customer\"");
+        // everything else on the actuator still needs a token
+        assertThat(call(null, "GET", "/actuator/metrics", null, null).statusCode()).isEqualTo(401);
+    }
+
     private HttpResponse<String> call(String token, String method, String path, String body, String customerHeader)
             throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))

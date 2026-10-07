@@ -33,13 +33,16 @@ public class MfaService {
     private final org.springframework.transaction.support.TransactionTemplate tx;
     private final int maxAttempts;
     private final java.time.Duration lockout;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
     public MfaService(IdentityStore store, CrudEngine crud, UserService users, SessionService sessions,
                       OutboxWriter outbox, JsonMapper json,
                       org.springframework.transaction.support.TransactionTemplate tx,
                       @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-seed-key}") String seedKey,
                       @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-max-attempts:5}") int maxAttempts,
-                      @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-lockout:PT15M}") java.time.Duration lockout) {
+                      @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-lockout:PT15M}") java.time.Duration lockout,
+                      io.micrometer.core.instrument.MeterRegistry meters) {
+        this.meters = meters;
         this.seeds = new io.meridian.identity.domain.SeedCipher(seedKey);
         this.tx = tx;
         this.maxAttempts = maxAttempts;
@@ -100,11 +103,22 @@ public class MfaService {
     private record Attempt(String row, ApiException failure) {}
 
     public String verify(UUID userId, UUID factorId, String code, JsonNode assertion) {
-        Attempt a = tx.execute(s -> attempt(userId, factorId, code, assertion));
-        if (a.failure() != null) {
-            throw a.failure();
+        String outcome = "error";
+        try {
+            Attempt a = tx.execute(s -> attempt(userId, factorId, code, assertion));
+            if (a.failure() != null) {
+                outcome = a.failure().code();
+                throw a.failure();
+            }
+            outcome = "verified";
+            return a.row();
+        } catch (ApiException e) {
+            outcome = e.code();
+            throw e;
+        } finally {
+            // GAP-10: MFA verification outcomes (invalid_code / factor_locked spikes = guessing or a broken factor)
+            meters.counter("meridian.identity.mfa.verifications", "outcome", outcome).increment();
         }
-        return a.row();
     }
 
     private Attempt attempt(UUID userId, UUID factorId, String code, JsonNode assertion) {

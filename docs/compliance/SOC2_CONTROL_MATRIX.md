@@ -67,14 +67,14 @@ listed at the end.
 | CC6.5 Disposal | Purge with certificate of destruction (archive-service `purge_request.certificate_document_id`) | archive-service `PurgeService`, `ArchiveWorkflowApprovalIT` | Partial | GAP-08 (owning services do not implement purge) |
 | CC6.6 Boundary protection | Edge gateway strips internal identity headers and owns `X-Forwarded-For` (SEC-13/16), body-size caps (SEC-26), actuator limited to health/info (SEC-31); cell router verifies JWTs and strips the same headers (`HeaderPolicyParityTest`); provider callbacks HMAC v2 with timestamp + nonce (SEC-17); SSRF policy for all tenant-supplied URLs (SEC-08/09/18/39); private subnets, security groups for Aurora/MSK; Kubernetes NetworkPolicy per service | `HeaderPolicyTest`, `ProxyControllerIT`, `CallbackVerifierTest`, `DownstreamPolicyTest`; `infra/helm/meridian/templates/services.yaml` (NetworkPolicy) | Partial | GAP-15, GAP-17, GAP-23 |
 | CC6.7 Data transmission and movement | TLS to Aurora / MSK / S3; webhook payloads HMAC-signed; signed, expiring download links (file-gateway SEC-36, audit, statements); outbound HTTP pinned resolution, no redirects | `OutboundHttp`, `FileGatewayFlowIT`; tofu MSK `client_broker = "TLS"` | Partial | Cluster-internal service-to-service HTTP is plain (`http://{name}`; no mesh mTLS) - proposed |
-| CC6.8 Malware / unauthorised software | Minimal JRE base image (`eclipse-temurin:25-jre`), non-root uid 10001, read-only root FS, all capabilities dropped, seccomp RuntimeDefault, no service-account token; inbound files virus-scanned before routing (file-gateway) | `infra/docker/Dockerfile`, `services.yaml` securityContext; `FileGatewayFlowIT.inboundFileIsScannedValidatedRoutedAndAcknowledged` | Partial | GAP-04 (image scanning, signing), GAP-18 |
+| CC6.8 Malware / unauthorised software | Minimal JRE base image (`eclipse-temurin:25-jre`), non-root uid 10001, read-only root FS, all capabilities dropped, seccomp RuntimeDefault, no service-account token; inbound files virus-scanned before routing (file-gateway) | `infra/docker/Dockerfile`, `services.yaml` securityContext; `FileGatewayFlowIT.inboundFileIsScannedValidatedRoutedAndAcknowledged`; CI Trivy image scan, cosign signature + SBOM attestation per image on main (`ci.yml` jobs `deploy-artifacts`, `release-images`) | Partial | GAP-04 residual (no signature verification at admission), GAP-18 |
 
 ### CC7 System operations
 
 | Criterion | Meridian control | Evidence | Status | Gap |
 |---|---|---|---|---|
-| CC7.1 Configuration and vulnerability detection | Helm chart regenerated and diffed in CI, `kubeconform -strict`; tofu `validate` | CI job `deploy-artifacts` | Partial | GAP-04 (no SCA / image / IaC scanning) |
-| CC7.2 Anomaly monitoring | Tamper-evident audit chain per tenant (`audit_event.hash/prev_hash`), `platform.audit_chain.broken` event; ledger integrity verification (`ledger_verification`, hash mismatches); denied object access published as `channels.*_action.denied`; card-vault access log; fraud / TM alerts; router metrics; EKS audit logs; VPC flow logs | `HashChainTest`, `AuditFlowIT`, `AuditIntegrityIT`; daily `AuditIntegrityJobs` (full chain verification, `platform.audit_chain.broken`, metric `meridian.audit.chain.breaks`), `POST /v1/audit-chain-verifications/run`, `POST /v1/audit-events/verify-chain`; ledger `POST /v1/ledgers/{id}/verify`; `infra/tofu/modules/cell/main.tf` (`enabled_log_types`, `enable_flow_log`) | Partial | GAP-06, GAP-07, GAP-10 |
+| CC7.1 Configuration and vulnerability detection | Helm chart regenerated and diffed in CI, `kubeconform -strict` (monitoring CRs against the CRD catalog); tofu `validate`; SAST (Semgrep OWASP / Java / secrets), secret scanning (gitleaks), SCA (Trivy on the CycloneDX SBOM and npm lockfiles), container image scan (Trivy), Dependabot update PRs | CI jobs `deploy-artifacts`, `sast`, `secrets`, `sbom`; code-scanning SARIF; `.github/dependabot.yml` | Partial | GAP-04 residual (no IaC scanning of `infra/tofu`) |
+| CC7.2 Anomaly monitoring | Tamper-evident audit chain per tenant (`audit_event.hash/prev_hash`), `platform.audit_chain.broken` event; ledger integrity verification (`ledger_verification`, hash mismatches); denied object access published as `channels.*_action.denied`; card-vault access log; fraud / TM alerts; Prometheus metrics on every service with SLO burn-rate, saturation and security alerts (step-up spikes, MFA failures, IdP login failures, audit consumer lag); EKS audit logs; VPC flow logs | `HashChainTest`, `AuditFlowIT`, `AuditIntegrityIT`; daily `AuditIntegrityJobs` (full chain verification, `platform.audit_chain.broken`, metric `meridian.audit.chain.breaks`), `POST /v1/audit-chain-verifications/run`, `POST /v1/audit-events/verify-chain`; ledger `POST /v1/ledgers/{id}/verify`; `infra/tofu/modules/cell/main.tf` (`enabled_log_types`, `enable_flow_log`); `infra/observability/prometheus/rules/*.yml` | Partial | GAP-06, GAP-07 residual (read auditing), GAP-10 residual (no monitoring stack / paging deployed) |
 | CC7.3 Security event evaluation | Incident severity matrix and triage | [RUNBOOKS.md - Incident severity](../operations/RUNBOOKS.md#13-incident-severity-matrix-and-on-call) | Partial | GAP-06 (no SIEM correlation), GAP-24 (IR plan) |
 | CC7.4 Incident response | Runbooks for key compromise, failover, stuck payments; break-glass cell OFFLINE (single operator, audited) | `docs/operations/RUNBOOKS.md`, `docs/MULTI_REGION.md` section 5 | Partial | GAP-24 (tested IR plan, regulator notification) |
 | CC7.5 Recovery | DR runbook with RTO budget; backups 35 days in prod, deletion protection, S3 versioning + object lock | `docs/MULTI_REGION.md`, [BCP_DR.md](../operations/BCP_DR.md), tofu `backup_retention_period` | Partial | GAP-11 |
@@ -83,7 +83,7 @@ listed at the end.
 
 | Criterion | Meridian control | Evidence | Status | Gap |
 |---|---|---|---|---|
-| CC8.1 Authorised, tested, approved changes | PR-based workflow with CI (spec validation, generated artefacts up to date, OpenAPI/AsyncAPI lint, DDL on PostgreSQL 18, full build with Testcontainers ITs, Helm lint/kubeconform, image build); forward-only migrations; business configuration changes (products, pricing, rules, regulatory packs, EOD jobs) through maker-checker | `.github/workflows/ci.yml`; `docs/CONVENTIONS.md` section 3; G11 notes in `docs/SPEC_BACKLOG.md` | Partial | GAP-04, GAP-05 (no branch protection / CODEOWNERS evidence, no deploy approvals or release log) |
+| CC8.1 Authorised, tested, approved changes | PR-based workflow with CI (spec validation, generated artefacts up to date, OpenAPI/AsyncAPI lint, DDL on PostgreSQL 18, full build with Testcontainers ITs, Helm lint/kubeconform, image build, SAST, secret scan, SBOM + SCA, image scan; signed and attested images on main); code owners per area; forward-only migrations; business configuration changes (products, pricing, rules, regulatory packs, EOD jobs) through maker-checker | `.github/workflows/ci.yml`; `.github/CODEOWNERS`; `docs/CONVENTIONS.md` section 3; G11 notes in `docs/SPEC_BACKLOG.md` | Partial | GAP-04 residual (branch protection requiring CI + code-owner review not evidenced; placeholder teams), GAP-05 (no deploy approvals or release log) |
 
 ### CC9 Risk mitigation
 
@@ -96,7 +96,7 @@ listed at the end.
 
 | Criterion | Meridian control | Evidence | Status | Gap |
 |---|---|---|---|---|
-| A1.1 Capacity | HPA per service (2-10 replicas, CPU 70%), PDB, zone/host spread; ledger benchmark 1,792 postings/s; per-service pool sizing (`dbPool`) | `infra/helm/meridian/values.yaml`; `docs/PERFORMANCE.md` | Partial | GAP-12, GAP-10; 10,000 TPS per cell target not yet tested (S22) |
+| A1.1 Capacity | HPA per service (2-10 replicas, CPU 70%), PDB, zone/host spread; ledger benchmark 1,792 postings/s; per-service pool sizing (`dbPool`) | `infra/helm/meridian/values.yaml`; `docs/PERFORMANCE.md`; saturation alerts and dashboards (DB pools, JVM heap, Kafka lag, outbox backlog) in `infra/observability` | Partial | GAP-12, GAP-10 residual; 10,000 TPS per cell target not yet tested (S22) |
 | A1.2 Environmental protection, backups, recovery infrastructure | Aurora 6-way storage across 3 AZs, Global Database, MSK RF 3 / Replicator, S3 CRR, Route 53 failover; PITR backups (35 d prod) | `infra/tofu/modules/region`, `docs/MULTI_REGION.md` section 4 | Implemented (design) | GAP-11 |
 | A1.3 Recovery testing | Game-day runbook (RTO < 5 min, RPO 0 planned / lag unplanned) | `docs/MULTI_REGION.md` section 5; [BCP_DR.md](../operations/BCP_DR.md#5-test-and-game-day-schedule) | Gap (not yet executed) | GAP-11 |
 
@@ -148,18 +148,19 @@ listed at the end.
 | Audit integrity | Scheduled `verify-chain` results per tenant (none broken), ledger `ledger_verification` results | audit-service, ledger-service |
 | Card data access | `card_vault_access_log` samples (purpose, caller, step-up) | card-vault-service |
 | Backups / DR | Restore test reports, game-day timelines | [BCP_DR.md](../operations/BCP_DR.md) |
-| Monitoring | Alert history, incident tickets, post-mortems | GAP-06 / GAP-10 tooling |
+| Monitoring | Alert history, incident tickets, post-mortems | Prometheus / Alertmanager from `infra/observability` rules (GAP-10 residual: stack not deployed), GAP-06 |
+| Supply chain | Green `sast` / `secrets` / `sbom` runs per merged PR; SBOM artifacts; cosign signatures and attestations in Rekor per released image | GitHub Actions, code scanning, GHCR / Rekor |
 
 ## Open gaps
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-04 | No SAST / SCA / image scanning / SBOM / signing in CI | TBD (DevSecOps) | Proposed; plan PLT-CI status to correct |
+| GAP-04 | Closed in CI (SAST, secrets, SBOM, SCA, image scan, signing, CODEOWNERS); residual: branch protection evidence, admission-time signature verification, IaC scanning | TBD (DevSecOps) | PLT-CI (Done); residual proposed |
 | GAP-05 | No deployment pipeline or change records | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS |
 | GAP-06 | No central logging / SIEM, IdP events off in shipped realm | TBD (SecOps) | Proposed; PLT-OBSERVABILITY |
 | GAP-07 | Partially closed 2026-10-07 (masking, daily verification, WORM seals); open: read auditing | TBD (Platform) | Proposed; [SPEC_BACKLOG per-domain platform](../SPEC_BACKLOG.md#per-domain-notes) |
 | GAP-08 | Largely closed 2026-10-07; residuals: S3 file content, search journal, Kafka retention, services outside the DSAR fan-out | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes) |
-| GAP-10 | No SLO monitoring / alerting | TBD (SRE) | PLT-OBSERVABILITY |
+| GAP-10 | Metrics, dashboards and alert rules exist; monitoring stack, paging and on-call not deployed | TBD (SRE) | PLT-OBSERVABILITY (In progress) |
 | GAP-11 | DR not yet tested | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | GAP-13 | Staff MFA flow and access recertification | TBD (IAM) | Proposed |
 | GAP-16 | Shared service identity, no Kafka ACLs | TBD (Platform) | [SPEC_BACKLOG wave A](../SPEC_BACKLOG.md#cross-cutting-items-raised-in-wave-a-open) |

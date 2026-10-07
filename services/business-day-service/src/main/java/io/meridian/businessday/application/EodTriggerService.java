@@ -60,6 +60,8 @@ public class EodTriggerService {
     private final MeterRegistry meters;
     private final JsonMapper json;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    /** Epoch seconds of the last SUCCEEDED sweep in this process (0 = none yet): the "EOD late" alert input. */
+    private final java.util.concurrent.atomic.AtomicLong lastSucceeded = new java.util.concurrent.atomic.AtomicLong();
 
     public EodTriggerService(Rows rows, EodRunService eod, BusinessDayService days, TenantDirectory tenants,
                              EodSweepStore sweeps, OutboxWriter outbox, TransactionTemplate tx, AutoEodSettings settings,
@@ -74,6 +76,10 @@ public class EodTriggerService {
         this.settings = settings;
         this.meters = meters;
         this.json = json;
+        io.micrometer.core.instrument.Gauge.builder("meridian.eod.sweep.last.success.timestamp", lastSucceeded,
+                        java.util.concurrent.atomic.AtomicLong::get)
+                .baseUnit("seconds").description("Epoch seconds of the last SUCCEEDED EOD sweep (0 = none since start)")
+                .register(meters);
     }
 
     @PreDestroy
@@ -161,6 +167,9 @@ public class EodTriggerService {
         publishPlatform(sweepId, row);
         sample.stop(meters.timer("meridian.eod.sweep.duration", "trigger", trigger, "status", status));
         meters.counter("meridian.eod.sweep.runs", "trigger", trigger, "status", status).increment();
+        if ("SUCCEEDED".equals(status)) {
+            lastSucceeded.set(java.time.Instant.now().getEpochSecond());
+        }
         log.info("EOD sweep {} ({}) {}: tenants={} failed={} started={} rolled={} skipped={}", sweepId, trigger, status,
                 counts[0], counts[1], counts[2], counts[3], counts[4]);
         return Optional.of(row);

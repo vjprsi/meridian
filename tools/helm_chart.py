@@ -123,6 +123,11 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    {{- if $svc.managementPort }}
+    - name: management
+      port: {{ $svc.managementPort }}
+      targetPort: management
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -175,6 +180,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if $svc.managementPort }}
+            - name: management
+              containerPort: {{ $svc.managementPort }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: meridian-common
@@ -201,6 +210,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
+            {{- if $svc.managementPort }}
+            - name: MANAGEMENT_SERVER_PORT          # actuator (probes, /actuator/prometheus) on its own port
+              value: {{ $svc.managementPort | quote }}
+            {{- end }}
             {{- range $envName, $key := $svc.secretEnv }}
             - name: {{ $envName }}
               valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
@@ -217,14 +230,14 @@ spec:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
             limits: {memory: {{ $svc.memory | default $g.resources.memory | quote }}}
           startupProbe:
-            httpGet: {path: /actuator/health/liveness, port: http}
+            httpGet: {path: /actuator/health/liveness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 5
             failureThreshold: 60
           livenessProbe:
-            httpGet: {path: /actuator/health/liveness, port: http}
+            httpGet: {path: /actuator/health/liveness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 10
           readinessProbe:
-            httpGet: {path: /actuator/health/readiness, port: http}
+            httpGet: {path: /actuator/health/readiness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 5
           lifecycle:
             preStop:
@@ -291,6 +304,17 @@ spec:
         {{- end }}
       ports:
         - {port: http, protocol: TCP}
+    {{- if $svc.managementPort }}
+    # management port (metrics, probes): only the metrics scraper (kubelet probes are not subject to policies)
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+    {{- end }}
 {{- end }}
 {{- if $g.serviceMonitor.enabled }}
 ---
@@ -303,7 +327,7 @@ spec:
   selector:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
   endpoints:
-    - port: http
+    - port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}
       path: /actuator/prometheus
       interval: 30s
 {{- end }}
@@ -466,6 +490,50 @@ spec:
             pathType: Prefix
             backend:
               service: {name: edge-gateway, port: {name: http}}
+{{- end }}
+'''
+
+# GAP-10: rules and dashboards from tools/observability.py, copied into the chart's files/observability/
+OBSERVABILITY_TPL = r'''{{- $o := .Values.observability -}}
+{{- if $o.prometheusRule.enabled }}
+{{- range $path, $_ := .Files.Glob "files/observability/rules/*.yml" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ base $path | trimSuffix ".rules.yml" }}
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    meridian.io/cell: {{ $.Values.global.cell.id | default "unassigned" | quote }}
+    {{- with $o.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+{{- $.Files.Get $path | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- if $o.dashboards.enabled }}
+{{- range $path, $_ := .Files.Glob "files/observability/dashboards/*.json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ base $path | trimSuffix ".json" }}-dashboard
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    {{- with $o.dashboards.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- with $o.dashboards.folder }}
+    grafana_folder: {{ . | quote }}
+    {{- end }}
+data:
+  {{ base $path }}: |-
+{{- $.Files.Get $path | nindent 4 }}
+{{- end }}
 {{- end }}
 '''
 
@@ -857,7 +925,9 @@ def services_values(manifest):
             r["env"] = dict(sorted(SERVICE_ENV[s["name"]].items()))
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
-                 "replicas": 3, "cpu": "500m", "memory": "512Mi"})
+                 "replicas": 3, "cpu": "500m", "memory": "512Mi",
+                 # SEC-31 / GAP-10: actuator (probes, /actuator/prometheus) never on the port behind the ingress
+                 "managementPort": 9090})
     return rows
 
 
@@ -927,14 +997,26 @@ def values_yaml(rows, app_version):
         "  annotations: {}",
         "  tls: []",
         "",
+        "# GAP-10: SLO burn-rate / saturation alerts and Grafana dashboards (tools/observability.py). Needs the",
+        "# Prometheus Operator CRDs (PrometheusRule) and a Grafana dashboard sidecar; scraping is global.serviceMonitor.",
+        "observability:",
+        "  prometheusRule:",
+        "    enabled: false",
+        "    labels: {}              # e.g. {release: kube-prometheus-stack} to match the Prometheus ruleSelector",
+        "  dashboards:",
+        "    enabled: false",
+        '    labels: {grafana_dashboard: "1"}   # label watched by the Grafana sidecar',
+        '    folder: "Meridian"',
+        "",
         "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,",
+        "# managementPort (actuator on its own port: probes and the ServiceMonitor use it),",
         "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),",
         "# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).",
         "services:",
     ]
     for r in rows:
         lines.append(f"  - name: {r['name']}")
-        for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory"):
+        for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory", "managementPort"):
             if k in r:
                 lines.append(f"    {k}: {yaml_value(r[k])}")
         if "secretEnv" in r:
@@ -951,6 +1033,18 @@ def values_yaml(rows, app_version):
             for env, (secret, key) in r["sharedSecretEnv"].items():
                 lines.append(f"      {env}: {{secret: {yaml_value(secret)}, key: {yaml_value(key)}}}")
     return "\n".join(lines) + "\n"
+
+
+def copy_observability():
+    """GAP-10: package infra/observability (tools/observability.py output) as chart files."""
+    src = ROOT / "infra" / "observability"
+    dst = OUT / "files" / "observability"
+    for sub, pattern in (("rules", "prometheus/rules/*.yml"), ("dashboards", "grafana/dashboards/*.json")):
+        (dst / sub).mkdir(parents=True, exist_ok=True)
+        for old in (dst / sub).iterdir():
+            old.unlink()
+        for f in sorted(src.glob(pattern)):
+            (dst / sub / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
 
 
 def main():
@@ -973,11 +1067,13 @@ kubeVersion: ">=1.30.0-0"
         "templates/config.yaml": CONFIG_TPL,
         "templates/migrations.yaml": MIGRATIONS_TPL,
         "templates/ingress.yaml": INGRESS_TPL,
+        "templates/observability.yaml": OBSERVABILITY_TPL,
         "templates/NOTES.txt": NOTES,
         ".helmignore": ".git/\n*.md.bak\n",
     }
     for name, text in files.items():
         (OUT / name).write_text(text, encoding="utf-8", newline="\n")
+    copy_observability()
     print(f"helm chart: {len(rows)} components -> {OUT.relative_to(ROOT)}")
     write_router_chart(app_version)
     print(f"helm chart: cell router -> {ROUTER_OUT.relative_to(ROOT)}")

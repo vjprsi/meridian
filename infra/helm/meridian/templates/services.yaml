@@ -24,6 +24,11 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    {{- if $svc.managementPort }}
+    - name: management
+      port: {{ $svc.managementPort }}
+      targetPort: management
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -76,6 +81,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if $svc.managementPort }}
+            - name: management
+              containerPort: {{ $svc.managementPort }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: meridian-common
@@ -102,6 +111,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
+            {{- if $svc.managementPort }}
+            - name: MANAGEMENT_SERVER_PORT          # actuator (probes, /actuator/prometheus) on its own port
+              value: {{ $svc.managementPort | quote }}
+            {{- end }}
             {{- range $envName, $key := $svc.secretEnv }}
             - name: {{ $envName }}
               valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
@@ -118,14 +131,14 @@ spec:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
             limits: {memory: {{ $svc.memory | default $g.resources.memory | quote }}}
           startupProbe:
-            httpGet: {path: /actuator/health/liveness, port: http}
+            httpGet: {path: /actuator/health/liveness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 5
             failureThreshold: 60
           livenessProbe:
-            httpGet: {path: /actuator/health/liveness, port: http}
+            httpGet: {path: /actuator/health/liveness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 10
           readinessProbe:
-            httpGet: {path: /actuator/health/readiness, port: http}
+            httpGet: {path: /actuator/health/readiness, port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}}
             periodSeconds: 5
           lifecycle:
             preStop:
@@ -192,6 +205,17 @@ spec:
         {{- end }}
       ports:
         - {port: http, protocol: TCP}
+    {{- if $svc.managementPort }}
+    # management port (metrics, probes): only the metrics scraper (kubelet probes are not subject to policies)
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+    {{- end }}
 {{- end }}
 {{- if $g.serviceMonitor.enabled }}
 ---
@@ -204,7 +228,7 @@ spec:
   selector:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
   endpoints:
-    - port: http
+    - port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}
       path: /actuator/prometheus
       interval: 30s
 {{- end }}

@@ -40,9 +40,11 @@ public class StepUp {
     private final DeviceKeys keys;
     private final Ownership own;
     private final Clock clock;
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
     public StepUp(AgentChannelProperties props, ActionAudit audit, DeviceKeys keys, Ownership own,
-                  Optional<Clock> clock) {
+                  Optional<Clock> clock, io.micrometer.core.instrument.MeterRegistry meters) {
+        this.meters = meters;
         this.props = props;
         this.audit = audit;
         this.keys = keys;
@@ -77,9 +79,13 @@ public class StepUp {
                 return;
             }
             audit.signatureInvalid(action, objectType, objectId, "device_proof_invalid", null);
+            meters.counter("meridian.auth.step_up.challenges", "channel", "agent", "reason", "device_proof_invalid")
+                    .increment();
             throw refuse("device_proof_invalid", "The device proof is invalid or expired; unlock the app on a "
                     + "registered device or sign in again", max);
         }
+        // GAP-10: step-up challenges per channel and cause (SLO_SLA.md login / step-up failures)
+        meters.counter("meridian.auth.step_up.challenges", "channel", "agent", "reason", "stale_auth").increment();
         audit.stepUpRequired(action, objectType, objectId);
         throw refuse("step_up_required", "This action needs a recent sign-in (within " + max.toSeconds()
                 + " s) or a proof from a registered device; sign in again and retry", max);

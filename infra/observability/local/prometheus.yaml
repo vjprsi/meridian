@@ -1,0 +1,37 @@
+# Local stack only: replaces /otel-lgtm/prometheus.yaml of grafana/otel-lgtm (keep the otlp / storage sections in
+# step with the image) to load the generated Meridian rules and scrape Keycloak's metrics. Services push metrics over
+# OTLP (MANAGEMENT_OTLP_METRICS_EXPORT_URL, base unit seconds), so the same metric names, dashboards and rules work
+# here and with the Kubernetes ServiceMonitor. Alerts show in Grafana / Prometheus (no Alertmanager locally).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  scrape_native_histograms: true
+
+rule_files:
+  - /otel-lgtm/meridian/rules/*.yml
+
+scrape_configs:
+  # IdP login events (J4): Keycloak runs with --metrics-enabled and --event-metrics-user-enabled
+  - job_name: keycloak
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["keycloak:9000"]
+
+otlp:
+  keep_identifying_resource_attributes: true
+  promote_resource_attributes:
+    - service.instance.id
+    - service.name
+    - service.namespace
+    - service.version
+    - cloud.availability_zone
+    - cloud.region
+    - meridian.cell
+    - container.name
+    - deployment.environment
+    - deployment.environment.name
+    - host.name
+
+storage:
+  tsdb:
+    out_of_order_time_window: 10m

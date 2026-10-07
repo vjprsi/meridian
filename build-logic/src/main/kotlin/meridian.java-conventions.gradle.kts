@@ -14,6 +14,14 @@ val libs = the<VersionCatalogsExtension>().named("libs")
 
 dependencies {
     "implementation"(platform(libs.findLibrary("spring-boot-bom").get()))
+    // GAP-04 SCA: patched versions above the Spring Boot BOM (CI fails on fixable CRITICAL findings); remove once
+    // the BOM catches up. Constraints only raise versions where the module is on the classpath anyway.
+    "implementation"(platform(libs.findLibrary("jackson-bom").get()))
+    constraints {
+        for (lib in listOf("tomcat-embed-core", "tomcat-embed-el", "tomcat-embed-websocket")) {
+            "implementation"(libs.findLibrary(lib).get())
+        }
+    }
     "testImplementation"(platform(libs.findLibrary("testcontainers-bom").get()))
     "testImplementation"("org.springframework.boot:spring-boot-starter-test")
     "testImplementation"(libs.findLibrary("jqwik").get())

@@ -52,7 +52,19 @@ ingress:
   annotations: {}
   tls: []
 
+# GAP-10: SLO burn-rate / saturation alerts and Grafana dashboards (tools/observability.py). Needs the
+# Prometheus Operator CRDs (PrometheusRule) and a Grafana dashboard sidecar; scraping is global.serviceMonitor.
+observability:
+  prometheusRule:
+    enabled: false
+    labels: {}              # e.g. {release: kube-prometheus-stack} to match the Prometheus ruleSelector
+  dashboards:
+    enabled: false
+    labels: {grafana_dashboard: "1"}   # label watched by the Grafana sidecar
+    folder: "Meridian"
+
 # One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,
+# managementPort (actuator on its own port: probes and the ServiceMonitor use it),
 # secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),
 # sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).
 services:
@@ -490,3 +502,4 @@ services:
     replicas: 3
     cpu: "500m"
     memory: "512Mi"
+    managementPort: 9090

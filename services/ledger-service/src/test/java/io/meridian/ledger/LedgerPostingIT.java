@@ -499,6 +499,22 @@ class LedgerPostingIT {
                 .hasMessageContaining("append-only");
     }
 
+    /** GAP-10: the ServiceMonitor scrape (no token) sees request histograms and the J3 posting latency timer. */
+    @Test
+    @Order(100)
+    void prometheusExposesLatencyHistogramsAndPostingTimer() throws Exception {
+        HttpResponse<String> res = http.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(res.body())
+                .contains("http_server_requests_seconds_bucket")
+                .contains("le=\"0.25\"")
+                .containsPattern("meridian_ledger_posting_duration_seconds_bucket\\{[^}]*outcome=\"posted\"")
+                .containsPattern("meridian_ledger_posting_duration_seconds_count\\{[^}]*outcome=\"rejected\"")
+                .containsPattern("hikaricp_connections_pending\\{");
+    }
+
     @Test
     @Order(99)
     void reusedKeysNeverReplayADifferentRequest() throws Exception {
