@@ -173,7 +173,7 @@ channels:
         $ref: '#/components/messages/CardsCardDisputeClosed'
   channels:
     address: meridian.channels.v1
-    description: Customer and Agent Channels events
+    description: Customer, Agent and Business Channels events
     messages:
       ChannelsCustomerActionDenied:
         $ref: '#/components/messages/ChannelsCustomerActionDenied'
@@ -183,6 +183,22 @@ channels:
         $ref: '#/components/messages/ChannelsAgentDeviceKeyRegistered'
       ChannelsAgentDeviceKeyRevoked:
         $ref: '#/components/messages/ChannelsAgentDeviceKeyRevoked'
+      ChannelsBusinessActionDenied:
+        $ref: '#/components/messages/ChannelsBusinessActionDenied'
+      ChannelsBusinessUserChanged:
+        $ref: '#/components/messages/ChannelsBusinessUserChanged'
+      ChannelsBusinessEntitlementChanged:
+        $ref: '#/components/messages/ChannelsBusinessEntitlementChanged'
+      ChannelsBusinessApprovalRuleChanged:
+        $ref: '#/components/messages/ChannelsBusinessApprovalRuleChanged'
+      ChannelsBusinessPaymentSubmitted:
+        $ref: '#/components/messages/ChannelsBusinessPaymentSubmitted'
+      ChannelsBusinessPaymentApproved:
+        $ref: '#/components/messages/ChannelsBusinessPaymentApproved'
+      ChannelsBusinessPaymentReleased:
+        $ref: '#/components/messages/ChannelsBusinessPaymentReleased'
+      ChannelsBusinessPaymentRejected:
+        $ref: '#/components/messages/ChannelsBusinessPaymentRejected'
   engagement:
     address: meridian.engagement.v1
     description: 'Engagement: Rewards, Insights and Campaigns events'
@@ -3570,6 +3586,182 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AgentDeviceKey'
+    ChannelsBusinessActionDenied:
+      name: channels.business_action.denied
+      title: A business user referenced an object of another business, lacked the entitlement or role, or was refused step-up
+      summary: A business user referenced an object of another business, lacked the entitlement or role, or was refused step-up
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_action.denied
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessAction'
+    ChannelsBusinessUserChanged:
+      name: channels.business_user.changed
+      title: A business user was added, bootstrapped, changed, suspended, reactivated or removed
+      summary: A business user was added, bootstrapped, changed, suspended, reactivated or removed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_user.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessUser'
+    ChannelsBusinessEntitlementChanged:
+      name: channels.business_entitlement.changed
+      title: An account entitlement of a business user was set or removed
+      summary: An account entitlement of a business user was set or removed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_entitlement.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessEntitlement'
+    ChannelsBusinessApprovalRuleChanged:
+      name: channels.business_approval_rule.changed
+      title: The business's approval matrix changed
+      summary: The business's approval matrix changed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_approval_rule.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessApprovalRule'
+    ChannelsBusinessPaymentSubmitted:
+      name: channels.business_payment.submitted
+      title: A business payment was submitted for approval
+      summary: A business payment was submitted for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_payment.submitted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessPayment'
+    ChannelsBusinessPaymentApproved:
+      name: channels.business_payment.approved
+      title: A business payment received its final approval
+      summary: A business payment received its final approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_payment.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessPayment'
+    ChannelsBusinessPaymentReleased:
+      name: channels.business_payment.released
+      title: A business payment was released to payment-service
+      summary: A business payment was released to payment-service
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_payment.released
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessPayment'
+    ChannelsBusinessPaymentRejected:
+      name: channels.business_payment.rejected
+      title: A business payment was rejected by an approver
+      summary: A business payment was rejected by an approver
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.business_payment.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/BusinessPayment'
     EngagementRewardsProgramActivated:
       name: engagement.rewards_program.activated
       title: A rewards program went live
@@ -26766,6 +26958,707 @@ components:
       - public_key
       - key_fingerprint
       - status
+    BusinessAction:
+      type: object
+      description: Audit trail of business users' actions through the portal, including object-level and entitlement denials
+        and step-up refusals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        business_customer_id:
+          type: string
+          format: uuid
+          description: Business customer (from the token)
+        business_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Business user (from the token)
+        action:
+          type: string
+          maxLength: 64
+          description: Operation (operation id of the /v1/business endpoint)
+        object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: ACCOUNT, PAYMENT, PAYEE, MANDATE, COLLECTION, VIRTUAL_ACCOUNT, PAYMENT_LINK, CARD, LOAN, CREDIT_LINE,
+            FX_QUOTE, STATEMENT, API_CLIENT, WEBHOOK_ENDPOINT, USER, RULE
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object acted on, or the object id that was refused
+        outcome:
+          type: string
+          enum:
+          - SUCCEEDED
+          - DENIED
+          - STEP_UP_REQUIRED
+          - FAILED
+          description: Result
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Problem code when not SUCCEEDED
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the record created (payment, approval, card...)
+        auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the user's last authentication when the action ran
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Authentication context class of the token
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address (right-most X-Forwarded-For hop) (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent
+      required:
+      - id
+      - created_at
+      - business_customer_id
+      - action
+      - outcome
+    BusinessUser:
+      type: object
+      description: A person using the business portal for one business customer, with a role and an optional daily limit
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        business_customer_id:
+          type: string
+          format: uuid
+          description: Business customer the user acts for
+        display_name:
+          type: string
+          maxLength: 160
+          description: Name shown to colleagues
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Contact e-mail (identity provider login is bound through the business_user_id attribute)
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - MAKER
+          - APPROVER
+          - VIEWER
+          description: ADMIN manages users, entitlements, the approval matrix, cards and integrations; MAKER initiates; APPROVER
+            approves; VIEWER reads
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+          description: Changed by suspend, reactivate and remove
+          readOnly: true
+        daily_limit:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum total the user may submit per day (empty = no per-user limit)
+        limit_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of daily_limit (ISO 4217)
+        last_login_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last time the user opened the portal
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last suspension or removal
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - business_customer_id
+      - display_name
+      - role
+      - status
+    BusinessEntitlement:
+      type: object
+      description: What one business user may do on one account of the business
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        business_customer_id:
+          type: string
+          format: uuid
+          description: Business customer
+        business_user_id:
+          type: string
+          format: uuid
+          description: User
+        deposit_account_id:
+          type: string
+          format: uuid
+          description: Account of the business
+        can_view:
+          type: boolean
+          description: May see the account, its balance, transactions, statements and payments
+        can_initiate:
+          type: boolean
+          description: May draft and submit payments from the account (MAKER or ADMIN)
+        can_approve:
+          type: boolean
+          description: May approve payments from the account (APPROVER or ADMIN)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Largest single payment the user may initiate from the account (empty = no cap)
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - business_customer_id
+      - business_user_id
+      - deposit_account_id
+      - can_view
+      - can_initiate
+      - can_approve
+    BusinessApprovalRule:
+      type: object
+      description: One amount band of the business's approval matrix
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        business_customer_id:
+          type: string
+          format: uuid
+          description: Business customer
+        name:
+          type: string
+          maxLength: 120
+          description: Rule name
+        applies_to:
+          type: string
+          enum:
+          - ALL
+          - SINGLE
+          - BULK
+          description: Single payments, bulk/payroll batches or both
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the band (payments in other currencies use other rules) (ISO 4217)
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Band starts at this amount (inclusive)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Band ends at this amount (inclusive; empty = no upper bound)
+        required_approvals:
+          type: integer
+          format: int32
+          description: Number of distinct approvers (1-10; never the initiator)
+        approval_order:
+          type: string
+          enum:
+          - ANY_ORDER
+          - SEQUENTIAL
+          description: 'ANY_ORDER: any entitled approvers; SEQUENTIAL: approver_ids in that order'
+        approver_ids:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Business user ids: the ordered approvers (SEQUENTIAL) or the allowed pool (ANY_ORDER; empty = any
+            entitled approver)'
+        is_active:
+          type: boolean
+          description: Deactivated rules are kept for the payments that used them
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - business_customer_id
+      - name
+      - applies_to
+      - currency
+      - min_amount
+      - required_approvals
+      - approval_order
+      - is_active
+    BusinessPayment:
+      type: object
+      description: A payment, bulk payment or payroll drafted in the portal, with its approvals and release to payment-service
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        business_customer_id:
+          type: string
+          format: uuid
+          description: Business customer
+        kind:
+          type: string
+          enum:
+          - OWN_TRANSFER
+          - DOMESTIC
+          - INTERNATIONAL
+          - BULK
+          - PAYROLL
+          description: Own transfer, domestic payee payment, international payment, bulk or payroll batch
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - RELEASED
+          - RELEASE_FAILED
+          - REJECTED
+          - CANCELLED
+          description: Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED)
+          readOnly: true
+        debtor_account_id:
+          type: string
+          format: uuid
+          description: Business account debited
+        payee_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payee of the business (domestic and international)
+        creditor_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Other account of the business (own transfer)
+        creditor_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: Beneficiary name (from the payee or account)
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount debited (batch total for bulk and payroll)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Debit currency (the account currency) (ISO 4217)
+          readOnly: true
+        instructed_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount the beneficiary receives (international, from the FX quote)
+          readOnly: true
+        instructed_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Beneficiary currency (international) (ISO 4217)
+          readOnly: true
+        fx_quote_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: FX quote priced for the business and bound to this payment (international)
+        fx_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Quoted customer rate
+          readOnly: true
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: Payer reference
+        remittance:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: Remittance information
+        purpose_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: ISO 20022 purpose code
+        requested_execution_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Requested execution date
+        name:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: Batch name (bulk and payroll)
+        item_count:
+          type: integer
+          format: int32
+          description: Lines in the batch
+          readOnly: true
+        invalid_count:
+          type: integer
+          format: int32
+          description: Lines that failed validation (a batch with invalid lines cannot be submitted)
+          readOnly: true
+        items:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Validated batch lines (creditor_name, creditor_account_id_type, creditor_account_number, creditor_agent_bic,
+            creditor_agent_clearing_id, amount, remittance)
+          readOnly: true
+        validation_errors:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Validation errors per line ({line, field, code, message})
+          readOnly: true
+        initiated_by:
+          type: string
+          format: uuid
+          description: Business user that drafted and submitted it
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission for approval
+          readOnly: true
+        approval_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Matrix rule applied at submission (empty = default rule)
+          readOnly: true
+        required_approvals:
+          type: integer
+          format: int32
+          description: Approvals required (snapshot at submission)
+          readOnly: true
+        approval_order:
+          type: string
+          enum:
+          - ANY_ORDER
+          - SEQUENTIAL
+          description: Order of approvals (snapshot)
+          readOnly: true
+        approver_ids:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Ordered or allowed approvers (snapshot)
+          readOnly: true
+        approvals_received:
+          type: integer
+          format: int32
+          description: Approvals so far
+          readOnly: true
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the payment content; approvals are given on this content
+          readOnly: true
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payment created in payment-service on release
+          readOnly: true
+        bulk_payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bulk payment created in payment-service on release
+          readOnly: true
+        downstream_status:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Status in payment-service after release
+          readOnly: true
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        released_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver whose approval released it
+          readOnly: true
+        release_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Problem of the last failed release (retry with release)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approver that rejected it
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection reason
+          readOnly: true
+        cancelled_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: User that cancelled it
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - business_customer_id
+      - kind
+      - status
+      - debtor_account_id
+      - amount
+      - currency
+      - item_count
+      - invalid_count
+      - initiated_by
+      - required_approvals
+      - approval_order
+      - approvals_received
     RewardsProgram:
       type: object
       description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings

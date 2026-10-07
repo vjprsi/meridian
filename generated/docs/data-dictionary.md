@@ -2027,9 +2027,9 @@ API: internal only · Requirements: CRD-08
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
-## Customer and Agent Channels (`channels`)
+## Customer, Agent and Business Channels (`channels`)
 
-Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see agent-channel-service). Domain services keep their operator APIs; customer and agent tokens carry no domain scope and are rejected there.
+Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see agent-channel-service), and the business banking portal uses /v1/business (business_customer_id and business_user_id claims, scope channels:business; see business-channel-service). Domain services keep their operator APIs; customer, agent and business tokens carry no domain scope and are rejected there.
 
 
 ### Service `customer-channel-service` — database `customer_channel_db`
@@ -2142,6 +2142,206 @@ API: /v1/agent/customer-wallets
 | currency | char(3) | yes |  | currency | Wallet currency |
 | wallet_status | varchar(40) (WalletStatus) | yes |  | wallet_status | Wallet status |
 | kyc_tier | integer | yes |  | kyc_tier | KYC tier (drives limits) |
+
+### Service `business-channel-service` — database `business_channel_db`
+
+Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration.
+
+
+#### `business_user`
+
+A person using the business portal for one business customer, with a role and an optional daily limit
+
+API: /v1/business/me, /v1/business/users
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer the user acts for |
+| display_name | varchar(160) | no |  | display_name | Name shown to colleagues |
+| email | varchar(320) | yes |  | email | Contact e-mail (identity provider login is bound through the business_user_id attribute) |
+| role | varchar(40) (BusinessUserRole) | no |  | role | ADMIN manages users, entitlements, the approval matrix, cards and integrations; MAKER initiates; APPROVER approves; VIEWER reads |
+| status | varchar(40) (BusinessUserStatus) | no |  | status (read-only) | Changed by suspend, reactivate and remove |
+| daily_limit | numeric(28,8) | yes |  | daily_limit | Maximum total the user may submit per day (empty = no per-user limit) |
+| limit_currency | char(3) | yes |  | limit_currency | Currency of daily_limit |
+| last_login_at | timestamptz | yes |  | last_login_at (read-only) | Last time the user opened the portal |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last suspension or removal |
+
+#### `business_entitlement`
+
+What one business user may do on one account of the business
+
+API: internal only
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
+| business_user_id | uuid | no | FK → business_user | business_user_id | User |
+| deposit_account_id | uuid | no | ref → deposit_account | deposit_account_id | Account of the business |
+| can_view | boolean | no |  | can_view | May see the account, its balance, transactions, statements and payments |
+| can_initiate | boolean | no |  | can_initiate | May draft and submit payments from the account (MAKER or ADMIN) |
+| can_approve | boolean | no |  | can_approve | May approve payments from the account (APPROVER or ADMIN) |
+| max_amount | numeric(28,8) | yes |  | max_amount | Largest single payment the user may initiate from the account (empty = no cap) |
+
+#### `business_approval_rule`
+
+One amount band of the business's approval matrix
+
+API: /v1/business/approval-rules
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
+| name | varchar(120) | no |  | name | Rule name |
+| applies_to | varchar(40) (BusinessPaymentScope) | no |  | applies_to | Single payments, bulk/payroll batches or both |
+| currency | char(3) | no |  | currency | Currency of the band (payments in other currencies use other rules) |
+| min_amount | numeric(28,8) | no |  | min_amount | Band starts at this amount (inclusive) |
+| max_amount | numeric(28,8) | yes |  | max_amount | Band ends at this amount (inclusive; empty = no upper bound) |
+| required_approvals | integer | no |  | required_approvals | Number of distinct approvers (1-10; never the initiator) |
+| approval_order | varchar(40) (BusinessApprovalOrder) | no |  | approval_order | ANY_ORDER: any entitled approvers; SEQUENTIAL: approver_ids in that order |
+| approver_ids | jsonb | yes |  | approver_ids | Business user ids: the ordered approvers (SEQUENTIAL) or the allowed pool (ANY_ORDER; empty = any entitled approver) |
+| is_active | boolean | no |  | is_active (read-only) | Deactivated rules are kept for the payments that used them |
+
+#### `business_payment`
+
+A payment, bulk payment or payroll drafted in the portal, with its approvals and release to payment-service
+
+API: /v1/business/approval-queue, /v1/business/bulk-payments, /v1/business/payments
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
+| kind | varchar(40) (BusinessPaymentKind) | no |  | kind | Own transfer, domestic payee payment, international payment, bulk or payroll batch |
+| status | varchar(40) (BusinessPaymentStatus) | no |  | status (read-only) | Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED) |
+| debtor_account_id | uuid | no | ref → deposit_account | debtor_account_id | Business account debited |
+| payee_id | uuid | yes | ref → payee | payee_id | Payee of the business (domestic and international) |
+| creditor_account_id | uuid | yes | ref → deposit_account | creditor_account_id | Other account of the business (own transfer) |
+| creditor_name | varchar(140) | yes |  | creditor_name (read-only) | Beneficiary name (from the payee or account) |
+| amount | numeric(28,8) | no |  | amount | Amount debited (batch total for bulk and payroll) |
+| currency | char(3) | no |  | currency (read-only) | Debit currency (the account currency) |
+| instructed_amount | numeric(28,8) | yes |  | instructed_amount (read-only) | Amount the beneficiary receives (international, from the FX quote) |
+| instructed_currency | char(3) | yes |  | instructed_currency (read-only) | Beneficiary currency (international) |
+| fx_quote_id | uuid | yes | ref → fx_quote | fx_quote_id | FX quote priced for the business and bound to this payment (international) |
+| fx_rate | numeric(18,10) | yes |  | fx_rate (read-only) | Quoted customer rate |
+| reference | varchar(35) | yes |  | reference | Payer reference |
+| remittance | varchar(140) | yes |  | remittance | Remittance information |
+| purpose_code | varchar(4) | yes |  | purpose_code | ISO 20022 purpose code |
+| requested_execution_date | date | yes |  | requested_execution_date | Requested execution date |
+| name | varchar(140) | yes |  | name | Batch name (bulk and payroll) |
+| item_count | integer | no |  | item_count (read-only) | Lines in the batch |
+| invalid_count | integer | no |  | invalid_count (read-only) | Lines that failed validation (a batch with invalid lines cannot be submitted) |
+| items | jsonb | yes |  | items (read-only) | Validated batch lines (creditor_name, creditor_account_id_type, creditor_account_number, creditor_agent_bic, creditor_agent_clearing_id, amount, remittance) |
+| validation_errors | jsonb | yes |  | validation_errors (read-only) | Validation errors per line ({line, field, code, message}) |
+| initiated_by | uuid | no | FK → business_user | initiated_by (read-only) | Business user that drafted and submitted it |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission for approval |
+| approval_rule_id | uuid | yes | FK → business_approval_rule | approval_rule_id (read-only) | Matrix rule applied at submission (empty = default rule) |
+| required_approvals | integer | no |  | required_approvals (read-only) | Approvals required (snapshot at submission) |
+| approval_order | varchar(40) (BusinessApprovalOrder) | no |  | approval_order (read-only) | Order of approvals (snapshot) |
+| approver_ids | jsonb | yes |  | approver_ids (read-only) | Ordered or allowed approvers (snapshot) |
+| approvals_received | integer | no |  | approvals_received (read-only) | Approvals so far |
+| checksum | varchar(64) | yes |  | checksum (read-only) | SHA-256 of the payment content; approvals are given on this content |
+| payment_id | uuid | yes | ref → payment | payment_id (read-only) | Payment created in payment-service on release |
+| bulk_payment_id | uuid | yes | ref → bulk_payment | bulk_payment_id (read-only) | Bulk payment created in payment-service on release |
+| downstream_status | varchar(32) | yes |  | downstream_status (read-only) | Status in payment-service after release |
+| released_at | timestamptz | yes |  | released_at (read-only) | Release time |
+| released_by | uuid | yes |  | released_by (read-only) | Approver whose approval released it |
+| release_error | varchar(255) | yes |  | release_error (read-only) | Problem of the last failed release (retry with release) |
+| rejected_by | uuid | yes |  | rejected_by (read-only) | Approver that rejected it |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Rejection reason |
+| cancelled_by | uuid | yes |  | cancelled_by (read-only) | User that cancelled it |
+
+#### `business_payment_approval` (append-only)
+
+One approver's decision on a business payment. Append-only.
+
+API: internal only
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| business_payment_id | uuid | no | FK → business_payment | business_payment_id | Payment |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
+| business_user_id | uuid | no | FK → business_user | business_user_id | Approver |
+| decision | varchar(40) (BusinessApprovalDecision) | no |  | decision | Approved or rejected |
+| sequence | integer | no |  | sequence | Order of the decision (1 = first) |
+| comment | varchar(500) | yes |  | comment | Approver comment or rejection reason |
+| checksum | varchar(64) | no |  | checksum | Content the decision was given on |
+| auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the approver's last authentication |
+
+#### `business_object`
+
+Integration objects created through the portal for a business (API clients, webhook endpoints) whose owning service does not record the business
+
+API: /v1/business/api-clients, /v1/business/webhook-endpoints
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
+| object_type | varchar(40) (BusinessObjectType) | no |  | object_type | Kind of object |
+| object_id | uuid | no | UQ | object_id | Object id in its owning service |
+| label | varchar(160) | yes |  | label | Name shown in the portal |
+
+#### `business_action` (append-only)
+
+Audit trail of business users' actions through the portal, including object-level and entitlement denials and step-up refusals
+
+API: /v1/business/accounts, /v1/business/activity, /v1/business/card-products, /v1/business/cards, /v1/business/cash-position, /v1/business/credit-lines, /v1/business/fx-deals, /v1/business/fx-quotes, /v1/business/loans, /v1/business/mandates, /v1/business/payees, /v1/business/payment-links, /v1/business/virtual-accounts
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer (from the token) |
+| business_user_id | uuid | yes |  | business_user_id | Business user (from the token) |
+| action | varchar(64) | no |  | action | Operation (operation id of the /v1/business endpoint) |
+| object_type | varchar(40) | yes |  | object_type | ACCOUNT, PAYMENT, PAYEE, MANDATE, COLLECTION, VIRTUAL_ACCOUNT, PAYMENT_LINK, CARD, LOAN, CREDIT_LINE, FX_QUOTE, STATEMENT, API_CLIENT, WEBHOOK_ENDPOINT, USER, RULE |
+| object_id | uuid | yes |  | object_id | Object acted on, or the object id that was refused |
+| outcome | varchar(40) (BusinessActionOutcome) | no |  | outcome | Result |
+| error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
+| result_id | uuid | yes |  | result_id | Id of the record created (payment, approval, card...) |
+| auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the user's last authentication when the action ran |
+| acr | varchar(64) | yes |  | acr | Authentication context class of the token |
+| ip_address | inet | yes |  | ip_address | Client address (right-most X-Forwarded-For hop) |
+| user_agent | varchar(255) | yes |  | user_agent | Client user agent |
 
 ## Engagement: Rewards, Insights and Campaigns (`engagement`)
 

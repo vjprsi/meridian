@@ -270,7 +270,7 @@
   {
     "name": "customer-channel-service",
     "domain": "channels",
-    "domain_title": "Customer and Agent Channels",
+    "domain_title": "Customer, Agent and Business Channels",
     "phase": 3,
     "database": "customer_channel_db",
     "schema": "customer_channel",
@@ -309,7 +309,7 @@
   {
     "name": "agent-channel-service",
     "domain": "channels",
-    "domain_title": "Customer and Agent Channels",
+    "domain_title": "Customer, Agent and Business Channels",
     "phase": 3,
     "database": "agent_channel_db",
     "schema": "agent_channel",
@@ -341,6 +341,52 @@
       "channels.agent_device_key.revoked"
     ],
     "scope": "channels:agent"
+  },
+  {
+    "name": "business-channel-service",
+    "domain": "channels",
+    "domain_title": "Customer, Agent and Business Channels",
+    "phase": 3,
+    "database": "business_channel_db",
+    "schema": "business_channel",
+    "package": "io.meridian.businesschannel",
+    "port": 9166,
+    "description": "Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration.",
+    "tags": [
+      "Business Accounts",
+      "Business Activity",
+      "Business Api Clients",
+      "Business Approval Queue",
+      "Business Approval Rules",
+      "Business Bulk Payments",
+      "Business Card Products",
+      "Business Cards",
+      "Business Cash Position",
+      "Business Credit Lines",
+      "Business Fx Deals",
+      "Business Fx Quotes",
+      "Business Loans",
+      "Business Mandates",
+      "Business Me",
+      "Business Payees",
+      "Business Payment Links",
+      "Business Payments",
+      "Business Users",
+      "Business Virtual Accounts",
+      "Business Webhooks"
+    ],
+    "tables": 7,
+    "events": [
+      "channels.business_action.denied",
+      "channels.business_user.changed",
+      "channels.business_entitlement.changed",
+      "channels.business_approval_rule.changed",
+      "channels.business_payment.submitted",
+      "channels.business_payment.approved",
+      "channels.business_payment.released",
+      "channels.business_payment.rejected"
+    ],
+    "scope": "channels:business"
   },
   {
     "name": "rewards-service",
