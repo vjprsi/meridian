@@ -24,11 +24,13 @@ public class Rows {
     private final JdbcClient jdbc;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;
+        this.businessDates = businessDates;
     }
 
     public JdbcClient jdbc() {
@@ -72,6 +74,14 @@ public class Rows {
 
     public int execute(String sql, Object... args) {
         return jdbc.sql(sql).params(java.util.Arrays.asList(args)).update();
+    }
+
+    /**
+     * Today's business date (business-day-service, tenant-wide) for dates shown to customers or used as review dates;
+     * falls back to the UTC date of the database clock. SLA deadlines stay timestamps on {@link #now()}.
+     */
+    public java.time.LocalDate today() {
+        return businessDates.today(() -> now().toLocalDate());
     }
 
     /** The database clock (transaction start time): the single clock for every SLA and deadline comparison. */

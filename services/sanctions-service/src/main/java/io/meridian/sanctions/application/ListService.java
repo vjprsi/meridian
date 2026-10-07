@@ -172,8 +172,8 @@ public class ListService {
     private void touchList(UUID listId) {
         db.update("""
                 update sanctions_list set entry_count = (select count(*) from sanctions_list_entry
-                    where sanctions_list_id = ? and (delisted_on is null or delisted_on > current_date)), updated_by = ?
-                where id = ?""", listId, TenantContext.principal(), listId);
+                    where sanctions_list_id = ? and (delisted_on is null or delisted_on > ?)), updated_by = ?
+                where id = ?""", listId, db.today(), TenantContext.principal(), listId);
         catalog.invalidate();
     }
 
@@ -205,18 +205,19 @@ public class ListService {
             upsert(listId, rows);
             Set<String> ids = new LinkedHashSet<>();
             rows.forEach(r -> ids.add(r.fields().get("external_id").toString()));
+            java.time.LocalDate today = db.today();
             db.update("""
-                    update sanctions_list_entry set delisted_on = current_date, updated_by = ?
+                    update sanctions_list_entry set delisted_on = ?, updated_by = ?
                     where sanctions_list_id = ? and delisted_on is null
                       and not (external_id = any(cast(? as text[])))""",
-                    TenantContext.principal(), listId, ids.toArray(new String[0]));
+                    today, TenantContext.principal(), listId, ids.toArray(new String[0]));
             db.update("""
                     update sanctions_list set list_version = coalesce(?, list_version),
                         published_at = coalesce(cast(? as timestamptz), published_at), loaded_at = now(),
                         content_sha256 = ?, updated_by = ?,
                         entry_count = (select count(*) from sanctions_list_entry where sanctions_list_id = ?
-                                       and (delisted_on is null or delisted_on > current_date))
-                    where id = ?""", listVersion, publishedAt, sha, TenantContext.principal(), listId, listId);
+                                       and (delisted_on is null or delisted_on > ?))
+                    where id = ?""", listVersion, publishedAt, sha, TenantContext.principal(), listId, today, listId);
             JsonNode row = db.require("sanctions_list", listId, false);
             outbox.publish("risk.sanctions_list.updated", "sanctions_list", listId, row);
             catalog.invalidate();
@@ -246,8 +247,8 @@ public class ListService {
             db.update("""
                     update sanctions_list set loaded_at = now(), updated_by = ?,
                         entry_count = (select count(*) from sanctions_list_entry where sanctions_list_id = ?
-                                       and (delisted_on is null or delisted_on > current_date))
-                    where id = ?""", TenantContext.principal(), listId, listId);
+                                       and (delisted_on is null or delisted_on > ?))
+                    where id = ?""", TenantContext.principal(), listId, db.today(), listId);
             JsonNode row = db.require("sanctions_list", listId, false);
             if (c[0] + c[1] > 0) {
                 outbox.publish("risk.sanctions_list.updated", "sanctions_list", listId, row);

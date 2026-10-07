@@ -47,7 +47,7 @@ public class ComplianceService {
         if ("TERMINATED".equals(Rows.str(agent, "status"))) {
             throw ApiException.unprocessable("agent_terminated", "The agent is terminated");
         }
-        if (rows.scalar("select coalesce(?::date < current_date, false)", Boolean.class, Rows.str(v, "expires_at")).orElse(false)) {
+        if (Rows.str(v, "expires_at") != null && java.time.LocalDate.parse(Rows.str(v, "expires_at")).isBefore(rows.today())) {
             throw ApiException.unprocessable("document_expired", "The document has already expired");
         }
         v.put("verified", false);
@@ -85,8 +85,8 @@ public class ComplianceService {
         if (TenantContext.principal().equals(Rows.str(d, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "The document must be verified by a different user than its uploader");
         }
-        if (rows.scalar("select expires_at is not null and expires_at < current_date from agent_kyc_document where id = ?",
-                Boolean.class, id).orElse(false)) {
+        if (rows.scalar("select expires_at is not null and expires_at < ? from agent_kyc_document where id = ?",
+                Boolean.class, rows.today(), id).orElse(false)) {
             throw ApiException.unprocessable("document_expired", "An expired document cannot be verified");
         }
         rows.execute("update agent_kyc_document set verified = true, verified_by = ?, verified_at = now() where id = ?",

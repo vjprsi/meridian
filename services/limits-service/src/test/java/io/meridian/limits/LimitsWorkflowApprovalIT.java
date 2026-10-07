@@ -55,6 +55,9 @@ class LimitsWorkflowApprovalIT {
     @Autowired
     ApprovalEventsDispatcher dispatcher;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     @MockitoBean
     ServiceClient serviceClient;
 
@@ -140,6 +143,68 @@ class LimitsWorkflowApprovalIT {
         assertThat(path.getValue()).contains("resource_type=limit_override").contains("resource_id=" + override)
                 .contains("status=PENDING");
         verify(serviceClient, never()).post(eq("workflow-service"), startsWith("/v1/approval-requests/"), any(), anyString());
+    }
+
+    @Test
+    void ruleSubmissionIsActivatedOrRejectedFromWorkflow() throws Exception {
+        String rule = rule("WF_RULE_A");
+        JsonNode submitted = post("/v1/risk/limits/rules/" + rule + "/submit", "{\"comment\":\"new cap\"}", 200, "alice");
+        assertThat(submitted.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(submitted.get("submitted_by").asString()).isEqualTo("alice");
+        assertThat(lastRequest.get()).containsEntry("resource_type", "limit_rule").containsEntry("resource_id", rule)
+                .containsEntry("action", "activate").containsEntry("currency", "USD");
+        String first = lastRequestId.get();
+        Map<?, ?> payload = (Map<?, ?>) lastRequest.get().get("payload");
+
+        // rejection keeps the rule DRAFT and records who rejected it
+        dispatcher.dispatch(UUID.fromString(TENANT), ruleDecision(first, rule, payload, "bob"), Outcome.REJECTED);
+        JsonNode rejected = get("/v1/risk/limits/rules/" + rule);
+        assertThat(rejected.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("bob");
+        assertThat(rejected.hasNonNull("submitted_at")).isFalse();
+
+        // resubmitted: the old request is stale, the new one activates (submitter still cannot approve)
+        post("/v1/risk/limits/rules/" + rule + "/submit", "{}", 200, "alice");
+        String second = lastRequestId.get();
+        dispatcher.dispatch(UUID.fromString(TENANT), ruleDecision(first, rule, payload, "bob"), Outcome.APPROVED);
+        assertThat(get("/v1/risk/limits/rules/" + rule).get("status").asString()).isEqualTo("DRAFT");
+        dispatcher.dispatch(UUID.fromString(TENANT), ruleDecision(second, rule, payload, "alice"), Outcome.APPROVED);
+        assertThat(get("/v1/risk/limits/rules/" + rule).get("status").asString()).isEqualTo("DRAFT");
+        dispatcher.dispatch(UUID.fromString(TENANT), ruleDecision(second, rule, payload, "bob"), Outcome.APPROVED);
+        JsonNode active = get("/v1/risk/limits/rules/" + rule);
+        assertThat(active.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(active.get("approved_by").asString()).isEqualTo("bob");
+
+        // direct reject needs a pending submission
+        assertThat(post("/v1/risk/limits/rules/" + rule + "/reject", "{\"reason\":\"x\"}", 409, "bob").get("code").asString())
+                .isEqualTo("no_pending_submission");
+    }
+
+    @Test
+    void dailyCountersFollowTheBusinessDate() throws Exception {
+        when(serviceClient.get(eq("business-day-service"), startsWith("/v1/operations/business-days")))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2026-01-15\"}]}"));
+        businessDates.invalidate();
+        try {
+            String rule = rule("WF_BD_DAILY");
+            post("/v1/risk/limits/rules/" + rule + "/activate", "{}", 200, "bob");
+            String subject = UUID.randomUUID().toString();
+            post("/v1/risk/limits/checks", """
+                    {"subject_type":"ACCOUNT","subject_id":"%s","transaction_type":"P2P","amount":"10","currency":"USD"}"""
+                    .formatted(subject), 201, "svc");
+            JsonNode usage = get("/v1/risk/limits/usages?limit_rule_id=" + rule).get("data").get(0);
+            assertThat(OffsetDateTime.parse(usage.get("period_start").asString()).toInstant())
+                    .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+        } finally {
+            businessDates.invalidate();
+        }
+    }
+
+    private ObjectNode ruleDecision(String requestId, String rule, Map<?, ?> payload, String approver) {
+        ObjectNode row = decision(requestId, rule, payload, approver);
+        row.put("resource_type", "limit_rule");
+        row.put("action", "activate");
+        return row;
     }
 
     private ObjectNode decision(String requestId, String override, Map<?, ?> payload, String approver) {

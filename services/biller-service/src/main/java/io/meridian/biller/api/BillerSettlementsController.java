@@ -6,6 +6,7 @@ import io.meridian.biller.api.generated.model.BillerSettlement;
 import io.meridian.biller.api.generated.model.BillerSettlementCreate;
 import io.meridian.biller.api.generated.model.BillerSettlementsApproveRequest;
 import io.meridian.biller.api.generated.model.BillerSettlementsMarkPaidRequest;
+import io.meridian.biller.api.generated.model.BillerSettlementsRejectRequest;
 import io.meridian.biller.application.SettlementService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
@@ -35,6 +36,13 @@ public class BillerSettlementsController implements BillerSettlementsApi {
     public ResponseEntity<BillerSettlement> billerSettlementsApprove(UUID id, String idempotencyKey,
                                                                     BillerSettlementsApproveRequest body) {
         return actions.action(idempotencyKey, id, "approve", body, BillerSettlement.class, () -> settlements.approve(id));
+    }
+
+    @Override
+    public ResponseEntity<BillerSettlement> billerSettlementsReject(UUID id, String idempotencyKey,
+                                                                   BillerSettlementsRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, BillerSettlement.class,
+                () -> settlements.reject(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

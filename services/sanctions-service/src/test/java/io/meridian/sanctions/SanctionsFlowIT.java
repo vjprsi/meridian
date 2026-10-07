@@ -64,6 +64,9 @@ class SanctionsFlowIT {
     @MockitoBean
     ServiceClient serviceClient;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     final HttpClient http = HttpClient.newHttpClient();
     String list;
     String binLadenResult;
@@ -204,12 +207,17 @@ class SanctionsFlowIT {
     @Test
     @Order(5)
     void resyncDelistsMissingEntriesAndImportAdds() throws Exception {
+        // delisting is dated with the tenant's business date from business-day-service
+        when(serviceClient.get(eq("business-day-service"), org.mockito.ArgumentMatchers.startsWith("/v1/operations/business-days")))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2026-10-05\"}]}"));
+        businessDates.invalidate();
         String reduced = LIST_CSV.lines().filter(l -> !l.startsWith("SDN-5")).reduce("", (a, b) -> a + b + "\n");
         JsonNode synced = post("/v1/risk/sanctions/lists/" + list + "/sync",
                 json.writeValueAsString(java.util.Map.of("content", reduced, "list_version", "2026-10-05")), 200, "compliance");
         assertThat(synced.get("entry_count").asInt()).isEqualTo(4);
         JsonNode delisted = get("/v1/risk/sanctions/list-entries?sanctions_list_id=" + list + "&external_id=SDN-5", TENANT).get("data").get(0);
-        assertThat(delisted.get("delisted_on").asString()).isNotBlank();
+        assertThat(delisted.get("delisted_on").asString()).isEqualTo("2026-10-05");
+        businessDates.invalidate();
         JsonNode after = post("/v1/risk/sanctions/screenings", """
                 {"subject_type":"CUSTOMER","subject_id":"%s","trigger":"LIST_UPDATE","full_name":"Ivan Petrovich Sidorov",
                  "requested_by_service":"onboarding-service"}""".formatted(UUID.randomUUID()), 201, "onboarding");

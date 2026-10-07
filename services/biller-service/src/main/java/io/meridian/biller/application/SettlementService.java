@@ -136,6 +136,29 @@ public class SettlementService {
         return after;
     }
 
+    /**
+     * Checker step: rejects a calculated settlement (four-eyes). Its payments and top-ups are released, so a new
+     * settlement of the period picks them up again; the rejected settlement keeps its totals for the audit trail.
+     */
+    @Transactional
+    public ObjectNode reject(UUID id, String reason) {
+        ObjectNode s = rows.lock(TABLE, id);
+        Lifecycle.settlement(Rows.str(s, "status"), "REJECTED");
+        if (TenantContext.principal().equals(Rows.str(s, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The settlement must be rejected by a different user than its maker");
+        }
+        rows.execute("update bill_payment set biller_settlement_id = null where biller_settlement_id = ?", id);
+        rows.execute("update airtime_topup set biller_settlement_id = null where biller_settlement_id = ?", id);
+        ObjectNode u = rows.object();
+        u.put("status", "REJECTED");
+        u.put("rejected_by", TenantContext.principal());
+        u.put("rejection_reason", reason == null ? null : reason.length() > 255 ? reason.substring(0, 255) : reason);
+        ObjectNode after = rows.update(TABLE, id, u);
+        events.publish("wallets.biller_settlement.rejected", TABLE, after);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return after;
+    }
+
     /** Moves the net amount out of the collection wallet to the clearing account and records the bank payment. */
     public ObjectNode markPaid(UUID id, String paymentReference) {
         ObjectNode s = rows.get(TABLE, id);

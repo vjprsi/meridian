@@ -3,9 +3,13 @@ package io.meridian.channel.application;
 import io.meridian.channel.domain.UssdEngine;
 import io.meridian.channel.infrastructure.Rows;
 import io.meridian.channel.infrastructure.WalletActions;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.common.time.Clocks;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,14 +33,19 @@ public class MenuService {
     static final String MENU = "ussd_menu";
     static final String NODE = "ussd_menu_node";
 
+    /** Approval resource type for USSD menu publication submissions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "ussd_menu";
+
     private final Rows rows;
     private final Events events;
     private final WalletActions actions;
+    private final Approvals approvals;
 
-    public MenuService(Rows rows, Events events, WalletActions actions) {
+    public MenuService(Rows rows, Events events, WalletActions actions, Approvals approvals) {
         this.rows = rows;
         this.events = events;
         this.actions = actions;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -165,7 +174,58 @@ public class MenuService {
         return new UssdEngine.Menu(Rows.str(m, "root_node_key"), nodes);
     }
 
-    /** Publishes a draft after validation; the publisher must not be the maker. */
+    /**
+     * Maker step: submits a valid DRAFT (menu and tree) for publication. In workflow mode this opens an approval
+     * request whose payload carries a checksum of the menu and its nodes; {@link UssdMenuApprovalHandler} publishes or
+     * rejects. A new submission replaces a pending one.
+     */
+    @Transactional
+    public ObjectNode submit(UUID id, String comment) {
+        ObjectNode m = rows.lock(MENU, id);
+        if ("PUBLISHED".equals(Rows.str(m, "status"))) {
+            throw ApiException.conflict("invalid_transition", "The menu is already published");
+        }
+        requireDraft(id);
+        List<String> problems = UssdEngine.validate(load(id));
+        if (!problems.isEmpty()) {
+            throw ApiException.unprocessable("invalid_menu_tree", String.join("; ", problems));
+        }
+        OffsetDateTime at = Clocks.now();
+        rows.execute("""
+                update ussd_menu set submitted_by = ?, submitted_at = ?, rejected_by = null, rejection_reason = null
+                where id = ?""", TenantContext.principal(), at, id);
+        int nodes = rows.scalar("select count(*)::int from ussd_menu_node where ussd_menu_id = ?", Integer.class, id).orElse(0);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", Rows.str(m, "code"));
+        payload.put("short_code", Rows.str(m, "short_code"));
+        payload.put("language", Rows.str(m, "language"));
+        payload.put("version", Rows.integer(m, "version"));
+        payload.put("node_count", nodes);
+        payload.put("checksum", checksum(id));
+        if (comment != null) {
+            payload.put("comment", comment);
+        }
+        UUID requestId = Approvals.idOf(approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "publish",
+                "USSD menu " + Rows.str(m, "short_code") + " " + Rows.str(m, "language") + " v" + Rows.integer(m, "version"),
+                payload), "ussd-menu:" + id + ":" + at));
+        if (requestId != null) {
+            approvals.cancelOpenExcept(APPROVAL_RESOURCE, id, null, requestId, "superseded");
+        }
+        ObjectNode after = rows.get(MENU, id);
+        events.publish("wallets.ussd_menu.submitted", MENU, after);
+        return after;
+    }
+
+    /** True while the DRAFT is submitted with the submitted content (checksum of menu and nodes) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String checksum) {
+        return rows.find(MENU, id)
+                .filter(m -> "DRAFT".equals(Rows.str(m, "status")) && m.hasNonNull("submitted_at"))
+                .filter(m -> checksum != null && checksum.equals(checksum(id)))
+                .isPresent();
+    }
+
+    /** Publishes a draft after validation; the publisher must not be the maker or the submitter. */
     @Transactional
     public ObjectNode publish(UUID id, String comment) {
         ObjectNode m = rows.lock(MENU, id);
@@ -173,8 +233,10 @@ public class MenuService {
             throw ApiException.conflict("invalid_transition", "The menu is already published");
         }
         requireDraft(id);
-        if (TenantContext.principal().equals(Rows.str(m, "created_by"))) {
-            throw ApiException.unprocessable("four_eyes_violation", "The menu must be published by a different user than its maker");
+        if (TenantContext.principal().equals(Rows.str(m, "created_by"))
+                || TenantContext.principal().equals(Rows.str(m, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation",
+                    "The menu must be published by a different user than its maker and submitter");
         }
         List<String> problems = UssdEngine.validate(load(id));
         if (!problems.isEmpty()) {
@@ -184,11 +246,52 @@ public class MenuService {
                 update ussd_menu set status = 'RETIRED', retired_at = now()
                 where short_code = ? and language = ? and status = 'PUBLISHED' and id <> ?""",
                 Rows.str(m, "short_code"), Rows.str(m, "language"), id);
-        rows.execute("update ussd_menu set status = 'PUBLISHED', published_at = now(), published_by = ? where id = ?",
-                TenantContext.principal(), id);
+        rows.execute("""
+                update ussd_menu set status = 'PUBLISHED', published_at = now(), published_by = ?, submitted_by = null,
+                submitted_at = null where id = ?""", TenantContext.principal(), id);
         ObjectNode after = rows.get(MENU, id);
         events.publish("wallets.ussd_menu.published", MENU, after);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "published directly");
         return after;
+    }
+
+    /** Checker step: rejects the submitted draft; it stays DRAFT (editable) for rework. */
+    @Transactional
+    public ObjectNode reject(UUID id, String reason) {
+        ObjectNode m = rows.lock(MENU, id);
+        if (!"DRAFT".equals(Rows.str(m, "status")) || !m.hasNonNull("submitted_at")) {
+            throw ApiException.conflict("no_pending_submission", "The menu has no pending publication submission");
+        }
+        String checker = TenantContext.principal();
+        if (checker.equals(Rows.str(m, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The submitter cannot reject their own submission");
+        }
+        rows.execute("""
+                update ussd_menu set rejected_by = ?, rejection_reason = ?, submitted_by = null, submitted_at = null
+                where id = ?""", checker, reason, id);
+        ObjectNode after = rows.get(MENU, id);
+        events.publish("wallets.ussd_menu.rejected", MENU, after);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return after;
+    }
+
+    /** SHA-256 over the menu's served fields and every node (without audit columns), to detect edits after submission. */
+    private String checksum(UUID id) {
+        StringBuilder sb = new StringBuilder();
+        ObjectNode m = rows.get(MENU, id);
+        sb.append(Rows.str(m, "root_node_key")).append('|').append(Rows.integer(m, "session_timeout_seconds")).append('\n');
+        for (ObjectNode n : rows.query("select row_to_json(t)::text from ussd_menu_node t where ussd_menu_id = ? order by id", id)) {
+            for (String f : new String[] {"tenant_id", "created_at", "created_by", "updated_at", "updated_by", "row_version"}) {
+                n.remove(f);
+            }
+            sb.append(n).append('\n');
+        }
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** A new DRAFT version of the short code and language with copies of all nodes. */

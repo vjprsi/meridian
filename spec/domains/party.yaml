@@ -407,6 +407,7 @@ services:
           - "GET /{id}/relationships | Relationships where this customer is subject or related | | customer_relationship[]"
           - "GET /{id}/ownership-tree | Ownership and control structure with computed UBOs | | object"
           - "POST /duplicates-check | Check for potential duplicates before creating; candidates carry match_score and match_reasons | first_name string(100), last_name string(100), date_of_birth date, phone phone, email email, identifier_value string(64), registration_number string(64) | object"
+          - "POST /contact-search-backfill | Operator batch for contact search: fills masked_value and lookup_hash of verified contacts missing them (or recomputes them for every verified contact with rehash_all, after a lookup key rotation) and republishes party.customer_contact.verified; idempotent, one batch per call (batch_size default 500, max 5000), resume with after_id = next_after_id: {processed, updated, published, next_after_id, done} | batch_size int, after_id uuid, rehash_all bool | object"
       - resource: customer-identifiers
         path: /v1/customers/{customer_id}/identifiers
         table: customer_identifier

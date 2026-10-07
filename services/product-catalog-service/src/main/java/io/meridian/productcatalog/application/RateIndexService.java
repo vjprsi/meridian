@@ -36,7 +36,7 @@ public class RateIndexService {
         if (valueDate == null || rate == null) {
             throw ApiException.unprocessable("invalid_request", "value_date and rate are required");
         }
-        if (valueDate.isAfter(LocalDate.now())) {
+        if (valueDate.isAfter(store.today())) {
             throw ApiException.unprocessable("value_date_in_future", "A fixing cannot be published for a future date");
         }
         if (rate.abs().compareTo(MAX_ABS_RATE) >= 0) {

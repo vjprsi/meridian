@@ -3,20 +3,17 @@ package io.meridian.analytics.application;
 import io.meridian.approvals.ApprovalDecision;
 import io.meridian.approvals.ApprovalOutcomeHandler;
 import io.meridian.common.error.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * Applies workflow-service decisions on KPI certification requests (G11). Approval runs the same certification as
  * the direct endpoint with the deciding approver as principal, so the author still cannot certify their own KPI.
- * A decision for a definition that changed since submission, or a KPI already certified, is ignored. KPIs have no
- * rejected state: a rejection leaves the KPI uncertified (the author reworks the definition, which resubmits).
+ * A rejection (or changes requested) declines certification like {@code POST /kpis/{id}/reject-certification}
+ * (recorded on the KPI; the author's definition change clears it and resubmits). A decision for a definition that
+ * changed since submission, or a KPI already certified or declined, is ignored.
  */
 @Component
 public class KpiCertificationHandler implements ApprovalOutcomeHandler {
-    private static final Logger log = LoggerFactory.getLogger(KpiCertificationHandler.class);
-
     private final KpiService kpis;
 
     public KpiCertificationHandler(KpiService kpis) {
@@ -36,8 +33,8 @@ public class KpiCertificationHandler implements ApprovalOutcomeHandler {
         }
         switch (d.outcome()) {
             case APPROVED -> kpis.certify(d.resourceId(), "certified in workflow request " + d.approvalRequestId());
-            case REJECTED, CHANGES_REQUESTED -> log.info("KPI {} certification {} in workflow request {}; stays uncertified",
-                    d.resourceId(), d.outcome(), d.approvalRequestId());
+            case REJECTED, CHANGES_REQUESTED -> kpis.rejectCertification(d.resourceId(),
+                    "declined in workflow request " + d.approvalRequestId());
             case EXPIRED, CANCELLED -> { } // stays uncertified; can be certified directly or resubmitted
             default -> throw new ApiException(500, "unknown_outcome", "Unhandled outcome " + d.outcome());
         }

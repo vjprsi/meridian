@@ -31,7 +31,7 @@ public final class Lifecycles {
             "PENDING_APPROVAL", Set.of("APPROVED", "REJECTED"));
 
     private static final Map<String, Set<String>> VERSION = Map.of(
-            "DRAFT", Set.of("ACTIVE"),
+            "DRAFT", Set.of("ACTIVE", "REJECTED"),
             "ACTIVE", Set.of("SUPERSEDED", "DEPRECATED"));
 
     public static void run(String from, String to) {

@@ -112,12 +112,30 @@ class RegulatoryReportingWorkflowApprovalIT {
         dispatch("report_definition_version", version, payload, CHECKER, Outcome.APPROVED);
         assertThat(versionStatus(definition)).isEqualTo("ACTIVE");
 
-        // a rejected version stays an unpublished DRAFT
+        // a rejected version becomes REJECTED (final); the active version stays in force
         String v2 = post("/v1/reporting/definitions/" + definition + "/versions",
                 VERSION.replace("2026-01-01", "2026-06-01"), MAKER, 201).get("id").asString();
         Map<?, ?> p2 = (Map<?, ?>) lastRequest.get("report_definition_version").get("payload");
+        dispatch("report_definition_version", v2, p2, MAKER, Outcome.REJECTED);
+        assertThat(get("/v1/reporting/definition-versions/" + v2).get("status").asString()).isEqualTo("DRAFT");
         dispatch("report_definition_version", v2, p2, CHECKER, Outcome.REJECTED);
+        JsonNode rejected = get("/v1/reporting/definition-versions/" + v2);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo(CHECKER);
         assertThat(get("/v1/reporting/definitions/" + definition).get("active_version").asInt()).isEqualTo(1);
+        // a late approval of the rejected version does nothing
+        dispatch("report_definition_version", v2, p2, CHECKER, Outcome.APPROVED);
+        assertThat(get("/v1/reporting/definition-versions/" + v2).get("status").asString()).isEqualTo("REJECTED");
+
+        // direct rejection: four eyes, DRAFT only
+        String v3 = post("/v1/reporting/definitions/" + definition + "/versions",
+                VERSION.replace("2026-01-01", "2026-07-01"), MAKER, 201).get("id").asString();
+        assertThat(post("/v1/reporting/definition-versions/" + v3 + "/reject", "{\"reason\":\"mine\"}", MAKER, 422)
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        assertThat(post("/v1/reporting/definition-versions/" + v3 + "/reject", "{\"reason\":\"wrong cell refs\"}", CHECKER, 200)
+                .get("rejection_reason").asString()).isEqualTo("wrong cell refs");
+        assertThat(post("/v1/reporting/definition-versions/" + v3 + "/reject", "{\"reason\":\"again\"}", CHECKER, 409)
+                .get("code").asString()).isEqualTo("invalid_transition");
     }
 
     @Test

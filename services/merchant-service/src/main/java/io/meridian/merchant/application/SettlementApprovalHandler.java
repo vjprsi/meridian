@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 /**
  * Applies workflow-service decisions on calculated merchant settlements (G11). Approval runs the same
  * {@link SettlementService#approve} as the direct endpoint with the approver as principal (the calculating user still
- * cannot approve). The settlement lifecycle has no rejected state, so a rejection leaves it CALCULATED (it can be
- * approved directly or left unpaid). Settlements no longer CALCULATED, or whose net amount differs from the
+ * cannot approve). A rejection (or changes requested) rejects it like {@code POST /merchant-settlements/{id}/reject}
+ * (REJECTED; the period can be settled again). Settlements no longer CALCULATED, or whose net amount differs from the
  * submission, are left alone.
  */
 @Component
@@ -33,7 +33,9 @@ public class SettlementApprovalHandler implements ApprovalOutcomeHandler {
         }
         switch (d.outcome()) {
             case APPROVED -> settlements.approve(d.resourceId(), "approved in workflow request " + d.approvalRequestId());
-            case REJECTED, CHANGES_REQUESTED, EXPIRED, CANCELLED -> { } // no reject transition: stays CALCULATED
+            case REJECTED, CHANGES_REQUESTED -> settlements.reject(d.resourceId(),
+                    "rejected in workflow request " + d.approvalRequestId());
+            case EXPIRED, CANCELLED -> { } // stays CALCULATED; can be decided directly
             default -> throw new ApiException(500, "unknown_outcome", "Unhandled outcome " + d.outcome());
         }
     }

@@ -68,7 +68,7 @@ public class ListCatalog {
             List<NameMatcher.Entry> entries = new ArrayList<>();
             for (JsonNode e : db.list("""
                     select row_to_json(e)::text from sanctions_list_entry e
-                    where sanctions_list_id = ? and (delisted_on is null or delisted_on > current_date)""", list.id())) {
+                    where sanctions_list_id = ? and (delisted_on is null or delisted_on > ?)""", list.id(), db.today())) {
                 entries.add(entry(e, list));
             }
             i = new Indexed(list.version(), new EntryIndex(entries));

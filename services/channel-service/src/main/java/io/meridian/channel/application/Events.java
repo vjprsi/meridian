@@ -10,7 +10,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** Publishes the channel-service events (names exactly as declared in spec/domains/wallets.yaml) via the outbox. */
 @Component
 public class Events {
-    static final Set<String> DECLARED = Set.of("wallets.ussd_menu.published", "wallets.ussd_session.completed",
+    static final Set<String> DECLARED = Set.of("wallets.ussd_menu.published", "wallets.ussd_menu.submitted",
+            "wallets.ussd_menu.rejected", "wallets.ussd_session.completed",
             "wallets.sms_message.received", "wallets.sms_message.delivery_updated");
 
     private final OutboxWriter outbox;

@@ -70,8 +70,9 @@ public class AccrualService {
         }
         // resolve outside the transaction (HTTP), then insert under a per-transaction lock
         Hierarchy.Context ctx = hierarchy.resolve(t.agentId());
-        LocalDate earnedOn = (t.completedAt() == null ? io.meridian.common.time.Clocks.now() : t.completedAt())
-                .withOffsetSameInstant(ZoneOffset.UTC).toLocalDate();
+        // the transaction's own date when known, else today's business date
+        LocalDate earnedOn = t.completedAt() == null ? rows.today()
+                : t.completedAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDate();
         ObjectNode plan = selectPlan(t, ctx, earnedOn);
         if (plan == null) {
             return result(t, List.of());
@@ -141,7 +142,7 @@ public class AccrualService {
             v.put("is_clawback", true);
             v.put("clawback_of_id", Rows.str(e, "id"));
             v.put("earned_at", rows.scalar("select now()::text", String.class).orElseThrow());
-            v.put("payout_due_on", rows.scalar("select current_date::text", String.class).orElseThrow());
+            v.put("payout_due_on", rows.today().toString());
             ObjectNode row = rows.insert(TABLE, v);
             events.publish("wallets.commission_earning.accrued", TABLE, row);
         }

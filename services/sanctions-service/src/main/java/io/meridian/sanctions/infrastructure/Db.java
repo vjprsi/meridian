@@ -1,7 +1,9 @@
 package io.meridian.sanctions.infrastructure;
 
 import io.meridian.common.error.ApiException;
+import io.meridian.web.time.BusinessDates;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,14 +19,24 @@ public class Db {
     private static final Pattern IDENT = Pattern.compile("[a-z][a-z0-9_]*");
     private final JdbcClient jdbc;
     private final JsonMapper json;
+    private final BusinessDates businessDates;
 
-    public Db(JdbcClient jdbc, JsonMapper json) {
+    public Db(JdbcClient jdbc, JsonMapper json, BusinessDates businessDates) {
         this.jdbc = jdbc;
         this.json = json;
+        this.businessDates = businessDates;
     }
 
     public JdbcClient jdbc() {
         return jdbc;
+    }
+
+    /**
+     * Today's business date (business-day-service, tenant-wide) for delisting dates and list validity; falls back to
+     * the database's current date.
+     */
+    public LocalDate today() {
+        return businessDates.today(() -> jdbc.sql("select current_date").query(LocalDate.class).single());
     }
 
     public Optional<JsonNode> one(String sql, Object... args) {

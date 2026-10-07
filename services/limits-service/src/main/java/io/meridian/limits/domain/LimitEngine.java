@@ -103,24 +103,33 @@ public final class LimitEngine {
 
     /** The period window containing {@code now} (UTC calendar periods; rolling periods use hourly buckets). */
     public static Window window(String period, Instant now) {
+        return window(period, now, now.atZone(ZoneOffset.UTC).toLocalDate());
+    }
+
+    /**
+     * The period window for a transaction at {@code now} on business date {@code today}: calendar periods (daily,
+     * weekly, monthly, yearly) follow the business date, so a transaction booked while the previous business day is
+     * still open counts towards that day; rolling periods use hourly buckets of the instant.
+     */
+    public static Window window(String period, Instant now, LocalDate today) {
         ZonedDateTime t = now.atZone(ZoneOffset.UTC);
         return switch (period) {
             case "DAILY" -> {
-                Instant s = t.truncatedTo(ChronoUnit.DAYS).toInstant();
+                Instant s = today.atStartOfDay(ZoneOffset.UTC).toInstant();
                 yield new Window(s, s.plus(Duration.ofDays(1)), false, s);
             }
             case "WEEKLY" -> {
-                LocalDate monday = t.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
                 Instant s = monday.atStartOfDay(ZoneOffset.UTC).toInstant();
                 yield new Window(s, s.plus(Duration.ofDays(7)), false, s);
             }
             case "MONTHLY" -> {
-                LocalDate first = t.toLocalDate().withDayOfMonth(1);
+                LocalDate first = today.withDayOfMonth(1);
                 Instant s = first.atStartOfDay(ZoneOffset.UTC).toInstant();
                 yield new Window(s, first.plusMonths(1).atStartOfDay(ZoneOffset.UTC).toInstant(), false, s);
             }
             case "YEARLY" -> {
-                LocalDate first = t.toLocalDate().withDayOfYear(1);
+                LocalDate first = today.withDayOfYear(1);
                 Instant s = first.atStartOfDay(ZoneOffset.UTC).toInstant();
                 yield new Window(s, first.plusYears(1).atStartOfDay(ZoneOffset.UTC).toInstant(), false, s);
             }

@@ -87,7 +87,8 @@ public class SarService {
         }
         ObjectNode v = crud.toColumns("sar_report", changes);
         for (String f : List.of("status", "ai_draft_narrative", "export_document_id", "prepared_by", "approved_by",
-                "submitted_at", "acknowledged_at", "regulator_reference", "rejection_reason", "filing_channel")) {
+                "submitted_at", "acknowledged_at", "regulator_reference", "rejection_reason", "filing_channel",
+                "returned_by", "return_reason")) {
             v.remove(f);
         }
         ObjectNode merged = ((ObjectNode) s.deepCopy()).setAll(v);
@@ -193,6 +194,23 @@ public class SarService {
                 TenantContext.principal(), TenantContext.principal(), id);
         approvals.cancelOpen(SAR_APPROVAL, id, null, "approved directly");
         return publish(id, "risk.sar_report.approved");
+    }
+
+    /**
+     * MLRO step: returns a report pending approval to DRAFT for the preparer to rework (and submit again). Same
+     * four-eyes rule as approval: the preparer cannot return their own report.
+     */
+    @Transactional
+    public String returnToDraft(UUID id, String reason) {
+        JsonNode s = db.require("sar_report", id, true);
+        require(s, "return_to_draft");
+        if (TenantContext.principal().equals(Db.str(s, "prepared_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The preparer cannot return the report; the MLRO must");
+        }
+        db.update("update sar_report set status = 'DRAFT', returned_by = ?, return_reason = ?, updated_by = ? where id = ?",
+                TenantContext.principal(), reason, TenantContext.principal(), id);
+        approvals.cancelOpen(SAR_APPROVAL, id, null, "returned to draft directly");
+        return publish(id, "risk.sar_report.returned");
     }
 
     @Transactional

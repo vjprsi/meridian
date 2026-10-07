@@ -25,10 +25,11 @@ public final class Lifecycle {
 
     private static final Map<String, Set<String>> SETTLEMENT = Map.of(
             "PENDING", Set.of("CALCULATED"),
-            "CALCULATED", Set.of("APPROVED"),
+            "CALCULATED", Set.of("APPROVED", "REJECTED"),
             "APPROVED", Set.of("PAID", "FAILED"),
             "FAILED", Set.of("PAID"),
-            "PAID", Set.of());
+            "PAID", Set.of(),
+            "REJECTED", Set.of());
 
     public static void biller(String from, String to) {
         require(BILLER, from, to, "Biller");

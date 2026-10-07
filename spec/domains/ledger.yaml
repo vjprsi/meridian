@@ -388,7 +388,8 @@ services:
         prefix: glj
         description: >-
           GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
-          post to the GL balances only once a gl_journal_approval exists for them.
+          post to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a
+          manual journal without posting it (it no longer blocks the period close).
         immutable: true
         fr: [GL-02, GL-05]
         columns:
@@ -427,6 +428,16 @@ services:
           - "gl_journal_id uuid nn fk=gl_journal uq ro | Approved GL journal (one approval per journal)"
           - "approved_by string(64) nn ro | Checker (system:<process> for system journals such as provisions)"
           - "comment string(500) | Checker comment"
+
+      - name: gl_journal_rejection
+        prefix: gjr
+        description: Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.
+        immutable: true
+        fr: [GL-02, GL-05]
+        columns:
+          - "gl_journal_id uuid nn fk=gl_journal uq ro | Rejected GL journal (one decision per journal)"
+          - "rejected_by string(64) nn ro | Checker"
+          - "reason string(500) nn | Why the journal was rejected"
 
       - name: period_close_run
         prefix: pcr
@@ -509,11 +520,17 @@ services:
         actions:
           - "GET /{id}/lines | Lines of a GL journal | | gl_journal_line[]"
           - "POST /{id}/approve | Approve a manual GL journal (checker, four-eyes) and post it to the GL balances | comment string(500) | gl_journal_approval"
+          - "POST /{id}/reject | Reject a manual GL journal (checker, four-eyes); it never posts and no longer blocks the period close | reason string(500) nn | gl_journal_rejection"
       - resource: gl-journal-approvals
         path: /v1/gl/journal-approvals
         table: gl_journal_approval
         ops: [list, get]
         filters: [gl_journal_id, approved_by]
+      - resource: gl-journal-rejections
+        path: /v1/gl/journal-rejections
+        table: gl_journal_rejection
+        ops: [list, get]
+        filters: [gl_journal_id, rejected_by]
       - resource: period-close-runs
         path: /v1/gl/close-runs
         table: period_close_run
@@ -537,6 +554,7 @@ services:
     events:
       - "ledger.gl_journal.posted | gl_journal | A GL journal was posted"
       - "ledger.gl_journal.approved | gl_journal_approval | A manual GL journal was approved (four-eyes) and posted"
+      - "ledger.gl_journal.rejected | gl_journal_rejection | A manual GL journal was rejected (four-eyes) and will not post"
       - "ledger.erp_export.completed | erp_export | An ERP export file was generated"
       - "ledger.accounting_period.closed | accounting_period | An accounting period was closed"
       - "ledger.accounting_period.reopened | accounting_period | A closed period was reopened"

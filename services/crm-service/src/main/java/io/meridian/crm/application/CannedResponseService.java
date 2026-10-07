@@ -97,7 +97,7 @@ public class CannedResponseService {
         if (customerId != null) {
             values.put("customer.id", customerId.toString());
         }
-        values.put("today", rows.now().toLocalDate().toString());
+        values.put("today", rows.today().toString());
         JsonNode extra = req.get("values");
         if (extra != null && extra.isObject()) {
             extra.propertyNames().forEach(k -> {

@@ -5,6 +5,7 @@ import io.meridian.alm.api.generated.model.AlmBehaviouralAssumption;
 import io.meridian.alm.api.generated.model.AlmBehaviouralAssumptionCreate;
 import io.meridian.alm.api.generated.model.AlmBehaviouralAssumptionUpdate;
 import io.meridian.alm.api.generated.model.AlmBehaviouralAssumptionsApproveRequest;
+import io.meridian.alm.api.generated.model.AlmBehaviouralAssumptionsRejectRequest;
 import io.meridian.alm.application.AssumptionService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.Crud;
@@ -43,9 +44,17 @@ public class AlmBehaviouralAssumptionsController implements AlmBehaviouralAssump
         ResponseEntity<AlmBehaviouralAssumption> updated = crud.update("alm_behavioural_assumption",
                 AlmBehaviouralAssumption.class, body, ifMatch, Crud.params().with("id", id));
         if (updated.getStatusCode().is2xxSuccessful()) {
-            service.resubmit(id); // reworked while awaiting approval: submit the new content (G11)
+            service.resubmit(id); // reworked while awaiting approval (or rejected): submit the new content (G11)
+            return crud.get("alm_behavioural_assumption", AlmBehaviouralAssumption.class, Crud.params().with("id", id));
         }
         return updated;
+    }
+
+    @Override
+    public ResponseEntity<AlmBehaviouralAssumption> almBehaviouralAssumptionsReject(
+            UUID id, String idempotencyKey, AlmBehaviouralAssumptionsRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, AlmBehaviouralAssumption.class,
+                () -> service.reject(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

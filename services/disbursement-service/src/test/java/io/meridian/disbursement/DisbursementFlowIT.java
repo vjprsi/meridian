@@ -3,6 +3,7 @@ package io.meridian.disbursement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import io.meridian.common.tenancy.TenantContext;
@@ -71,6 +72,9 @@ class DisbursementFlowIT {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
 
     @MockitoBean
     ServiceClient serviceClient;
@@ -444,6 +448,29 @@ class DisbursementFlowIT {
         HttpResponse<String> noTenant = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/v1/disbursement-programs")).GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(noTenant.statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    @Order(10)
+    void batchReferenceAndProgramPeriodUseTheBusinessDate() throws Exception {
+        when(serviceClient.get(eq("business-day-service"), anyString()))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2031-03-14\"}]}"));
+        businessDates.invalidate();
+        String program = post("/v1/disbursement-programs", programBody("BD-1", fund, 1, false, "KES"), "maker", 201)
+                .get("id").asString();
+        post("/v1/disbursement-programs/" + program + "/activate", null, "ops", 200);
+        try {
+            JsonNode b = post("/v1/disbursement-batches", batchBody(program), "maker", 201);
+            assertThat(b.get("batch_reference").asString()).startsWith("DB20310314-");
+
+            // a program whose end date is before the business date has ended
+            TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                    "update disbursement_program set end_date = date '2031-03-13' where id = ?::uuid").param(program).update());
+            assertThat(json.readTree(send("POST", "/v1/disbursement-batches", batchBody(program), key(), "maker", TENANT).body())
+                    .get("code").asString()).isEqualTo("program_not_in_period");
+        } finally {
+            businessDates.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------ helpers

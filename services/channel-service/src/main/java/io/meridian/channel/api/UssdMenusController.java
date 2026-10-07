@@ -6,6 +6,8 @@ import io.meridian.channel.api.generated.model.UssdMenuCreate;
 import io.meridian.channel.api.generated.model.UssdMenuNodePage;
 import io.meridian.channel.api.generated.model.UssdMenuUpdate;
 import io.meridian.channel.api.generated.model.UssdMenusPublishRequest;
+import io.meridian.channel.api.generated.model.UssdMenusRejectRequest;
+import io.meridian.channel.api.generated.model.UssdMenusSubmitRequest;
 import io.meridian.channel.api.generated.model.UssdMenusSimulateRequest;
 import io.meridian.channel.application.MenuService;
 import io.meridian.common.tenancy.TenantContext;
@@ -59,6 +61,18 @@ public class UssdMenusController implements UssdMenusApi {
     public ResponseEntity<UssdMenu> ussdMenusPublish(UUID id, String idempotencyKey, UssdMenusPublishRequest body) {
         return actions.action(idempotencyKey, id, "publish", body, UssdMenu.class,
                 () -> menus.publish(id, Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<UssdMenu> ussdMenusSubmit(UUID id, String idempotencyKey, UssdMenusSubmitRequest body) {
+        return actions.action(idempotencyKey, id, "submit", body, UssdMenu.class,
+                () -> menus.submit(id, Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<UssdMenu> ussdMenusReject(UUID id, String idempotencyKey, UssdMenusRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, UssdMenu.class,
+                () -> menus.reject(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

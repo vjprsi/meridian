@@ -109,7 +109,7 @@ public class AgentService {
         if ("ONBOARDING".equals(from)) {
             long docs = rows.scalar("""
                     select count(*) from agent_kyc_document where agent_id = ? and verified
-                      and (expires_at is null or expires_at >= current_date)""", Long.class, id).orElse(0L);
+                      and (expires_at is null or expires_at >= ?)""", Long.class, id, rows.today()).orElse(0L);
             if (docs == 0) {
                 throw ApiException.unprocessable("kyc_incomplete", "At least one verified, unexpired KYB document is required");
             }
@@ -203,7 +203,7 @@ public class AgentService {
         ObjectNode v = rows.object();
         v.put("status", "TERMINATED");
         v.put("status_reason", reason);
-        v.put("contract_end", (effective == null ? LocalDate.now(java.time.ZoneOffset.UTC) : effective).toString());
+        v.put("contract_end", (effective == null ? rows.today() : effective).toString());
         rows.update(TABLE, id, v);
         rows.execute("update agent set terminated_at = now() where id = ?", id);
         ObjectNode row = rows.get(TABLE, id);

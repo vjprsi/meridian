@@ -56,6 +56,9 @@ class ProductCatalogFlowIT {
     @MockitoBean
     ServiceClient services;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     final HttpClient http = HttpClient.newHttpClient();
     String template;
     String product;
@@ -462,7 +465,7 @@ class ProductCatalogFlowIT {
                 .get("data")).hasSize(2);
 
         JsonNode retired = post("/v1/products/" + product + "/retire",
-                "{\"retire_date\":\"%s\",\"reason\":\"end of life\"}".formatted(java.time.LocalDate.now()), 200, MAKER);
+                "{\"retire_date\":\"%s\",\"reason\":\"end of life\"}".formatted(java.time.LocalDate.now(java.time.ZoneOffset.UTC)), 200, MAKER);
         assertThat(retired.get("status").asString()).isEqualTo("RETIRED");
         HttpResponse<String> publish = send("POST", "/v1/product-versions/" + v3 + "/submit", "{}",
                 UUID.randomUUID().toString(), TENANT, MAKER, null);
@@ -478,6 +481,23 @@ class ProductCatalogFlowIT {
         HttpResponse<String> submit = send("POST", "/v1/product-versions/" + v3 + "/submit", "{}",
                 UUID.randomUUID().toString(), OTHER_TENANT, MAKER, null);
         assertThat(submit.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    @Order(99)
+    void pastAndFutureChecksUseTheBusinessDate() throws Exception {
+        org.mockito.Mockito.when(services.get(org.mockito.ArgumentMatchers.eq("business-day-service"),
+                        org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2031-01-10\"}]}"));
+        businessDates.invalidate();
+        try {
+            // in the future by the calendar, in the past by the business date
+            JsonNode r = post("/v1/products/" + UUID.randomUUID() + "/retire",
+                    "{\"retire_date\":\"2031-01-09\",\"reason\":\"x\"}", 422, MAKER);
+            assertThat(r.get("code").asString()).isEqualTo("retire_date_in_past");
+        } finally {
+            businessDates.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------ helpers

@@ -10,9 +10,10 @@ import tools.jackson.databind.JsonNode;
 @Component
 public class Events {
     static final Set<String> DECLARED = Set.of(
-            "treasury.alm_assumption.approved", "treasury.alm_gap_run.completed", "treasury.alm_gap_run.failed",
-            "treasury.alm_sensitivity.completed", "treasury.alm_sensitivity.outlier_breached",
-            "treasury.ftp_curve.published", "treasury.ftp_assignment.computed");
+            "treasury.alm_assumption.approved", "treasury.alm_assumption.rejected", "treasury.alm_gap_run.completed",
+            "treasury.alm_gap_run.failed", "treasury.alm_sensitivity.completed", "treasury.alm_sensitivity.outlier_breached",
+            "treasury.ftp_curve.published", "treasury.ftp_curve.submitted", "treasury.ftp_curve.rejected",
+            "treasury.ftp_assignment.computed");
 
     private final OutboxWriter outbox;
 

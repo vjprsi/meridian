@@ -8,6 +8,7 @@ import io.meridian.merchant.api.generated.model.MerchantSettlementPage;
 import io.meridian.merchant.api.generated.model.MerchantStorePage;
 import io.meridian.merchant.api.generated.model.MerchantUpdate;
 import io.meridian.merchant.api.generated.model.MerchantsActivateRequest;
+import io.meridian.merchant.api.generated.model.MerchantsRejectOnboardingRequest;
 import io.meridian.merchant.api.generated.model.MerchantsSuspendRequest;
 import io.meridian.merchant.api.generated.model.MerchantsTerminateRequest;
 import io.meridian.merchant.api.generated.model.WalletTransactionPage;
@@ -50,8 +51,21 @@ public class MerchantsController implements MerchantsApi {
         if (req.hasNonNull("mcc") && !req.get("mcc").asString().matches("\\d{4}")) {
             throw io.meridian.common.error.ApiException.unprocessable("invalid_mcc", "mcc must be 4 digits");
         }
-        return actions.guardedUpdate(crud, "merchant", Merchant.class, id, ifMatch, body, PROTECTED,
-                "currency, country, type and owner are fixed at onboarding");
+        ResponseEntity<Merchant> updated = actions.guardedUpdate(crud, "merchant", Merchant.class, id, ifMatch, body,
+                PROTECTED, "currency, country, type and owner are fixed at onboarding");
+        if (updated.getStatusCode().is2xxSuccessful() && updated.getBody() != null
+                && "ONBOARDING".equals(String.valueOf(updated.getBody().getStatus()))) {
+            merchants.resubmitOnboarding(id); // reworked onboarding: submit the new content (G11)
+            return crud.get("merchant", Merchant.class, Crud.params().with("id", id));
+        }
+        return updated;
+    }
+
+    @Override
+    public ResponseEntity<Merchant> merchantsRejectOnboarding(UUID id, String idempotencyKey,
+                                                             MerchantsRejectOnboardingRequest body) {
+        return actions.action(idempotencyKey, id, "reject-onboarding", body, Merchant.class,
+                () -> merchants.rejectOnboarding(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

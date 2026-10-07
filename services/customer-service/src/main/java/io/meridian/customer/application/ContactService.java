@@ -173,6 +173,54 @@ public class ContactService {
         }
     }
 
+    /**
+     * Operator backfill for contact search, one batch per call (ordered by id, resumable with {@code afterId}):
+     * verified contacts without masked_value / lookup_hash (verified before the hashed contact search existed), or
+     * every verified contact with {@code rehashAll} (after a lookup key rotation), get their search fields computed
+     * and {@code party.customer_contact.verified} published again. Idempotent: a finished backfill finds nothing to
+     * do, and search-service upserts the republished contacts.
+     */
+    @Transactional
+    public java.util.Map<String, Object> backfillSearch(Integer batchSize, UUID afterId, boolean rehashAll) {
+        if (lookup.hash("probe@example.com") == null) {
+            throw ApiException.unprocessable("lookup_key_not_configured",
+                    "meridian.contact-lookup.key is not set; contact lookup hashes cannot be computed");
+        }
+        int size = batchSize == null ? 500 : batchSize;
+        if (size < 1 || size > 5000) {
+            throw ApiException.unprocessable("invalid_batch_size", "batch_size must be between 1 and 5000");
+        }
+        java.util.List<ObjectNode> batch = rows.query("""
+                select row_to_json(t)::text from customer_contact t
+                where t.is_verified and t.id > ? and (? or t.masked_value is null or t.lookup_hash is null)
+                order by t.id limit ?""", afterId == null ? new UUID(0, 0) : afterId, rehashAll, size);
+        int updated = 0;
+        int published = 0;
+        for (ObjectNode c : batch) {
+            UUID id = UUID.fromString(c.get("id").asString());
+            ObjectNode v = rows.object();
+            searchFields(c, v);
+            ObjectNode current = c;
+            if (!java.util.Objects.equals(text(c, "masked_value"), text(v, "masked_value"))
+                    || !java.util.Objects.equals(text(c, "lookup_hash"), text(v, "lookup_hash"))) {
+                current = rows.update(T, id, v);
+                updated++;
+            }
+            if (text(current, "lookup_hash") != null) { // a value that is neither e-mail nor phone has no hash
+                events.publishPayload("party.customer_contact.verified", T, id, eventPayload(current));
+                published++;
+            }
+        }
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("processed", batch.size());
+        out.put("updated", updated);
+        out.put("published", published);
+        boolean done = batch.size() < size;
+        out.put("next_after_id", done ? null : batch.getLast().get("id").asString());
+        out.put("done", done);
+        return out;
+    }
+
     /** Masked display value and lookup hash of the contact point in {@code source}, written into {@code target}. */
     private void searchFields(ObjectNode source, ObjectNode target) {
         String value = text(source, "email") != null ? text(source, "email") : text(source, "phone");

@@ -101,7 +101,7 @@ public class ProgramService {
     public JsonNode activate(UUID id) {
         ObjectNode p = rows.lock(TABLE, id);
         Lifecycle.program(str(p, "status"), "ACTIVE");
-        boolean ended = rows.scalar("select ?::date < current_date", Boolean.class, str(p, "end_date")).orElse(false);
+        boolean ended = str(p, "end_date") != null && java.time.LocalDate.parse(str(p, "end_date")).isBefore(rows.today());
         if (str(p, "end_date") != null && ended) {
             throw ApiException.unprocessable("program_ended", "The program end_date has passed");
         }

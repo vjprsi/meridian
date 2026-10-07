@@ -5,6 +5,7 @@ import io.meridian.merchant.api.generated.MerchantSettlementsApi;
 import io.meridian.merchant.api.generated.model.MerchantSettlement;
 import io.meridian.merchant.api.generated.model.MerchantSettlementCreate;
 import io.meridian.merchant.api.generated.model.MerchantSettlementsApproveRequest;
+import io.meridian.merchant.api.generated.model.MerchantSettlementsRejectRequest;
 import io.meridian.merchant.application.SettlementService;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -34,6 +35,13 @@ public class MerchantSettlementsController implements MerchantSettlementsApi {
                                                                         MerchantSettlementsApproveRequest body) {
         return actions.action(idempotencyKey, id, "approve", body, MerchantSettlement.class,
                 () -> settlements.approve(id, Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<MerchantSettlement> merchantSettlementsReject(UUID id, String idempotencyKey,
+                                                                       MerchantSettlementsRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, MerchantSettlement.class,
+                () -> settlements.reject(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

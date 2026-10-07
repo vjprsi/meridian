@@ -187,7 +187,7 @@ public class ProductService {
         if (retireDate == null) {
             throw ApiException.unprocessable("retire_date_required", "retire_date is required");
         }
-        if (retireDate.isBefore(LocalDate.now())) {
+        if (retireDate.isBefore(store.today())) {
             throw ApiException.unprocessable("retire_date_in_past", "retire_date cannot be in the past");
         }
         JsonNode p = store.lock(PRODUCT, id);

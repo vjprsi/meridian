@@ -133,6 +133,7 @@ public class JournalService {
                 .filter(j -> !SYSTEM_TYPES.contains(j.path("journal_type").asString()))
                 .filter(j -> store.row("select row_to_json(a)::text from gl_journal_approval a where a.gl_journal_id = ?",
                         id).isEmpty())
+                .filter(j -> rejection(id).isEmpty())
                 .filter(j -> checksum == null || checksum.equals(checksum(loadLines(id))))
                 .isPresent();
     }
@@ -167,6 +168,10 @@ public class JournalService {
                     throw ApiException.conflict("already_approved", "Journal " + id + " was already approved by "
                             + a.get("approved_by").asString());
                 });
+        rejection(id).ifPresent(r -> {
+            throw ApiException.conflict("journal_rejected", "Journal " + id + " was rejected by "
+                    + r.get("rejected_by").asString() + "; post a new journal instead");
+        });
         if (TenantContext.principal().equals(Fields.text(j, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "The maker of a journal cannot approve it");
         }
@@ -180,6 +185,46 @@ public class JournalService {
                 UUID.fromString(approval.get("id").asString()), approval);
         approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approval.toString();
+    }
+
+    /**
+     * Checker step: rejects a manual journal (four-eyes). The rejection is its own append-only record
+     * (gl_journal_rejection); the journal never posts and no longer blocks the period close. A journal is decided once.
+     */
+    @Transactional
+    public String reject(UUID id, String reason) {
+        JsonNode j = store.requireLocked("gl_journal", id);
+        if (SYSTEM_TYPES.contains(j.get("journal_type").asString())) {
+            throw ApiException.conflict("not_approvable", "System-generated journals are posted without approval");
+        }
+        store.row("select row_to_json(a)::text from gl_journal_approval a where a.gl_journal_id = ?", id)
+                .ifPresent(a -> {
+                    throw ApiException.conflict("already_approved", "Journal " + id + " was already approved by "
+                            + a.get("approved_by").asString());
+                });
+        rejection(id).ifPresent(r -> {
+            throw ApiException.conflict("already_rejected", "Journal " + id + " was already rejected by "
+                    + r.get("rejected_by").asString());
+        });
+        if (TenantContext.principal().equals(Fields.text(j, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The maker of a journal cannot reject it");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.unprocessable("reason_required", "A rejection reason is required");
+        }
+        ObjectNode r = json.createObjectNode();
+        r.put("gl_journal_id", id.toString());
+        r.put("rejected_by", TenantContext.principal());
+        r.put("reason", reason.length() > 500 ? reason.substring(0, 500) : reason);
+        JsonNode rejection = json.readTree(crud.insert("gl_journal_rejection", r));
+        outbox.publish("ledger.gl_journal.rejected", "gl_journal_rejection",
+                UUID.fromString(rejection.get("id").asString()), rejection);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return rejection.toString();
+    }
+
+    private java.util.Optional<JsonNode> rejection(UUID journalId) {
+        return store.row("select row_to_json(r)::text from gl_journal_rejection r where r.gl_journal_id = ?", journalId);
     }
 
     /** The journal row with its lines embedded as {@code lines} (GlJournal API shape). */

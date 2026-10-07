@@ -133,17 +133,21 @@ class CaseManagementWorkflowApprovalIT {
         assertThat(payload.get("row_version")).isNotNull();
         assertThat(json.writeValueAsString(req)).doesNotContain("Jane Roe").doesNotContain("P999").doesNotContain("threshold");
 
-        // the preparer approving in the inbox is refused; a rejection in the inbox leaves the report pending
+        // the preparer approving in the inbox is refused; a rejection in the inbox returns the report to DRAFT
         dispatcher.dispatch(UUID.fromString(TENANT), decision("sar_report", sar, payload, "inv-1"), Outcome.APPROVED);
         assertThat(get("/v1/risk/sar-reports/" + sar).get("status").asString()).isEqualTo("PENDING_APPROVAL");
         dispatcher.dispatch(UUID.fromString(TENANT), decision("sar_report", sar, payload, "mlro"), Outcome.REJECTED);
-        assertThat(get("/v1/risk/sar-reports/" + sar).get("status").asString()).isEqualTo("PENDING_APPROVAL");
+        JsonNode returned = get("/v1/risk/sar-reports/" + sar);
+        assertThat(returned.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(returned.get("returned_by").asString()).isEqualTo("mlro");
+        assertThat(returned.get("return_reason").asString()).contains("workflow");
 
-        // a decision for another submission (different row_version) is ignored
-        ObjectNode stale = decision("sar_report", sar, payload, "mlro");
-        ((ObjectNode) stale.get("payload")).put("row_version", 1);
-        dispatcher.dispatch(UUID.fromString(TENANT), stale, Outcome.APPROVED);
+        // a decision for the first submission is ignored once the report is reworked and submitted again
+        post("/v1/risk/sar-reports/" + sar + "/submit-for-approval", "{}", 200, "inv-1");
+        Map<?, ?> resubmitted = (Map<?, ?>) lastRequest.get().get("payload");
+        dispatcher.dispatch(UUID.fromString(TENANT), decision("sar_report", sar, payload, "mlro"), Outcome.APPROVED);
         assertThat(get("/v1/risk/sar-reports/" + sar).get("status").asString()).isEqualTo("PENDING_APPROVAL");
+        payload = resubmitted;
 
         dispatcher.dispatch(UUID.fromString(TENANT), decision("sar_report", sar, payload, "mlro"), Outcome.APPROVED);
         JsonNode approved = get("/v1/risk/sar-reports/" + sar);
@@ -151,6 +155,18 @@ class CaseManagementWorkflowApprovalIT {
         assertThat(approved.get("approved_by").asString()).isEqualTo("mlro");
         dispatcher.dispatch(UUID.fromString(TENANT), decision("sar_report", sar, payload, "mlro"), Outcome.APPROVED);
         assertThat(get("/v1/risk/sar-reports/" + sar).get("status").asString()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void mlroReturnsSarToDraftDirectly() throws Exception {
+        String sar = submittedSar(openCase());
+        assertThat(post("/v1/risk/sar-reports/" + sar + "/return-to-draft", "{\"reason\":\"mine\"}", 422, "inv-1")
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        JsonNode r = post("/v1/risk/sar-reports/" + sar + "/return-to-draft", "{\"reason\":\"add the 2025 transfers\"}", 200, "mlro");
+        assertThat(r.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(r.get("return_reason").asString()).isEqualTo("add the 2025 transfers");
+        assertThat(post("/v1/risk/sar-reports/" + sar + "/return-to-draft", "{\"reason\":\"again\"}", 409, "mlro")
+                .get("code").asString()).isEqualTo("invalid_transition");
     }
 
     @Test

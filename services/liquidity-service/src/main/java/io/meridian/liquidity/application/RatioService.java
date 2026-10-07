@@ -168,6 +168,30 @@ public class RatioService {
         return approved;
     }
 
+    /**
+     * Rejects an LCR or NSFR snapshot (four-eyes, like approval). A REJECTED snapshot is not reported; recalculating
+     * the same entity, date and currency replaces it and submits it again.
+     */
+    @Transactional
+    public ObjectNode reject(String table, UUID id, String reason) {
+        ObjectNode row = rows.lock(table, id);
+        String status = Rows.str(row, "status");
+        if (!APPROVABLE.contains(status)) {
+            throw ApiException.conflict("invalid_transition", "a " + status + " calculation cannot be rejected");
+        }
+        String me = TenantContext.principal();
+        if (me.equals(Rows.str(row, "created_by")) || me.equals(Rows.str(row, "updated_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "the calculator cannot reject the calculation");
+        }
+        rows.execute("update " + table + " set status = 'REJECTED', rejected_by = ?, rejected_at = ?, rejection_reason = ?,"
+                + " updated_by = ? where id = ?", me, io.meridian.common.time.Clocks.now(),
+                reason != null && reason.length() > 500 ? reason.substring(0, 500) : reason, me, id);
+        ObjectNode rejected = rows.get(table, id);
+        events.publish(LCR.equals(table) ? "treasury.lcr.rejected" : "treasury.nsfr.rejected", table, rejected);
+        approvals.cancelOpen(table, id, null, "rejected directly");
+        return rejected;
+    }
+
     /** True while the snapshot is approvable with the submitted calculation (row_version) unchanged. */
     @Transactional(readOnly = true)
     public boolean awaitsApproval(String table, UUID id, Integer rowVersion) {
@@ -209,6 +233,9 @@ public class RatioService {
         v.put("status", "CALCULATED");
         v.putNull("approved_by");
         v.putNull("approved_at");
+        v.putNull("rejected_by");
+        v.putNull("rejected_at");
+        v.putNull("rejection_reason");
         Optional<ObjectNode> existing = rows.queryOne("select row_to_json(t)::text from " + table + " t"
                 + " where legal_entity_id = ? and as_of_date = ? and currency = ? for update",
                 key.entity(), key.date(), key.currency());

@@ -8,8 +8,9 @@ import org.springframework.stereotype.Component;
 /**
  * Applies workflow-service decisions on submitted behavioural assumptions (G11). Approval runs the same four-eyes
  * check as the direct endpoint, with the deciding approver as principal. A decision for content that changed since
- * submission (row_version) or an assumption already approved is ignored. Assumptions have no rejected state: a
- * rejection leaves the assumption unapproved (never used by gap, FTP or sensitivity runs) for the maker to rework.
+ * submission (row_version) or an assumption already decided is ignored. A rejection (or changes requested) records
+ * the rejection (rejected_by / rejection_reason); the assumption stays unused until the maker reworks it (PATCH),
+ * which clears the rejection and submits it again.
  */
 @Component
 public class AssumptionApprovalHandler implements ApprovalOutcomeHandler {
@@ -32,7 +33,9 @@ public class AssumptionApprovalHandler implements ApprovalOutcomeHandler {
         }
         switch (d.outcome()) {
             case APPROVED -> assumptions.approve(d.resourceId(), "approved in workflow request " + d.approvalRequestId());
-            case REJECTED, CHANGES_REQUESTED, EXPIRED, CANCELLED -> { } // stays unapproved; rework (PATCH) resubmits
+            case REJECTED, CHANGES_REQUESTED -> assumptions.reject(d.resourceId(),
+                    "rejected in workflow request " + d.approvalRequestId());
+            case EXPIRED, CANCELLED -> { } // stays unapproved; can be decided directly or reworked (PATCH resubmits)
             default -> throw new ApiException(500, "unknown_outcome", "Unhandled outcome " + d.outcome());
         }
     }

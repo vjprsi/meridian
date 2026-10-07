@@ -64,7 +64,13 @@ public class MerchantService {
         v.put("status", "ONBOARDING");
         ObjectNode row = rows.insert(TABLE, v);
         // Central maker-checker: onboarding is approved in the workflow inbox; MerchantApprovalHandler activates.
+        requestOnboardingApproval(row, "activate:" + Rows.uuid(row, "id"));
+        return row;
+    }
+
+    private UUID requestOnboardingApproval(ObjectNode row, String key) {
         UUID id = Rows.uuid(row, "id");
+        String code = Rows.str(row, "merchant_code");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("merchant_code", code);
         payload.put("legal_name", Rows.str(row, "legal_name"));
@@ -73,18 +79,68 @@ public class MerchantService {
         payload.put("currency", Rows.str(row, "currency"));
         payload.put("merchant_fee_plan_id", Rows.str(row, "merchant_fee_plan_id"));
         payload.put("daily_limit", Rows.str(row, "daily_limit"));
-        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
-                "Onboard merchant " + Rows.str(row, "trading_name") + " (" + code + ")", payload), "activate:" + id);
-        return row;
+        payload.put("row_version", Rows.integer(row, "row_version"));
+        return Approvals.idOf(approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
+                "Onboard merchant " + Rows.str(row, "trading_name") + " (" + code + ")", payload), key));
     }
 
-    /** True while the merchant is still ONBOARDING under the submitted merchant code (never activated). */
+    /**
+     * After a PATCH of a merchant still ONBOARDING: the reworked application (answering a rejection, or edited while
+     * pending) is submitted again; the earlier request carries the old row_version and is ignored if decided.
+     */
+    @Transactional
+    public void resubmitOnboarding(UUID id) {
+        ObjectNode m = rows.lock(TABLE, id);
+        if (!"ONBOARDING".equals(Rows.str(m, "status"))) {
+            return;
+        }
+        if (m.hasNonNull("onboarding_rejected_by")) {
+            rows.execute("update merchant set onboarding_rejected_by = null, status_reason = null where id = ?", id);
+            m = rows.get(TABLE, id);
+        }
+        UUID requestId = requestOnboardingApproval(m, "activate:" + id + ":" + Rows.integer(m, "row_version"));
+        if (requestId != null) {
+            approvals.cancelOpenExcept(APPROVAL_RESOURCE, id, null, requestId, "superseded");
+        }
+    }
+
+    /**
+     * True while the merchant is ONBOARDING, not returned for rework, under the submitted merchant code and content
+     * (row_version, when the submission carries one).
+     */
     @Transactional(readOnly = true)
-    public boolean awaitsOnboarding(UUID id, String merchantCode) {
+    public boolean awaitsOnboarding(UUID id, String merchantCode, Integer rowVersion) {
         return rows.find(TABLE, id)
-                .filter(m -> "ONBOARDING".equals(Rows.str(m, "status")))
+                .filter(m -> "ONBOARDING".equals(Rows.str(m, "status")) && !m.hasNonNull("onboarding_rejected_by"))
                 .filter(m -> merchantCode == null || merchantCode.equals(Rows.str(m, "merchant_code")))
+                .filter(m -> rowVersion == null || rowVersion.equals(Rows.integer(m, "row_version")))
                 .isPresent();
+    }
+
+    /**
+     * Checker step: returns an ONBOARDING merchant to the maker for rework (four-eyes). The merchant stays ONBOARDING
+     * with the reason in status_reason; a PATCH reworks it and submits it again.
+     */
+    @Transactional
+    public ObjectNode rejectOnboarding(UUID id, String reason) {
+        ObjectNode m = rows.lock(TABLE, id);
+        if (!"ONBOARDING".equals(Rows.str(m, "status"))) {
+            throw ApiException.conflict("invalid_transition", "Only an ONBOARDING merchant can be returned for rework");
+        }
+        if (m.hasNonNull("onboarding_rejected_by")) {
+            throw ApiException.conflict("already_rejected", "The onboarding was already returned by "
+                    + Rows.str(m, "onboarding_rejected_by") + "; rework it to submit it again");
+        }
+        if (TenantContext.principal().equals(Rows.str(m, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "A merchant onboarding must be rejected by a different user than its creator");
+        }
+        ObjectNode v = rows.object();
+        v.put("status_reason", reason == null ? null : reason.length() > 255 ? reason.substring(0, 255) : reason);
+        v.put("onboarding_rejected_by", TenantContext.principal());
+        ObjectNode row = rows.update(TABLE, id, v);
+        events.publish("wallets.merchant.onboarding_rejected", TABLE, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return row;
     }
 
     void requireFeePlan(UUID planId, String currency) {
@@ -101,6 +157,10 @@ public class MerchantService {
         ObjectNode m = rows.lock(TABLE, id);
         String from = Rows.str(m, "status");
         MerchantRules.requireTransition(from, "ACTIVE");
+        if ("ONBOARDING".equals(from) && m.hasNonNull("onboarding_rejected_by")) {
+            throw ApiException.conflict("onboarding_rejected", "The onboarding was returned for rework by "
+                    + Rows.str(m, "onboarding_rejected_by") + "; update the merchant to submit it again");
+        }
         if (TenantContext.principal().equals(Rows.str(m, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "A merchant must be activated by a different user than its creator");
         }

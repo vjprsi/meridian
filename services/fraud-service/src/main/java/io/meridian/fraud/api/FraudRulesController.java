@@ -9,6 +9,8 @@ import io.meridian.fraud.api.generated.model.FraudRuleUpdate;
 import io.meridian.fraud.api.generated.model.FraudRulesActivateRequest;
 import io.meridian.fraud.api.generated.model.FraudRulesBacktestRequest;
 import io.meridian.fraud.api.generated.model.FraudRulesDeactivateRequest;
+import io.meridian.fraud.api.generated.model.FraudRulesRejectRequest;
+import io.meridian.fraud.api.generated.model.FraudRulesSubmitRequest;
 import io.meridian.fraud.api.generated.model.FraudRulesTestExpressionRequest;
 import io.meridian.fraud.application.FraudConfigCache;
 import io.meridian.fraud.application.FraudRuleService;
@@ -56,6 +58,20 @@ public class FraudRulesController implements FraudRulesApi {
         JsonNode req = http.tree(body);
         return http.once(idempotencyKey, body, FraudRule.class,
                 () -> http.ok(rules.activate(id, Http.text(req, "mode")), FraudRule.class));
+    }
+
+    @Override
+    public ResponseEntity<FraudRule> fraudRulesSubmit(UUID id, String idempotencyKey, FraudRulesSubmitRequest body) {
+        JsonNode req = http.tree(body);
+        return http.once(idempotencyKey, body, FraudRule.class,
+                () -> http.ok(rules.submit(id, Http.text(req, "mode"), Http.text(req, "comment")), FraudRule.class));
+    }
+
+    @Override
+    public ResponseEntity<FraudRule> fraudRulesReject(UUID id, String idempotencyKey, FraudRulesRejectRequest body) {
+        JsonNode req = http.tree(body);
+        return http.once(idempotencyKey, body, FraudRule.class,
+                () -> http.ok(rules.reject(id, Http.text(req, "reason")), FraudRule.class));
     }
 
     @Override

@@ -48,7 +48,7 @@ enums:
   BillerIntegration: [API, ISO8583, FILE, AGGREGATOR]
   BillPaymentStatus: [INITIATED, VALIDATED, PROCESSING, PENDING_PROVIDER, COMPLETED, FAILED, REVERSED]
   SettlementFrequency: [REALTIME, DAILY, WEEKLY, MONTHLY, ON_DEMAND]
-  WalletSettlementStatus: [PENDING, CALCULATED, APPROVED, PAID, FAILED]
+  WalletSettlementStatus: [PENDING, CALCULATED, APPROVED, PAID, FAILED, REJECTED]
   MerchantStatus: [ONBOARDING, ACTIVE, SUSPENDED, TERMINATED]
   MerchantType: [INDIVIDUAL, SOLE_TRADER, COMPANY, GOVERNMENT, NGO]
   MerchantTerminalStatus: [ACTIVE, INACTIVE, LOST, RETIRED]
@@ -1008,9 +1008,11 @@ services:
           - "fee_amount amount ro | Fees retained"
           - "commission_amount amount ro | Commissions retained"
           - "net_amount amount ro | Net payable to the biller"
-          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status"
+          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status (REJECTED releases its payments for a new settlement)"
           - "approved_by string(64) ro | Checker"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the settlement"
+          - "rejection_reason string(255) ro | Why the settlement was rejected"
           - "payment_reference string(64) ro | Bank payment reference"
           - "wallet_transaction_id uuid ref=wallet_transaction ro | Settlement transaction out of the collection wallet"
           - "paid_at ts ro | Payment time"
@@ -1120,6 +1122,7 @@ services:
         filters: [biller_id, status]
         actions:
           - "POST /{id}/approve | Approve the settlement (checker differs from the maker) | comment string(500)"
+          - "POST /{id}/reject | Reject the settlement (checker differs from the maker); its payments are released for a new settlement | reason string(255) nn"
           - "POST /{id}/mark-paid | Record the bank payment of the settlement and move the net amount out of the collection wallet | payment_reference string(64) nn"
           - "GET /{id}/payments | Payments included | | bill_payment[]"
 
@@ -1131,6 +1134,7 @@ services:
       - "wallets.airtime_topup.completed | airtime_topup | An airtime top-up was delivered"
       - "wallets.airtime_topup.failed | airtime_topup | An airtime top-up failed"
       - "wallets.biller_settlement.approved | biller_settlement | A biller settlement was approved"
+      - "wallets.biller_settlement.rejected | biller_settlement | A biller settlement was rejected"
       - "wallets.biller_settlement.paid | biller_settlement | A biller settlement was paid"
 
   # ------------------------------------------------------------------ merchant-service
@@ -1187,7 +1191,8 @@ services:
           - "risk_rating string(16) | LOW, MEDIUM, HIGH"
           - "daily_limit amount | Maximum daily collections"
           - "status enum:MerchantStatus nn default=ONBOARDING ro | Status (changed only by actions)"
-          - "status_reason string(255) ro | Reason for the current status"
+          - "status_reason string(255) ro | Reason for the current status (for ONBOARDING: why the checker returned it for rework)"
+          - "onboarding_rejected_by string(64) ro | Checker who last returned the onboarding for rework"
           - "onboarded_at ts ro | Activation time"
           - "logo_document_id uuid ref=document | Logo"
           - "metadata json | Client-defined key/value metadata"
@@ -1273,11 +1278,13 @@ services:
           - "mdr_amount amount ro | Merchant discount fees"
           - "refund_amount amount ro | Refunds"
           - "net_amount amount ro | Net payable"
-          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status"
+          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status (REJECTED releases its payments for a new settlement)"
           - "settlement_wallet_id uuid ref=wallet ro | Wallet the collections sit in"
           - "settlement_account_id uuid ref=deposit_account ro | Bank account paid (empty = net stays in the wallet)"
           - "approved_by string(64) ro | Checker"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the settlement"
+          - "rejection_reason string(255) ro | Why the settlement was rejected"
           - "payment_id uuid ref=payment ro | Bank payment when settled to bank"
           - "fee_wallet_transaction_id uuid ref=wallet_transaction ro | MDR fee transaction"
           - "wallet_transaction_id uuid ref=wallet_transaction ro | Settlement transaction to the bank account"
@@ -1313,6 +1320,7 @@ services:
         filters: [merchant_type, mcc, status, acquiring_agent_id, merchant_code, country, customer_id]
         actions:
           - "POST /{id}/activate | Activate the merchant (checker differs from the creator); opens the merchant wallet on first activation | comment string(500)"
+          - "POST /{id}/reject-onboarding | Return an ONBOARDING merchant to the maker for rework (checker differs from the creator); it stays ONBOARDING with the reason in status_reason | reason string(255) nn"
           - "POST /{id}/suspend | Suspend acceptance | reason string(255) nn"
           - "POST /{id}/terminate | Terminate the merchant | reason string(255) nn"
           - "GET /{id}/stores | Stores of the merchant | | merchant_store[]"
@@ -1365,6 +1373,7 @@ services:
         filters: [merchant_id, status]
         actions:
           - "POST /{id}/approve | Approve the settlement (checker differs from the maker) | comment string(500)"
+          - "POST /{id}/reject | Reject the settlement (checker differs from the maker); its period can be settled again | reason string(255) nn"
           - "POST /{id}/pay | Collect the MDR fee and pay the net amount to the settlement bank account (or leave it in the wallet)"
           - "GET /{id}/report | Download the settlement report | | text/csv"
 
@@ -1380,9 +1389,11 @@ services:
     events:
       - "wallets.merchant.onboarded | merchant | A merchant was activated"
       - "wallets.merchant.status_changed | merchant | A merchant was suspended or terminated"
+      - "wallets.merchant.onboarding_rejected | merchant | A merchant onboarding was returned to the maker for rework"
       - "wallets.merchant_qr.paid | merchant_qr | A merchant QR code was paid"
       - "wallets.merchant_payment_link.paid | merchant_payment_link | A payment link was paid"
       - "wallets.merchant_settlement.approved | merchant_settlement | A merchant settlement was approved"
+      - "wallets.merchant_settlement.rejected | merchant_settlement | A merchant settlement was rejected"
       - "wallets.merchant_settlement.paid | merchant_settlement | A merchant settlement was paid"
       - "wallets.merchant_refund.completed | merchant_refund | A merchant refund was completed"
       - "wallets.merchant_refund.rejected | merchant_refund | A merchant refund was rejected"
@@ -1410,6 +1421,10 @@ services:
           - "status enum:UssdMenuStatus nn default=DRAFT ro | Status"
           - "published_at ts ro | Publication time"
           - "published_by string(64) ro | Publisher (checker, differs from the maker)"
+          - "submitted_by string(64) ro | Maker who submitted the draft for publication"
+          - "submitted_at ts ro | Submission time (empty when no publication is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason string(500) ro | Why the last submission was rejected"
           - "retired_at ts ro | Time a newer version replaced it"
         unique: [[tenant_id, short_code, language, version]]
 
@@ -1518,7 +1533,9 @@ services:
         filters: [short_code, language, status, code]
         actions:
           - "GET /{id}/nodes | Nodes of the menu | | ussd_menu_node[]"
+          - "POST /{id}/submit | Submit the draft version and its tree for publication (maker) | comment string(500)"
           - "POST /{id}/publish | Publish the draft version after validating the tree (checker differs from the maker); the previously published version is retired | comment string(500)"
+          - "POST /{id}/reject | Reject the submitted draft (checker); it stays DRAFT for rework | reason string(500) nn"
           - "POST /{id}/clone | Create a new draft version with copies of all nodes | | ussd_menu"
           - "POST /{id}/simulate | Run the menu in a simulator with scripted inputs (no session stored, actions dry-run unless execute_actions): {screens[{step, node_key, input, text, end}], ended, final_node_key} | msisdn phone nn, inputs string(182)[] nn, execute_actions bool | object"
 
@@ -1555,6 +1572,8 @@ services:
 
     events:
       - "wallets.ussd_menu.published | ussd_menu | A USSD menu version was published"
+      - "wallets.ussd_menu.submitted | ussd_menu | A USSD menu draft was submitted for publication"
+      - "wallets.ussd_menu.rejected | ussd_menu | A submitted USSD menu draft was rejected"
       - "wallets.ussd_session.completed | ussd_session | A USSD session ended"
       - "wallets.sms_message.received | sms_message | An inbound SMS command was received"
       - "wallets.sms_message.delivery_updated | sms_message | An outbound SMS was delivered or failed"

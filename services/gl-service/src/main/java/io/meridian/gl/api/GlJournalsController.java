@@ -7,7 +7,9 @@ import io.meridian.gl.api.generated.model.GlJournal;
 import io.meridian.gl.api.generated.model.GlJournalApproval;
 import io.meridian.gl.api.generated.model.GlJournalCreate;
 import io.meridian.gl.api.generated.model.GlJournalLinePage;
+import io.meridian.gl.api.generated.model.GlJournalRejection;
 import io.meridian.gl.api.generated.model.GlJournalsApproveRequest;
+import io.meridian.gl.api.generated.model.GlJournalsRejectRequest;
 import io.meridian.gl.application.Fields;
 import io.meridian.gl.application.JournalService;
 import io.meridian.web.crud.Crud;
@@ -62,6 +64,14 @@ public class GlJournalsController implements GlJournalsApi {
         JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
         return idempotency.execute(idempotencyKey, responses.action("approve", id, req), GlJournalApproval.class,
                 () -> responses.ok(journals.approve(id, Fields.text(req, "comment")), GlJournalApproval.class));
+    }
+
+    @Override
+    public ResponseEntity<GlJournalRejection> glJournalsReject(UUID id, String idempotencyKey, GlJournalsRejectRequest body) {
+        TenantContext.require();
+        JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, responses.action("reject", id, req), GlJournalRejection.class,
+                () -> responses.ok(journals.reject(id, Fields.text(req, "reason")), GlJournalRejection.class));
     }
 
     @Override

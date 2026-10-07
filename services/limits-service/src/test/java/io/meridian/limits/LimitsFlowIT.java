@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
  * count and regulatory limits, overrides with four-eyes, concurrency, expiry, resets and risk appetite.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})
+        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
+                "meridian.business-date.source=clock"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

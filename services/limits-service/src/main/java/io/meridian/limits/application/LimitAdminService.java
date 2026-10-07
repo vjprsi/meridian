@@ -32,6 +32,9 @@ public class LimitAdminService {
     static final Duration MAX_OVERRIDE = Duration.ofDays(90);
     /** Approval resource type for limit overrides in workflow-service (G11). */
     public static final String OVERRIDE_APPROVAL = "limit_override";
+    /** Approval resource type for limit rule activation submissions in workflow-service (G11). */
+    public static final String RULE_APPROVAL = "limit_rule";
+    private static final String CLEAR_SUBMISSION = "submitted_by = null, submitted_at = null";
 
     private final Db db;
     private final CrudEngine crud;
@@ -105,18 +108,74 @@ public class LimitAdminService {
             throw ApiException.conflict("version_conflict", "If-Match " + expectedVersion + " does not match the current version; reload and retry");
         }
         ObjectNode values = crud.toColumns("limit_rule", changes);
-        for (String f : new String[] {"status", "approved_by", "deactivation_reason"}) {
+        for (String f : new String[] {"status", "approved_by", "deactivation_reason", "submitted_by", "submitted_at",
+                "rejected_by", "rejection_reason", "approval_request_id"}) {
             values.remove(f);
         }
         ObjectNode merged = ((ObjectNode) rule.deepCopy()).setAll(values);
         validateRule(merged);
+        boolean pending = rule.hasNonNull("submitted_at");
+        if (pending) { // an edit withdraws the pending activation submission
+            values.putNull("submitted_by");
+            values.putNull("submitted_at");
+        }
         String row = crud.updateRow("limit_rule", Map.of("id", id), values, expectedVersion).orElseThrow();
+        if (pending) {
+            approvals.cancelOpen(RULE_APPROVAL, id, null, "rule changed after submission");
+        }
         outbox.publish("risk.limit_rule.changed", "limit_rule", id, json.readTree(row));
         cache.invalidate();
         return row;
     }
 
-    /** Maker-checker: the activating user must differ from the last author of the rule. */
+    /**
+     * Maker step: asks for activation. The rule keeps its status until a checker activates it (directly or in the
+     * workflow inbox, {@link LimitRuleApprovalHandler}) or rejects the submission. A new submission replaces a pending
+     * one; an edit withdraws it.
+     */
+    @Transactional
+    public String submit(UUID id, String comment) {
+        JsonNode rule = db.require("limit_rule", id, true);
+        if ("ACTIVE".equals(rule.get("status").asString())) {
+            throw ApiException.conflict("invalid_transition", "Limit is already active");
+        }
+        validateRule(rule);
+        OffsetDateTime at = io.meridian.common.time.Clocks.now();
+        db.update("update limit_rule set submitted_by = ?, submitted_at = ?, rejected_by = null, rejection_reason = null"
+                + " where id = ?", TenantContext.principal(), at, id);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        for (String f : new String[] {"code", "name", "scope", "scope_ref", "transaction_type", "channel", "period",
+                "measure", "currency", "max_amount", "max_count", "breach_action", "status"}) {
+            payload.put(f, Db.str(rule, f));
+        }
+        payload.put("is_regulatory", Db.bool(rule, "is_regulatory"));
+        payload.put("row_version", rule.get("row_version").asInt());
+        payload.put("submitted_at", at.toString());
+        if (comment != null) {
+            payload.put("comment", comment);
+        }
+        ApprovalSpec spec = ApprovalSpec.of(RULE_APPROVAL, id, "activate", "Limit rule " + Db.str(rule, "code"), payload);
+        if (Db.dec(rule, "max_amount") != null && Db.str(rule, "currency") != null) {
+            spec = spec.withAmount(Db.dec(rule, "max_amount"), Db.str(rule, "currency"));
+        }
+        UUID requestId = Approvals.idOf(approvals.request(spec, "limit-rule:" + id + ":" + rule.get("row_version").asInt() + ":" + at));
+        if (requestId != null) {
+            db.update("update limit_rule set approval_request_id = ? where id = ?", requestId, id);
+            approvals.cancelOpenExcept(RULE_APPROVAL, id, null, requestId, "superseded");
+        }
+        return publishRule(id, "risk.limit_rule.submitted");
+    }
+
+    /** True while the rule waits on the activation submission opened as {@code approvalRequestId}. */
+    @Transactional(readOnly = true)
+    public boolean awaitsRuleApproval(UUID id, UUID approvalRequestId) {
+        return db.one("select row_to_json(t)::text from limit_rule t where id = ?", id)
+                .filter(r -> r.hasNonNull("submitted_at"))
+                .filter(r -> approvalRequestId != null && approvalRequestId.toString().equals(Db.str(r, "approval_request_id")))
+                .isPresent();
+    }
+
+    /** Maker-checker: the activating user must differ from the last author of the rule and from the submitter. */
     @Transactional
     public String activate(UUID id) {
         JsonNode rule = db.require("limit_rule", id, true);
@@ -124,14 +183,33 @@ public class LimitAdminService {
             throw ApiException.conflict("invalid_transition", "Limit is already active");
         }
         String maker = Db.str(rule, "updated_by") != null ? Db.str(rule, "updated_by") : Db.str(rule, "created_by");
-        if (TenantContext.principal().equals(maker)) {
+        String checker = TenantContext.principal();
+        if (checker.equals(maker) || checker.equals(Db.str(rule, "submitted_by"))) {
             throw ApiException.unprocessable("four_eyes_violation",
-                    "The limit was last changed by " + maker + "; another user must activate it");
+                    "The limit was last changed or submitted by " + checker + "; another user must activate it");
         }
         validateRule(rule);
-        db.update("update limit_rule set status = 'ACTIVE', approved_by = ?, deactivation_reason = null where id = ?",
-                TenantContext.principal(), id);
+        db.update("update limit_rule set status = 'ACTIVE', approved_by = ?, deactivation_reason = null, "
+                + CLEAR_SUBMISSION + " where id = ?", checker, id);
+        approvals.cancelOpen(RULE_APPROVAL, id, null, "activated directly");
         return publishRule(id, "risk.limit_rule.activated");
+    }
+
+    /** Checker step: rejects the pending activation submission; the rule keeps its status and can be reworked. */
+    @Transactional
+    public String reject(UUID id, String reason) {
+        JsonNode rule = db.require("limit_rule", id, true);
+        if (!rule.hasNonNull("submitted_at")) {
+            throw ApiException.conflict("no_pending_submission", "Limit " + Db.str(rule, "code") + " has no pending activation");
+        }
+        String checker = TenantContext.principal();
+        if (checker.equals(Db.str(rule, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The submitter cannot reject their own submission");
+        }
+        db.update("update limit_rule set rejected_by = ?, rejection_reason = ?, " + CLEAR_SUBMISSION + " where id = ?",
+                checker, reason, id);
+        approvals.cancelOpen(RULE_APPROVAL, id, null, "rejected directly");
+        return publishRule(id, "risk.limit_rule.rejected");
     }
 
     @Transactional
@@ -140,7 +218,8 @@ public class LimitAdminService {
         if (!"ACTIVE".equals(rule.get("status").asString())) {
             throw ApiException.conflict("invalid_transition", "Limit is not active");
         }
-        db.update("update limit_rule set status = 'INACTIVE', deactivation_reason = ? where id = ?", reason, id);
+        db.update("update limit_rule set status = 'INACTIVE', deactivation_reason = ?, " + CLEAR_SUBMISSION
+                + " where id = ?", reason, id);
         return publishRule(id, "risk.limit_rule.deactivated");
     }
 
