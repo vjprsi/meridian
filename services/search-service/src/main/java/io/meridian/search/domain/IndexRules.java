@@ -9,7 +9,8 @@ import java.util.Set;
 /** Index lifecycle and naming rules. */
 public final class IndexRules {
     public static final Set<String> ENTITY_TYPES = Set.of("CUSTOMER", "DEPOSIT_ACCOUNT", "WALLET", "CARD", "LOAN", "PAYMENT",
-            "WALLET_TRANSACTION", "SERVICE_CASE", "AML_CASE", "MERCHANT", "AGENT", "DOCUMENT", "LEDGER_ACCOUNT");
+            "WALLET_TRANSACTION", "SERVICE_CASE", "AML_CASE", "MERCHANT", "AGENT", "DOCUMENT", "LEDGER_ACCOUNT",
+            "LOAN_APPLICATION", "FRAUD_ALERT", "CARD_DISPUTE", "COMPLAINT"); // = spec enum SearchEntityType
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private IndexRules() {}

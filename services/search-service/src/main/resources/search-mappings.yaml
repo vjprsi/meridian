@@ -24,9 +24,7 @@
 #   closed_events / closed_statuses : the document stays searchable with lifecycle CLOSED
 #   delete_events / delete_statuses / delete_when_present : the document is removed from the index
 #
-# The entity_type must be one of the spec enum SearchEntityType. Kinds without their own enum value yet
-# (loan_application, fraud_alert, card_dispute, complaint) are filed under the closest entity type and are
-# distinguishable with the filter {"doc_kind": "..."}.
+# The entity_type must be one of the spec enum SearchEntityType (each doc kind has its own entity type).
 
 # Index definition auto-provisioned for a tenant on the first document of an entity type (when the tenant has not
 # defined one through POST /v1/search/indexes).
@@ -121,7 +119,7 @@ mappings:
     closed_statuses: [PAID_OFF, CLOSED, WRITTEN_OFF, CHARGED_OFF, CANCELLED]
 
   - doc_kind: loan_application            # spec gap: no LOAN_APPLICATION in SearchEntityType yet
-    entity_type: LOAN
+    entity_type: LOAN_APPLICATION
     topic: meridian.lending.v1
     schema: LoanApplication
     events: [lending.loan_application.created, lending.loan_application.submitted,
@@ -209,7 +207,7 @@ mappings:
     closed_statuses: [CLOSED]
 
   - doc_kind: fraud_alert                 # spec gap: no FRAUD_ALERT in SearchEntityType yet
-    entity_type: AML_CASE
+    entity_type: FRAUD_ALERT
     topic: meridian.risk.v1
     schema: FraudAlert
     events: [risk.fraud_alert.raised, risk.fraud_alert.assigned, risk.fraud_alert.customer_contacted,
@@ -223,7 +221,7 @@ mappings:
     closed_statuses: [CLOSED, FALSE_POSITIVE]
 
   - doc_kind: card_dispute                # spec gap: no DISPUTE in SearchEntityType yet
-    entity_type: SERVICE_CASE
+    entity_type: CARD_DISPUTE
     topic: meridian.cards.v1
     schema: CardDispute
     events: [cards.card_dispute.opened, cards.card_dispute.stage_changed,
@@ -256,7 +254,7 @@ mappings:
     closed_statuses: [CLOSED, CANCELLED]
 
   - doc_kind: complaint                   # spec gap: no COMPLAINT in SearchEntityType yet
-    entity_type: SERVICE_CASE
+    entity_type: COMPLAINT
     topic: meridian.servicing.v1
     schema: Complaint
     events: [servicing.complaint.received, servicing.complaint.acknowledged, servicing.complaint.assigned,
