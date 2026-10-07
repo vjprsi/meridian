@@ -49,7 +49,12 @@ public class Downstream {
     /** Posts a balanced journal entry (zero legs dropped); returns its id. */
     public UUID post(String key, String description, String currency, UUID disputeId, List<Leg> legs) {
         ObjectNode body = json.createObjectNode();
-        body.put("ledger_id", required(props.ledgerId(), "meridian.cards.ledger-id").toString());
+        UUID ledgerId = props.ledgerId();
+        if (ledgerId == null) {
+            throw ApiException.unprocessable("ledger_not_configured", "No ledger book is configured for this tenant "
+                    + "(config-service ledger/card-dispute-service.ledger_id or meridian.cards.ledger-id)");
+        }
+        body.put("ledger_id", ledgerId.toString());
         body.put("entry_type", "ADJUSTMENT");
         body.put("description", description);
         body.put("source_type", "CARD_DISPUTE");
@@ -78,20 +83,21 @@ public class Downstream {
     }
 
     public UUID suspense() {
-        return required(props.dispute().suspenseAccount(), "meridian.cards.dispute.suspense-account");
+        return required(props.dispute().suspenseAccount(), "dispute.suspense_account");
     }
 
     public UUID lossExpense() {
-        return required(props.dispute().lossExpenseAccount(), "meridian.cards.dispute.loss-expense-account");
+        return required(props.dispute().lossExpenseAccount(), "dispute.loss_expense_account");
     }
 
     public UUID schemeReceivable() {
-        return required(props.dispute().schemeReceivableAccount(), "meridian.cards.dispute.scheme-receivable-account");
+        return required(props.dispute().schemeReceivableAccount(), "dispute.scheme_receivable_account");
     }
 
     private static <T> T required(T v, String what) {
         if (v == null) {
-            throw new ApiException(500, "ledger_account_not_configured", what + " is not configured");
+            throw ApiException.unprocessable("ledger_account_not_configured", "No " + what + " ledger account is configured "
+                    + "for this tenant (config-service ledger/card-dispute-service or meridian.cards.*)");
         }
         return v;
     }

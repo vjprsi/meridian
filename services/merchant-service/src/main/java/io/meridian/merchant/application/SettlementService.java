@@ -198,13 +198,15 @@ public class SettlementService {
         String netTxn = null;
         try {
             if (mdr.signum() > 0) {
-                if (props.feeIncomeAccountId() == null) {
-                    throw new ApiException(500, "ledger_account_not_configured",
-                            "meridian.merchant.fee-income-account-id is not configured");
+                UUID feeIncome = props.feeIncomeAccountId();
+                if (feeIncome == null) {
+                    throw ApiException.unprocessable("ledger_account_not_configured", "No fee income account is configured "
+                            + "for this tenant (config-service ledger/merchant-service.fee_income_account_id or "
+                            + "meridian.merchant.fee-income-account-id)");
                 }
                 ObjectNode fee = wallets.txn("FEE", "SYSTEM", "SYSTEM", mdr, currency);
                 fee.put("payer_wallet_id", wallet.toString());
-                fee.put("counterparty_ledger_account_id", props.feeIncomeAccountId().toString());
+                fee.put("counterparty_ledger_account_id", feeIncome.toString());
                 fee.put("merchant_id", Rows.str(st, "merchant_id"));
                 fee.put("description", "MDR fees for settlement " + id);
                 feeTxn = wallets.transact(fee, "mse-" + id + "-fee").get("id").asString();

@@ -95,8 +95,8 @@ public class LiquidityService {
         }
         UUID funding = props.gl().treasuryFunding();
         if (funding == null) {
-            throw new ApiException(500, "treasury_funding_not_configured",
-                    "meridian.routing.gl.treasury-funding is not configured");
+            throw ApiException.unprocessable("treasury_funding_not_configured", "No treasury funding account is configured "
+                    + "for this tenant (config-service ledger/routing-service.gl.treasury_funding or meridian.routing.gl.treasury-funding)");
         }
         UUID journal = downstream.transfer("nos-topup:" + nostroId + ":" + idempotencyKey, uuid(nostro, "ledger_account_id"),
                 funding, amount, str(nostro, "currency"),

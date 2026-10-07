@@ -38,18 +38,17 @@ meridian:
   events:
     topic: meridian.cards.v1
   cards:
-    # Ledger book and internal accounts used by clearing postings (dev placeholders; override per environment).
-    ledger-id: 0199a000-0000-7000-8000-0000000000aa
+    # Ledger book and internal accounts of clearing postings are tenant data: set them per tenant in config-service
+    # (namespace ledger, key card-clearing-service: ledger_id, clearing.settlement_accounts.<SCHEME>,
+    # clearing.fee_income_account, clearing.interchange_income_account, clearing.nostro_account, clearing.tax_account).
+    # The deployment values are only a fallback for single-tenant installs; with neither, postings fail with
+    # 422 ledger_not_configured / ledger_account_not_configured (the clearing record goes to EXCEPTION).
+    ledger-id: ${MERIDIAN_CARDS_LEDGER_ID:}
     clearing:
       match-tolerance-pct: 0.20
       atm-fee: 2.50
-      settlement-accounts:
-        VISA: 0199a000-0000-7000-8000-00000000c501
-        MASTERCARD: 0199a000-0000-7000-8000-00000000c502
-      fee-income-account: 0199a000-0000-7000-8000-00000000c510
-      interchange-income-account: 0199a000-0000-7000-8000-00000000c511
-      nostro-account: 0199a000-0000-7000-8000-00000000c512
-      tax-account: 0199a000-0000-7000-8000-00000000c513
+      # settlement-accounts: { VISA: <id>, MASTERCARD: <id> }
+      # fee-income-account / interchange-income-account / nostro-account / tax-account: <id>
 
 management:
   endpoints:

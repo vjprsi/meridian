@@ -2,6 +2,7 @@ package io.meridian.rewards.infrastructure;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.web.client.ServiceClient;
+import io.meridian.web.config.TenantSettings;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class ExternalServices {
     static final String LEDGER = "ledger-service";
     static final String DEPOSIT = "deposit-service";
+    static final String SERVICE = "rewards-service";
 
     private final ServiceClient client;
     private final JsonMapper json;
@@ -47,12 +49,22 @@ public class ExternalServices {
     /**
      * Posts a two-leg journal entry (debit the funding account, credit the customer's ledger account); the key makes
      * retries exactly-once at the ledger. Returns the journal entry id.
+     *
+     * <p>The program's (or campaign's) own {@code ledger_id} / {@code funding_ledger_account_id} win; when unset, the
+     * tenant's config-service settings apply (namespace {@code ledger}, key {@code rewards-service}: {@code ledger_id}
+     * (or {@code default.ledger_id}), {@code funding_account_id}). With neither, nothing is posted (422).
      */
     public UUID payout(UUID ledgerId, UUID fundingAccount, UUID customerLedgerAccount, BigDecimal amount, String currency,
                        String sourceType, UUID sourceId, String description, String key) {
-        if (ledgerId == null || fundingAccount == null) {
-            throw ApiException.unprocessable("funding_not_configured",
-                    "The program has no ledger_id / funding_ledger_account_id for payouts");
+        ledgerId = ledgerId != null ? ledgerId : TenantSettings.uuid(SERVICE, "ledger_id", null);
+        fundingAccount = fundingAccount != null ? fundingAccount : TenantSettings.uuid(SERVICE, "funding_account_id", null);
+        if (ledgerId == null) {
+            throw ApiException.unprocessable("ledger_not_configured", "No ledger book for payouts: set ledger_id on the "
+                    + "program or the tenant's config-service ledger/rewards-service.ledger_id");
+        }
+        if (fundingAccount == null) {
+            throw ApiException.unprocessable("funding_not_configured", "No funding account for payouts: set "
+                    + "funding_ledger_account_id on the program or the tenant's config-service ledger/rewards-service.funding_account_id");
         }
         BigDecimal value = amount.stripTrailingZeros();
         if (value.scale() < 2) {

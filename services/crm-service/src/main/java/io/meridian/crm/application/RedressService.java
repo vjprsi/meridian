@@ -11,6 +11,7 @@ import io.meridian.crm.api.generated.model.ComplaintRedress;
 import io.meridian.crm.domain.Lifecycles;
 import io.meridian.crm.infrastructure.ExternalServices;
 import io.meridian.crm.infrastructure.Rows;
+import io.meridian.web.config.TenantSettings;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -166,11 +167,16 @@ public class RedressService {
         ObjectNode complaint = rows.lock("complaint", Json.uuid(r, "complaint_id"));
         ObjectNode v = rows.object();
         if (Lifecycles.MONETARY_REDRESS.contains(text(r, "redress_type"))) {
-            String ledger = text(r, "ledger_id") != null ? text(r, "ledger_id") : blankToNull(defaultLedger);
-            String funding = text(r, "funding_account_id") != null ? text(r, "funding_account_id") : blankToNull(defaultFunding);
-            if (ledger == null || funding == null) {
-                throw ApiException.unprocessable("redress_funding_not_configured",
-                        "No ledger / funding account for redress: set them on the redress or in meridian.crm.redress.*");
+            String ledger = resolve(text(r, "ledger_id"), "redress.ledger_id", defaultLedger);
+            String funding = resolve(text(r, "funding_account_id"), "redress.funding_account_id", defaultFunding);
+            if (ledger == null) {
+                throw ApiException.unprocessable("ledger_not_configured", "No ledger book for redress: set ledger_id on the "
+                        + "redress, the tenant's config-service ledger/crm-service.redress.ledger_id or meridian.crm.redress.ledger-id");
+            }
+            if (funding == null) {
+                throw ApiException.unprocessable("redress_funding_not_configured", "No funding account for redress: set "
+                        + "funding_account_id on the redress, the tenant's config-service "
+                        + "ledger/crm-service.redress.funding_account_id or meridian.crm.redress.funding-account-id");
             }
             try {
                 JsonNode entry = external.postJournalEntry(journal(r, complaint, ledger, funding), "crm-redress:" + id);
@@ -233,6 +239,18 @@ public class RedressService {
         credit.put("currency", text(r, "currency"));
         credit.put("description", narrative);
         return j;
+    }
+
+    /**
+     * A redress ledger setting: the redress's own value, else the tenant's config-service setting (namespace
+     * {@code ledger}, key {@code crm-service}, {@code path}), else the deployment property; null when none is set.
+     */
+    static String resolve(String own, String path, String deployment) {
+        if (own != null) {
+            return own;
+        }
+        UUID tenant = TenantSettings.uuid("crm-service", path, null);
+        return tenant != null ? tenant.toString() : blankToNull(deployment);
     }
 
     private static String blankToNull(String s) {

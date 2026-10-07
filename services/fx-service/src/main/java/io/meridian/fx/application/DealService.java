@@ -12,7 +12,6 @@ import io.meridian.fx.infrastructure.LedgerClient.Leg;
 import io.meridian.fx.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,10 +53,10 @@ public class DealService {
         BigDecimal buyAmount = FxPricing.round(dec(d, "buy_amount"), buy);
         String text = "FX deal " + id + " " + sell + "/" + buy + " @ " + dec(d, "rate").toPlainString();
         UUID je = ledger.post(props.ledgerId(), "fxd-settle:" + id, text, "FX_DEAL", id, date(d, "value_date"), List.of(
-                new Leg(account(props.clearingAccounts(), sell, "clearing"), "DEBIT", sellAmount, sell, "Customer sells " + sell),
-                new Leg(account(props.positionAccounts(), sell, "position"), "CREDIT", sellAmount, sell, "FX position " + sell),
-                new Leg(account(props.positionAccounts(), buy, "position"), "DEBIT", buyAmount, buy, "FX position " + buy),
-                new Leg(account(props.clearingAccounts(), buy, "clearing"), "CREDIT", buyAmount, buy, "Customer buys " + buy)));
+                new Leg(account(props.clearingAccount(sell), sell, "clearing"), "DEBIT", sellAmount, sell, "Customer sells " + sell),
+                new Leg(account(props.positionAccount(sell), sell, "position"), "CREDIT", sellAmount, sell, "FX position " + sell),
+                new Leg(account(props.positionAccount(buy), buy, "position"), "DEBIT", buyAmount, buy, "FX position " + buy),
+                new Leg(account(props.clearingAccount(buy), buy, "clearing"), "CREDIT", buyAmount, buy, "Customer buys " + buy)));
         ObjectNode row = rows.update(DEAL, id, rows.object().put("status", "SETTLED").put("journal_entry_id", je.toString()));
         events.publish("payments.fx_deal.settled", DEAL, row);
         return row;
@@ -78,10 +77,9 @@ public class DealService {
         return row;
     }
 
-    private static UUID account(Map<String, UUID> accounts, String ccy, String kind) {
-        UUID a = accounts.get(ccy);
+    private static UUID account(UUID a, String ccy, String kind) {
         if (a == null) {
-            throw new ApiException(500, "ledger_account_not_configured",
+            throw ApiException.unprocessable("ledger_account_not_configured",
                     "No FX " + kind + " ledger account is configured for " + ccy);
         }
         return a;

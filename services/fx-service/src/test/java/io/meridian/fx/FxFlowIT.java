@@ -77,6 +77,9 @@ class FxFlowIT {
         }
 
         synchronized JsonNode get(String service, String path) {
+            if ("config-service".equals(service)) { // no tenant ledger settings: the deployment properties apply
+                return json.readTree("{\"namespace\":\"ledger\",\"values\":{}}");
+            }
             assertThat(service).isEqualTo("reference-data-service");
             assertThat(path).startsWith("/v1/reference/fx-rates/latest?");
             Map<String, String> q = new HashMap<>();

@@ -94,6 +94,45 @@ Lessons from the rollout (all 63 services):
   ServiceClient sends it as `X-Tenant-Id`, which receivers honour only for internal tokens.
 - Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
 
+## Per-tenant ledger settings (config-service namespace `ledger`)
+
+Ledger books, internal (GL / clearing / income / funding) accounts, treasury wallets and similar ids are tenant
+data, never deployment constants. Read them through `io.meridian.web.config.TenantSettings`, normally by overriding
+the accessor of the service's `@ConfigurationProperties` record, e.g.
+`TenantSettings.uuid("payment-service", "gl.clearing", gl.clearing())`.
+
+- Source: config-service namespace `ledger` (approval-gated, versioned), resolved per tenant and cached 30 s. Each
+  service has one key (its name). The value is a JSON object whose paths mirror the service's `meridian.*` properties
+  in snake_case. The optional `default.ledger_id` is the tenant's main book for every service.
+- Precedence: a value on the business record itself, where one exists (a rewards program's `ledger_id`, a redress's
+  `funding_account_id`). Then the tenant's `<service>.<path>`. For `ledger_id` only, `default.ledger_id` comes
+  next. The deployment property is the last fallback, for single-tenant installs and tests.
+- Never ship placeholder UUIDs in `application.yml`. When nothing is configured, the operation fails with
+  422 `ledger_not_configured` (missing book) or `ledger_account_not_configured` (or the service's own
+  `*_not_configured` code). It never posts to a made-up account.
+- In tests, stub `config-service` through the mocked `ServiceClient`; an empty
+  `{"namespace":"ledger","values":{}}` means the deployment properties apply.
+
+| Key (path in namespace `ledger`) | Owning service | Meaning |
+|---|---|---|
+| `default.ledger_id` | all | Tenant's main ledger book, used when a service has no `ledger_id` of its own |
+| `deposit-service.ledger_id`, `.gl.{clearing,fee_income,interest_expense,interest_income,tax_payable}` | deposit-service | Book and GL accounts for deposit postings |
+| `payment-service.ledger_id`, `.gl.{clearing,fee_income,direct_debit_clearing}` | payment-service | Book, default rail clearing, fee income and direct-debit clearing accounts |
+| `wallet-service.ledger_id`, `.gl.{bank_clearing,fee_income,tax_payable}` | wallet-service | Book and internal accounts of wallet transactions |
+| `loan-service.ledger_id`, `.gl.{clearing,interest_income,interest_receivable,interest_suspense,fee_income,fee_receivable,penalty_income,penalty_receivable,overpayment,waiver_expense,write_off_expense,recovery_income,agency_commission,tax_payable}` | loan-service | Book and loan GL accounts |
+| `card-clearing-service.ledger_id`, `.clearing.settlement_accounts.<SCHEME>`, `.clearing.{fee_income_account,interchange_income_account,nostro_account,tax_account}` | card-clearing-service | Book, scheme settlement accounts and clearing income, nostro and tax accounts |
+| `card-dispute-service.ledger_id`, `.dispute.{suspense_account,loss_expense_account,scheme_receivable_account}` | card-dispute-service | Book, provisional-credit suspense, absorbed-loss expense and chargeback receivable |
+| `fx-service.ledger_id`, `.position_accounts.<CCY>`, `.clearing_accounts.<CCY>` | fx-service | Book and per-currency FX position and clearing accounts used at deal settlement |
+| `routing-service.ledger_id`, `.gl.treasury_funding` | routing-service | Book and treasury account debited when a nostro is topped up |
+| `treasury-deal-service.ledger_id`, `.accounts.<CCY>.<role>` | treasury-deal-service | Book and treasury accounts per currency. Roles are snake_case: `nostro`, `mm_placements`, `mm_borrowings`, `interest_receivable`, `interest_payable`, `interest_income`, `interest_expense`, `fx_position`, `securities`, `realised_pnl` |
+| `crm-service.redress.ledger_id`, `.redress.funding_account_id` | crm-service | Book and redress expense / suspense account for monetary complaint redress, unless the redress sets its own |
+| `rewards-service.ledger_id`, `.funding_account_id` | rewards-service | Book and funding account for cashback, redemption and referral payouts, unless the program or campaign sets its own |
+| `biller-service.settlement_clearing_account_id` | biller-service | Bank clearing / nostro account credited when a biller settlement is paid out |
+| `merchant-service.fee_income_account_id` | merchant-service | Account credited with MDR and refund fees |
+| `commission-service.payout_source_wallet_id` | commission-service | Commission pool wallet funding agent commission payouts |
+| `agent-network-service.treasury_wallet_id` | agent-network-service | Treasury wallet funding bank-funded float top-ups |
+| `channel-service.airtime_biller_id` | channel-service | Biller used by the USSD AIRTIME action when the menu gives none |
+
 ## Time
 
 - Validity windows, expiries and "is it effective now" checks must use one clock. When SQL compares with `now()`,

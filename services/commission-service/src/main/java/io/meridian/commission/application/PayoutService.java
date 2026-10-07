@@ -232,11 +232,13 @@ public class PayoutService {
         String txnId = null;
         String failure = null;
         try {
-            if (props.payoutSourceWalletId() == null) {
-                throw new ApiException(500, "payout_source_not_configured",
-                        "meridian.commission.payout-source-wallet-id is not configured");
+            UUID source = props.payoutSourceWalletId();
+            if (source == null) {
+                throw ApiException.unprocessable("payout_source_not_configured", "No commission payout wallet is configured "
+                        + "for this tenant (config-service ledger/commission-service.payout_source_wallet_id or "
+                        + "meridian.commission.payout-source-wallet-id)");
             }
-            JsonNode t = downstream.payout("cpr-" + runId + "-" + g.walletId() + "-" + attempt, props.payoutSourceWalletId(),
+            JsonNode t = downstream.payout("cpr-" + runId + "-" + g.walletId() + "-" + attempt, source,
                     g.walletId(), g.agentId(), g.net(), Rows.str(run, "currency"), runId);
             status = "PAID";
             txnId = t.path("id").asString(null);

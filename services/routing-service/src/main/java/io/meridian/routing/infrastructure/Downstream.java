@@ -41,11 +41,13 @@ public class Downstream {
     /** Posts a balanced two-line journal entry: debit {@code debit}, credit {@code credit}. Returns its id. */
     public UUID transfer(String key, UUID debit, UUID credit, BigDecimal amount, String currency, String description,
                          String sourceType, UUID sourceId) {
-        if (props.ledgerId() == null) {
-            throw new ApiException(500, "ledger_not_configured", "meridian.routing.ledger-id is not configured");
+        UUID ledgerId = props.ledgerId();
+        if (ledgerId == null) {
+            throw ApiException.unprocessable("ledger_not_configured", "No ledger book is configured for this tenant "
+                    + "(config-service ledger/routing-service.ledger_id or meridian.routing.ledger-id)");
         }
         ObjectNode body = json.createObjectNode();
-        body.put("ledger_id", props.ledgerId().toString());
+        body.put("ledger_id", ledgerId.toString());
         body.put("entry_type", "TRANSFER");
         body.put("description", description);
         body.put("source_type", sourceType);

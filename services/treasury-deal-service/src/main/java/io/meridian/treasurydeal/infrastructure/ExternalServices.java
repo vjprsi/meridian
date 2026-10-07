@@ -39,8 +39,10 @@ public class ExternalServices implements Ports.Ledger, Ports.Payments, Ports.Mar
 
     @Override
     public UUID post(Ports.Posting p) {
-        if (props.ledgerId() == null) {
-            throw new ApiException(500, "ledger_not_configured", "meridian.treasury.ledger-id is not configured");
+        UUID ledgerId = props.ledgerId();
+        if (ledgerId == null) {
+            throw ApiException.unprocessable("ledger_not_configured", "No ledger book is configured for this tenant "
+                    + "(config-service ledger/treasury-deal-service.ledger_id or meridian.treasury.ledger-id)");
         }
         // net lines per account and direction so one account never appears twice on the same side
         Map<String, BigDecimal> net = new LinkedHashMap<>();
@@ -57,7 +59,7 @@ public class ExternalServices implements Ports.Ledger, Ports.Payments, Ports.Mar
             sample.putIfAbsent(k, l);
         }
         ObjectNode body = json.createObjectNode();
-        body.put("ledger_id", props.ledgerId().toString());
+        body.put("ledger_id", ledgerId.toString());
         body.put("entry_type", p.entryType());
         body.put("description", p.description().length() > 500 ? p.description().substring(0, 500) : p.description());
         body.put("source_type", p.sourceType());
@@ -73,9 +75,10 @@ public class ExternalServices implements Ports.Ledger, Ports.Payments, Ports.Mar
             Ports.Line l = sample.get(k);
             UUID account = props.account(l.currency(), l.role());
             if (account == null) {
-                throw new ApiException(500, "ledger_account_not_configured",
-                        "No ledger account configured for " + l.role() + " in " + l.currency()
-                                + " (meridian.treasury.accounts." + l.currency() + "." + l.role() + ")");
+                throw ApiException.unprocessable("ledger_account_not_configured",
+                        "No ledger account configured for " + l.role() + " in " + l.currency() + " (config-service ledger/"
+                                + "treasury-deal-service.accounts." + l.currency() + "." + l.role().replace('-', '_')
+                                + " or meridian.treasury.accounts." + l.currency() + "." + l.role() + ")");
             }
             ObjectNode e = entries.addObject();
             e.put("ledger_account_id", account.toString());
