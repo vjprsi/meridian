@@ -101,10 +101,13 @@ CREATE TABLE report_definition_version (
   xbrl_taxonomy                varchar(255),
   effective_from               date NOT NULL,
   effective_to                 date,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'SUPERSEDED', 'DEPRECATED')),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'SUPERSEDED', 'DEPRECATED', 'REJECTED')),
   change_note                  text,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejected_at                  timestamptz,
+  rejection_reason             text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -133,6 +136,9 @@ COMMENT ON COLUMN report_definition_version.status IS 'Status';
 COMMENT ON COLUMN report_definition_version.change_note IS 'What changed';
 COMMENT ON COLUMN report_definition_version.approved_by IS 'Checker who published the version';
 COMMENT ON COLUMN report_definition_version.approved_at IS 'Publication time';
+COMMENT ON COLUMN report_definition_version.rejected_by IS 'Checker who rejected the version';
+COMMENT ON COLUMN report_definition_version.rejected_at IS 'Rejection time';
+COMMENT ON COLUMN report_definition_version.rejection_reason IS 'Why the version was rejected (the maker creates a new version)';
 COMMENT ON COLUMN report_definition_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

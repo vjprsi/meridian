@@ -43,9 +43,12 @@ tags:
   description: GL balance per account, period and currency, aggregated in real time from ledger events
 - name: Gl Journals
   description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post
-    to the GL balances only once a gl_journal_approval exists for them.
+    to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a manual journal without
+    posting it (it no longer blocks the period close).
 - name: Gl Journal Approvals
   description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+- name: Gl Journal Rejections
+  description: Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.
 - name: Period Close Runs
   description: Execution of an EOD / EOM / EOY close with its checklist steps
 - name: Ecl Provisions
@@ -3353,6 +3356,53 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-required-scope: ledger:write
       x-table: gl_journal
+  /v1/gl/journals/{id}/reject:
+    post:
+      operationId: glJournalsReject
+      summary: Reject a manual GL journal (checker, four-eyes); it never posts and no longer blocks the period close
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalRejection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlJournalsRejectRequest'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: gl_journal
   /v1/gl/journal-approvals:
     get:
       operationId: glJournalApprovalsList
@@ -3458,6 +3508,113 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
       x-required-scope: ledger:read
       x-table: gl_journal_approval
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/journal-rejections:
+    get:
+      operationId: glJournalRejectionsList
+      summary: List gl journal rejections
+      tags:
+      - Gl Journal Rejections
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: gl_journal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: rejected_by
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalRejectionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: gl_journal_rejection
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/journal-rejections/{id}:
+    get:
+      operationId: glJournalRejectionsGet
+      summary: Retrieve gl journal rejection
+      tags:
+      - Gl Journal Rejections
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalRejection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: gl_journal_rejection
       x-crud: true
       x-crud-get: true
   /v1/gl/close-runs:
@@ -5738,6 +5895,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    GlJournalsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     GlJournalApprovalPage:
       type: object
       description: One page of GlJournalApproval results (newest first)
@@ -5746,6 +5911,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GlJournalApproval'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GlJournalRejectionPage:
+      type: object
+      description: One page of GlJournalRejection results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalRejection'
         next_cursor:
           type:
           - string
@@ -7182,7 +7365,8 @@ components:
     GlJournal:
       type: object
       description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
-        post to the GL balances only once a gl_journal_approval exists for them.
+        post to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a manual journal
+        without posting it (it no longer blocks the period close).
       properties:
         id:
           type: string
@@ -7589,6 +7773,77 @@ components:
       - direction
       - amount
       - currency
+    GlJournalRejection:
+      type: object
+      description: Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        gl_journal_id:
+          type: string
+          format: uuid
+          description: Rejected GL journal (one decision per journal)
+          readOnly: true
+        rejected_by:
+          type: string
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 500
+          description: Why the journal was rejected
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - gl_journal_id
+      - rejected_by
+      - reason
     GlMappingRule:
       type: object
       description: Maps ledger account types / products / transaction types to GL accounts

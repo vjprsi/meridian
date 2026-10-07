@@ -556,6 +556,7 @@ paths:
           - ACTIVE
           - SUPERSEDED
           - DEPRECATED
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -641,6 +642,54 @@ paths:
       x-table: report_definition_version
       x-crud: true
       x-crud-get: true
+  /v1/reporting/definition-versions/{id}/reject:
+    post:
+      operationId: reportDefinitionVersionsReject
+      summary: 'Reject a DRAFT version (checker: must not be the version''s author); the maker creates a new version'
+      tags:
+      - Report Definition Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDefinitionVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportDefinitionVersionsRejectRequest'
+      x-requirements:
+      - REG-01
+      - REG-02
+      - REG-03
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: report_definition_version
   /v1/reporting/schedules:
     get:
       operationId: reportSchedulesList
@@ -2973,6 +3022,50 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AnalyticsKpisCertifyRequest'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: analytics_kpi
+  /v1/analytics/kpis/{id}/reject-certification:
+    post:
+      operationId: analyticsKpisRejectCertification
+      summary: Decline certification of the KPI definition (data governance; not the author); the author reworks the metric
+      tags:
+      - Analytics Kpis
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsKpi'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsKpisRejectCertificationRequest'
       x-service: analytics-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
@@ -7510,6 +7603,13 @@ components:
           type: string
       required:
       - reason
+    ReportDefinitionVersionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     ReportSchedulePage:
       type: object
       description: One page of ReportSchedule results (newest first)
@@ -7792,6 +7892,13 @@ components:
       properties:
         comment:
           type: string
+    AnalyticsKpisRejectCertificationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     AnalyticsSavedQueryPage:
       type: object
       description: One page of AnalyticsSavedQuery results (newest first)
@@ -9404,6 +9511,26 @@ components:
           - 'null'
           format: date-time
           description: Certification time
+          readOnly: true
+        certification_rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Data governance reviewer who declined the last certification request
+          readOnly: true
+        certification_rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time certification was declined (cleared when the metric changes)
+          readOnly: true
+        certification_rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why certification was declined
           readOnly: true
         custom_field_1:
           type:
@@ -13183,6 +13310,7 @@ components:
           - ACTIVE
           - SUPERSEDED
           - DEPRECATED
+          - REJECTED
           description: Status
           readOnly: true
         change_note:
@@ -13203,6 +13331,26 @@ components:
           - 'null'
           format: date-time
           description: Publication time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the version
+          readOnly: true
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rejection time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the version was rejected (the maker creates a new version)
           readOnly: true
         custom_field_1:
           type:

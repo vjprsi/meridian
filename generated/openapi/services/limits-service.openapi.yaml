@@ -282,6 +282,53 @@ paths:
       x-table: limit_rule
       x-crud: true
       x-crud-update: true
+  /v1/risk/limits/rules/{id}/submit:
+    post:
+      operationId: limitRulesSubmit
+      summary: Submit the rule for activation (maker); a checker activates it or rejects the submission
+      tags:
+      - Limit Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitRulesSubmitRequest'
+      x-requirements:
+      - CIF-03
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: limit_rule
   /v1/risk/limits/rules/{id}/activate:
     post:
       operationId: limitRulesActivate
@@ -322,6 +369,53 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LimitRulesActivateRequest'
+      x-requirements:
+      - CIF-03
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: limit_rule
+  /v1/risk/limits/rules/{id}/reject:
+    post:
+      operationId: limitRulesReject
+      summary: Reject the pending activation submission (checker); the rule keeps its status
+      tags:
+      - Limit Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitRulesRejectRequest'
       x-requirements:
       - CIF-03
       - LIM-01
@@ -1556,11 +1650,23 @@ components:
       required:
       - data
       - has_more
+    LimitRulesSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
     LimitRulesActivateRequest:
       type: object
       properties:
         comment:
           type: string
+    LimitRulesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     LimitRulesDeactivateRequest:
       type: object
       properties:
@@ -2581,6 +2687,33 @@ components:
           - string
           - 'null'
           description: Why the rule was deactivated
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the rule for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
           readOnly: true
         custom_field_1:
           type:

@@ -1647,6 +1647,52 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-required-scope: risk:write
       x-table: sar_report
+  /v1/risk/sar-reports/{id}/return-to-draft:
+    post:
+      operationId: sarReportsReturnToDraft
+      summary: Return a report pending approval to DRAFT for rework (MLRO; not the preparer)
+      tags:
+      - Sar Reports
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SarReport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SarReportsReturnToDraftRequest'
+      x-requirements:
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: sar_report
   /v1/risk/sar-reports/{id}/file:
     post:
       operationId: sarReportsFile
@@ -2096,6 +2142,13 @@ components:
       properties:
         comment:
           type: string
+    SarReportsReturnToDraftRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     SarReportsFileRequest:
       type: object
       properties:
@@ -3373,6 +3426,19 @@ components:
           - string
           - 'null'
           description: FIU rejection reason
+          readOnly: true
+        returned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO who last returned the report to DRAFT for rework
+          readOnly: true
+        return_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the MLRO returned the report
           readOnly: true
         custom_field_1:
           type:

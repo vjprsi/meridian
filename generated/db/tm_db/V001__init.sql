@@ -93,6 +93,10 @@ CREATE TABLE tm_scenario_version (
   tuning_rationale             text,
   approval_request_id          uuid,
   approved_by                  varchar(64),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -120,6 +124,10 @@ COMMENT ON COLUMN tm_scenario_version.effective_from IS 'Effective from (set on 
 COMMENT ON COLUMN tm_scenario_version.tuning_rationale IS 'Why thresholds were set or changed (below/above-the-line testing)';
 COMMENT ON COLUMN tm_scenario_version.approval_request_id IS 'Maker-checker approval';
 COMMENT ON COLUMN tm_scenario_version.approved_by IS 'Approver';
+COMMENT ON COLUMN tm_scenario_version.submitted_by IS 'Maker who submitted the version for activation';
+COMMENT ON COLUMN tm_scenario_version.submitted_at IS 'Submission time (empty when no activation is pending)';
+COMMENT ON COLUMN tm_scenario_version.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN tm_scenario_version.rejection_reason IS 'Why the last submission was rejected';
 COMMENT ON COLUMN tm_scenario_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tm_scenario_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tm_scenario_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

@@ -207,9 +207,12 @@ CREATE TABLE lcr_calculation (
   regulatory_minimum           numeric(18,10) NOT NULL DEFAULT 1.0,
   breach                       boolean NOT NULL DEFAULT false,
   components                   jsonb NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED')),
+  status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED', 'REJECTED')),
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejected_at                  timestamptz,
+  rejection_reason             varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -241,9 +244,12 @@ COMMENT ON COLUMN lcr_calculation.lcr_ratio IS 'LCR = HQLA / net outflows';
 COMMENT ON COLUMN lcr_calculation.regulatory_minimum IS 'Minimum ratio';
 COMMENT ON COLUMN lcr_calculation.breach IS 'Ratio below the regulatory minimum';
 COMMENT ON COLUMN lcr_calculation.components IS 'Line-level components [{line, code, category, amount, factor, weighted}]';
-COMMENT ON COLUMN lcr_calculation.status IS 'Status';
+COMMENT ON COLUMN lcr_calculation.status IS 'Status (REJECTED: recalculate to resubmit)';
 COMMENT ON COLUMN lcr_calculation.approved_by IS 'Approver (four-eyes)';
 COMMENT ON COLUMN lcr_calculation.approved_at IS 'Approval time';
+COMMENT ON COLUMN lcr_calculation.rejected_by IS 'Checker who rejected the calculation';
+COMMENT ON COLUMN lcr_calculation.rejected_at IS 'Rejection time';
+COMMENT ON COLUMN lcr_calculation.rejection_reason IS 'Why the calculation was rejected';
 COMMENT ON COLUMN lcr_calculation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN lcr_calculation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN lcr_calculation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -273,9 +279,12 @@ CREATE TABLE nsfr_calculation (
   regulatory_minimum           numeric(18,10) NOT NULL DEFAULT 1.0,
   breach                       boolean NOT NULL DEFAULT false,
   components                   jsonb NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED')),
+  status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED', 'REJECTED')),
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejected_at                  timestamptz,
+  rejection_reason             varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -300,9 +309,12 @@ COMMENT ON COLUMN nsfr_calculation.nsfr_ratio IS 'ASF / RSF';
 COMMENT ON COLUMN nsfr_calculation.regulatory_minimum IS 'Minimum ratio';
 COMMENT ON COLUMN nsfr_calculation.breach IS 'Ratio below the regulatory minimum';
 COMMENT ON COLUMN nsfr_calculation.components IS 'ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}]';
-COMMENT ON COLUMN nsfr_calculation.status IS 'Status';
+COMMENT ON COLUMN nsfr_calculation.status IS 'Status (REJECTED: recalculate to resubmit)';
 COMMENT ON COLUMN nsfr_calculation.approved_by IS 'Approver (four-eyes)';
 COMMENT ON COLUMN nsfr_calculation.approved_at IS 'Approval time';
+COMMENT ON COLUMN nsfr_calculation.rejected_by IS 'Checker who rejected the calculation';
+COMMENT ON COLUMN nsfr_calculation.rejected_at IS 'Rejection time';
+COMMENT ON COLUMN nsfr_calculation.rejection_reason IS 'Why the calculation was rejected';
 COMMENT ON COLUMN nsfr_calculation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN nsfr_calculation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN nsfr_calculation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

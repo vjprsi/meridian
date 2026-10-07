@@ -37,6 +37,9 @@ CREATE TABLE alm_behavioural_assumption (
   model_version                varchar(32) NOT NULL,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejected_at                  timestamptz,
+  rejection_reason             varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -61,6 +64,9 @@ COMMENT ON COLUMN alm_behavioural_assumption.valid_to IS 'Effective to';
 COMMENT ON COLUMN alm_behavioural_assumption.model_version IS 'Model version';
 COMMENT ON COLUMN alm_behavioural_assumption.approved_by IS 'Model approver (four-eyes)';
 COMMENT ON COLUMN alm_behavioural_assumption.approved_at IS 'Approval time';
+COMMENT ON COLUMN alm_behavioural_assumption.rejected_by IS 'Model risk checker who rejected the assumption (cleared when it is reworked)';
+COMMENT ON COLUMN alm_behavioural_assumption.rejected_at IS 'Rejection time';
+COMMENT ON COLUMN alm_behavioural_assumption.rejection_reason IS 'Why the assumption was rejected';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -255,6 +261,10 @@ CREATE TABLE ftp_curve (
   is_published                 boolean NOT NULL DEFAULT false,
   approved_by                  varchar(64),
   published_at                 timestamptz,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -278,6 +288,10 @@ COMMENT ON COLUMN ftp_curve.source IS 'Market source / construction method';
 COMMENT ON COLUMN ftp_curve.is_published IS 'Published for use (publish action)';
 COMMENT ON COLUMN ftp_curve.approved_by IS 'ALCO approver (four-eyes)';
 COMMENT ON COLUMN ftp_curve.published_at IS 'Publication time';
+COMMENT ON COLUMN ftp_curve.submitted_by IS 'Maker who submitted the curve for ALCO approval';
+COMMENT ON COLUMN ftp_curve.submitted_at IS 'Submission time (empty when no publication is pending)';
+COMMENT ON COLUMN ftp_curve.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN ftp_curve.rejection_reason IS 'Why the last submission was rejected';
 COMMENT ON COLUMN ftp_curve.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_curve.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_curve.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

@@ -43,6 +43,11 @@ CREATE TABLE fraud_rule (
   approval_request_id          uuid,
   approved_by                  varchar(64),
   deactivation_reason          varchar(255),
+  submitted_mode               varchar(40) CHECK (submitted_mode IN ('DRAFT', 'SHADOW', 'ACTIVE', 'DISABLED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -74,6 +79,11 @@ COMMENT ON COLUMN fraud_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN fraud_rule.approval_request_id IS 'Maker-checker approval';
 COMMENT ON COLUMN fraud_rule.approved_by IS 'Checker';
 COMMENT ON COLUMN fraud_rule.deactivation_reason IS 'Why the rule was disabled';
+COMMENT ON COLUMN fraud_rule.submitted_mode IS 'Mode (ACTIVE or SHADOW) requested by the pending activation submission';
+COMMENT ON COLUMN fraud_rule.submitted_by IS 'Maker who submitted the activation';
+COMMENT ON COLUMN fraud_rule.submitted_at IS 'Submission time (empty when no activation is pending)';
+COMMENT ON COLUMN fraud_rule.rejected_by IS 'Checker who rejected the last activation submission';
+COMMENT ON COLUMN fraud_rule.rejection_reason IS 'Why the last activation submission was rejected';
 COMMENT ON COLUMN fraud_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

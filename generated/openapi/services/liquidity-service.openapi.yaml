@@ -479,6 +479,7 @@ paths:
           - REVIEWED
           - APPROVED
           - SUBMITTED
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -650,6 +651,53 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: lcr_calculation
+  /v1/treasury/liquidity/lcr/{id}/reject:
+    post:
+      operationId: lcrCalculationsReject
+      summary: Reject the calculation (checker; not the calculator); a recalculation resubmits it
+      tags:
+      - Lcr Calculations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LcrCalculation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LcrCalculationsRejectRequest'
+      x-requirements:
+      - REG-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: lcr_calculation
   /v1/treasury/liquidity/nsfr:
     get:
       operationId: nsfrCalculationsList
@@ -689,6 +737,7 @@ paths:
           - REVIEWED
           - APPROVED
           - SUBMITTED
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -853,6 +902,53 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/NsfrCalculationsApproveRequest'
+      x-requirements:
+      - REG-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: nsfr_calculation
+  /v1/treasury/liquidity/nsfr/{id}/reject:
+    post:
+      operationId: nsfrCalculationsReject
+      summary: Reject the calculation (checker; not the calculator); a recalculation resubmits it
+      tags:
+      - Nsfr Calculations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NsfrCalculation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NsfrCalculationsRejectRequest'
       x-requirements:
       - REG-01
       - TRY-03
@@ -1735,6 +1831,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    LcrCalculationsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     NsfrCalculationPage:
       type: object
       description: One page of NsfrCalculation results (newest first)
@@ -1785,6 +1889,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    NsfrCalculationsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     LiquidityStressScenarioPage:
       type: object
       description: One page of LiquidityStressScenario results (newest first)
@@ -2230,7 +2342,8 @@ components:
           - REVIEWED
           - APPROVED
           - SUBMITTED
-          description: Status
+          - REJECTED
+          description: 'Status (REJECTED: recalculate to resubmit)'
           readOnly: true
         approved_by:
           type:
@@ -2245,6 +2358,27 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the calculation
+          readOnly: true
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rejection time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the calculation was rejected
           readOnly: true
         custom_field_1:
           type:
@@ -3408,7 +3542,8 @@ components:
           - REVIEWED
           - APPROVED
           - SUBMITTED
-          description: Status
+          - REJECTED
+          description: 'Status (REJECTED: recalculate to resubmit)'
           readOnly: true
         approved_by:
           type:
@@ -3423,6 +3558,27 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the calculation
+          readOnly: true
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rejection time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the calculation was rejected
           readOnly: true
         custom_field_1:
           type:

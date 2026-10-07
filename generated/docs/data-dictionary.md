@@ -3785,7 +3785,7 @@ API: /v1/gl/balances · Requirements: GL-02, GL-03
 
 #### `gl_journal` (append-only)
 
-GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.
+GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a manual journal without posting it (it no longer blocks the period close).
 
 API: /v1/gl/journals · Requirements: GL-02, GL-05
 
@@ -3850,6 +3850,27 @@ API: /v1/gl/journal-approvals · Requirements: GL-02, GL-05
 | gl_journal_id | uuid | no | FK → gl_journal | gl_journal_id (read-only) | Approved GL journal (one approval per journal) |
 | approved_by | varchar(64) | no |  | approved_by (read-only) | Checker (system:<process> for system journals such as provisions) |
 | comment | varchar(500) | yes |  | comment | Checker comment |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `gl_journal_rejection` (append-only)
+
+Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.
+
+API: /v1/gl/journal-rejections · Requirements: GL-02, GL-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| gl_journal_id | uuid | no | FK → gl_journal | gl_journal_id (read-only) | Rejected GL journal (one decision per journal) |
+| rejected_by | varchar(64) | no |  | rejected_by (read-only) | Checker |
+| reason | varchar(500) | no |  | reason | Why the journal was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12509,6 +12530,9 @@ API: /v1/reporting/definition-versions · Requirements: REG-01, REG-02, REG-03
 | change_note | text | yes |  | change_note | What changed |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who published the version |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Publication time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the version |
+| rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the version was rejected (the maker creates a new version) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12841,6 +12865,9 @@ API: /v1/analytics/kpis
 | is_certified | boolean | no |  | is_certified (read-only) | Certified by data governance (cleared when the metric changes) |
 | certified_by | varchar(64) | yes |  | certified_by (read-only) | Certifier |
 | certified_at | timestamptz | yes |  | certified_at (read-only) | Certification time |
+| certification_rejected_by | varchar(64) | yes |  | certification_rejected_by (read-only) | Data governance reviewer who declined the last certification request |
+| certification_rejected_at | timestamptz | yes |  | certification_rejected_at (read-only) | Time certification was declined (cleared when the metric changes) |
+| certification_rejection_reason | text | yes |  | certification_rejection_reason (read-only) | Why certification was declined |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13447,6 +13474,11 @@ API: /v1/risk/fraud/rules · Requirements: FRM-01
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | deactivation_reason | varchar(255) | yes |  | deactivation_reason (read-only) | Why the rule was disabled |
+| submitted_mode | varchar(40) (FraudRuleStatus) | yes |  | submitted_mode (read-only) | Mode (ACTIVE or SHADOW) requested by the pending activation submission |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last activation submission |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the last activation submission was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13758,6 +13790,10 @@ API: /v1/risk/monitoring/scenario-versions · Requirements: FRM-02
 | tuning_rationale | text | yes |  | tuning_rationale | Why thresholds were set or changed (below/above-the-line testing) |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the version for activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14440,6 +14476,8 @@ API: /v1/risk/sar-reports · Requirements: FRM-04
 | acknowledged_at | timestamptz | yes |  | acknowledged_at (read-only) | FIU acknowledgement time |
 | regulator_reference | varchar(128) | yes |  | regulator_reference (read-only) | FIU reference number |
 | rejection_reason | text | yes |  | rejection_reason (read-only) | FIU rejection reason |
+| returned_by | varchar(64) | yes |  | returned_by (read-only) | MLRO who last returned the report to DRAFT for rework |
+| return_reason | text | yes |  | return_reason (read-only) | Why the MLRO returned the report |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14486,6 +14524,10 @@ API: /v1/risk/limits/rules · Requirements: LIM-01, CIF-03
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who activated the rule |
 | deactivation_reason | text | yes |  | deactivation_reason (read-only) | Why the rule was deactivated |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the rule for activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -15794,9 +15836,12 @@ API: /v1/treasury/liquidity/lcr · Requirements: TRY-03, REG-01
 | regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
 | breach | boolean | no |  | breach (read-only) | Ratio below the regulatory minimum |
 | components | jsonb | no |  | components (read-only) | Line-level components [{line, code, category, amount, factor, weighted}] |
-| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status (REJECTED: recalculate to resubmit) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver (four-eyes) |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the calculation |
+| rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the calculation was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -15827,9 +15872,12 @@ API: /v1/treasury/liquidity/nsfr · Requirements: TRY-03, REG-01
 | regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
 | breach | boolean | no |  | breach (read-only) | Ratio below the regulatory minimum |
 | components | jsonb | no |  | components (read-only) | ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}] |
-| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status (REJECTED: recalculate to resubmit) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver (four-eyes) |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the calculation |
+| rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the calculation was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -15982,6 +16030,9 @@ API: /v1/treasury/alm/assumptions · Requirements: TRY-04, TRY-05
 | model_version | varchar(32) | no |  | model_version | Model version |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Model approver (four-eyes) |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Model risk checker who rejected the assumption (cleared when it is reworked) |
+| rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the assumption was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -16106,6 +16157,10 @@ API: /v1/treasury/ftp/curves · Requirements: TRY-05
 | is_published | boolean | no |  | is_published (read-only) | Published for use (publish action) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | ALCO approver (four-eyes) |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the curve for ALCO approval |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no publication is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -17260,9 +17315,11 @@ API: /v1/biller-settlements · Requirements: WAL-05
 | fee_amount | numeric(28,8) | yes |  | fee_amount (read-only) | Fees retained |
 | commission_amount | numeric(28,8) | yes |  | commission_amount (read-only) | Commissions retained |
 | net_amount | numeric(28,8) | yes |  | net_amount (read-only) | Net payable to the biller |
-| status | varchar(40) (WalletSettlementStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (WalletSettlementStatus) | no |  | status (read-only) | Status (REJECTED releases its payments for a new settlement) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the settlement |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Why the settlement was rejected |
 | payment_reference | varchar(64) | yes |  | payment_reference (read-only) | Bank payment reference |
 | wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id (read-only) | Settlement transaction out of the collection wallet |
 | paid_at | timestamptz | yes |  | paid_at (read-only) | Payment time |
@@ -17429,7 +17486,8 @@ API: /v1/merchants · Requirements: WAL-06, ONB-04
 | risk_rating | varchar(16) | yes |  | risk_rating | LOW, MEDIUM, HIGH |
 | daily_limit | numeric(28,8) | yes |  | daily_limit | Maximum daily collections |
 | status | varchar(40) (MerchantStatus) | no |  | status (read-only) | Status (changed only by actions) |
-| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the current status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the current status (for ONBOARDING: why the checker returned it for rework) |
+| onboarding_rejected_by | varchar(64) | yes |  | onboarding_rejected_by (read-only) | Checker who last returned the onboarding for rework |
 | onboarded_at | timestamptz | yes |  | onboarded_at (read-only) | Activation time |
 | logo_document_id | uuid | yes | ref → document | logo_document_id | Logo |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
@@ -17590,11 +17648,13 @@ API: /v1/merchant-settlements · Requirements: WAL-06
 | mdr_amount | numeric(28,8) | yes |  | mdr_amount (read-only) | Merchant discount fees |
 | refund_amount | numeric(28,8) | yes |  | refund_amount (read-only) | Refunds |
 | net_amount | numeric(28,8) | yes |  | net_amount (read-only) | Net payable |
-| status | varchar(40) (WalletSettlementStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (WalletSettlementStatus) | no |  | status (read-only) | Status (REJECTED releases its payments for a new settlement) |
 | settlement_wallet_id | uuid | yes | ref → wallet | settlement_wallet_id (read-only) | Wallet the collections sit in |
 | settlement_account_id | uuid | yes | ref → deposit_account | settlement_account_id (read-only) | Bank account paid (empty = net stays in the wallet) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the settlement |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Why the settlement was rejected |
 | payment_id | uuid | yes | ref → payment | payment_id (read-only) | Bank payment when settled to bank |
 | fee_wallet_transaction_id | uuid | yes | ref → wallet_transaction | fee_wallet_transaction_id (read-only) | MDR fee transaction |
 | wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id (read-only) | Settlement transaction to the bank account |
@@ -17672,6 +17732,10 @@ API: /v1/ussd-menus · Requirements: WAL-03
 | status | varchar(40) (UssdMenuStatus) | no |  | status (read-only) | Status |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
 | published_by | varchar(64) | yes |  | published_by (read-only) | Publisher (checker, differs from the maker) |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the draft for publication |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no publication is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
 | retired_at | timestamptz | yes |  | retired_at (read-only) | Time a newer version replaced it |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |

@@ -574,6 +574,52 @@ paths:
       x-table: fraud_rule
       x-crud: true
       x-crud-update: true
+  /v1/risk/fraud/rules/{id}/submit:
+    post:
+      operationId: fraudRulesSubmit
+      summary: Submit the rule for activation in a mode (maker); a checker activates it or rejects the submission
+      tags:
+      - Fraud Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudRulesSubmitRequest'
+      x-requirements:
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_rule
   /v1/risk/fraud/rules/{id}/activate:
     post:
       operationId: fraudRulesActivate
@@ -614,6 +660,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/FraudRulesActivateRequest'
+      x-requirements:
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_rule
+  /v1/risk/fraud/rules/{id}/reject:
+    post:
+      operationId: fraudRulesReject
+      summary: Reject the pending activation submission (checker); the rule keeps its status
+      tags:
+      - Fraud Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudRulesRejectRequest'
       x-requirements:
       - FRM-01
       x-service: fraud-service
@@ -2752,6 +2844,21 @@ components:
       required:
       - data
       - has_more
+    FraudRulesSubmitRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - DRAFT
+          - SHADOW
+          - ACTIVE
+          - DISABLED
+        comment:
+          type: string
+          maxLength: 500
+      required:
+      - mode
     FraudRulesActivateRequest:
       type: object
       properties:
@@ -2764,6 +2871,14 @@ components:
           - DISABLED
       required:
       - mode
+    FraudRulesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     FraudRulesDeactivateRequest:
       type: object
       properties:
@@ -4927,6 +5042,45 @@ components:
           - 'null'
           maxLength: 255
           description: Why the rule was disabled
+          readOnly: true
+        submitted_mode:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DRAFT
+          - SHADOW
+          - ACTIVE
+          - DISABLED
+          description: Mode (ACTIVE or SHADOW) requested by the pending activation submission
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last activation submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the last activation submission was rejected
           readOnly: true
         custom_field_1:
           type:

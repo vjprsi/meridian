@@ -110,6 +110,7 @@ CREATE TABLE merchant (
   daily_limit                  numeric(28,8),
   status                       varchar(40) NOT NULL DEFAULT 'ONBOARDING' CHECK (status IN ('ONBOARDING', 'ACTIVE', 'SUSPENDED', 'TERMINATED')),
   status_reason                varchar(255),
+  onboarding_rejected_by       varchar(64),
   onboarded_at                 timestamptz,
   logo_document_id             uuid,
   metadata                     jsonb,
@@ -152,7 +153,8 @@ COMMENT ON COLUMN merchant.acquiring_agent_id IS 'Agent who onboarded the mercha
 COMMENT ON COLUMN merchant.risk_rating IS 'LOW, MEDIUM, HIGH';
 COMMENT ON COLUMN merchant.daily_limit IS 'Maximum daily collections';
 COMMENT ON COLUMN merchant.status IS 'Status (changed only by actions)';
-COMMENT ON COLUMN merchant.status_reason IS 'Reason for the current status';
+COMMENT ON COLUMN merchant.status_reason IS 'Reason for the current status (for ONBOARDING: why the checker returned it for rework)';
+COMMENT ON COLUMN merchant.onboarding_rejected_by IS 'Checker who last returned the onboarding for rework';
 COMMENT ON COLUMN merchant.onboarded_at IS 'Activation time';
 COMMENT ON COLUMN merchant.logo_document_id IS 'Logo';
 COMMENT ON COLUMN merchant.metadata IS 'Client-defined key/value metadata';
@@ -418,11 +420,13 @@ CREATE TABLE merchant_settlement (
   mdr_amount                   numeric(28,8),
   refund_amount                numeric(28,8),
   net_amount                   numeric(28,8),
-  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED', 'REJECTED')),
   settlement_wallet_id         uuid,
   settlement_account_id        uuid,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(255),
   payment_id                   uuid,
   fee_wallet_transaction_id    uuid,
   wallet_transaction_id        uuid,
@@ -452,11 +456,13 @@ COMMENT ON COLUMN merchant_settlement.gross_amount IS 'Gross collections';
 COMMENT ON COLUMN merchant_settlement.mdr_amount IS 'Merchant discount fees';
 COMMENT ON COLUMN merchant_settlement.refund_amount IS 'Refunds';
 COMMENT ON COLUMN merchant_settlement.net_amount IS 'Net payable';
-COMMENT ON COLUMN merchant_settlement.status IS 'Status';
+COMMENT ON COLUMN merchant_settlement.status IS 'Status (REJECTED releases its payments for a new settlement)';
 COMMENT ON COLUMN merchant_settlement.settlement_wallet_id IS 'Wallet the collections sit in';
 COMMENT ON COLUMN merchant_settlement.settlement_account_id IS 'Bank account paid (empty = net stays in the wallet)';
 COMMENT ON COLUMN merchant_settlement.approved_by IS 'Checker';
 COMMENT ON COLUMN merchant_settlement.approved_at IS 'Approval time';
+COMMENT ON COLUMN merchant_settlement.rejected_by IS 'Checker who rejected the settlement';
+COMMENT ON COLUMN merchant_settlement.rejection_reason IS 'Why the settlement was rejected';
 COMMENT ON COLUMN merchant_settlement.payment_id IS 'Bank payment when settled to bank';
 COMMENT ON COLUMN merchant_settlement.fee_wallet_transaction_id IS 'MDR fee transaction';
 COMMENT ON COLUMN merchant_settlement.wallet_transaction_id IS 'Settlement transaction to the bank account';

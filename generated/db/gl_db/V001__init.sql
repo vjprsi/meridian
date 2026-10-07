@@ -239,7 +239,7 @@ ALTER TABLE gl_balance ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON gl_balance USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_gl_balance_touch BEFORE UPDATE ON gl_balance FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- gl_journal: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.
+-- gl_journal: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a manual journal without posting it (it no longer blocks the period close).
 CREATE TABLE gl_journal (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -257,7 +257,7 @@ CREATE TABLE gl_journal (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE gl_journal IS 'GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.';
+COMMENT ON TABLE gl_journal IS 'GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them; a gl_journal_rejection closes a manual journal without posting it (it no longer blocks the period close).';
 COMMENT ON COLUMN gl_journal.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN gl_journal.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN gl_journal.created_at IS 'Creation time';
@@ -365,6 +365,40 @@ CREATE INDEX ix_gl_journal_approval_tenant ON gl_journal_approval (tenant_id, cr
 ALTER TABLE gl_journal_approval ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON gl_journal_approval USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_gl_journal_approval_append_only BEFORE UPDATE OR DELETE ON gl_journal_approval FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- gl_journal_rejection: Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.
+CREATE TABLE gl_journal_rejection (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  gl_journal_id                uuid NOT NULL REFERENCES gl_journal(id),
+  rejected_by                  varchar(64) NOT NULL,
+  reason                       varchar(500) NOT NULL,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_gl_journal_rejection_gl_journal_id UNIQUE (tenant_id, gl_journal_id)
+);
+COMMENT ON TABLE gl_journal_rejection IS 'Checker rejection of a manual GL journal (four-eyes); the journal never posts. Append-only.';
+COMMENT ON COLUMN gl_journal_rejection.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN gl_journal_rejection.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN gl_journal_rejection.created_at IS 'Creation time';
+COMMENT ON COLUMN gl_journal_rejection.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN gl_journal_rejection.gl_journal_id IS 'Rejected GL journal (one decision per journal)';
+COMMENT ON COLUMN gl_journal_rejection.rejected_by IS 'Checker';
+COMMENT ON COLUMN gl_journal_rejection.reason IS 'Why the journal was rejected';
+COMMENT ON COLUMN gl_journal_rejection.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_rejection.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_rejection.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_rejection.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_rejection.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_gl_journal_rejection_tenant ON gl_journal_rejection (tenant_id, created_at);
+ALTER TABLE gl_journal_rejection ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON gl_journal_rejection USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_gl_journal_rejection_append_only BEFORE UPDATE OR DELETE ON gl_journal_rejection FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- period_close_run: Execution of an EOD / EOM / EOY close with its checklist steps
 CREATE TABLE period_close_run (

@@ -38,6 +38,10 @@ CREATE TABLE ussd_menu (
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'RETIRED')),
   published_at                 timestamptz,
   published_by                 varchar(64),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
   retired_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -65,6 +69,10 @@ COMMENT ON COLUMN ussd_menu.session_timeout_seconds IS 'Session timeout';
 COMMENT ON COLUMN ussd_menu.status IS 'Status';
 COMMENT ON COLUMN ussd_menu.published_at IS 'Publication time';
 COMMENT ON COLUMN ussd_menu.published_by IS 'Publisher (checker, differs from the maker)';
+COMMENT ON COLUMN ussd_menu.submitted_by IS 'Maker who submitted the draft for publication';
+COMMENT ON COLUMN ussd_menu.submitted_at IS 'Submission time (empty when no publication is pending)';
+COMMENT ON COLUMN ussd_menu.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN ussd_menu.rejection_reason IS 'Why the last submission was rejected';
 COMMENT ON COLUMN ussd_menu.retired_at IS 'Time a newer version replaced it';
 COMMENT ON COLUMN ussd_menu.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_menu.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

@@ -313,6 +313,54 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: merchant
+  /v1/merchants/{id}/reject-onboarding:
+    post:
+      operationId: merchantsRejectOnboarding
+      summary: Return an ONBOARDING merchant to the maker for rework (checker differs from the creator); it stays ONBOARDING
+        with the reason in status_reason
+      tags:
+      - Merchants
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Merchant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantsRejectOnboardingRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-06
+      x-service: merchant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: merchant
   /v1/merchants/{id}/suspend:
     post:
       operationId: merchantsSuspend
@@ -1767,6 +1815,7 @@ paths:
           - APPROVED
           - PAID
           - FAILED
+          - REJECTED
       - name: custom_field_1
         in: query
         schema:
@@ -1927,6 +1976,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/MerchantSettlementsApproveRequest'
+      x-requirements:
+      - WAL-06
+      x-service: merchant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: merchant_settlement
+  /v1/merchant-settlements/{id}/reject:
+    post:
+      operationId: merchantSettlementsReject
+      summary: Reject the settlement (checker differs from the maker); its period can be settled again
+      tags:
+      - Merchant Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantSettlementsRejectRequest'
       x-requirements:
       - WAL-06
       x-service: merchant-service
@@ -2334,6 +2429,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    MerchantsRejectOnboardingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     MerchantsSuspendRequest:
       type: object
       properties:
@@ -2542,6 +2645,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    MerchantSettlementsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     MerchantRefundPage:
       type: object
       description: One page of MerchantRefund results (newest first)
@@ -2763,7 +2874,14 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Reason for the current status
+          description: 'Reason for the current status (for ONBOARDING: why the checker returned it for rework)'
+          readOnly: true
+        onboarding_rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who last returned the onboarding for rework
           readOnly: true
         onboarded_at:
           type:
@@ -4181,7 +4299,8 @@ components:
           - APPROVED
           - PAID
           - FAILED
-          description: Status
+          - REJECTED
+          description: Status (REJECTED releases its payments for a new settlement)
           readOnly: true
         settlement_wallet_id:
           type:
@@ -4210,6 +4329,20 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the settlement
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the settlement was rejected
           readOnly: true
         payment_id:
           type:

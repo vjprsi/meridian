@@ -230,9 +230,11 @@ CREATE TABLE biller_settlement (
   fee_amount                   numeric(28,8),
   commission_amount            numeric(28,8),
   net_amount                   numeric(28,8),
-  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED', 'REJECTED')),
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(255),
   payment_reference            varchar(64),
   wallet_transaction_id        uuid,
   paid_at                      timestamptz,
@@ -261,9 +263,11 @@ COMMENT ON COLUMN biller_settlement.gross_amount IS 'Collected';
 COMMENT ON COLUMN biller_settlement.fee_amount IS 'Fees retained';
 COMMENT ON COLUMN biller_settlement.commission_amount IS 'Commissions retained';
 COMMENT ON COLUMN biller_settlement.net_amount IS 'Net payable to the biller';
-COMMENT ON COLUMN biller_settlement.status IS 'Status';
+COMMENT ON COLUMN biller_settlement.status IS 'Status (REJECTED releases its payments for a new settlement)';
 COMMENT ON COLUMN biller_settlement.approved_by IS 'Checker';
 COMMENT ON COLUMN biller_settlement.approved_at IS 'Approval time';
+COMMENT ON COLUMN biller_settlement.rejected_by IS 'Checker who rejected the settlement';
+COMMENT ON COLUMN biller_settlement.rejection_reason IS 'Why the settlement was rejected';
 COMMENT ON COLUMN biller_settlement.payment_reference IS 'Bank payment reference';
 COMMENT ON COLUMN biller_settlement.wallet_transaction_id IS 'Settlement transaction out of the collection wallet';
 COMMENT ON COLUMN biller_settlement.paid_at IS 'Payment time';

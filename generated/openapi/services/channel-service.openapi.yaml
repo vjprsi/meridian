@@ -272,6 +272,52 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
       x-required-scope: wallets:read
       x-table: ussd_menu
+  /v1/ussd-menus/{id}/submit:
+    post:
+      operationId: ussdMenusSubmit
+      summary: Submit the draft version and its tree for publication (maker)
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenusSubmitRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: ussd_menu
   /v1/ussd-menus/{id}/publish:
     post:
       operationId: ussdMenusPublish
@@ -313,6 +359,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UssdMenusPublishRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: ussd_menu
+  /v1/ussd-menus/{id}/reject:
+    post:
+      operationId: ussdMenusReject
+      summary: Reject the submitted draft (checker); it stays DRAFT for rework
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenusRejectRequest'
       x-requirements:
       - WAL-03
       x-service: channel-service
@@ -1392,12 +1484,26 @@ components:
       required:
       - data
       - has_more
+    UssdMenusSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
     UssdMenusPublishRequest:
       type: object
       properties:
         comment:
           type: string
           maxLength: 500
+    UssdMenusRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     UssdMenusSimulateRequest:
       type: object
       properties:
@@ -2061,6 +2167,34 @@ components:
           - 'null'
           maxLength: 64
           description: Publisher (checker, differs from the maker)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the draft for publication
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no publication is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the last submission was rejected
           readOnly: true
         retired_at:
           type:

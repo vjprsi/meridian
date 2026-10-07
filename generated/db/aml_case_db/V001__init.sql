@@ -356,6 +356,8 @@ CREATE TABLE sar_report (
   acknowledged_at              timestamptz,
   regulator_reference          varchar(128),
   rejection_reason             text,
+  returned_by                  varchar(64),
+  return_reason                text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -392,6 +394,8 @@ COMMENT ON COLUMN sar_report.submitted_at IS 'Submission time';
 COMMENT ON COLUMN sar_report.acknowledged_at IS 'FIU acknowledgement time';
 COMMENT ON COLUMN sar_report.regulator_reference IS 'FIU reference number';
 COMMENT ON COLUMN sar_report.rejection_reason IS 'FIU rejection reason';
+COMMENT ON COLUMN sar_report.returned_by IS 'MLRO who last returned the report to DRAFT for rework';
+COMMENT ON COLUMN sar_report.return_reason IS 'Why the MLRO returned the report';
 COMMENT ON COLUMN sar_report.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN sar_report.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN sar_report.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

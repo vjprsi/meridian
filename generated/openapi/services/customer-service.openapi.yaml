@@ -869,6 +869,53 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
       x-required-scope: party:write
       x-table: customer
+  /v1/customers/contact-search-backfill:
+    post:
+      operationId: customersContactSearchBackfill
+      summary: 'Operator batch for contact search: fills masked_value and lookup_hash of verified contacts missing them (or
+        recomputes them for every verified contact with rehash_all, after a lookup key rotation) and republishes party.customer_contact.verified;
+        idempotent, one batch per call (batch_size default 500, max 5000), resume with after_id = next_after_id: {processed,
+        updated, published, next_after_id, done}'
+      tags:
+      - Customers
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomersContactSearchBackfillRequest'
+      x-requirements:
+      - CIF-01
+      - CIF-02
+      - CIF-03
+      x-service: customer-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-required-scope: party:write
+      x-table: customer
   /v1/customers/{customer_id}/identifiers:
     get:
       operationId: customerIdentifiersList
@@ -4242,6 +4289,17 @@ components:
         registration_number:
           type: string
           maxLength: 64
+    CustomersContactSearchBackfillRequest:
+      type: object
+      properties:
+        batch_size:
+          type: integer
+          format: int32
+        after_id:
+          type: string
+          format: uuid
+        rehash_all:
+          type: boolean
     CustomerIdentifierPage:
       type: object
       description: One page of CustomerIdentifier results (newest first)

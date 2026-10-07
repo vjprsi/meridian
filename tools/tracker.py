@@ -426,6 +426,12 @@ def build(path: Path, domains, enums, endpoints, events, apps, plan, api_by_tabl
 
     wb.move_sheet("Dashboard", offset=-wb.index(wb["Dashboard"]))
     path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(path)
+    try:
+        wb.save(path)
+    except PermissionError:
+        # the workbook is open in Excel: never fight the user's session; write alongside and say so
+        pending = Path(path).with_name(Path(path).stem + ".pending.xlsx")
+        wb.save(pending)
+        print(f"warning: {path} is locked (open in Excel?); wrote {pending} instead - close Excel and rerun generate.py")
     return (f"tasks={n_tasks} screens={n_screens} requirements={n_reqs} "
             f"tracker_rows(tables={n_tables}, columns={n_cols}, endpoints={n_ep})")

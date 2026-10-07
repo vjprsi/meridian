@@ -39,6 +39,9 @@ CREATE TABLE analytics_kpi (
   is_certified                 boolean NOT NULL DEFAULT false,
   certified_by                 varchar(64),
   certified_at                 timestamptz,
+  certification_rejected_by    varchar(64),
+  certification_rejected_at    timestamptz,
+  certification_rejection_reason text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -66,6 +69,9 @@ COMMENT ON COLUMN analytics_kpi.owner IS 'Data owner';
 COMMENT ON COLUMN analytics_kpi.is_certified IS 'Certified by data governance (cleared when the metric changes)';
 COMMENT ON COLUMN analytics_kpi.certified_by IS 'Certifier';
 COMMENT ON COLUMN analytics_kpi.certified_at IS 'Certification time';
+COMMENT ON COLUMN analytics_kpi.certification_rejected_by IS 'Data governance reviewer who declined the last certification request';
+COMMENT ON COLUMN analytics_kpi.certification_rejected_at IS 'Time certification was declined (cleared when the metric changes)';
+COMMENT ON COLUMN analytics_kpi.certification_rejection_reason IS 'Why certification was declined';
 COMMENT ON COLUMN analytics_kpi.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_kpi.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_kpi.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

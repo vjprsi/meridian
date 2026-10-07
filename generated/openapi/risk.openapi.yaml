@@ -625,6 +625,52 @@ paths:
       x-table: fraud_rule
       x-crud: true
       x-crud-update: true
+  /v1/risk/fraud/rules/{id}/submit:
+    post:
+      operationId: fraudRulesSubmit
+      summary: Submit the rule for activation in a mode (maker); a checker activates it or rejects the submission
+      tags:
+      - Fraud Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudRulesSubmitRequest'
+      x-requirements:
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_rule
   /v1/risk/fraud/rules/{id}/activate:
     post:
       operationId: fraudRulesActivate
@@ -665,6 +711,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/FraudRulesActivateRequest'
+      x-requirements:
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_rule
+  /v1/risk/fraud/rules/{id}/reject:
+    post:
+      operationId: fraudRulesReject
+      summary: Reject the pending activation submission (checker); the rule keeps its status
+      tags:
+      - Fraud Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudRulesRejectRequest'
       x-requirements:
       - FRM-01
       x-service: fraud-service
@@ -3136,6 +3228,99 @@ paths:
       x-table: tm_scenario_version
       x-crud: true
       x-crud-get: true
+  /v1/risk/monitoring/scenario-versions/{id}/submit:
+    post:
+      operationId: tmScenarioVersionsSubmit
+      summary: Submit a DRAFT or TUNING version for activation (maker); a checker activates it on the scenario or rejects
+        the submission
+      tags:
+      - Tm Scenario Versions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenarioVersionsSubmitRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: tm_scenario_version
+  /v1/risk/monitoring/scenario-versions/{id}/reject:
+    post:
+      operationId: tmScenarioVersionsReject
+      summary: Reject the pending activation submission (checker); the version keeps its status
+      tags:
+      - Tm Scenario Versions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenarioVersionsRejectRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: tm_scenario_version
   /v1/risk/monitoring/runs:
     get:
       operationId: tmRunsList
@@ -7776,6 +7961,52 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-required-scope: risk:write
       x-table: sar_report
+  /v1/risk/sar-reports/{id}/return-to-draft:
+    post:
+      operationId: sarReportsReturnToDraft
+      summary: Return a report pending approval to DRAFT for rework (MLRO; not the preparer)
+      tags:
+      - Sar Reports
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SarReport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SarReportsReturnToDraftRequest'
+      x-requirements:
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: sar_report
   /v1/risk/sar-reports/{id}/file:
     post:
       operationId: sarReportsFile
@@ -8198,6 +8429,53 @@ paths:
       x-table: limit_rule
       x-crud: true
       x-crud-update: true
+  /v1/risk/limits/rules/{id}/submit:
+    post:
+      operationId: limitRulesSubmit
+      summary: Submit the rule for activation (maker); a checker activates it or rejects the submission
+      tags:
+      - Limit Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitRulesSubmitRequest'
+      x-requirements:
+      - CIF-03
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: limit_rule
   /v1/risk/limits/rules/{id}/activate:
     post:
       operationId: limitRulesActivate
@@ -8238,6 +8516,53 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LimitRulesActivateRequest'
+      x-requirements:
+      - CIF-03
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: limit_rule
+  /v1/risk/limits/rules/{id}/reject:
+    post:
+      operationId: limitRulesReject
+      summary: Reject the pending activation submission (checker); the rule keeps its status
+      tags:
+      - Limit Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitRulesRejectRequest'
       x-requirements:
       - CIF-03
       - LIM-01
@@ -9628,6 +9953,21 @@ components:
       required:
       - data
       - has_more
+    FraudRulesSubmitRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - DRAFT
+          - SHADOW
+          - ACTIVE
+          - DISABLED
+        comment:
+          type: string
+          maxLength: 500
+      required:
+      - mode
     FraudRulesActivateRequest:
       type: object
       properties:
@@ -9640,6 +9980,14 @@ components:
           - DISABLED
       required:
       - mode
+    FraudRulesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     FraudRulesDeactivateRequest:
       type: object
       properties:
@@ -10007,6 +10355,18 @@ components:
       - scenario_version
       - from_ts
       - to_ts
+    TmScenarioVersionsSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    TmScenarioVersionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     TmRunPage:
       type: object
       description: One page of TmRun results (newest first)
@@ -10719,6 +11079,13 @@ components:
       properties:
         comment:
           type: string
+    SarReportsReturnToDraftRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     SarReportsFileRequest:
       type: object
       properties:
@@ -10760,11 +11127,23 @@ components:
       required:
       - data
       - has_more
+    LimitRulesSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
     LimitRulesActivateRequest:
       type: object
       properties:
         comment:
           type: string
+    LimitRulesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     LimitRulesDeactivateRequest:
       type: object
       properties:
@@ -14060,6 +14439,45 @@ components:
           maxLength: 255
           description: Why the rule was disabled
           readOnly: true
+        submitted_mode:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DRAFT
+          - SHADOW
+          - ACTIVE
+          - DISABLED
+          description: Mode (ACTIVE or SHADOW) requested by the pending activation submission
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last activation submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the last activation submission was rejected
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -15352,6 +15770,33 @@ components:
           - string
           - 'null'
           description: Why the rule was deactivated
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the rule for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
           readOnly: true
         custom_field_1:
           type:
@@ -17179,6 +17624,19 @@ components:
           - string
           - 'null'
           description: FIU rejection reason
+          readOnly: true
+        returned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO who last returned the report to DRAFT for rework
+          readOnly: true
+        return_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the MLRO returned the report
           readOnly: true
         custom_field_1:
           type:
@@ -19329,6 +19787,33 @@ components:
           - 'null'
           maxLength: 64
           description: Approver
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the version for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
           readOnly: true
         custom_field_1:
           type:
