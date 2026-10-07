@@ -9,6 +9,7 @@ plugins {
 }
 
 val svc = extensions.create<MeridianServiceExtension>("meridianService")
+val catalog = the<VersionCatalogsExtension>().named("libs")
 val spec = rootProject.layout.projectDirectory.file("generated/openapi/services/${project.name}.openapi.yaml")
 
 dependencies {
@@ -26,6 +27,9 @@ dependencies {
     "implementation"("org.springframework.boot:spring-boot-starter-opentelemetry")
     // GAP-10: /actuator/prometheus for the ServiceMonitor (OTLP export stays on for the collector)
     "implementation"("io.micrometer:micrometer-registry-prometheus")
+    // GAP-16: per-service Kafka principals on MSK (SASL AWS_MSK_IAM with the pod's IRSA role); only used when the Helm
+    // chart sets global.kafka.iam.enabled (local Kafka stays PLAINTEXT)
+    "runtimeOnly"(catalog.findLibrary("aws-msk-iam-auth").get())
     "runtimeOnly"("org.flywaydb:flyway-database-postgresql")
     "runtimeOnly"("org.postgresql:postgresql")
     "testImplementation"(project(":libs:meridian-test"))

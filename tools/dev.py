@@ -108,6 +108,16 @@ def running(name: str) -> int | None:
         return None
 
 
+def service_identity_env(t: dict) -> dict:
+    """GAP-16: with MERIDIAN_SECURITY_MODE=jwt each service calls as its own local Keycloak client svc-<name>
+    (secret svc-<name>-secret in infra/local/keycloak/meridian-realm.json); dev mode needs no service token."""
+    if os.environ.get("MERIDIAN_SECURITY_MODE", "dev") != "jwt" or t["name"] == "gateway":
+        return {}
+    return {"MERIDIAN_SERVICE_AUTH_TOKEN_URI": "http://localhost:15180/realms/meridian/protocol/openid-connect/token",
+            "MERIDIAN_SERVICE_AUTH_CLIENT_ID": f"svc-{t['name']}",
+            "MERIDIAN_SERVICE_AUTH_CLIENT_SECRET": f"svc-{t['name']}-secret"}
+
+
 def up(names: list[str], reset: bool = False) -> None:
     RUN.mkdir(exist_ok=True)
     (RUN / "logs").mkdir(exist_ok=True)
@@ -142,7 +152,8 @@ def up(names: list[str], reset: bool = False) -> None:
                                      # hashes still detect tampering); every deployed environment uses COMPLIANCE
                                      "MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE": os.environ.get("MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE", "NONE"),
                                      # 63 services share one local PostgreSQL (max_connections=600)
-                                     "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6")})
+                                     "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6"),
+                                     **service_identity_env(t)})
         pid_file(t["name"]).write_text(str(proc.pid))
         print(f"  started {t['name']} (pid {proc.pid}, port {t['port']})")
     deadline = time.time() + int(os.environ.get("MERIDIAN_START_TIMEOUT", "420"))

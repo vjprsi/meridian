@@ -19,6 +19,33 @@ data:
   MERIDIAN_GATEWAY_URL_TEMPLATE: "http://{name}"
   MERIDIAN_APPROVALS_MODE: {{ $g.approvalsMode | quote }}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ $g.kafka.bootstrapServers | quote }}
+  {{- if $g.kafka.iam.enabled }}
+  {{- if not (contains "{name}" $g.kafka.iam.roleArnTemplate) }}
+  {{- fail "global.kafka.iam.roleArnTemplate must contain {name} (infra/tofu cell output kafka_service_role_arns)" }}
+  {{- end }}
+  # GAP-16: every service authenticates to MSK as its own IAM principal (IRSA role of its service account); topic and
+  # group permissions come from tools/kafka_acls.py (infra/tofu/modules/cell/kafka_iam.tf)
+  SPRING_KAFKA_SECURITY_PROTOCOL: "SASL_SSL"
+  SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: "AWS_MSK_IAM"
+  SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: "software.amazon.msk.auth.iam.IAMLoginModule required;"
+  SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS: "software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+  {{- end }}
+  # GAP-16: shared service clients whose X-Meridian-Service header is still believed (migration only; empty = none)
+  MERIDIAN_SECURITY_LEGACY_SERVICE_CLIENTS: {{ join "," $g.auth.legacyServiceClients | quote }}
+  # GAP-13: minimum acr of user tokens using meridian:admin / platform:operator
+  MERIDIAN_SECURITY_PRIVILEGED_ACR: {{ $g.auth.privilegedAcr | quote }}
+  # GAP-06: application logs as ECS JSON lines on stdout (request_id, tenant_id, principal, trace ids; no PII)
+  MERIDIAN_LOGGING_FORMAT: {{ $g.logging.format | quote }}
+  {{- if $g.auth.idpEvents.enabled }}
+  {{- if not $g.auth.platformOperatorTenant }}
+  {{- fail "global.auth.idpEvents needs global.auth.platformOperatorTenant (IdP events are audited in that tenant)" }}
+  {{- end }}
+  # GAP-06: audit-service copies Keycloak sign-in / admin events into the audit trail (client meridian-audit-events)
+  MERIDIAN_AUDIT_KEYCLOAK_ENABLED: "true"
+  MERIDIAN_AUDIT_KEYCLOAK_URL: {{ regexReplaceAll "/realms/[^/]+/?$" $g.auth.issuerUri "" | quote }}
+  MERIDIAN_AUDIT_KEYCLOAK_REALM: {{ regexReplaceAll "^.*/realms/([^/]+)/?$" $g.auth.issuerUri "${1}" | quote }}
+  MERIDIAN_AUDIT_KEYCLOAK_TENANT: {{ $g.auth.platformOperatorTenant | quote }}
+  {{- end }}
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: {{ $g.auth.issuerUri | quote }}
   # SEC-14: tokens must carry this audience; SEC-15: only this tenant's users may use platform:operator
   MERIDIAN_SECURITY_AUDIENCES: {{ $g.auth.audience | quote }}

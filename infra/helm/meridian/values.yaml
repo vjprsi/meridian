@@ -27,9 +27,18 @@ global:
     resources: {cpu: 250m, memory: 512Mi}
   kafka:
     bootstrapServers: "meridian-kafka:9092"
+    iam:                    # GAP-16: MSK IAM, one principal per service (SASL_SSL / AWS_MSK_IAM, IRSA)
+      enabled: false
+      roleArnTemplate: ""   # e.g. arn:aws:iam::123456789012:role/meridian-eu1a-kafka-{name} (tofu output)
   auth:
     issuerUri: "https://auth.example.com/realms/meridian"
-    serviceClientSecret: "meridian-service-client"
+    serviceClientSecret: "meridian-service-client"   # LEGACY shared client (used only with sharedServiceClient)
+    sharedServiceClient: false        # GAP-16 migration: true = every service uses serviceClientSecret again
+    legacyServiceClients: []          # GAP-16 migration: e.g. [meridian-service] while old pods still call
+    privilegedAcr: 2                  # GAP-13: acr needed for meridian:admin / platform:operator user tokens
+    idpEvents:                        # GAP-06: audit-service copies Keycloak sign-in / admin events
+      enabled: false                  # needs platformOperatorTenant (the tenant the events are audited in)
+      clientSecret: "meridian-audit-events-client"   # client-id / client-secret of meridian-audit-events
     audience: "meridian-api"          # SEC-14: required aud of every access token
     platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)
   cell:                     # S20: identity of this cell in the tenant registry
@@ -43,6 +52,7 @@ global:
   otel:
     endpoint: "http://otel-collector.monitoring:4318"
     samplingProbability: 0.1
+  logging: {format: json}   # GAP-06: json (ECS lines on stdout, for the node log collector) | text
   env: {}                   # extra environment for every component
 
 ingress:
@@ -66,7 +76,9 @@ observability:
 # One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,
 # managementPort (actuator on its own port: probes and the ServiceMonitor use it),
 # secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),
-# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).
+# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share),
+# clientSecret (Secret of the service's OAuth client, default meridian-<service>-client), serviceIdentity (false:
+# no OAuth client and no Kafka principal, e.g. the edge gateway).
 services:
   - name: deposit-service
     domain: "accounts"
@@ -97,6 +109,8 @@ services:
     secretName: "meridian-card-vault-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_VAULT_MASTER_KEY: "master-key"
+    env:
+      MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS: "meridian-console,svc-card-authorization-service,svc-card-service,svc-card-threeds-service,svc-card-tokenization-service"
   - name: card-authorization-service
     domain: "cards"
     enabled: true
@@ -503,3 +517,4 @@ services:
     cpu: "500m"
     memory: "512Mi"
     managementPort: 9090
+    serviceIdentity: false

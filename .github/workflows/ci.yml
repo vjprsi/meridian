@@ -99,12 +99,20 @@ jobs:
         run: |
           python tools/helm_chart.py
           git diff --exit-code -- infra/helm || (echo "::error::Run tools/helm_chart.py and commit" && exit 1)
+      - name: Kafka ACLs (MSK IAM per service) are up to date (GAP-16)
+        run: python tools/kafka_acls.py --check
       - name: Lint, render and validate against Kubernetes schemas
         run: |
           helm lint infra/helm/meridian
           helm template ci infra/helm/meridian > rendered.yaml
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
           ./kubeconform -strict -summary -kubernetes-version 1.33.0 rendered.yaml
+          # GAP-16 / GAP-06: MSK IAM principals, legacy shared-client migration, IdP events
+          helm template ci infra/helm/meridian --set global.kafka.iam.enabled=true \
+            --set 'global.kafka.iam.roleArnTemplate=arn:aws:iam::123456789012:role/meridian-ci-kafka-{name}' \
+            --set global.auth.idpEvents.enabled=true --set global.auth.platformOperatorTenant=0199a000-0000-7000-8000-0000000000f0 \
+            --set global.auth.sharedServiceClient=true --set 'global.auth.legacyServiceClients={meridian-service}' > rendered-iam.yaml
+          ./kubeconform -strict -summary -kubernetes-version 1.33.0 rendered-iam.yaml
       - name: Render with monitoring enabled (ServiceMonitor, PrometheusRule, dashboards; CRDs from the catalog)
         run: |
           helm template ci infra/helm/meridian --set global.serviceMonitor.enabled=true \

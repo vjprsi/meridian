@@ -33,7 +33,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-import yaml
+
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIENT_PREFIX = "svc-"
@@ -87,6 +87,7 @@ def operations(service: str) -> list[tuple[list[str], list[str]]]:
     f = ROOT / "generated" / "openapi" / "services" / f"{service}.openapi.yaml"
     if not f.exists():
         return []
+    import yaml   # only the scope derivation needs PyYAML (helm_chart.py / kafka_acls.py run without it)
     doc = yaml.load(f.read_text(encoding="utf-8"), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
     ops = []
     for path, item in (doc.get("paths") or {}).items():
