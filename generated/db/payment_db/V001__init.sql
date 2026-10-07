@@ -400,7 +400,7 @@ CREATE TABLE payment (
   row_version                  integer NOT NULL DEFAULT 1,
   payment_type                 varchar(40) NOT NULL CHECK (payment_type IN ('INTERNAL_TRANSFER', 'P2P', 'DOMESTIC', 'INSTANT', 'CROSS_BORDER', 'BULK_ITEM', 'PAYROLL', 'DIRECT_DEBIT', 'REQUEST_TO_PAY', 'BILL_PAYMENT', 'QR_PAYMENT', 'LINK_PAYMENT', 'REFUND', 'RETURN')),
   direction                    varchar(40) NOT NULL CHECK (direction IN ('OUTBOUND', 'INBOUND', 'INTERNAL')),
-  status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR')),
+  status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR', 'ON_HOLD')),
   channel                      varchar(40) NOT NULL CHECK (channel IN ('API', 'MOBILE', 'WEB', 'BRANCH', 'USSD', 'AGENT', 'BULK_FILE', 'OPEN_BANKING', 'SCHEDULER', 'INBOUND_RAIL')),
   priority                     varchar(40) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('NORMAL', 'HIGH', 'URGENT')),
   idempotency_key              varchar(128) NOT NULL,
@@ -455,6 +455,12 @@ CREATE TABLE payment (
   screening_result_id          uuid,
   limit_check_id               uuid,
   fraud_score                  numeric(18,10),
+  fraud_score_id               uuid,
+  fraud_decision               varchar(40) CHECK (fraud_decision IN ('ALLOW', 'STEP_UP', 'REVIEW', 'BLOCK')),
+  fraud_alert_id               uuid,
+  fraud_degraded               boolean NOT NULL DEFAULT false,
+  hold_reason                  varchar(32),
+  risk_context                 jsonb,
   rejection_code               varchar(8),
   rejection_reason             varchar(255),
   bulk_payment_id              uuid REFERENCES bulk_payment(id),
@@ -538,7 +544,13 @@ COMMENT ON COLUMN payment.hold_id IS 'Ledger hold placed on the debtor account';
 COMMENT ON COLUMN payment.journal_entry_id IS 'Ledger posting on settlement';
 COMMENT ON COLUMN payment.screening_result_id IS 'Sanctions screening result';
 COMMENT ON COLUMN payment.limit_check_id IS 'Limits reservation (committed on settlement, released on failure)';
-COMMENT ON COLUMN payment.fraud_score IS 'Fraud score 0..1 at initiation';
+COMMENT ON COLUMN payment.fraud_score IS 'Fraud score 0..1 (fraud-service score / 1000) before release';
+COMMENT ON COLUMN payment.fraud_score_id IS 'fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>)';
+COMMENT ON COLUMN payment.fraud_decision IS 'Fraud decision applied: fraud-service''s, or the fail-open / fail-closed fallback when scoring was unavailable';
+COMMENT ON COLUMN payment.fraud_alert_id IS 'Fraud alert whose resolution releases or rejects a payment held for review';
+COMMENT ON COLUMN payment.fraud_degraded IS 'Fraud scoring timed out or was unavailable; the configured fallback decided';
+COMMENT ON COLUMN payment.hold_reason IS 'Why the payment is ON_HOLD (FRAUD_REVIEW)';
+COMMENT ON COLUMN payment.risk_context IS 'Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) [PII]';
 COMMENT ON COLUMN payment.rejection_code IS 'ISO 20022 status reason code';
 COMMENT ON COLUMN payment.rejection_reason IS 'Human-readable rejection reason';
 COMMENT ON COLUMN payment.bulk_payment_id IS 'Parent bulk payment';
@@ -573,6 +585,8 @@ CREATE INDEX ix_payment_hold_id ON payment (hold_id);
 CREATE INDEX ix_payment_journal_entry_id ON payment (journal_entry_id);
 CREATE INDEX ix_payment_screening_result_id ON payment (screening_result_id);
 CREATE INDEX ix_payment_limit_check_id ON payment (limit_check_id);
+CREATE INDEX ix_payment_fraud_score_id ON payment (fraud_score_id);
+CREATE INDEX ix_payment_fraud_alert_id ON payment (fraud_alert_id);
 CREATE INDEX ix_payment_bulk_payment_id ON payment (bulk_payment_id);
 CREATE INDEX ix_payment_mandate_id ON payment (mandate_id);
 CREATE INDEX ix_payment_request_to_pay_id ON payment (request_to_pay_id);
@@ -591,8 +605,8 @@ CREATE TABLE payment_status_history (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   payment_id                   uuid NOT NULL REFERENCES payment(id),
-  from_status                  varchar(40) CHECK (from_status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR')),
-  to_status                    varchar(40) NOT NULL CHECK (to_status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR')),
+  from_status                  varchar(40) CHECK (from_status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR', 'ON_HOLD')),
+  to_status                    varchar(40) NOT NULL CHECK (to_status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR', 'ON_HOLD')),
   reason_code                  varchar(8),
   reason                       varchar(255),
   actor                        varchar(64),

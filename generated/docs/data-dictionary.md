@@ -8734,7 +8734,13 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting on settlement |
 | screening_result_id | uuid | yes | ref → screening_result | screening_result_id (read-only) | Sanctions screening result |
 | limit_check_id | uuid | yes | ref → limit_check | limit_check_id (read-only) | Limits reservation (committed on settlement, released on failure) |
-| fraud_score | numeric(18,10) | yes |  | fraud_score (read-only) | Fraud score 0..1 at initiation |
+| fraud_score | numeric(18,10) | yes |  | fraud_score (read-only) | Fraud score 0..1 (fraud-service score / 1000) before release |
+| fraud_score_id | uuid | yes | ref → fraud_score | fraud_score_id (read-only) | fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>) |
+| fraud_decision | varchar(40) (PaymentFraudDecision) | yes |  | fraud_decision (read-only) | Fraud decision applied: fraud-service's, or the fail-open / fail-closed fallback when scoring was unavailable |
+| fraud_alert_id | uuid | yes | ref → fraud_alert | fraud_alert_id (read-only) | Fraud alert whose resolution releases or rejects a payment held for review |
+| fraud_degraded | boolean | no |  | fraud_degraded (read-only) | Fraud scoring timed out or was unavailable; the configured fallback decided |
+| hold_reason | varchar(32) | yes |  | hold_reason (read-only) | Why the payment is ON_HOLD (FRAUD_REVIEW) |
+| risk_context | jsonb | yes |  | risk_context | Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) PII |
 | rejection_code | varchar(8) | yes |  | rejection_code (read-only) | ISO 20022 status reason code |
 | rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Human-readable rejection reason |
 | bulk_payment_id | uuid | yes | FK → bulk_payment | bulk_payment_id | Parent bulk payment |

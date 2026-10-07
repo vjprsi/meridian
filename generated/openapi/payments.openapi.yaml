@@ -108,6 +108,7 @@ paths:
           - FAILED
           - CANCELLED
           - IN_REPAIR
+          - ON_HOLD
       - name: payment_type
         in: query
         schema:
@@ -710,6 +711,104 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentsScreeningDecisionRequest'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment
+  /v1/payments/{id}/fraud-review-decision:
+    post:
+      operationId: paymentsFraudReviewDecision
+      summary: Release (RELEASE) or reject (REJECT) a payment ON_HOLD for fraud review; applied automatically when its fraud
+        alert is resolved
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentsFraudReviewDecisionRequest'
+      x-requirements:
+      - LED-05
+      - PAY-01
+      - PAY-02
+      - PAY-03
+      - PAY-04
+      - PAY-06
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment
+  /v1/payments/{id}/fraud-rescore:
+    post:
+      operationId: paymentsFraudRescore
+      summary: Score again a payment held because fraud scoring was unavailable (same idempotency key, so fraud-service replays
+        an evaluation it completed)
+      tags:
+      - Payments
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - LED-05
       - PAY-01
@@ -9247,6 +9346,20 @@ components:
           maxLength: 255
       required:
       - status
+    PaymentsFraudReviewDecisionRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          maxLength: 16
+        fraud_alert_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - decision
     PaymentsStatusReportRequest:
       type: object
       properties:
@@ -13117,6 +13230,7 @@ components:
           - FAILED
           - CANCELLED
           - IN_REPAIR
+          - ON_HOLD
           description: Lifecycle status
           readOnly: true
         channel:
@@ -13490,8 +13604,52 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Fraud score 0..1 at initiation
+          description: Fraud score 0..1 (fraud-service score / 1000) before release
           readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>)
+          readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ALLOW
+          - STEP_UP
+          - REVIEW
+          - BLOCK
+          description: 'Fraud decision applied: fraud-service''s, or the fail-open / fail-closed fallback when scoring was
+            unavailable'
+          readOnly: true
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud alert whose resolution releases or rejects a payment held for review
+          readOnly: true
+        fraud_degraded:
+          type: boolean
+          description: Fraud scoring timed out or was unavailable; the configured fallback decided
+          readOnly: true
+        hold_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Why the payment is ON_HOLD (FRAUD_REVIEW)
+          readOnly: true
+        risk_context:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address,
+            ip_country, session_id, user_agent)
         rejection_code:
           type:
           - string
@@ -13615,6 +13773,7 @@ components:
       - currency
       - charge_bearer
       - end_to_end_id
+      - fraud_degraded
     PaymentCreate:
       type: object
       properties:
@@ -13814,6 +13973,11 @@ components:
           type: string
           format: date
           description: Requested execution date (future-dated payments)
+        risk_context:
+          type: object
+          additionalProperties: true
+          description: Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address,
+            ip_country, session_id, user_agent)
         bulk_payment_id:
           type: string
           format: uuid
@@ -16240,6 +16404,7 @@ components:
           - FAILED
           - CANCELLED
           - IN_REPAIR
+          - ON_HOLD
           description: Previous status
         to_status:
           type: string
@@ -16256,6 +16421,7 @@ components:
           - FAILED
           - CANCELLED
           - IN_REPAIR
+          - ON_HOLD
           description: New status
         reason_code:
           type:

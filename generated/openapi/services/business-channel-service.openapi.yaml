@@ -10103,6 +10103,7 @@ components:
           - FAILED
           - CANCELLED
           - IN_REPAIR
+          - ON_HOLD
           description: Lifecycle status
           readOnly: true
         channel:
@@ -10476,8 +10477,52 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Fraud score 0..1 at initiation
+          description: Fraud score 0..1 (fraud-service score / 1000) before release
           readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>)
+          readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ALLOW
+          - STEP_UP
+          - REVIEW
+          - BLOCK
+          description: 'Fraud decision applied: fraud-service''s, or the fail-open / fail-closed fallback when scoring was
+            unavailable'
+          readOnly: true
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud alert whose resolution releases or rejects a payment held for review
+          readOnly: true
+        fraud_degraded:
+          type: boolean
+          description: Fraud scoring timed out or was unavailable; the configured fallback decided
+          readOnly: true
+        hold_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Why the payment is ON_HOLD (FRAUD_REVIEW)
+          readOnly: true
+        risk_context:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address,
+            ip_country, session_id, user_agent)
         rejection_code:
           type:
           - string
@@ -10601,6 +10646,7 @@ components:
       - currency
       - charge_bearer
       - end_to_end_id
+      - fraud_degraded
     PaymentLink:
       type: object
       description: Shareable payment link (pay-by-link) for collecting money online

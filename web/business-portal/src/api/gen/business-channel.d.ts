@@ -4854,7 +4854,7 @@ export interface components {
              * @description Lifecycle status
              * @enum {string}
              */
-            readonly status: "INITIATED" | "SCREENING" | "PENDING_APPROVAL" | "APPROVED" | "SUBMITTED" | "ACCEPTED" | "SETTLED" | "REJECTED" | "RETURNED" | "FAILED" | "CANCELLED" | "IN_REPAIR";
+            readonly status: "INITIATED" | "SCREENING" | "PENDING_APPROVAL" | "APPROVED" | "SUBMITTED" | "ACCEPTED" | "SETTLED" | "REJECTED" | "RETURNED" | "FAILED" | "CANCELLED" | "IN_REPAIR" | "ON_HOLD";
             /**
              * @description Channel that initiated the payment
              * @enum {string}
@@ -5053,10 +5053,33 @@ export interface components {
             readonly limit_check_id?: string | null;
             /**
              * Format: decimal
-             * @description Fraud score 0..1 at initiation
+             * @description Fraud score 0..1 (fraud-service score / 1000) before release
              * @example 125.50
              */
             readonly fraud_score?: string | null;
+            /**
+             * Format: uuid
+             * @description fraud-service evaluation of this payment (idempotency key pay-fraud:<payment id>)
+             */
+            readonly fraud_score_id?: string | null;
+            /**
+             * @description Fraud decision applied: fraud-service's, or the fail-open / fail-closed fallback when scoring was unavailable
+             * @enum {string|null}
+             */
+            readonly fraud_decision?: "ALLOW" | "STEP_UP" | "REVIEW" | "BLOCK" | null;
+            /**
+             * Format: uuid
+             * @description Fraud alert whose resolution releases or rejects a payment held for review
+             */
+            readonly fraud_alert_id?: string | null;
+            /** @description Fraud scoring timed out or was unavailable; the configured fallback decided */
+            readonly fraud_degraded: boolean;
+            /** @description Why the payment is ON_HOLD (FRAUD_REVIEW) */
+            readonly hold_reason?: string | null;
+            /** @description Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) */
+            risk_context?: {
+                [key: string]: unknown;
+            } | null;
             /** @description ISO 20022 status reason code */
             readonly rejection_code?: string | null;
             /** @description Human-readable rejection reason */
