@@ -47,7 +47,7 @@ Other scenarios:
 |---|---|---|---|
 | Aurora (all service databases of a cell) | Continuous automated backups + PITR; Global Database secondary | 35 days prod, 7 days other (`backup_retention_period`), deletion protection in prod | `infra/tofu/modules/cell/main.tf`, `infra/tofu/modules/region/main.tf` |
 | S3 documents | Versioning, optional object lock (GOVERNANCE, `object_lock_days`), CRR both ways with KMS re-encryption | Per object lock / lifecycle (lifecycle rules not defined - proposed) | `infra/tofu/modules/cell`, `region` |
-| Archive objects | WORM (`archived_object.worm_retain_until`), SHA-256 manifests | Per retention policy | archive-service (owning-service extraction missing, GAP-08) |
+| Archive objects | WORM (`archived_object.worm_retain_until`), SHA-256 manifests | Per retention policy | archive-service (owning services answer `/v1/internal/data-lifecycle/*`) |
 | Secrets | Secrets Manager with replicas in the DR region (`secret_replicas`, DR KMS key) | Versions kept by Secrets Manager | `infra/tofu/modules/region` (`aws_kms_key.dr_secrets`) |
 | Kafka | Not backed up: events are reproducible from service outboxes during the relay window; consumers idempotent | Topic retention (cluster config) | Outbox rows are deleted after relay (follow-up: keep relayed rows for a window, MULTI_REGION section 4) |
 | Infrastructure state | OpenTofu state in S3 (`meridian-tofu-state`, encrypted, lock file) | Bucket versioning to confirm (bucket not managed in repo) | `infra/tofu/envs/*/main.tf` |
@@ -107,7 +107,6 @@ the tracker and in this document's history.
 |---|---|---|---|
 | GAP-11 | No game day yet; data mover, FIS, outbox retention, control-plane DR, MSK IAM config, reverse replicator | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | GAP-01 | No HSM key backup / ceremony for card keys | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
-| GAP-08 | Archive extraction from owning services not implemented | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes) |
 | GAP-10 | Dashboards / alerts for detection and RTO measurement | TBD (SRE) | PLT-OBSERVABILITY |
 | - | S3 lifecycle rules and tofu-state bucket versioning not managed in the repo | TBD (Platform) | Proposed |
 | - | Restore verification has never been run; no automation | TBD (SRE / DBA) | Proposed |

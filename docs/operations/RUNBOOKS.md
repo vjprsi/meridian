@@ -18,7 +18,9 @@ Pre-deploy checklist:
 3. Chart rendered and diffed against the running release:
    `helm diff upgrade $REL infra/helm/meridian -n $NS -f values-<env>.yaml --set global.image.tag=<tag>` (helm-diff plugin).
 4. Migrations: Flyway runs forward-only, expand-and-contract (`docs/CONVENTIONS.md` section 3). A release must not
-   contain a "contract" step (drop / rename) for a column that the previous release still reads.
+   contain a "contract" step (drop / rename) for a column that the previous release still reads. Migrations run in the
+   `<service>-migrate` hook Jobs before any Deployment changes (GAP-22, see below), so the previous pods keep serving
+   on the migrated schema while the new ones roll out.
 5. Change record with approver **[gap: GAP-05, no pipeline; record in the ticket]**.
 
 Deploy:
@@ -28,6 +30,22 @@ helm upgrade --install $REL infra/helm/meridian -n $NS -f values-<env>.yaml --se
   --atomic --timeout 20m --history-max 20
 kubectl -n $NS rollout status deploy --timeout=15m          # every Deployment: maxUnavailable 0, maxSurge 1
 ```
+
+Migration Jobs (GAP-22): `helm upgrade` first runs one `<service>-migrate` Job per service (hook `pre-upgrade`,
+weight -10; Flyway as `meridian-db-owner`, then the process exits). Hooks run one after another, and `--timeout`
+applies to each hook. If one fails, Helm stops before touching any Deployment (with `--atomic` the release is rolled
+back; the schema change of an already finished Job stays, which is safe because migrations are expand-only):
+
+```bash
+kubectl -n $NS get jobs -l app.kubernetes.io/component=db-migration
+kubectl -n $NS logs job/<service>-migrate           # Flyway output: "Migrate-only run finished: N migration(s)"
+```
+
+Fix the cause (lock held by a long transaction, owner password rotated without updating the Secret, failed
+statement) and re-run `helm upgrade`; the hook policy `before-hook-creation` replaces the failed Job. To migrate one
+service on its own, run its image with the argument `migrate` and the same three variables (`SPRING_DATASOURCE_URL`,
+`SPRING_FLYWAY_USER`, `SPRING_FLYWAY_PASSWORD`). Running pods never migrate (`SPRING_FLYWAY_ENABLED=false`) and never
+hold the owner credentials.
 
 Verify: router `meridian.router.requests{outcome}` error share back to baseline; `http.server.requests` 5xx per
 service; `GET /actuator/health/readiness` of changed services; run `python tools/e2e/journeys.py` against staging (all
@@ -53,7 +71,7 @@ weakening. After updating a Secret: `kubectl -n $NS rollout restart deploy/<serv
 | Secret | Env var / Secret key | Rotation impact | Procedure |
 |---|---|---|---|
 | DB runtime role | `meridian-db-app` username / password | Pods reconnect after restart | Create new password in Secrets Manager -> `ALTER ROLE meridian_app PASSWORD ...` -> update Secret -> rolling restart all |
-| DB owner (Flyway) | `meridian-db-owner` | Only used at startup | Same as above **[gap: GAP-22, mounted in every pod]** |
+| DB owner (Flyway) | `meridian-db-owner` | Only used by the `<service>-migrate` hook Jobs (GAP-22 closed for pods: no Deployment mounts it) | Same as above (`ALTER ROLE meridian ...`); no restart needed, the next release's Jobs pick it up |
 | Service client | `meridian-service-client` (`client-id`, `client-secret`) | All service-to-service calls | Add a second secret in the IdP if supported, update Secret, rolling restart, revoke old |
 | Cell router client | `meridian-cell-router-client` | Router registry reads (stale-if-error caches 15 min) | Rotate in IdP, update Secret in `meridian-edge`, restart routers one region at a time |
 | Callback HMAC secrets | `MERIDIAN_ROUTING_CALLBACK_SECRET`, `MERIDIAN_CARDS_CALLBACK_SECRET`, `MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET`, `MERIDIAN_ESIGN_CALLBACK_SECRET`, `MERIDIAN_CARDS_AUTH_JIT_SECRET` | Only one secret is accepted at a time: callbacks signed with the old secret fail during the cut-over (providers retry with a new nonce) | Agree a cut-over minute with the provider; update Secret; restart the service; provider switches; watch callback 401 rate. Prefer per-rail / per-provider secrets (`callback-secrets.<CODE>`) so one provider rotates alone |
@@ -96,12 +114,20 @@ Pseudonyms are one-way (`HMAC(tenant key, digest)`): stored `h1:` values cannot 
 `POST /v1/risk/fraud/scores/pseudonymise-stored` is **not** a rotation tool: it only converts legacy plain SHA-256
 values and clear contexts to `h1:` under the current key (`{"dry_run": true}` first, repeat until `complete: true`).
 
-### 2.5 Contact lookup key (`MERIDIAN_CONTACT_LOOKUP_KEY`)
+### 2.5 Contact lookup key (`MERIDIAN_CONTACT_LOOKUP_KEY`) and customer secret key (`MERIDIAN_CUSTOMER_SECRET_KEY`)
 
-Shared by customer-service and search-service (they must hold the **same** value). **[gap: GAP-14]** customer-service
-does not receive it from Helm and does not refuse its dev default: fix the chart generator before relying on this.
+The contact lookup key is shared by customer-service and search-service: both read the **one** Secret
+`meridian-contact-lookup` (key `key`, chart `sharedSecretEnv`), so the values cannot drift apart. Both services
+declare it in `meridian.required-secrets` and refuse to start outside dev mode when it is missing, short or a
+committed default. customer-service also requires `MERIDIAN_CUSTOMER_SECRET_KEY` (Secret
+`meridian-customer-service-secrets`, key `secret-key`: identifier hashes, OTP peppering, passkey challenges).
 
-1. Update the value for both services, restart customer-service and search-service together (contact search by
+Customer secret key rotation: identifier `value_hash` values (duplicate detection) are keyed with it, so rotate only on
+compromise; pending OTPs and passkey challenges fail and are re-requested.
+
+Contact lookup key rotation:
+
+1. Update `meridian-contact-lookup`, restart customer-service and search-service together (contact search by
    exact value returns nothing until step 2 completes).
 2. Per tenant, repeat until `done: true`:
    `POST /v1/customers/contact-search-backfill {"rehash_all": true, "batch_size": 2000, "after_id": <next_after_id>}`
@@ -235,9 +261,31 @@ Full procedure, timings and roles: [docs/MULTI_REGION.md](../MULTI_REGION.md) se
 
 ## 10. Audit chain broken / ledger integrity mismatch
 
-`platform.audit_chain.broken` or a `ledger_verification` with `hash_mismatches > 0` (`POST /v1/ledgers/{id}/verify`):
-SEV1. Preserve evidence (DB snapshot, no fixes in place), restrict DB access, compare with archived manifests and
-replicas, involve security and internal audit. Never "repair" the chain.
+Signals: `platform.audit_chain.broken`, `platform.audit_seal.tampered`, an increase of `meridian.audit.chain.breaks` or
+`meridian.audit.seal.tampered` (alert on any increase), an `audit_chain_verification` row with `valid = false`, or a
+`ledger_verification` with `hash_mismatches > 0` (`POST /v1/ledgers/{id}/verify`): SEV1. Preserve evidence (DB
+snapshot, no fixes in place), restrict DB access, involve security and internal audit. Never "repair" the chain.
+
+Audit integrity jobs (GAP-07): audit-service runs daily at 01:15 UTC per tenant (`meridian.audit.integrity.cron`): a full
+hash-chain verification, then the seal of yesterday to the Object Lock bucket (`audit/<tenant>/<yyyy>/<mm>/<dd>/` with
+`events.jsonl` and `manifest.json`). To investigate, with the tenant's operator token:
+
+```bash
+GET  /v1/audit-chain-verifications?valid=false                  # failed runs: first_broken_sequence, break_reason
+POST /v1/audit-chain-verifications/run {"full": true}           # re-verify everything now (on demand)
+GET  /v1/audit-seals?seal_date=<day>                            # seal of a day: hashes, sequence range, storage URIs
+POST /v1/audit-seals/{id}/verify                                # re-hash storage + database rows of the sealed range
+```
+
+The sealed objects are the reference copy: compare the database with them (`verify` lists every mismatch: storage
+object changed, manifest changed, chain inside the batch, database row differs). A missing seal for a day (job
+failure, bucket unreachable) is caught up by `POST /v1/audit-seals/run {"seal_date": "<day>"}`, oldest day first (days
+are sealed in order; a later sealed day blocks an earlier one). A seal is refused while the chain is broken.
+
+Bucket and keys: `MERIDIAN_AUDIT_WORM_ENDPOINT` / `_BUCKET` / `_REGION` (cell output `audit_bucket`), credentials in
+`meridian-audit-service-secrets` (`worm-access-key`, `worm-secret-key`); `MERIDIAN_AUDIT_PSEUDONYM_KEY` (`pseudonym-key`)
+keys the `psn:` pseudonyms of personal data in stored audit states: rotate only on compromise (pseudonyms recorded
+before and after the rotation no longer correlate).
 
 ## 11. Card authorisation degradation
 
@@ -270,11 +318,10 @@ wired]**. Escalation: primary 5 min -> secondary 10 min -> IC 15 min -> CTO 30 m
 |---|---|---|---|
 | GAP-05 | No deploy pipeline / change records | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS |
 | GAP-01 | Master key rotation not supported; no HSM | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
-| GAP-14 | Contact lookup / customer secret not injected for customer-service | TBD (Party) | [SECURITY_REVIEW SEC-02](../SECURITY_REVIEW.md#findings) |
 | GAP-19 | No resolve action for in-doubt returns / wallet reversals | TBD (Payments / Wallets) | [SECURITY_REVIEW SEC-06 / SEC-07](../SECURITY_REVIEW.md#remediation-status) |
 | GAP-21 | Webhook encryption key and MFA seed key cannot be rotated | TBD (Platform) | Proposed |
 | GAP-12 | Connection budget / PgBouncer | TBD (Platform) | [SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget) |
 | GAP-10 | Alerting / paging not wired; on-call names TBD | TBD (SRE) | PLT-OBSERVABILITY |
 | GAP-11 | Data mover for tenant moves; game day | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | - | Card ZPK grace period | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
-| - | No EOD jobs for audit chain verification, ledger verification or archive runs | TBD (Operations) | Proposed |
+| - | No EOD jobs for ledger verification or archive runs (audit chain verification and seals run daily since GAP-07) | TBD (Operations) | Proposed |

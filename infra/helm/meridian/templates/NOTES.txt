@@ -6,12 +6,25 @@ API: {{ if .Values.ingress.enabled }}https://{{ .Values.ingress.host }}{{ else }
 
 Required secrets in the namespace (not created by this chart):
   {{ .Values.global.postgres.appSecret }}        username/password of the runtime role (RLS-bound, no DDL)
-  {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner used by Flyway
+  {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner, mounted only by the
+      <service>-migrate Jobs (Helm pre-install / pre-upgrade hooks), never by a running Deployment (GAP-22)
   {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the service account (scope meridian:internal)
 {{- range $svc := .Values.services }}
 {{- if and $svc.enabled $svc.secretEnv }}
   {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}  keys: {{ join ", " (values $svc.secretEnv | sortAlpha) }}
 {{- end }}
+{{- end }}
+{{- $shared := dict }}
+{{- range $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- range $envName, $ref := $svc.sharedSecretEnv }}
+{{- $k := printf "%s  key: %s" $ref.secret $ref.key }}
+{{- $_ := set $shared $k (append (get $shared $k | default list) $svc.name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $k, $users := $shared }}
+  {{ $k }}  (one Secret shared by {{ join ", " $users }})
 {{- end }}
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.

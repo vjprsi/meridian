@@ -2,6 +2,7 @@ package io.meridian.audit.application;
 
 import io.meridian.audit.domain.AuditRecord;
 import io.meridian.audit.domain.HashChain;
+import io.meridian.audit.domain.PiiMasker;
 import io.meridian.audit.infrastructure.AuditEventStore;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
@@ -21,6 +22,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Appends audit events to the tenant's hash chain: per-tenant advisory lock, gapless sequence, prev_hash link,
  * SHA-256 over the canonical form ({@link HashChain}). The table itself is append-only (database trigger).
+ * Before / after states are stored with personal data masked ({@link PiiMasker}, GAP-07): the hash covers the
+ * masked form, so the chain never depends on clear personal data.
  */
 @Service
 public class AuditRecorder {
@@ -32,9 +35,11 @@ public class AuditRecorder {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final PiiMasker masker;
 
-    public AuditRecorder(AuditEventStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public AuditRecorder(AuditEventStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, PiiMasker masker) {
         this.store = store;
+        this.masker = masker;
         this.crud = crud;
         this.outbox = outbox;
         this.json = json;
@@ -70,10 +75,12 @@ public class AuditRecorder {
         if (dedupe && e.sourceEventId() != null && store.existsBySourceEventId(e.sourceEventId())) {
             return Optional.empty();
         }
-        String before = store.normaliseJson(e.beforeState() == null || e.beforeState().isNull()
-                ? null : json.writeValueAsString(e.beforeState()));
-        String after = store.normaliseJson(e.afterState() == null || e.afterState().isNull()
-                ? null : json.writeValueAsString(e.afterState()));
+        JsonNode beforeState = masker.mask(tenant, e.resourceType(), e.beforeState());
+        JsonNode afterState = masker.mask(tenant, e.resourceType(), e.afterState());
+        String before = store.normaliseJson(beforeState == null || beforeState.isNull()
+                ? null : json.writeValueAsString(beforeState));
+        String after = store.normaliseJson(afterState == null || afterState.isNull()
+                ? null : json.writeValueAsString(afterState));
         String ip = store.normaliseInet(blankToNull(e.ipAddress()));
         AuditRecord rec = new AuditRecord(Ids.newId(), tenant, 0,
                 e.occurredAt() == null ? Instant.now() : e.occurredAt(), e.actorType(), e.actorId(),

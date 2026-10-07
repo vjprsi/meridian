@@ -124,6 +124,18 @@ variable "object_lock_days" {
   default     = 0
 }
 
+variable "audit_retention_years" {
+  description = "Default COMPLIANCE-mode Object Lock retention of sealed audit batches (audit-service also sets a per-object retain-until)"
+  type        = number
+  default     = 10
+}
+
+variable "audit_cold_after_days" {
+  description = "Days after which sealed audit batches move to S3 Glacier Instant Retrieval"
+  type        = number
+  default     = 90
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

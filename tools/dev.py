@@ -138,6 +138,9 @@ def up(names: list[str], reset: bool = False) -> None:
                                      "MERIDIAN_OUTBOUND_ALLOW_PRIVATE_NETWORKS": os.environ.get("MERIDIAN_OUTBOUND_ALLOW_PRIVATE_NETWORKS", "true"),
                                      "MERIDIAN_OUTBOUND_ALLOW_HTTP": os.environ.get("MERIDIAN_OUTBOUND_ALLOW_HTTP", "true"),
                                      "MERIDIAN_NOTIFICATIONS_EXTRA_SMTP_PORTS": "11025",  # Mailpit
+                                     # local SeaweedFS has no S3 Object Lock: audit seals are plain objects (manifest
+                                     # hashes still detect tampering); every deployed environment uses COMPLIANCE
+                                     "MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE": os.environ.get("MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE", "NONE"),
                                      # 63 services share one local PostgreSQL (max_connections=600)
                                      "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6")})
         pid_file(t["name"]).write_text(str(proc.pid))

@@ -78,6 +78,7 @@ enums:
   WebhookDeliveryStatus: [PENDING, RETRYING, SUCCEEDED, FAILED, ABANDONED]
   AuditActorType: [STAFF_USER, CUSTOMER, API_CLIENT, SERVICE, SYSTEM, PLATFORM_OPERATOR, AGENT]
   AuditOutcome: [SUCCESS, FAILURE, DENIED]
+  AuditVerificationTrigger: [SCHEDULED, ON_DEMAND]
   DataExportType: [AUDIT_LOG, DATA_SUBJECT_ACCESS, DATA_PORTABILITY, REGULATOR_EXTRACT, LEGAL_DISCOVERY]
   BillingPeriod: [MONTHLY, QUARTERLY, ANNUAL]
   PricePlanStatus: [DRAFT, ACTIVE, RETIRED]
@@ -1964,8 +1965,8 @@ services:
           - "resource_id string(64) idx | Resource id"
           - "outcome enum:AuditOutcome nn | Outcome"
           - "reason string(500) | Reason or justification"
-          - "before_state json | State before (PII masked)"
-          - "after_state json | State after (PII masked)"
+          - "before_state json | State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms)"
+          - "after_state json | State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms)"
           - "legal_entity_id uuid ref=legal_entity | Legal entity"
           - "approval_request_id uuid ref=approval_request | Approval, if maker-checker"
           - "ip_address inet | Client IP"
@@ -1979,6 +1980,51 @@ services:
           - "prev_hash string(64) nn ro | Hash of the previous event"
         unique: [[tenant_id, sequence_no], [tenant_id, source_event_id]]
         indexes: [[resource_type, resource_id, occurred_at], [actor_id, occurred_at]]
+
+      - name: audit_chain_verification
+        prefix: acv
+        description: >
+          One verification run of a tenant's audit hash chain (daily schedule or on demand); incremental from the last
+          verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+        immutable: true
+        fr: [ADM-03]
+        columns:
+          - "trigger enum:AuditVerificationTrigger nn | Scheduled or on demand"
+          - "valid bool nn | True when every checked event links and hashes correctly"
+          - "from_sequence bigint nn | First sequence checked"
+          - "to_sequence bigint nn | Last sequence checked (head of the chain at the start of the run)"
+          - "checked bigint nn | Events checked"
+          - "first_broken_sequence bigint | First sequence that failed"
+          - "break_reason string(32) | HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP"
+          - "broken_event_id uuid | Event that failed"
+          - "head_hash string(64) | Hash of the last event checked"
+          - "started_at ts nn | Start"
+          - "finished_at ts nn | End"
+        indexes: [[created_at]]
+
+      - name: audit_seal
+        prefix: ase
+        description: >
+          One sealed daily batch of a tenant's audit events exported to WORM object storage (S3 Object Lock): the
+          events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal's
+          manifest hash, so tampering with storage or database is detectable.
+        immutable: true
+        fr: [ADM-03]
+        columns:
+          - "seal_date date nn | UTC day sealed"
+          - "from_sequence bigint | First event sequence in the batch"
+          - "to_sequence bigint | Last event sequence in the batch"
+          - "event_count int nn default=0 | Events in the batch"
+          - "first_prev_hash string(64) | prev_hash of the first event (links to the previous batch)"
+          - "last_hash string(64) | Hash of the last event"
+          - "content_sha256 string(64) | SHA-256 of the events object"
+          - "manifest_sha256 string(64) | SHA-256 of the manifest object"
+          - "previous_manifest_sha256 string(64) | Manifest hash of the previous seal of the tenant"
+          - "storage_uri string(500) | Events object (s3://bucket/key)"
+          - "manifest_uri string(500) | Manifest object"
+          - "object_lock_mode string(16) | COMPLIANCE, GOVERNANCE or NONE"
+          - "retain_until date | Object lock retain-until date"
+        unique: [[tenant_id, seal_date]]
 
       - name: audit_retention_policy
         prefix: arp
@@ -2020,6 +2066,21 @@ services:
         actions:
           - "POST /verify-chain | Verify the hash chain for a range | from_sequence bigint nn, to_sequence bigint nn | object"
           - "POST /search | Full-text and structured search over audit events | query json nn | audit_event[]"
+      - resource: audit-chain-verifications
+        path: /v1/audit-chain-verifications
+        table: audit_chain_verification
+        ops: [list, get]
+        filters: [trigger, valid]
+        actions:
+          - "POST /run | Verify the tenant's hash chain now (incremental from the last valid run; full re-checks from the first event) | full bool | audit_chain_verification"
+      - resource: audit-seals
+        path: /v1/audit-seals
+        table: audit_seal
+        ops: [list, get]
+        filters: [seal_date]
+        actions:
+          - "POST /run | Seal and export one UTC day now (default yesterday; days already sealed are returned as they are) | seal_date date | audit_seal"
+          - "POST /{id}/verify | Re-read the sealed objects from storage and check content, manifest and chain hashes | | object"
       - resource: audit-retention-policies
         path: /v1/audit-retention-policies
         table: audit_retention_policy
@@ -2037,6 +2098,9 @@ services:
     events:
       - "platform.audit_event.recorded | audit_event | An audit event was recorded (for SIEM streaming)"
       - "platform.audit_chain.broken | audit_event | Hash-chain verification failed"
+      - "platform.audit_chain.verified | audit_chain_verification | A hash-chain verification run finished"
+      - "platform.audit_seal.created | audit_seal | A daily batch was sealed and exported to WORM storage"
+      - "platform.audit_seal.tampered | audit_seal | A sealed batch no longer matches its manifest or the database"
       - "platform.data_export_request.completed | data_export_request | A data export is ready"
       - "platform.data_export_request.cancelled | data_export_request | A data export was cancelled"
 

@@ -33,7 +33,7 @@ Important: the `pii` marker is **documentation only** today; it does not encrypt
 | openbanking-service | Payment initiation creditor name / account; consents (unmarked) | PSUs | |
 | rewards, insights, campaign | Partner member ids, voucher codes, referee contacts; (unmarked) spending insights, segments | Customers | Profiling (marketing) |
 | channel BFFs | Action / denial logs (`customer_action`, `agent_action`, `business_action`, `merchant_action`) with IP (right-most forwarded hop) | Channel users | |
-| audit-service | `audit_event.after_state` = full domain event payload (personal data **not masked**, GAP-07), `ip_address`, `user_agent` | Everyone | Copies of all of the above |
+| audit-service | `audit_event.after_state` / `before_state` = domain event payload with personal data masked (spec `pii` columns and personal field names -> tenant-keyed `psn:` pseudonyms, `PiiMasker`; events recorded before 2026-10-07 keep clear copies until retention), `ip_address`, `user_agent` of the actor; sealed daily copies on the Object Lock bucket | Everyone | Pseudonymised copies of the above |
 | search-service | Indexed documents (masked contact values + lookup hashes; names) | Customers | |
 | Kafka topics, outbox | Every event payload (entity API representation) for the topic retention period | Everyone | |
 | ai-platform-service / fraud training sets | Numeric features only (`docs/ML_FRAUD_TRAINING.md`) | Customers | |
@@ -54,8 +54,8 @@ Important: the `pii` marker is **documentation only** today; it does not encrypt
 
 | Mechanism | What it does | Status |
 |---|---|---|
-| `audit_retention_policy` (audit-service) | Years to retain audit and business records per resource type and country (default 10), archive after N days | Configuration only; no job enforces it (GAP-07 / GAP-08) |
-| archive-service `retention_policy` / `archive_job` / `archived_object` | Per data class and jurisdiction: online days, total years, ARCHIVE_THEN_PURGE / ANONYMISE, Parquet to WORM object storage with SHA-256 manifests and `worm_retain_until`; legal holds override | Implemented in archive-service; **no owning service implements `/v1/internal/data-lifecycle/*`**, so jobs cannot extract or purge anything yet (GAP-08) |
+| `audit_retention_policy` (audit-service) | Years to retain audit and business records per resource type and country (default 10), archive after N days | Sets the Object Lock retain-until of the sealed daily audit batches (`resource_type = '*'`, default 10 y); deleting expired audit rows is not automated (append-only table) |
+| archive-service `retention_policy` / `archive_job` / `archived_object` | Per data class and jurisdiction: online days, total years, ARCHIVE_THEN_PURGE / ANONYMISE, Parquet to WORM object storage with SHA-256 manifests and `worm_retain_until`; legal holds override | Implemented end to end: every service answers `/v1/internal/data-lifecycle/{count,extract,confirm,purge}` (`DataLifecycleService` in libs/meridian-web, legal-hold exclusions applied in the owning service; confirm removes exactly the archived batch; append-only tables stay online) |
 | `purge_request` | Purge / anonymise at end of retention, four-eyes, blocked by legal holds, certificate of destruction with hash | Implemented (archive side) |
 | AML record keeping | DSAR erasure keeps identity and KYC data 5 years after the relationship ends (`PrivacyService.AML_RETENTION_YEARS`) | Implemented (fixed 5 y; should be per jurisdiction, e.g. 7 y in some markets) |
 | Idempotency keys (may contain response bodies with personal data) | Purged after 30 days (`meridian.idempotency.retention`, SEC-34) | Implemented |
@@ -73,10 +73,18 @@ Flow (customer-service, `/v1/privacy-requests`, statutory deadline in `due_at`):
    OBJECTION / RESTRICTION, status RECEIVED.
 2. **Verify identity**: `POST /{id}/verify-identity` (method recorded) -> IN_PROGRESS.
 3. **Execute**: `POST /{id}/execute`
-   - ACCESS / EXPORT: all customer-service data of the customer (secrets excluded) compiled into a JSON package stored as
-     a restricted document in document-service (`result_document_id`).
-   - ERASURE: consent-based processing stops at once (MARKETING, PROFILING, ANALYTICS, LOCATION, DATA_SHARING); if the
-     relationship is open -> blocker CONTRACT, nothing else erased; if ended but within AML retention -> devices and
+   - ACCESS / EXPORT: all customer-service data of the customer (secrets excluded) plus the customer's rows in every
+     service of `meridian.privacy.services` (internal `/v1/internal/data-lifecycle/export`: every table linked to the
+     customer by the spec's subject paths, hidden / secret columns left out) compiled into a JSON package stored as a
+     restricted document in document-service (`result_document_id`). If a service cannot answer, execution fails (502)
+     and the request stays IN_PROGRESS: an incomplete package is never delivered.
+   - ERASURE: consent-based processing stops at once (MARKETING, PROFILING, ANALYTICS, LOCATION, DATA_SHARING); an
+     active legal hold on the customer (archive-service `legal-holds/check`, fail closed) -> blocker LEGAL_HOLD, nothing
+     else erased; if the relationship is open -> blocker CONTRACT, nothing else erased; otherwise every service of
+     `meridian.privacy.services` anonymises the customer's `pii` columns (`/v1/internal/data-lifecycle/erase`), except
+     records it must keep while the AML retention period runs (`meridian.data-lifecycle.retain-on-erasure`, e.g.
+     payments, KYC documents, cards, wallet transactions, complaints) and append-only records - each reported as a
+     blocker with its lawful basis (and every unreachable service as NOT_EXECUTED); if ended but within AML retention -> devices and
      credentials revoked, contacts deleted (and removed from search), identity kept with blocker LEGAL_OBLIGATION and
      `retain_until`; otherwise full anonymisation (names, dates, addresses, contacts deleted; identifiers set to ERASED
      with a random hash; customer CLOSED with reason ERASED_ON_REQUEST; `erased_at` set). Blockers listed in
@@ -88,24 +96,26 @@ Flow (customer-service, `/v1/privacy-requests`, statutory deadline in `due_at`):
 Audit-side DSAR exports: `POST /v1/data-exports` (`export_type`, `subject_type CUSTOMER`, `subject_id`, `due_date`) under
 four-eyes approval, signed download URL with expiry.
 
-Limits (GAP-08, GAP-27): ACCESS / EXPORT and ERASURE cover customer-service (+ search contacts) only. Not covered:
-onboarding applications, KYC documents and screenings, documents in S3, payment payees and counterparties, wallet /
-agent data, CRM cases and notes, inbox messages, notifications, card orders, audit `after_state` copies, Kafka
-retention, search journal. A complete DSAR today needs a manual per-service export and a published
-`party.customer.erased` event consumed by each service (proposed).
+Coverage (GAP-08, largely closed 2026-10-07): customer, kyc, onboarding, deposit, payment, card, loan-origination,
+loan, wallet, crm, inbox, notification and document services (one service-level IT each). Not covered yet: file
+content of documents in S3 (rows anonymised, objects kept), search journal (GAP-27), Kafka topic retention, services
+not in the fan-out list (sanctions, transaction monitoring, case management, agent network, merchant, biller,
+channel, disbursement, interop, regulatory reporting, rewards, collections, openbanking - they answer the API, add
+them to `meridian.privacy.services` with their retention obligations). Audit copies are pseudonymised (GAP-07).
 
 ## 5. Pseudonymisation and minimisation
 
 | Technique | Where | Key / secret |
 |---|---|---|
 | Tenant-keyed HMAC pseudonyms (`psn:` in context, `h1:` lists, `acct:h1:` / `msisdn:h1:` feature keys) | fraud-service, before rules, features and storage; payment-service sends `beneficiary_account_digest` only | `meridian.fraud.pseudonym-key` (required secret), per tenant `HMAC(secret, "meridian-fraud-pseudonym/v1|" + tenant)` |
-| Contact lookup hash (`customer_contact.lookup_hash`, masked value) | customer-service and search-service; events carry only masked value + hash | `MERIDIAN_CONTACT_LOOKUP_KEY` shared by both; **not guarded or injected for customer-service** (GAP-14) |
+| Contact lookup hash (`customer_contact.lookup_hash`, masked value) | customer-service and search-service; events carry only masked value + hash | `MERIDIAN_CONTACT_LOOKUP_KEY`: one Secret `meridian-contact-lookup` read by both, required secret in both (GAP-14 closed) |
 | Counterparty account hash (`counterparty_account_hash`, `h1:` + last 4) | ledger-service and reconciliation-service (payment references on postings) | `meridian.refs.counterparty-key` (required secret, Helm `counterparty-key` in both services) |
-| Identifier hash (`customer_identifier.value_hash`, hidden) | customer-service duplicate detection | `MERIDIAN_CUSTOMER_SECRET_KEY` (GAP-14) |
+| Identifier hash (`customer_identifier.value_hash`, hidden) | customer-service duplicate detection | `MERIDIAN_CUSTOMER_SECRET_KEY` (required secret, Helm `secret-key`) |
 | Card tokens and keyed PAN fingerprint | card services | card-vault master key (GAP-01) |
 | Masked customer lookup | agent channel (logged, rate-limited) | - |
 | Redaction of security codes | notification-service (SEC-10) | - |
 | Numeric-only model features | ML training sets | - |
+| Audit state pseudonyms (`psn:` in `after_state` / `before_state`) | audit-service, before hashing and storage | `meridian.audit.pseudonym-key` (required secret), per tenant `HMAC(secret, "meridian-audit-pseudonym/v1|" + tenant)` |
 
 ## 6. International transfers and data residency
 
@@ -128,7 +138,8 @@ retention, search journal. A complete DSAR today needs a manual per-service expo
 
 Tenant isolation (RLS on every tenant table, tenant only from the token), encryption at rest (KMS CMK) and in transit
 (TLS), object-level authorization and server-built bodies in channel BFFs, maker-checker for privileged operations,
-hash-chained audit, secrets from the secret store with startup guards. Gaps: GAP-07, GAP-09, GAP-13, GAP-14.
+hash-chained audit with masked personal data, daily verification and WORM seals, secrets from the secret store with
+startup guards. Gaps: GAP-07 (read auditing), GAP-09, GAP-13.
 
 ## 8. Personal data breach handling
 
@@ -154,20 +165,20 @@ separate operational incident reporting.
    - cross-border replication (section 6);
    - counterparty names kept in clear on immutable ledger entries (accounting retention vs. erasure requests).
 4. **Risks to individuals**: unauthorised access across tenants or customers (mitigated by RLS and BOLA controls),
-   wrongful blocking of payments, discrimination in credit / fraud models, excessive retention (GAP-08), incomplete
-   erasure (GAP-08), audit copies of personal data (GAP-07).
+   wrongful blocking of payments, discrimination in credit / fraud models, excessive retention (GAP-08 residuals),
+   incomplete erasure (GAP-08 residuals: S3 file content, search journal, services outside the fan-out).
 5. **Measures**: section 7; model governance (four-eyes, shadow -> canary -> champion, monitoring); human review of
-   holds; DSAR propagation (to build); masking in audit (to build); field-level encryption (to build).
+   holds; DSAR propagation (built: data-lifecycle fan-out); masking in audit (built: `PiiMasker`); field-level
+   encryption (to build).
 6. **Sign-off**: DPO advice, controller decision, residual risk acceptance, prior consultation if high residual risk.
 
 ## Open gaps
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-08 | Data-lifecycle endpoints missing in all services; DSAR erasure / export limited to customer-service | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes) |
-| GAP-07 | Audit stores unmasked personal data in `after_state` | TBD (Platform) | Proposed |
+| GAP-08 | Largely closed: residuals are S3 file content, search journal, Kafka retention, per-jurisdiction AML retention, services outside the DSAR fan-out | TBD (Data platform) | [SPEC_BACKLOG per-domain operations](../SPEC_BACKLOG.md#per-domain-notes) |
+| GAP-07 | Partially closed: masking, scheduled verification and WORM seals done; reads of personal data not audited; pre-masking events keep clear copies until retention | TBD (Platform) | Proposed |
 | GAP-09 | `pii` marker not enforced (no field-level encryption / log masking) | TBD (Platform) | Proposed |
-| GAP-14 | Customer secret key and contact lookup key not guarded or injected in customer-service | TBD (Party domain) | [SECURITY_REVIEW SEC-02 residual](../SECURITY_REVIEW.md#findings) |
 | GAP-26 | Fraud device registry keeps SDK fingerprints; old events with clear values | TBD (Risk) | [SPEC_BACKLOG fraud follow-ups](../SPEC_BACKLOG.md#fraud-and-routing-follow-ups-2026-10-07) |
 | GAP-27 | Search journal erasure | TBD (Operations domain) | [SPEC_BACKLOG resume point](../SPEC_BACKLOG.md#resume-point-paused-2026-10-07) |
 | - | Residency vs. cross-region replication (section 6) | TBD (Platform / DPO) | Proposed |

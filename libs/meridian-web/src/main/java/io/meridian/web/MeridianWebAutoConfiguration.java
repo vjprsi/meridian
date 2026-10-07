@@ -212,6 +212,38 @@ public class MeridianWebAutoConfiguration {
                 env.getProperty("meridian.tenant-settings.ttl-ms", Long.class, 30_000L)).install();
     }
 
+    /**
+     * GAP-08: generic data-lifecycle operations over the service's own tables (archive extract / confirm / purge, DSAR
+     * export / erasure), driven by the spec's personal-data map. {@code meridian.data-lifecycle.enabled=false} turns
+     * the internal API off.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "meridian.data-lifecycle.enabled",
+            havingValue = "true", matchIfMissing = true)
+    io.meridian.web.lifecycle.DataLifecycleService dataLifecycleService(JdbcClient jdbc, TransactionTemplate tx,
+                                                                        JsonMapper json, Environment env) {
+        String service = env.getProperty("spring.application.name", "unknown");
+        java.util.Map<String, String> retain = env instanceof org.springframework.core.env.ConfigurableEnvironment ce
+                ? org.springframework.boot.context.properties.bind.Binder.get(ce)
+                    .bind("meridian.data-lifecycle.retain-on-erasure",
+                            org.springframework.boot.context.properties.bind.Bindable.mapOf(String.class, String.class))
+                    .orElse(java.util.Map.of())
+                : java.util.Map.of();
+        return new io.meridian.web.lifecycle.DataLifecycleService(jdbc, tx, json,
+                io.meridian.web.lifecycle.PersonalDataCatalog.forService(json, service), service, retain);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "meridian.data-lifecycle.enabled",
+            havingValue = "true", matchIfMissing = true)
+    io.meridian.web.lifecycle.DataLifecycleController dataLifecycleController(
+            io.meridian.web.lifecycle.DataLifecycleService lifecycle, Environment env) {
+        return new io.meridian.web.lifecycle.DataLifecycleController(lifecycle, java.util.Set.of(env.getProperty(
+                "meridian.data-lifecycle.callers", String[].class, new String[] {"archive-service", "customer-service"})));
+    }
+
     @Bean
     WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props,
                                               io.meridian.web.security.SecurityProperties security,

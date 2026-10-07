@@ -45,7 +45,7 @@ applicable unless stated; exclusions are justified inline.
 | 5.25 Assessment and decision on information security events | Yes | Severity matrix; `platform.audit_chain.broken`, `channels.*_action.denied` events | Partial | GAP-06 |
 | 5.26 Response to information security incidents | Yes | Key compromise runbook; break-glass cell OFFLINE | Partial | GAP-24 |
 | 5.27 Learning from information security incidents | Yes | Security review remediation table pattern (finding -> fix -> regression test -> residual risk) | Partial | Post-mortem template in RUNBOOKS |
-| 5.28 Collection of evidence | Yes | Hash-chained audit, append-only financial records, audit exports under four-eyes (`/v1/data-exports`), legal holds | Partial | GAP-07 |
+| 5.28 Collection of evidence | Yes | Hash-chained audit with daily verification and daily WORM seals (S3 Object Lock, chained manifests), append-only financial records, audit exports under four-eyes (`/v1/data-exports`), legal holds | Implemented | - |
 | 5.29 Information security during disruption | Yes | Security controls identical in standby cells (same chart); break-glass actions audited | Partial | GAP-11 |
 | 5.30 ICT readiness for business continuity | Yes | Cells, region pairs, failover runbook ([BCP_DR.md](../operations/BCP_DR.md)) | Partial | GAP-11 |
 | 5.31 Legal, statutory, regulatory and contractual requirements | Yes | Regulatory packs, AML retention blocker, PCI scope ([PCI_DSS_SCOPE.md](PCI_DSS_SCOPE.md)), DPIA ([DATA_PROTECTION.md](DATA_PROTECTION.md)) | Partial | GAP-24 (legal register) |
@@ -112,13 +112,13 @@ apply to Meridian's own premises and are organisational.
 | 8.15 Logging | Yes | Audit chain of domain events, channel action logs, vault access log, EKS audit logs, VPC flow logs | Partial | GAP-06, GAP-07 |
 | 8.16 Monitoring activities | Yes | OTLP metrics and traces to a collector; router / EOD / search metrics | Partial | GAP-10 |
 | 8.17 Clock synchronization | Yes | AWS Time Sync (inherited); application uses `Clocks.now()` (microsecond, DB clock where it matters, e.g. OTP cooldown SEC-16) | Inherited / Implemented | |
-| 8.18 Use of privileged utility programs | Yes | `kubectl exec` / DB superuser access not governed in repo | Gap | GAP-22, GAP-24 |
+| 8.18 Use of privileged utility programs | Yes | Schema-owner (DDL) credentials only in the pre-install / pre-upgrade migration Jobs, never in running pods (GAP-22 closed); `kubectl exec` / DB superuser access not governed in repo | Partial | GAP-24 |
 | 8.19 Installation of software on operational systems | Yes | Immutable images, read-only root FS, no package manager use at runtime | Partial | GAP-04 (signature verification at admission) |
 | 8.20 Networks security | Yes | Private subnets, SG rules (DB / Kafka from EKS only), TLS, NetworkPolicies | Partial | GAP-23 |
 | 8.21 Security of network services | Yes | Route 53 health checks, ALB / ingress TLS (values `ingress.tls`), MSK IAM | Partial | GAP-17 |
 | 8.22 Segregation of networks | Yes | VPC per cell; NetworkPolicy admits only Meridian pods + monitoring namespace | Partial | GAP-02 |
 | 8.23 Web filtering | Partly | Outbound: `OutboundUrlPolicy` (https, public addresses, pinned DNS, no redirects); staff browsing filtering is organisational | Partial | GAP-24 |
-| 8.24 Use of cryptography | Yes | AES-256-GCM with random IV and AAD, HMAC-SHA256 constant-time, PBKDF2, RSA-OAEP-256 for reveals, KMS CMK with rotation, TLS | Partial | GAP-01, GAP-09, GAP-14 |
+| 8.24 Use of cryptography | Yes | AES-256-GCM with random IV and AAD, HMAC-SHA256 constant-time, PBKDF2, RSA-OAEP-256 for reveals, KMS CMK with rotation, TLS | Partial | GAP-01, GAP-09 |
 | 8.25 Secure development life cycle | Yes | Spec-first contracts, generated authz, security review, required tests per service | Partial | GAP-04 |
 | 8.26 Application security requirements | Yes | Conventions (idempotency, If-Match, problem+json, scopes, step-up), callback v2 spec | Implemented | |
 | 8.27 Secure system architecture and engineering principles | Yes | Hexagonal layering (ArchUnit), one DB per service, channel BFFs (customers never call domain services), cells | Implemented | |
@@ -153,5 +153,5 @@ Mixed rows (for example "Inherited / Gap") are counted by their first status; re
 | GAP-13 | MFA at the IdP, access reviews | TBD (IAM) | Proposed |
 | GAP-01 / GAP-02 | Card key management and CDE segregation | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-11 | Continuity testing | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
-| GAP-22 / GAP-23 | Privileged utilities (DDL creds in pods), egress | TBD (Platform) | Proposed |
+| GAP-23 | Egress (GAP-22, DDL creds in pods, closed 2026-10-07) | TBD (Platform) | Proposed |
 | GAP-25 | Independent review / pen test | TBD (Security) | S22 |

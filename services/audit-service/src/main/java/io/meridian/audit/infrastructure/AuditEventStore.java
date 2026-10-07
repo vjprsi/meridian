@@ -61,6 +61,17 @@ public class AuditEventStore {
                 .params(from, to).query(this::map).list();
     }
 
+    /** Highest sequence recorded before {@code cutoff} (the end of a sealed day), if any. */
+    public Optional<Long> lastSequenceRecordedBefore(OffsetDateTime cutoff) {
+        return jdbc.sql("select sequence_no from audit_event where created_at < ? order by sequence_no desc limit 1")
+                .param(cutoff).query(Long.class).optional();
+    }
+
+    /** Tenants with recent audit activity (RLS-free outbox), for scheduled integrity jobs. */
+    public List<UUID> recentlyActiveTenants(OffsetDateTime since) {
+        return jdbc.sql("select distinct tenant_id from outbox where created_at >= ?").param(since).query(UUID.class).list();
+    }
+
     public Optional<String> hashAt(long sequenceNo) {
         return jdbc.sql("select hash from audit_event where sequence_no = ?").param(sequenceNo)
                 .query(String.class).optional();

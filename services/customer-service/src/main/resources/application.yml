@@ -36,12 +36,25 @@ spring:
 meridian:
   security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
                               # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
+  # SEC-02 / GAP-14: secrets injected from the secret store (Helm secretKeyRef). Outside security-mode=dev the service
+  # refuses to start when one is missing, short or a committed development default (RequiredSecrets); the local
+  # defaults below therefore only ever work in dev mode.
+  required-secrets:
+    - meridian.contact-lookup.key
+    - meridian.customer.secret-key
   events:
     topic: meridian.party.v1
   contact-lookup:
     # Key of the contact lookup hash (customer_contact.lookup_hash): customer-service and search-service MUST share
     # it (MERIDIAN_CONTACT_LOOKUP_KEY, from the vault outside the local stack); the default is for the local stack only.
     key: ${MERIDIAN_CONTACT_LOOKUP_KEY:local-dev-only-contact-lookup-key}
+  privacy:
+    # GAP-08: data subject requests fan out to every service holding personal data of customers (internal
+    # data-lifecycle API: export for ACCESS / EXPORT, erase for ERASURE); legal holds are checked in archive-service.
+    services: >-
+      kyc-service, onboarding-service, deposit-service, payment-service, card-service, loan-origination-service,
+      loan-service, wallet-service, crm-service, inbox-service, notification-service, document-service
+    legal-hold-service: archive-service
   approvals:
     # KYC tier upgrades have no local approve endpoint: their checker always decides in workflow-service, so this
     # service defaults to central approvals (override with MERIDIAN_APPROVALS_MODE).

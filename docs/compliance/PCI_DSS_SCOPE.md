@@ -62,7 +62,7 @@ Not built: card production bureau PAN export (bureau callbacks carry status only
 | Network | Every service has an ingress-only NetworkPolicy admitting all pods labelled `app.kubernetes.io/part-of: meridian` plus the monitoring namespace; the vault has no stricter policy and no egress policy | Gap (GAP-02, GAP-23) |
 | Internet exposure | `/v1/card-vault/*` is in `generated/routes.json`, so the edge gateway routes it; protected by exact scopes, `allowed-clients` (console + service client, SEC-14) and step-up, but reachable from the internet with a token | Partial (GAP-02) |
 | Identity | Vault lookup / verify / PIN set require a service token; the service client is shared by all 63 services, so any compromised service can call `lookup` / `verify` | Partial (GAP-16) |
-| Database | Separate database `card_vault_db`, RLS, non-owner runtime role; same Aurora cluster, same runtime and owner credentials as every service; owner credentials mounted in the pod | Partial (GAP-02, GAP-22) |
+| Database | Separate database `card_vault_db`, RLS, non-owner runtime role; same Aurora cluster, same runtime and owner credentials as every service; owner credentials only in the `card-vault-service-migrate` hook Job, never in the running pod (GAP-22 closed) | Partial (GAP-02) |
 | Secrets | Separate Kubernetes Secret `meridian-card-vault-service-secrets` (`master-key`); startup refuses a missing / dev key outside dev mode (SEC-01) | Implemented |
 | KMS | One customer-managed KMS key per cell encrypts Aurora, MSK, S3, EKS secrets and Secrets Manager; no dedicated key for the CDE | Partial |
 | Card keys | `SoftwareHsm`: all keys (PAN_DEK, CVV_KEY, PIN_KEY, ZPK, CVK, MDK) derived as HMAC-SHA256(master key, "key:<label>:v<version>") from one master key held in JVM memory; tenant-scoped labels for PAN DEK / PIN key (SEC-37); DEK rotation with background re-encryption (SEC-40); no HSM, no dual control / split knowledge, master key not rotatable in place | Gap (GAP-01) |
@@ -79,7 +79,7 @@ CVV2 not retained after production.
 | Req | Topic | Meridian implementation | Status | Gap |
 |---|---|---|---|---|
 | 1 | Network security controls | VPC per cell, private subnets, SGs for Aurora / MSK, NetworkPolicies (ingress-only, not CDE-specific), router / gateway as the only entry | Partial | GAP-02, GAP-23, GAP-17 |
-| 2 | Secure configurations | Hardened pods (non-root, read-only FS, no capabilities, seccomp, no SA token); dev mode refused in-cluster (SEC-13); no default credentials in prod (`RequiredSecrets`) - except GAP-14 | Partial | GAP-14 |
+| 2 | Secure configurations | Hardened pods (non-root, read-only FS, no capabilities, seccomp, no SA token); dev mode refused in-cluster (SEC-13); no default credentials in prod (`RequiredSecrets`, every service secret declared since GAP-14 was closed) | Partial | GAP-14 |
 | 3.2 / 3.3 | Account data retention; SAD after authorisation | Authorisation SAD never stored (card-authorization); issuer storage of CVV2 and PIN in the vault | Gap | GAP-03 |
 | 3.4 | PAN display masking | Only BIN + `last4` outside the vault; full PAN only with `cards:pan_reveal` + step-up | Implemented | |
 | 3.5 | PAN unreadable at rest | AES-256-GCM per record with AAD, keyed fingerprint (HMAC) for lookup, Aurora encryption with KMS | Implemented | GAP-01 (key protection) |
@@ -94,7 +94,7 @@ CVV2 not retained after production.
 | 8 | Identify and authenticate | OIDC, step-up (`auth_time` / `acr` / `amr`) for reveal; MFA for all CDE access (8.4.2) not enforced in the shipped IdP | Partial | GAP-13 |
 | 9 | Physical access | AWS | Inherited | |
 | 10.2 | Audit logs | `card_vault_access_log` (who, purpose, caller service from token, success / denied); audit chain of card events; EKS audit logs | Partial | GAP-06, GAP-20 |
-| 10.3 / 10.5 | Log protection and retention (12 months, 3 online) | Audit tables append-only; no central log store or retention for application logs | Gap | GAP-06, GAP-07 |
+| 10.3 / 10.5 | Log protection and retention (12 months, 3 online) | Audit tables append-only, hash-chained, verified daily and sealed daily to an S3 Object Lock (COMPLIANCE) bucket with chained manifests (GAP-07); no central log store or retention for application logs | Partial | GAP-06 |
 | 10.4 / 10.7 | Log review; failure of controls detected | No daily review process or alerting | Gap | GAP-06, GAP-10 |
 | 11.3 | Vulnerability scans (internal, ASV external) | None | Gap | GAP-04, GAP-25 |
 | 11.4 | Penetration testing incl. segmentation | Planned ([PEN_TEST_SCOPE.md](PEN_TEST_SCOPE.md)) | Gap | GAP-25 |
@@ -134,7 +134,7 @@ CVV2 not retained after production.
 | GAP-16 | Per-service identity for CDE callers | TBD (Platform) | [SPEC_BACKLOG wave A](../SPEC_BACKLOG.md#cross-cutting-items-raised-in-wave-a-open) |
 | GAP-17 | WAF for public endpoints | TBD (Platform) | Proposed |
 | GAP-20 | Mandatory `public_key`, CVV block admin / alert | TBD (Cards) | [SECURITY_REVIEW SEC-24](../SECURITY_REVIEW.md#remediation-status) |
-| GAP-22 / GAP-23 | DDL credentials in pods; egress policy | TBD (Platform) | Proposed |
+| GAP-23 | Egress policy (GAP-22, DDL credentials in pods, closed 2026-10-07) | TBD (Platform) | Proposed |
 | GAP-24 | PCI policies, TPSP register, incident response | TBD (CISO) | Proposed |
 | GAP-25 | ASV scans, internal scans, pen test with segmentation test | TBD (Security) | S22 |
 | - | Card limit counters read without lock; vault void endpoint for failed issue | TBD (Cards) | [SPEC_BACKLOG Wave B - Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |

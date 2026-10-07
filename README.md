@@ -335,7 +335,22 @@ One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gat
   writable path.
 - Install: `helm upgrade --install meridian infra/helm/meridian -n meridian -f values-<env>.yaml`.
   PostgreSQL, Kafka, the OIDC provider and the OTel collector are external; point `global.*` at them. Create the
-  secrets listed in the chart notes first (runtime DB role, schema-owner role for Flyway, service client).
+  secrets listed in the chart notes first (runtime DB role, schema-owner role for Flyway, service client, per-service
+  secrets `meridian-<service>-secrets`, and shared secrets such as `meridian-contact-lookup` used by both
+  customer-service and search-service).
+- Schema migrations (GAP-22): every service with a database gets a `<service>-migrate` Job (Helm `pre-install` /
+  `pre-upgrade` hook, weight -10). It runs the service's own image in migrate-only mode (`MERIDIAN_MIGRATE_ONLY=true`,
+  argument `migrate`: Flyway as the schema owner, then exit before any web server, Kafka client or scheduler starts)
+  and is the **only** workload that mounts `global.postgres.migrationSecret`. The Deployments run with the RLS-bound
+  runtime role only and `SPRING_FLYWAY_ENABLED=false`. A failed Job fails the release before any pod is replaced
+  (`kubectl -n <ns> logs job/<service>-migrate`). Standby cells (`global.cell.role=standby`) render no migration Jobs.
+  `global.migrations.enabled=false` leaves migrations to an external step (e.g. a GitOps PreSync job using the same
+  image and arguments). Local development and tests keep in-process Flyway.
+- Audit WORM storage (GAP-07): audit-service seals every UTC day of each tenant's audit chain into the cell's S3
+  Object Lock bucket (tofu cell output `audit_bucket`, COMPLIANCE mode); set `MERIDIAN_AUDIT_WORM_ENDPOINT`
+  (`https://s3.<region>.amazonaws.com`), `MERIDIAN_AUDIT_WORM_BUCKET` and `MERIDIAN_AUDIT_WORM_REGION` in the
+  audit-service `env` of `values-<env>.yaml`, and the Secret keys `pseudonym-key`, `worm-access-key`,
+  `worm-secret-key` in `meridian-audit-service-secrets`.
 - Each component gets a Deployment (zone/host spread, startup/liveness/readiness probes, graceful drain), Service,
   ServiceAccount (no token mounted), HPA, PDB, a NetworkPolicy that only admits Meridian pods and the monitoring
   namespace, and optionally a ServiceMonitor. Services call each other through cluster DNS

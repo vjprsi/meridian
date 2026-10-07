@@ -36,6 +36,14 @@ spring:
 meridian:
   security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
                               # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
+  data-lifecycle:
+    # GAP-08: records kept on a data subject erasure while the statutory retention period of the relationship
+    # runs (customer-service decides; within_retention). Every other pii column of the customer is anonymised.
+    retain-on-erasure:
+      payment: "AML/CFT record keeping and accounting: payment records"
+      payment_mandate: "Direct debit mandates: scheme and accounting record keeping"
+      bulk_payment_item: "AML/CFT record keeping and accounting: payment records"
+      request_to_pay: "AML/CFT record keeping: payment request records"
   events:
     topic: meridian.payments.v1
   payment:
