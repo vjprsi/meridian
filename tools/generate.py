@@ -132,6 +132,10 @@ class Api:
     actions: list
     description: str = ""
     fr: list = field(default_factory=list)
+    # Per-operation scope override: {"list" | "get" | "create" | "update" | "delete" | "METHOD /action-path":
+    # [required scope, accepted alternatives...]} (e.g. the cell router's narrow platform:routing-read, with
+    # platform:operator still accepted).
+    scopes: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -311,7 +315,9 @@ def load_domains() -> list:
                     resource=a["resource"], path=a["path"], table=a["table"], domain=did, service=sname,
                     ops=a.get("ops", []) or [], filters=a.get("filters", []) or [],
                     actions=[parse_action(x, ctx) for x in (a.get("actions", []) or [])],
-                    description=a.get("description", ""), fr=a.get("fr", []) or []))
+                    description=a.get("description", ""), fr=a.get("fr", []) or [],
+                    scopes={str(k): ([v] if isinstance(v, str) else list(v))
+                            for k, v in (a.get("scopes", {}) or {}).items()}))
             for e in s.get("events", []) or []:
                 parts = [p.strip() for p in e.split("|")]
                 events.append(Event(parts[0], parts[1] if len(parts) > 1 else "",
@@ -395,6 +401,13 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
                 for f in a.filters:
                     if not t.col(f):
                         errors.append(f"api {a.resource}: filter {f} is not a column of {t.name}")
+                op_keys = set(a.ops) | {f"{act.method} {act.path}" for act in a.actions}
+                for k, v in a.scopes.items():
+                    if k not in op_keys:
+                        errors.append(f"api {a.resource}: scopes key {k!r} is not an operation of the resource "
+                                      f"(one of {sorted(op_keys)})")
+                    if not v or any(not re.fullmatch(r"[a-z][a-z0-9_-]*:[a-z0-9_*-]+", str(x)) for x in v):
+                        errors.append(f"api {a.resource}: scopes[{k!r}] must be a list of '<domain>:<name>' scopes")
                 for act in a.actions:
                     if act.response and act.response not in ("none", "object") and "/" not in act.response                             and act.response.rstrip("[]") not in tables_global:
                         errors.append(f"api {a.resource}: action response {act.response} unknown")
@@ -904,7 +917,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
 
                 def add(method, path, op, kind, summary, request=None, response=None, status="200",
                         params=None, scope="read", extra_errs=None, req_schema="", resp_schema="",
-                        content_type="application/json", public=False):
+                        content_type="application/json", public=False, op_key=None):
                     oid = op
                     i = 2
                     while oid in used_ids:
@@ -940,12 +953,25 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         # except operator_only tables (tenant registry, cells), which operators alone may read.
                         operator = not (s.scope or d.scope) and ((scope == "write" and not t.tenant) or t.operator_only)
                         need = "platform:operator" if operator else granted
-                        if operator:
-                            o["security"] = [{"oauth2": [need]}]
+                        accepted = [need]
+                        override = a.scopes.get(op_key) if op_key else None
+                        if override:
+                            # spec `scopes:` override: the first scope is required, the others are accepted instead
+                            need, accepted = override[0], list(dict.fromkeys(override))
+                        if operator or override:
+                            o["security"] = [{"oauth2": [sc]} for sc in accepted]
                             for target in (doc, bundle):
                                 for flow in target["components"]["securitySchemes"]["oauth2"]["flows"].values():
-                                    flow["scopes"].setdefault(need, "Platform operator (operator tenant or service only)")
-                        o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
+                                    for sc in accepted:
+                                        flow["scopes"].setdefault(sc, "Platform operator (operator tenant or service only)"
+                                                                  if sc == "platform:operator" else f"Narrow scope {sc}")
+                        if len(accepted) > 1:
+                            alts = ", ".join(f'"{x}"' for x in accepted[1:])
+                            o["x-operation-extra-annotation"] = (f'@io.meridian.web.security.RequiredScope(value = '
+                                                                 f'"{need}", anyOf = {{{alts}}})')
+                            o["x-accepted-scopes"] = accepted
+                        else:
+                            o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
                         o["x-required-scope"] = need
                     o["x-table"] = t.name
                     if kind in ("list", "get", "create", "update", "delete"):
@@ -968,7 +994,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         fparams.append({"name": fcol, "in": "query", "schema": sch})
                     page_schema(doc, bundle, S)
                     lst = ref(f"{S}Page")
-                    add("get", a.path, f"{rn}List", "list", f"List {noun}", response=lst,
+                    add("get", a.path, f"{rn}List", "list", f"List {noun}", response=lst, op_key="list",
                         params=base_params + [{"$ref": "#/components/parameters/Limit"},
                                               {"$ref": "#/components/parameters/Cursor"},
                                               {"$ref": "#/components/parameters/CreatedAfter"},
@@ -976,7 +1002,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         resp_schema=f"{S}[]")
                 if "create" in a.ops:
                     add("post", a.path, f"{rn}Create", "create", f"Create {noun[:-1] if noun.endswith('s') else noun}",
-                        request=ref(f"{S}Create"), response=ref(S), status="201",
+                        request=ref(f"{S}Create"), response=ref(S), status="201", op_key="create",
                         params=base_params + [{"$ref": "#/components/parameters/IdempotencyKey"}], scope="write",
                         extra_errs=ERR(("409", "Conflict"), ("422", "Unprocessable")),
                         req_schema=f"{S}Create", resp_schema=S)
@@ -984,16 +1010,18 @@ def gen_openapi(domains, enums, tables_global) -> list:
                 iparams = path_params(ipath)
                 if "get" in a.ops:
                     add("get", ipath, f"{rn}Get", "get", f"Retrieve {noun[:-1] if noun.endswith('s') else noun}",
-                        response=ref(S), params=iparams, extra_errs=ERR(("404", "NotFound")), resp_schema=S)
+                        response=ref(S), params=iparams, extra_errs=ERR(("404", "NotFound")), resp_schema=S,
+                        op_key="get")
                 if "update" in a.ops:
                     add("patch", ipath, f"{rn}Update", "update", f"Update {noun[:-1] if noun.endswith('s') else noun}",
-                        request=ref(f"{S}Update"), response=ref(S),
+                        request=ref(f"{S}Update"), response=ref(S), op_key="update",
                         params=iparams + [{"$ref": "#/components/parameters/IfMatch"}], scope="write",
                         extra_errs=ERR(("404", "NotFound"), ("409", "Conflict"), ("422", "Unprocessable")),
                         req_schema=f"{S}Update", resp_schema=S)
                 if "delete" in a.ops:
                     add("delete", ipath, f"{rn}Delete", "delete", f"Delete {noun[:-1] if noun.endswith('s') else noun}",
-                        params=iparams, status="204", scope="write", extra_errs=ERR(("404", "NotFound")))
+                        params=iparams, status="204", scope="write", extra_errs=ERR(("404", "NotFound")),
+                        op_key="delete")
                 for act in a.actions:
                     # "/" addresses the resource path itself (/v1/me/cards); action paths made only of path
                     # parameters (/{card_id}) are named by verb: <resource>List / Get / Create / Update / Delete.
@@ -1064,6 +1092,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         params = params + [{"$ref": "#/components/parameters/IdempotencyKey"}]
                     add(act.method.lower(), full, aname, "action", act.summary.removeprefix("[public]").strip(),
                         request=req, response=resp, content_type=content_type, public=public,
+                        op_key=f"{act.method} {act.path}",
                         status="200" if resp is not None else "204", params=params,
                         scope="write" if write else "read",
                         extra_errs=ERR(("404", "NotFound"), ("409", "Conflict"), ("422", "Unprocessable")) if write else ERR(("404", "NotFound")),

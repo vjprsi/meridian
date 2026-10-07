@@ -51,7 +51,7 @@ public class FraudModelScoresController implements FraudModelScoresApi {
         TenantContext.require();
         JsonNode req = http.tree(body);
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("keys", FeatureService.keys(req));
+        out.put("keys", features.keys(req));
         out.put("features", FeatureService.jsonSafe(features.compute(req)));
         return ResponseEntity.ok(out);
     }

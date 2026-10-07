@@ -33,9 +33,12 @@ public class PaymentQueries {
     private final RiskClient risk;
     private final ApprovalService approvals;
     private final PaymentProperties props;
+    private final org.springframework.beans.factory.ObjectProvider<FraudRescoreJob> fraudRescore;
 
     public PaymentQueries(Rows rows, PaymentProcessor processor, PayeeService payees, RoutingClient routing,
-                          RiskClient risk, ApprovalService approvals, PaymentProperties props) {
+                          RiskClient risk, ApprovalService approvals, PaymentProperties props,
+                          org.springframework.beans.factory.ObjectProvider<FraudRescoreJob> fraudRescore) {
+        this.fraudRescore = fraudRescore;
         this.rows = rows;
         this.processor = processor;
         this.payees = payees;
@@ -255,6 +258,8 @@ public class PaymentQueries {
         out.put("settled", settled);
         out.put("rejected", rejected);
         out.put("as_of", rows.today().toString());
+        // degraded fraud holds whose backoff is due are re-scored too (same idempotency key; FraudRescoreJob)
+        out.set("fraud_rescore", fraudRescore.getObject().rescoreDue());
         return out;
     }
 

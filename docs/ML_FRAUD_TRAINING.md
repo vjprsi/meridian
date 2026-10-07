@@ -30,7 +30,8 @@ payments / cards / wallets / risk events (Kafka)        ai-platform-service
   start is at or after `floor(now) - window + bucket`. Profiles keep exponentially weighted amount mean / variance and
   time-of-day per customer and currency (`a = max(1/(n+1), 0.02)`); links remember the first time two entities were
   seen together. Retention: 5-minute buckets 2 h, hourly buckets 8 d, event ids 8 d, profiles / links 400 days after
-  last use, pruned per tenant by the consumer. All tables are tenant-scoped by row-level security.
+  last use, pruned per tenant by the consumer. All tables are tenant-scoped by row-level security. Entities identified
+  by personal data (beneficiary account numbers, MSISDNs) are keyed by tenant-keyed pseudonyms (section 7).
 - **Features.** `FeatureCatalog` lists every feature with its exact definition (source events, entity key,
   aggregation, window semantics, currency rule, transform, missing-value rule); `POST /v1/risk/fraud/model-scores/
   register-features` writes them to ai-platform's catalogue (`feature_set = fraud-realtime-v1`, idempotent). A model
@@ -169,10 +170,52 @@ fraud-service picks every step up through the deployment events (or `POST /model
 - Velocity windows are bucket-aligned (55-60 min, 23-24 h, 167-168 h), not exact sliding windows.
 - Wallet events carry no customer id: wallet velocity is keyed by the payer wallet (`context.wallet_id` in the
   evaluate request) and customer features need `customer_id` in the payload or metadata.
-- The beneficiary key hashes account numbers with plain SHA-256 (no secret); treat stored keys as pseudonymous, not
-  anonymous.
+- Pseudonyms are keyed, not anonymous: whoever holds `meridian.fraud.pseudonym-key` and the data can test guesses.
+  Rotating the key changes every pseudonym (velocity history restarts; list entries must be re-added or migrated by
+  re-adding their values).
+- The device registry (`device_fingerprint.fingerprint_hash`) keeps the SDK's fingerprint as sent (it is the lookup
+  key analysts search by, and SDKs send a hash); it is never copied into features, feature keys or model inputs.
 - ai-platform lists are read in pages of 200 (newest models and deployments).
 - payment-service scores every outbound and internal payment before release (subject PAYMENT, key
-  `pay-fraud:<payment id>`; see SERVICE_IMPLEMENTATION_GUIDE "Fraud scoring of payments"). The request carries the raw
-  beneficiary account + BIC in `context` (needed for the beneficiary key and BENEFICIARY_ACCOUNT lists), and
-  fraud-service stores the request context in `fraud_score.features`: that column holds account numbers in clear.
+  `pay-fraud:<payment id>`; see SERVICE_IMPLEMENTATION_GUIDE "Fraud scoring of payments"). It sends the beneficiary
+  account only as `beneficiary_account_digest` (see section 7).
+
+## 7. Personal identifiers: tenant-keyed pseudonyms
+
+fraud-service never stores, and never computes features on, an identifier in clear (account numbers, IBANs, card
+numbers or fragments, phone numbers, e-mail addresses, device ids, national ids):
+
+- **Key.** `meridian.fraud.pseudonym-key` (env `MERIDIAN_FRAUD_PSEUDONYM_KEY`, Helm Secret
+  `meridian-fraud-service-secrets` key `pseudonym-key`) is a required secret (`meridian.required-secrets`,
+  `RequiredSecrets`): outside `security-mode=dev` the service refuses to start without a real value (>= 32 characters,
+  not a development default). The dev default `dev-only-fraud-pseudonym-key-...` works only in dev mode. Each tenant
+  gets its own key `HMAC-SHA256(secret, "meridian-fraud-pseudonym/v1|" + tenant_id)` (`Pseudonymizer`), so two tenants
+  never share a pseudonym.
+- **Canonical digest.** Every pseudonym is derived from the identifier's digest `sha256(TYPE ":" normalised)` (the
+  normalisation of fraud lists: e-mails lower case, phone digits and `+`, account / card numbers without spaces and
+  dashes, upper case). Callers may send the digest instead of the value: a context field `<name>_digest` (64 hex) is
+  treated like `<name>` (payment-service sends `beneficiary_account_digest` =
+  `sha256("BENEFICIARY_ACCOUNT:" + account without spaces/dashes, upper case)`, never the account number).
+- **Evaluation context.** Before rules, features or storage see it, the request `context` is rewritten
+  (`ContextPseudonymisation`): identifier fields by name (`beneficiary_account`, `iban`, `account_number`,
+  `card_number`, `pan`, `card_last4`, `email`, `phone`, `msisdn`, `payee_msisdn`, `device_id`, `device_fingerprint`,
+  `national_id`, ...) and any other string shaped like an e-mail, IBAN, international phone number or 8+ digits become
+  `psn:` + 128-bit HMAC; e-mails and 12+ digit runs inside free text are replaced inline. Ids (UUIDs), BINs, codes,
+  dates and numbers are kept. Same value, same tenant -> same pseudonym, so rules comparing context fields keep
+  working; rules must not compare context identifiers with literals. `fraud_score.features` (and the
+  `risk.fraud_score.*` events built from it) carry `pseudonymisation: "h1"`.
+- **Lists.** `fraud_list_entry.value_hash` = `h1:` + `HMAC(tenant key, "list|" + digest)`; evaluation matches the
+  request's digests the same way (clear values or `*_digest` fields).
+- **Feature store.** Beneficiary keys are `acct:h1:<HMAC(tenant key, "acct|" + account digest + "|" + BIC)[0..40]>`
+  and `msisdn:h1:<HMAC(tenant key, "msisdn|" + digits)[0..40]>`, computed the same way from the payment / wallet events
+  and from evaluate requests; payee, wallet, customer, card, account and merchant keys are internal ids. Device
+  velocity is keyed by the device registry id, never the fingerprint.
+- **Model inputs.** `fraud_model_score.feature_vector` and the training set hold only the numeric features (engineered
+  + store), never identifiers.
+- **One-off migration.** `POST /v1/risk/fraud/scores/pseudonymise-stored` (per tenant, scope `risk:*`, body
+  `{"dry_run": true}` to count first, `batch_size` 1-5000) re-pseudonymises what was stored before: the `context` of
+  older `fraud_score.features` (the append-only guard admits this one update of `features` only, inside a transaction
+  that sets `fraud.pseudonymise`), list entries holding a plain SHA-256 (`value_hash` -> `h1:HMAC(digest)`, lists keep
+  matching) and drops feature-store rows keyed by a plain SHA-256 (`acct:` / `msisdn:` + 40 hex; that beneficiary
+  history restarts). It is idempotent and resumable; repeat until `complete: true`. Events already published with
+  clear values (outbox, Kafka retention, audit copies) are outside its reach and age out with their retention.

@@ -50,6 +50,9 @@ class ScopeInterceptorTest {
         @RequiredScope("platform:operator")
         public void tenantsList() {}
 
+        @RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})
+        public void tenantsRouting() {}
+
         public void handWritten() {}
 
         @PublicEndpoint
@@ -107,6 +110,30 @@ class ScopeInterceptorTest {
         // without a configured operator tenant only service tokens qualify
         assertThatThrownBy(() -> call(interceptor, operatorUser, "tenantsList"))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo("operator_tenant_required"));
+    }
+
+    @Test
+    void routingReadIsTheRoutersNarrowScopeWithOperatorStillAccepted() throws Exception {
+        String operatorTenant = "0199a000-0000-7000-8000-0000000000f0";
+        ScopeInterceptor op = new ScopeInterceptor(new MeridianProperties("jwt", "tenant_id"),
+                new SecurityProperties(null, null, operatorTenant), r -> false);
+        Jwt router = Jwt.withTokenValue("t").header("alg", "none").subject("svc-router").claim("azp", "meridian-cell-router")
+                .claim("scope", "platform:routing-read").claim("tenant_id", operatorTenant)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(call(op, router, "tenantsRouting")).isTrue();
+        assertThat(call(op, jwt("meridian-service", "platform:operator meridian:internal"), "tenantsRouting")).isTrue();
+        // the router's client reads routing only: no other registry operation, no domain operation
+        for (String other : new String[] {"tenantsList", "paymentsCreate", "depositAccountsList", "platformChange"}) {
+            assertThatThrownBy(() -> call(op, router, other)).as(other).isInstanceOfSatisfying(ApiException.class,
+                    e -> assertThat(e.code()).isEqualTo("insufficient_scope"));
+        }
+        // never implied by a bank's admin or wildcard scopes; the scope from a bank's tenant is refused too
+        assertThatThrownBy(() -> call(op, jwt("meridian-console", "meridian:admin platform:*"), "tenantsRouting"))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo("insufficient_scope"));
+        assertThatThrownBy(() -> call(op, jwt("meridian-cell-router", "platform:routing-read"), "tenantsRouting"))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo("operator_tenant_required"));
+        assertThat(ScopeInterceptor.permits(Set.of("platform:*", "meridian:admin"), ScopeInterceptor.ROUTING_READ_SCOPE))
+                .isFalse();
     }
 
     @Test

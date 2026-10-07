@@ -39,6 +39,7 @@ SERVICE_SECRETS = {
                          "MERIDIAN_DOCUMENTS_S3_ACCESS_KEY": "s3-access-key",
                          "MERIDIAN_DOCUMENTS_S3_SECRET_KEY": "s3-secret-key"},
     "file-gateway-service": {"MERIDIAN_FILES_SIGNING_KEY": "signing-key"},
+    "fraud-service": {"MERIDIAN_FRAUD_PSEUDONYM_KEY": "pseudonym-key"},
     "identity-service": {"MERIDIAN_IDENTITY_MFA_SEED_KEY": "mfa-seed-key"},
     "loan-origination-service": {"MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET": "callback-secret"},
     "onboarding-service": {"MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET": "otp-secret",
@@ -627,8 +628,8 @@ ROUTER_NOTES = r'''Meridian cell router {{ .Chart.AppVersion }} installed as "{{
 Tenant registry: {{ .Values.router.registryUrl }}
 Health check for the load balancer / Route 53: GET /healthz on the http port.
 Required secret (not created by this chart):
-  {{ .Values.router.auth.clientSecret }}  client-id/client-secret of the router's service client
-                                (scopes meridian:internal platform:operator; registry reads are operator-only, SEC-15)
+  {{ .Values.router.auth.clientSecret }}  client-id/client-secret of the router's own client (meridian-cell-router:
+                                scope platform:routing-read only, tokens of the platform-operator tenant; SEC-15)
 Cell gateways must list the router's addresses in global.trustedProxies (SEC-16) to keep the client address.
 {{- if .Values.router.cellOverrides }}
 WARNING: break-glass cell overrides in force: {{ toJson .Values.router.cellOverrides }}
@@ -668,8 +669,8 @@ router:
   operatorTenant: ""             # SEC-15: platform-operator tenant id (registry reads are operator-only)
   auth:
     tokenUri: ""                 # OIDC token endpoint for the router's client credentials
-    clientSecret: "meridian-service-client"   # Secret with client-id / client-secret of a client with meridian:internal + platform:operator (realm client meridian-service, or a dedicated one)
-    scope: "meridian:internal platform:operator"
+    clientSecret: "meridian-cell-router-client"   # Secret with client-id / client-secret of the router's own client (realm client meridian-cell-router), never the shared meridian-service client
+    scope: "platform:routing-read"   # the only scope the router needs: tenant routing and cell reads
   jwt:
     jwkSetUri: ""                # IdP JWKS used to verify callers' tokens
     issuer: ""

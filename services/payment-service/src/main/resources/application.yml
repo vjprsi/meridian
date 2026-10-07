@@ -78,6 +78,16 @@ meridian:
       alert-consumer-enabled: true     # risk.fraud_alert.resolved releases / rejects held payments
       alert-topic: meridian.risk.v1
       alert-group: payment-service-fraud-alerts
+      auto-rescore:                    # holds of unavailable scoring (fraud_degraded) are re-scored with the same key
+        enabled: true                  # internal scheduler over every tenant (execute-due also rescores due holds)
+        interval-ms: 60000
+        initial-backoff: 1m            # then doubling: 2m, 4m, ... capped at max-backoff
+        max-backoff: 1h
+        max-attempts: 12               # afterwards the hold waits for an analyst (fraud-rescore / fraud-review-decision)
+        batch-size: 100
+      upstream:                        # reuse the originating service's evaluation instead of scoring twice
+        services: [wallet-service]     # internal token + X-Meridian-Service only; never from channel or user tokens
+        max-age-seconds: 900           # only a recent ALLOW of the same customer, amount and currency
 
 management:
   endpoints:

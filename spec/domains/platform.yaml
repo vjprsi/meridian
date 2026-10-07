@@ -385,6 +385,11 @@ services:
         description: Platform-operator API for deployment cells
         ops: [list, get, create, update]
         filters: [region, cloud_provider, status, is_dedicated, deployment_model]
+        # the cell router's own client (meridian-cell-router) reads cells with the narrow platform:routing-read;
+        # platform:operator is still accepted, every other cell operation stays operator-only (SEC-15)
+        scopes:
+          list: [platform:routing-read, platform:operator]
+          get: [platform:routing-read, platform:operator]
         actions:
           - "POST /{id}/drain | Stop placing new tenants on the cell | reason string(255) nn"
           - "POST /{id}/offline | Take the cell out of service: the cell router fails its tenants over to their standby cells (break-glass, audited) | reason string(255) nn"
@@ -396,6 +401,8 @@ services:
         description: Platform-operator API for tenant lifecycle
         ops: [list, get, create, update]
         filters: [status, tenant_type, deployment_model, cell_id, environment]
+        scopes:
+          "GET /{id}/routing": [platform:routing-read, platform:operator]   # cell router client (SEC-15)
         actions:
           - "POST /{id}/activate | Activate a provisioned tenant"
           - "POST /{id}/suspend | Suspend a tenant (all APIs return 403) | reason string(255) nn"

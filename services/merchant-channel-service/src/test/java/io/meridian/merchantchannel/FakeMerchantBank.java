@@ -64,6 +64,7 @@ final class FakeMerchantBank {
         rows("webhook-service", "/v1/webhook-endpoints");
         rows("webhook-service", "/v1/webhook-subscriptions");
         rows("webhook-service", "/v1/webhook-deliveries");
+        rows("workflow-service", "/v1/approval-requests");
     }
 
     void wire(ServiceClient client) {
@@ -105,6 +106,34 @@ final class FakeMerchantBank {
     List<Call> writes(String service, String pathPrefix) {
         return calls.stream().filter(c -> c.writes() && c.service().equals(service) && c.path().startsWith(pathPrefix))
                 .toList();
+    }
+
+    /** Refunds approved by a merchant user above this amount wait for the bank's checkers (null = never). */
+    volatile BigDecimal refundBankReviewAbove;
+
+    private void completeRefund(ObjectNode row, String approver) {
+        ObjectNode original = row(WS, "/v1/wallet-transactions", row.path("original_transaction_id").asString());
+        ObjectNode refund = json.createObjectNode();
+        refund.put("id", UUID.randomUUID().toString()).put("txn_type", "REFUND").put("status", "COMPLETED")
+                .put("merchant_id", row.path("merchant_id").asString()).put("amount", row.path("amount").asString())
+                .put("currency", row.path("currency").asString())
+                .put("original_transaction_id", original.path("id").asString());
+        rows(WS, "/v1/wallet-transactions").put(refund.get("id").asString(), refund);
+        row.put("status", "COMPLETED").put("approved_by", approver)
+                .put("wallet_transaction_id", refund.get("id").asString());
+    }
+
+    /** A bank checker decides a refund waiting for the bank (what merchant-service does on the central decision). */
+    void bankDecidesRefund(String refundId, boolean approve, String checker) {
+        ObjectNode row = row(MS, "/v1/merchant-refunds", refundId);
+        if (!"PENDING_BANK_APPROVAL".equals(row.path("status").asString())) {
+            throw new IllegalStateException("refund is " + row.path("status").asString());
+        }
+        if (approve) {
+            completeRefund(row, checker);
+        } else {
+            row.put("status", "REJECTED").put("approved_by", checker).put("rejection_reason", "Refund not justified");
+        }
     }
 
     /** A customer pays a QR code: the QR is used (dynamic: deactivated) and a MERCHANT_PAYMENT is recorded. */
@@ -265,7 +294,8 @@ final class FakeMerchantBank {
                 BigDecimal already = BigDecimal.ZERO;
                 for (ObjectNode r : rows.values()) {
                     if (r.path("original_transaction_id").asString().equals(row.path("original_transaction_id").asString())
-                            && Set.of("REQUESTED", "APPROVED", "COMPLETED").contains(r.path("status").asString())) {
+                            && Set.of("REQUESTED", "PENDING_BANK_APPROVAL", "APPROVED", "COMPLETED")
+                            .contains(r.path("status").asString())) {
                         already = already.add(new BigDecimal(r.path("amount").asString()));
                     }
                 }
@@ -315,21 +345,24 @@ final class FakeMerchantBank {
             case "/v1/merchant-qr-codes deactivate", "/v1/merchant-payment-links deactivate" -> row.put("is_active", false);
             case "/v1/merchant-refunds approve" -> {
                 String who = TenantContext.principal();
+                boolean merchantUser = who.startsWith("merchant-user:");
+                if (merchantUser && "PENDING_BANK_APPROVAL".equals(row.path("status").asString())) {
+                    throw ApiException.conflict("awaiting_bank_approval", "The refund waits for the bank's checkers");
+                }
                 if (who.equals(row.path("created_by").asString())) {
                     throw ApiException.unprocessable("four_eyes_violation", "A refund must be approved by another user");
                 }
                 if (!"REQUESTED".equals(row.path("status").asString())) {
                     throw ApiException.conflict("invalid_transition", "The refund is " + row.path("status").asString());
                 }
-                ObjectNode original = row(WS, "/v1/wallet-transactions", row.path("original_transaction_id").asString());
-                ObjectNode refund = json.createObjectNode();
-                refund.put("id", UUID.randomUUID().toString()).put("txn_type", "REFUND").put("status", "COMPLETED")
-                        .put("merchant_id", row.path("merchant_id").asString()).put("amount", row.path("amount").asString())
-                        .put("currency", row.path("currency").asString())
-                        .put("original_transaction_id", original.path("id").asString());
-                rows(WS, "/v1/wallet-transactions").put(refund.get("id").asString(), refund);
-                row.put("status", "COMPLETED").put("approved_by", who)
-                        .put("wallet_transaction_id", refund.get("id").asString());
+                BigDecimal reviewAbove = refundBankReviewAbove;
+                if (merchantUser && reviewAbove != null && new BigDecimal(row.path("amount").asString()).compareTo(reviewAbove) > 0) {
+                    // like merchant-service: the merchant's approval hands it to the bank's checkers
+                    row.put("status", "PENDING_BANK_APPROVAL").put("merchant_approved_by", who)
+                            .put("bank_review_reason", "AMOUNT_THRESHOLD");
+                    break;
+                }
+                completeRefund(row, who);
             }
             case "/v1/api-clients suspend" -> row.put("status", "SUSPENDED");
             case "/v1/api-clients keys" -> {

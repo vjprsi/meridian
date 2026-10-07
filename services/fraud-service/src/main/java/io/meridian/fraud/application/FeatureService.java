@@ -1,6 +1,7 @@
 package io.meridian.fraud.application;
 
 import io.meridian.common.time.Clocks;
+import io.meridian.fraud.domain.Pseudonyms;
 import io.meridian.fraud.domain.features.FeatureEvent;
 import io.meridian.fraud.domain.features.StoreFeatures;
 import io.meridian.fraud.infrastructure.Db;
@@ -17,21 +18,35 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class FeatureService {
     private final FeatureStore store;
+    private final Pseudonymizer pseudonyms;
 
-    public FeatureService(FeatureStore store) {
+    public FeatureService(FeatureStore store, Pseudonymizer pseudonyms) {
         this.store = store;
+        this.pseudonyms = pseudonyms;
     }
 
-    /** Entity keys of an evaluate request; see {@code FeatureCatalog} for how each maps to the event keys. */
-    public static FeatureStore.Keys keys(JsonNode req) {
+    /**
+     * Entity keys of an evaluate request (the raw request: identifiers are turned into pseudonyms here and never
+     * leave this method in clear); see {@code FeatureCatalog} for how each maps to the event keys.
+     */
+    public static FeatureStore.Keys keys(JsonNode req, Pseudonyms ps) {
         JsonNode ctx = req.path("context");
         String account = first(Db.str(ctx, "wallet_id"), Db.str(ctx, "debtor_account_id"), Db.str(req, "account_id"));
-        String beneficiary = FeatureEvent.Keys.beneficiary(Db.str(ctx, "payee_id"), Db.str(ctx, "beneficiary_account"),
-                Db.str(ctx, "beneficiary_bic"), Db.str(ctx, "payee_wallet_id"), Db.str(ctx, "payee_msisdn"));
+        String digest = Db.str(ctx, "beneficiary_account_digest");
+        if (digest == null || !Pseudonyms.isDigest(digest)) {
+            digest = FeatureEvent.Keys.accountDigest(Db.str(ctx, "beneficiary_account"));
+        }
+        String beneficiary = FeatureEvent.Keys.beneficiary(Db.str(ctx, "payee_id"), digest,
+                Db.str(ctx, "beneficiary_bic"), Db.str(ctx, "payee_wallet_id"), Db.str(ctx, "payee_msisdn"), ps);
         String country = first(Db.str(req, "counterparty_country"), Db.str(ctx, "merchant_country"));
         return new FeatureStore.Keys(Db.str(req, "customer_id"), Db.str(req, "card_id"), account,
                 blankToNull(Db.str(req, "device_fingerprint")), Db.str(ctx, "merchant_id"), beneficiary,
                 country == null ? null : country.trim().toUpperCase(Locale.ROOT), Db.str(req, "currency"));
+    }
+
+    /** Entity keys of a request for the bound tenant (pseudonymised). */
+    public FeatureStore.Keys keys(JsonNode req) {
+        return keys(req, pseudonyms.current());
     }
 
     public Map<String, Double> compute(JsonNode req) {
@@ -40,7 +55,7 @@ public class FeatureService {
 
     public Map<String, Double> compute(JsonNode req, Instant now) {
         BigDecimal amount = Db.dec(req, "amount");
-        return StoreFeatures.compute(store.lookup(keys(req), amount == null ? null : amount.doubleValue(), now));
+        return StoreFeatures.compute(store.lookup(keys(req, pseudonyms.current()), amount == null ? null : amount.doubleValue(), now));
     }
 
     /** JSON-safe copy (NaN = missing becomes null). */

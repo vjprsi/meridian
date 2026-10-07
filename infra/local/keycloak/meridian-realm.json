@@ -416,6 +416,14 @@
       }
     },
     {
+      "name": "platform:routing-read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
       "name": "channels:agent",
       "protocol": "openid-connect",
       "attributes": {
@@ -752,6 +760,46 @@
         "meridian:internal",
         "platform:operator"
       ]
+    },
+    {
+      "clientId": "meridian-cell-router",
+      "name": "Meridian cell router",
+      "publicClient": false,
+      "secret": "meridian-cell-router-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-0000000000f0",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "platform:routing-read"
+      ],
+      "optionalClientScopes": []
     },
     {
       "clientId": "meridian-readonly",

@@ -19,9 +19,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Reads the tenant registry in tenant-service with the router's service identity: {@code GET
- * /v1/platform/tenants/{id}/routing} and {@code GET /v1/platform/cells}. Both are platform-operator operations
- * (SEC-15), so the router sends an internal client-credentials token and the operator tenant id; it never forwards a
- * caller's token or tenant to the registry.
+ * /v1/platform/tenants/{id}/routing} and {@code GET /v1/platform/cells}. Both accept the narrow
+ * {@code platform:routing-read} scope (or {@code platform:operator}; SEC-15), so the router sends a client-credentials
+ * token of its own client {@code meridian-cell-router} (that scope only, platform-operator tenant); it never forwards
+ * a caller's token or tenant to the registry.
  */
 @Component
 public class RegistryClient {

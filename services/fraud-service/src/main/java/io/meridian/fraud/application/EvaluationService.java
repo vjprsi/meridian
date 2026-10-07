@@ -3,9 +3,11 @@ package io.meridian.fraud.application;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.fraud.domain.ContextPseudonymisation;
 import io.meridian.fraud.domain.DecisionEngine;
 import io.meridian.fraud.domain.FeatureEngineering;
 import io.meridian.fraud.domain.ListValues;
+import io.meridian.fraud.domain.Pseudonyms;
 import io.meridian.fraud.domain.ml.MlExecution;
 import io.meridian.fraud.domain.model.FraudModel;
 import io.meridian.fraud.infrastructure.Db;
@@ -47,11 +49,13 @@ public class EvaluationService {
     private final JsonMapper json;
     private final FeatureService features;
     private final MlScoringService ml;
+    private final Pseudonymizer pseudonymizer;
     private final boolean featureLogging;
 
     public EvaluationService(EvaluationStore store, FraudConfigCache config, ModelRegistry models, TransactionTemplate tx,
-                             Db db, JsonMapper json, FeatureService features, MlScoringService ml,
+                             Db db, JsonMapper json, FeatureService features, MlScoringService ml, Pseudonymizer pseudonymizer,
                              @Value("${meridian.fraud.ml.feature-logging:true}") boolean featureLogging) {
+        this.pseudonymizer = pseudonymizer;
         this.store = store;
         this.config = config;
         this.models = models;
@@ -82,19 +86,23 @@ public class EvaluationService {
         FraudConfigCache.Snapshot cfg = config.current();
         DecisionEngine.Policy policy = cfg.policy(subjectType);
         UUID customerId = Db.uuid(req, "customer_id");
-        JsonNode context = req.hasNonNull("context") ? req.get("context") : json.createObjectNode();
+        JsonNode rawContext = req.hasNonNull("context") ? req.get("context") : json.createObjectNode();
+        Pseudonyms ps = pseudonymizer.current();
 
-        // values of this event that may be on a list, hashed per list entity type
-        Map<String, List<String>> candidates = listCandidates(req, context);
+        // values of this event that may be on a list: canonical digests per list entity type, matched by their keyed
+        // hash (lists store only that)
+        Map<String, List<String>> candidates = listCandidates(req, rawContext);
         Set<String> hashes = new LinkedHashSet<>();
         List<UUID> listIds = new ArrayList<>();
         for (FraudConfigCache.ListMeta l : cfg.lists()) {
-            List<String> values = candidates.getOrDefault(l.entityType(), List.of());
-            if (!values.isEmpty()) {
+            List<String> digests = candidates.getOrDefault(l.entityType(), List.of());
+            if (!digests.isEmpty()) {
                 listIds.add(l.id());
-                values.forEach(v -> hashes.add(ListValues.hash(l.entityType(), v)));
+                digests.forEach(d -> hashes.add(ps.listHash(d)));
             }
         }
+        // identifiers in the context become pseudonyms before rules, features and storage see them
+        JsonNode context = ContextPseudonymisation.sanitise(rawContext, ps);
         EvaluationStore.DeviceInput device = deviceInput(req);
         // real-time features from the feature store: one read outside the scoring transaction, so a failure there
         // degrades the ML model to rules instead of failing the evaluation
@@ -364,6 +372,7 @@ public class EvaluationService {
         f.put("velocity", toMap(loaded.get("velocity")));
         f.put("session", toMap(loaded.get("session")));
         f.put("context", toMap(context));
+        f.put(PseudonymisationService.MARKER, PseudonymisationService.VERSION); // identifiers already pseudonymised
         return f;
     }
 
@@ -436,9 +445,16 @@ public class EvaluationService {
         return v == null ? null : v.length() > max ? v.substring(0, max) : v;
     }
 
-    /** Values of the event per list entity type (the list lookup hashes them with the list's entity type). */
+    /**
+     * Canonical digests ({@link ListValues#hash}) of the event's values per list entity type; a caller may send a
+     * {@code beneficiary_account_digest} instead of the clear account number.
+     */
     static Map<String, List<String>> listCandidates(JsonNode req, JsonNode ctx) {
         Map<String, List<String>> m = new LinkedHashMap<>();
+        String accountDigest = Db.str(ctx, "beneficiary_account_digest");
+        if (Pseudonyms.isDigest(accountDigest)) {
+            m.computeIfAbsent("BENEFICIARY_ACCOUNT", k -> new ArrayList<>()).add(accountDigest.toLowerCase(java.util.Locale.ROOT));
+        }
         add(m, "DEVICE", Db.str(req, "device_fingerprint"));
         add(m, "IP_ADDRESS", Db.str(req, "ip_address"));
         add(m, "ACCOUNT", Db.str(req, "account_id"));
@@ -456,7 +472,7 @@ public class EvaluationService {
 
     private static void add(Map<String, List<String>> m, String type, String v) {
         if (v != null && !v.isBlank()) {
-            m.computeIfAbsent(type, k -> new ArrayList<>()).add(v);
+            m.computeIfAbsent(type, k -> new ArrayList<>()).add(ListValues.hash(type, v));
         }
     }
 

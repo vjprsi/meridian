@@ -6,6 +6,8 @@ import io.meridian.fraud.api.generated.model.FraudFeedback;
 import io.meridian.fraud.api.generated.model.FraudRuleHitPage;
 import io.meridian.fraud.api.generated.model.FraudScoresEvaluateRequest;
 import io.meridian.fraud.api.generated.model.FraudScoresFeedbackRequest;
+import io.meridian.fraud.api.generated.model.FraudScoresPseudonymiseStoredRequest;
+import io.meridian.fraud.application.PseudonymisationService;
 import io.meridian.fraud.application.EvaluationService;
 import io.meridian.fraud.application.ExplanationService;
 import io.meridian.fraud.application.FraudAlertService;
@@ -26,9 +28,11 @@ public class FraudScoresController implements FraudScoresApi {
     private final FraudAlertService alerts;
     private final CrudEngine crud;
     private final Http http;
+    private final PseudonymisationService pseudonymisation;
 
     public FraudScoresController(EvaluationService evaluation, ExplanationService explanation, FraudAlertService alerts,
-                                 CrudEngine crud, Http http) {
+                                 CrudEngine crud, Http http, PseudonymisationService pseudonymisation) {
+        this.pseudonymisation = pseudonymisation;
         this.evaluation = evaluation;
         this.explanation = explanation;
         this.alerts = alerts;
@@ -45,6 +49,20 @@ public class FraudScoresController implements FraudScoresApi {
             b.header("Idempotent-Replayed", "true");
         }
         return b.body(result);
+    }
+
+    /**
+     * One-off operator migration (scope risk:*). Not cached by idempotency: each call continues where the previous one
+     * stopped and reports what remains.
+     */
+    @Override
+    public ResponseEntity<Map<String, Object>> fraudScoresPseudonymiseStored(String idempotencyKey,
+                                                                            FraudScoresPseudonymiseStoredRequest body) {
+        TenantContext.require();
+        tools.jackson.databind.JsonNode req = body == null ? null : http.tree(body);
+        boolean dryRun = req != null && req.path("dry_run").asBoolean(false);
+        Integer batch = req != null && req.hasNonNull("batch_size") ? req.get("batch_size").asInt() : null;
+        return ResponseEntity.ok(pseudonymisation.run(dryRun, batch));
     }
 
     @Override

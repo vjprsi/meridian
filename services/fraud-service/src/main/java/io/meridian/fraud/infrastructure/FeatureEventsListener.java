@@ -2,6 +2,7 @@ package io.meridian.fraud.infrastructure;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.common.time.Clocks;
+import io.meridian.fraud.application.Pseudonymizer;
 import io.meridian.fraud.domain.features.FeatureEvent;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -38,11 +39,13 @@ public class FeatureEventsListener {
 
     private final FeatureStore store;
     private final JsonMapper json;
+    private final Pseudonymizer pseudonyms;
     private final Map<UUID, Long> lastPrune = new ConcurrentHashMap<>();
 
-    public FeatureEventsListener(FeatureStore store, JsonMapper json) {
+    public FeatureEventsListener(FeatureStore store, JsonMapper json, Pseudonymizer pseudonyms) {
         this.store = store;
         this.json = json;
+        this.pseudonyms = pseudonyms;
     }
 
     @KafkaListener(id = "fraud-feature-store",
@@ -61,7 +64,7 @@ public class FeatureEventsListener {
         try {
             tenantId = UUID.fromString(tenant);
             JsonNode payload = json.readTree(record.value());
-            event = FeatureEvent.from(id, type, time(header(record, "ce_time")), payload);
+            event = FeatureEvent.from(id, type, time(header(record, "ce_time")), payload, pseudonyms.forTenant(tenantId));
         } catch (IllegalArgumentException | JacksonException e) {
             log.warn("Feature store skips malformed event {} {}: {}", type, id, e.getMessage());
             return;

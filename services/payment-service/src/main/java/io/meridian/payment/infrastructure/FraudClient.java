@@ -84,6 +84,20 @@ public class FraudClient implements DisposableBean {
         }
     }
 
+    /**
+     * A stored evaluation ({@code GET /v1/risk/fraud/scores/{id}}) read with payment-service's own identity, never the
+     * caller's; empty when it does not exist in the tenant or fraud-service cannot answer.
+     */
+    public java.util.Optional<JsonNode> score(UUID scoreId) {
+        try {
+            return java.util.Optional.ofNullable(ServiceClient.asService(
+                    () -> client.get("fraud-service", "/v1/risk/fraud/scores/" + scoreId)));
+        } catch (RuntimeException e) {
+            log.warn("fraud score {} could not be read: {}", scoreId, e.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
     private static UUID uuid(JsonNode r, String f) {
         String v = r.path(f).asString(null);
         return v == null || v.isBlank() ? null : UUID.fromString(v);

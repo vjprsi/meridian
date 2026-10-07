@@ -190,6 +190,9 @@ class FeatureComputationTest {
     // ------------------------------------------------------------------ event mapping
 
     static final JsonMapper JSON = JsonMapper.builder().build();
+    static final io.meridian.fraud.domain.Pseudonyms PS = io.meridian.fraud.domain.Pseudonyms.of(
+            io.meridian.fraud.domain.Pseudonyms.tenantKey("test-secret-0123456789abcdef0123456789".getBytes(),
+                    java.util.UUID.fromString("0199a000-0000-7000-8000-00000000000a")));
 
     @Test
     void paymentEventsMapToCustomerAccountBeneficiaryAndLinks() {
@@ -197,18 +200,18 @@ class FeatureComputationTest {
                 {"id":"p1","direction":"OUTBOUND","customer_id":"c1","debtor_account_id":"a1","amount":"250.00",
                  "currency":"KES","creditor_account_number":"0012 3456-78","creditor_agent_bic":"abcdkenx",
                  "creditor_country":"ug","created_at":"2026-10-07T10:00:00Z"}""");
-        FeatureEvent e = FeatureEvent.from("ev1", FeatureEvent.PAYMENT_INITIATED, null, p).orElseThrow();
-        String beneficiary = FeatureEvent.Keys.beneficiary(null, "00123456 78", "ABCDKENX", null, null);
+        FeatureEvent e = FeatureEvent.from("ev1", FeatureEvent.PAYMENT_INITIATED, null, p, PS).orElseThrow();
+        String beneficiary = FeatureEvent.Keys.beneficiary(null, FeatureEvent.Keys.accountDigest("00123456 78"), "ABCDKENX", null, null, PS);
         assertThat(e.counters()).containsEntry("CUSTOMER", "c1").containsEntry("ACCOUNT", "a1")
                 .containsEntry("BENEFICIARY", beneficiary);
-        assertThat(beneficiary).startsWith("acct:").doesNotContain("0012");
+        assertThat(beneficiary).startsWith("acct:h1:").doesNotContain("0012");
         assertThat(e.links()).contains(new FeatureEvent.Link("CUSTOMER_BENEFICIARY", "c1", beneficiary),
                 new FeatureEvent.Link("CUSTOMER_COUNTRY", "c1", "UG"));
         assertThat(e.amount()).isEqualByComparingTo("250.00");
         assertThat(e.occurredAt()).isEqualTo(Instant.parse("2026-10-07T10:00:00Z"));
         var inbound = JSON.readTree("{\"direction\":\"INBOUND\",\"customer_id\":\"c1\",\"amount\":\"1\",\"currency\":\"KES\"}");
-        assertThat(FeatureEvent.from("ev2", FeatureEvent.PAYMENT_INITIATED, NOW, inbound)).isEmpty();
-        assertThat(FeatureEvent.from("ev3", "payments.payment.settled", NOW, p)).isEmpty();
+        assertThat(FeatureEvent.from("ev2", FeatureEvent.PAYMENT_INITIATED, NOW, inbound, PS)).isEmpty();
+        assertThat(FeatureEvent.from("ev3", "payments.payment.settled", NOW, p, PS)).isEmpty();
     }
 
     @Test
@@ -216,20 +219,20 @@ class FeatureComputationTest {
         var card = JSON.readTree("""
                 {"card_id":"k1","customer_id":"c1","merchant_id":"M-9","merchant_country":"gb","billing_amount":"12.5",
                  "billing_currency":"KES","transaction_amount":"0.1","transaction_currency":"GBP"}""");
-        FeatureEvent c = FeatureEvent.from("e1", FeatureEvent.CARD_DECLINED, NOW, card).orElseThrow();
+        FeatureEvent c = FeatureEvent.from("e1", FeatureEvent.CARD_DECLINED, NOW, card, PS).orElseThrow();
         assertThat(c.counters()).containsKeys("CUSTOMER", "CARD", "MERCHANT");
         assertThat(c.currency()).isEqualTo("KES");
         assertThat(c.occurredAt()).isEqualTo(NOW); // ce_time when the payload has no created_at
         assertThat(c.links()).contains(new FeatureEvent.Link("CARD_MERCHANT", "k1", "M-9"), new FeatureEvent.Link("CARD_COUNTRY", "k1", "GB"));
 
         var wallet = JSON.readTree("{\"payer_wallet_id\":\"w1\",\"payee_msisdn\":\"+254 712 000111\",\"amount\":\"5\",\"currency\":\"KES\"}");
-        FeatureEvent w = FeatureEvent.from("e2", FeatureEvent.WALLET_INITIATED, NOW, wallet).orElseThrow();
+        FeatureEvent w = FeatureEvent.from("e2", FeatureEvent.WALLET_INITIATED, NOW, wallet, PS).orElseThrow();
         assertThat(w.counters().get("ACCOUNT")).isEqualTo("w1");
-        assertThat(w.counters().get("BENEFICIARY")).isEqualTo(FeatureEvent.Keys.beneficiary(null, null, null, null, "254712000111"));
+        assertThat(w.counters().get("BENEFICIARY")).isEqualTo(FeatureEvent.Keys.beneficiary(null, null, null, null, "254712000111", PS));
         assertThat(w.links()).contains(new FeatureEvent.Link("ACCOUNT_BENEFICIARY", "w1", w.counters().get("BENEFICIARY")));
 
         var login = JSON.readTree("{\"subject_type\":\"LOGIN\",\"customer_id\":\"c1\",\"device_fingerprint_id\":\"d1\"}");
-        FeatureEvent l = FeatureEvent.from("e3", FeatureEvent.FRAUD_EVALUATED, NOW, login).orElseThrow();
+        FeatureEvent l = FeatureEvent.from("e3", FeatureEvent.FRAUD_EVALUATED, NOW, login, PS).orElseThrow();
         assertThat(l.counters()).containsEntry("CUSTOMER_LOGIN", "c1").containsEntry("DEVICE", "d1");
         assertThat(l.amount()).isNull();
         assertThat(l.currency()).isEqualTo(FeatureEvent.NO_CURRENCY);

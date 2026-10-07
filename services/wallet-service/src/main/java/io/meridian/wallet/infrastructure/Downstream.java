@@ -125,7 +125,7 @@ public class Downstream {
         }
         try {
             JsonNode r = client.post("fraud-service", "/v1/risk/fraud/scores/evaluate", body, key);
-            String id = r.path("id").asString(null);
+            String id = r.path("fraud_score_id").asString(r.path("id").asString(null));
             BigDecimal score = r.hasNonNull("score")
                     ? new BigDecimal(r.get("score").asString()).divide(BigDecimal.valueOf(1000), 4, java.math.RoundingMode.HALF_EVEN)
                     : null;
@@ -182,9 +182,16 @@ public class Downstream {
         return client.get("deposit-service", "/v1/deposit-accounts/" + id);
     }
 
-    /** Creates an outbound credit transfer in payment-service for a wallet-to-bank transfer to another bank. */
+    /**
+     * Creates an outbound credit transfer in payment-service for a wallet-to-bank transfer to another bank, with
+     * wallet-service's own identity (service token + X-Meridian-Service): payment-service debits the bank clearing
+     * account the wallet transaction credited, and reuses the wallet's ALLOW evaluation ({@code upstream_fraud_score_id})
+     * instead of scoring the same money movement twice. Both fields are honoured only from wallet-service.
+     *
+     * @param fraudScoreId the wallet transaction's evaluation when it was an ALLOW (null = payment-service scores it)
+     */
     public UUID outboundPayment(String key, JsonNode link, BigDecimal amount, String currency, String reference,
-                                UUID walletId, String debtorName) {
+                                UUID walletId, String debtorName, UUID fraudScoreId) {
         ObjectNode p = json.createObjectNode();
         p.put("payment_type", "DOMESTIC");
         p.put("direction", "OUTBOUND");
@@ -200,10 +207,13 @@ public class Downstream {
         p.put("debtor_wallet_id", walletId.toString());
         p.put("debtor_name", debtorName);
         if (props.gl().bankClearing() != null) {
-            p.put("debtor_ledger_account_id", props.gl().bankClearing().toString());
+            p.put("debtor_clearing_ledger_account_id", props.gl().bankClearing().toString());
+        }
+        if (fraudScoreId != null) {
+            p.put("upstream_fraud_score_id", fraudScoreId.toString());
         }
         p.put("remittance_unstructured", "Wallet transfer " + reference);
-        JsonNode r = client.post("payment-service", "/v1/payments", p, key);
+        JsonNode r = ServiceClient.asService(() -> client.post("payment-service", "/v1/payments", p, key));
         String id = r.path("id").asString(null);
         return id == null ? null : UUID.fromString(id);
     }

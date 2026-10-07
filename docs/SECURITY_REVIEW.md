@@ -91,6 +91,16 @@ public callback routes, the `tenant_id` parameter; it strips the same internal h
 (`HeaderPolicyParityTest`) and reads the registry with its own service identity. Cell `/offline` is deliberately
 single-operator (break-glass, audited) so a regional failover is not blocked by an approval round.
 
+Follow-ups (2026-10-07): the router's identity is a dedicated Keycloak client `meridian-cell-router` with the single
+scope `platform:routing-read` (tenant routing view, cell list / get; spec `scopes:`, `platform:operator` still accepted;
+honoured like `platform:operator` only for the operator tenant or internal tokens, never implied by `platform:*` or
+`meridian:admin`; `ScopeInterceptorTest.routingReadIsTheRoutersNarrowScopeWithOperatorStillAccepted`,
+`RegistryClientAuthTest`), instead of the shared `meridian-service` secret carrying `meridian:internal` and
+`platform:operator`. fraud-service stores identifiers only as tenant-keyed HMAC pseudonyms under the required secret
+`meridian.fraud.pseudonym-key` (SEC-02 guard; `FraudPseudonymisationIT`). Merchant refunds above the configured
+threshold (or of risky merchants) and payout-account changes go to the bank's central approval inbox after the merchant's
+own four-eyes; the channel no longer approves the bank-side request itself.
+
 ## Findings
 
 | ID | Sev | Category (OWASP API 2023) | Location | Description | Exploit scenario | Recommended fix | Status |

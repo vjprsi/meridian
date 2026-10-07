@@ -57,6 +57,8 @@ public class FakeBank {
     public static final String FRAUD_BLOCK_AMOUNT = "66.66";
     public volatile boolean fraudDown;
     public volatile long fraudDelayMs;
+    /** Stored evaluations served by GET /v1/risk/fraud/scores/{id} (e.g. a wallet-service evaluation to reuse). */
+    public final Map<String, ObjectNode> fraudScores = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, ObjectNode> fraudByKey = new HashMap<>();
 
     public FakeBank(JsonMapper json) {
@@ -274,6 +276,13 @@ public class FakeBank {
             case "fx-service" -> {
                 ObjectNode fq = fxQuotes.get(p[4]);
                 return fq != null ? fq.deepCopy() : json.createObjectNode().put("id", p[4]).put("status", "ACTIVE");
+            }
+            case "fraud-service" -> {
+                ObjectNode sc = p.length == 6 ? fraudScores.get(p[5]) : null;
+                if (sc == null) {
+                    throw ApiException.notFound("fraud score", path);
+                }
+                return sc.deepCopy();
             }
             default -> throw new IllegalArgumentException("unexpected GET " + service + " " + path);
         }

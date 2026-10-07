@@ -53,7 +53,7 @@ enums:
   MerchantType: [INDIVIDUAL, SOLE_TRADER, COMPANY, GOVERNMENT, NGO]
   MerchantTerminalStatus: [ACTIVE, INACTIVE, LOST, RETIRED]
   QrType: [STATIC, DYNAMIC]
-  MerchantRefundStatus: [REQUESTED, APPROVED, COMPLETED, REJECTED, FAILED]
+  MerchantRefundStatus: [REQUESTED, PENDING_BANK_APPROVAL, APPROVED, COMPLETED, REJECTED, FAILED]
   UssdMenuStatus: [DRAFT, PUBLISHED, RETIRED]
   UssdNodeType: [MENU, INPUT, CONFIRM, ACTION, END]
   UssdSessionStatus: [ACTIVE, COMPLETED, TIMED_OUT, ABORTED, FAILED]
@@ -1304,7 +1304,10 @@ services:
           - "amount amount nn | Refund amount"
           - "currency currency nn | Currency"
           - "reason string(255) nn | Reason"
-          - "status enum:MerchantRefundStatus nn default=REQUESTED ro | Status"
+          - "status enum:MerchantRefundStatus nn default=REQUESTED ro | REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews it) -> COMPLETED; REJECTED, FAILED"
+          - "merchant_approved_by string(64) ro | Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund"
+          - "merchant_approved_at ts ro | Merchant-side approval time"
+          - "bank_review_reason string(64) ro | Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK)"
           - "approved_by string(64) ro | Approver"
           - "approved_at ts ro | Approval time"
           - "rejection_reason string(255) ro | Rejection reason"
@@ -1385,7 +1388,7 @@ services:
         ops: [list, get, create]
         filters: [merchant_id, status, original_transaction_id]
         actions:
-          - "POST /{id}/approve | Approve (checker differs from the maker) and execute the refund | comment string(500)"
+          - "POST /{id}/approve | Approve (checker differs from the maker) and execute the refund; a merchant app user's approval of a refund the bank reviews moves it to PENDING_BANK_APPROVAL instead (bank checkers decide) | comment string(500)"
           - "POST /{id}/reject | Reject the refund | reason string(255) nn"
 
     events:
@@ -1399,6 +1402,7 @@ services:
       - "wallets.merchant_settlement.paid | merchant_settlement | A merchant settlement was paid"
       - "wallets.merchant_refund.completed | merchant_refund | A merchant refund was completed"
       - "wallets.merchant_refund.rejected | merchant_refund | A merchant refund was rejected"
+      - "wallets.merchant_refund.pending_bank_approval | merchant_refund | A refund approved inside the merchant waits for the bank's checkers"
 
   # ------------------------------------------------------------------ channel-service
   - name: channel-service

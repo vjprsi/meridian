@@ -185,7 +185,7 @@ class FraudFlowIT {
         JsonNode entry = post("/v1/risk/fraud/lists/" + list + "/entries",
                 "{\"value\":\"GB29 NWBK 6016 1331 9268 19\",\"reason\":\"confirmed mule\",\"source\":\"CONSORTIUM\"}", 200, "alice");
         assertThat(entry.get("value_masked").asString()).endsWith("6819").doesNotContain("NWBK");
-        assertThat(entry.get("value_hash").asString()).hasSize(64);
+        assertThat(entry.get("value_hash").asString()).startsWith("h1:").hasSize(67);   // tenant-keyed pseudonym
         JsonNode lookup = post("/v1/risk/fraud/lists/" + list + "/lookup", "{\"value\":\"gb29nwbk60161331926819\"}", 200, "alice");
         assertThat(lookup.get("on_list").asBoolean()).isTrue();
         assertThat(post("/v1/risk/fraud/lists/" + list + "/lookup", "{\"value\":\"GB00\"}", 200, "alice")

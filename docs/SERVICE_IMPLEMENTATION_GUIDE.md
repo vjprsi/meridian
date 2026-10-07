@@ -138,7 +138,14 @@ claims `merchant_id` and `merchant_user_id`) is bound as `io.meridian.web.securi
 (`MerchantContext.merchantId()`, `merchantUserId()`, `require().authTime()`; dev mode: `X-Merchant-Id` /
 `X-Merchant-User-Id` / `X-Auth-Time`; never for internal, customer, agent or business tokens). ServiceClient never
 forwards it (service token, `X-User: merchant-user:<id>`). Approved refunds are created in merchant-service as the
-requester and approved as the approver (`TenantContext.callAs`), so its four-eyes rule compares real people.
+requester and approved as the approver (`TenantContext.callAs`), so its four-eyes rule compares real people. The
+merchant's four-eyes does not replace the bank's: merchant-service opens no central request for a refund requested by a
+merchant user; when the merchant user's approval meets `meridian.merchant.refund-bank-review` (above `threshold`, per
+currency `currency-thresholds`, or a merchant `risk_rating` in `risk-ratings`) the refund becomes
+`PENDING_BANK_APPROVAL` and a request opens in the bank's central inbox, which only bank checkers decide (a merchant
+user gets 409 `awaiting_bank_approval`); the channel request follows it on read. Payout account changes approved in
+the app go to the bank too (`meridian.merchant.payout-bank-review`, default true): central-only request
+`merchant_payout_change` (owner merchant-channel-service), applied to merchant-service as the deciding bank checker.
 `channels:merchant` is exact like the other channel scopes; never add it to a domain operation.
 
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
@@ -437,8 +444,16 @@ excluded) is scored after validation and sanctions screening and before limits, 
   account), amount / currency, `channel` (RiskChannel mapping of the payment channel), `counterparty_country`, the
   channel session from `payment.risk_context` (`device_fingerprint`, `ip_address`, `ip_country`, `session_id`; set
   server-side by customer-channel-service) and `context` keyed as fraud-service's feature store expects
-  (`debtor_account_id`, `payee_id`, `beneficiary_account` + `beneficiary_bic`, `merchant_id`, `bulk_payment_id`, ...;
-  no names). Budget `meridian.payment.fraud.timeout-ms` (2000).
+  (`debtor_account_id`, `payee_id`, `beneficiary_account_digest` + `beneficiary_bic`, `merchant_id`,
+  `bulk_payment_id`, ...; no names, and the account number only as its canonical digest
+  `sha256("BENEFICIARY_ACCOUNT:" + number without spaces/dashes, upper case)`). Budget
+  `meridian.payment.fraud.timeout-ms` (2000).
+- fraud-service pseudonymises every identifier of an evaluation (account numbers / IBANs, card numbers or fragments,
+  phone, e-mail, device ids, national ids; by field name and by shape) with a tenant-keyed HMAC before rules, features
+  and storage (`fraud_score.features`, list entries, feature-store keys); the key comes from the required secret
+  `meridian.fraud.pseudonym-key` (`RequiredSecrets`, Helm `meridian-fraud-service-secrets/pseudonym-key`). Send
+  identifiers minimised where you can (`<name>_digest`). See `docs/ML_FRAUD_TRAINING.md` section 7 (including the
+  one-off `POST /v1/risk/fraud/scores/pseudonymise-stored`, scope `risk:*`).
 - ALLOW continues unchanged. REVIEW (and STEP_UP, `step-up-action: REVIEW`) moves the payment to `ON_HOLD`
   (`hold_reason FRAUD_REVIEW`, history reason code `FRAD`, event `payments.payment.held`) with `fraud_alert_id`.
   BLOCK rejects it (`rejection_code FRAD`, `rejection_reason FRAUD_BLOCKED: ...`) before any hold or posting.
@@ -450,6 +465,22 @@ excluded) is scored after validation and sanctions screening and before limits, 
   and `payments.payment.fraud_degraded`; the payment is held for review (fail-closed) at or above
   `fail-closed-amount` (1000, per channel `channel-fail-closed-amount.<CHANNEL>`) and continues below it (fail-open).
   `POST /v1/payments/{id}/fraud-rescore` scores a degraded hold again with the same key.
+- Degraded holds are also re-scored automatically (`FraudRescoreJob`): `fraud_next_rescore_at` is set when the hold is
+  placed (`auto-rescore.initial-backoff` 1 min), each still-unavailable attempt doubles the delay up to `max-backoff`
+  (1 h) and counts `fraud_rescore_attempts`; after `max-attempts` (12) the hold waits for an analyst. The internal
+  scheduler (`auto-rescore.interval-ms`, every tenant with activity from the RLS-free `idempotency_key` table) and
+  `POST /v1/payments/execute-due` (result `fraud_rescore`) both run it; a hold is claimed with a conditional update so
+  replicas never re-score the same payment twice, and the key `pay-fraud:<id>` makes fraud-service replay an
+  evaluation it already completed.
+- Wallet payouts (wallet-to-bank to another bank) are created by wallet-service with its own identity
+  (`ServiceClient.asService`): `debtor_wallet_id` + `debtor_clearing_ledger_account_id` (the clearing account the wallet
+  transaction credited; `meridian.payment.wallet-funding-services`) and `upstream_fraud_score_id` = the wallet
+  transaction's ALLOW evaluation. payment-service reads that evaluation from fraud-service and reuses it instead of
+  scoring again only when it is an ALLOW of a `WALLET_TRANSACTION` for the same amount and currency (and customer when
+  both name one), at most `upstream.max-age-seconds` (900) old and not used by another payment; otherwise it scores
+  normally (history row says why). Both fields are honoured only from `upstream.services` (wallet-service) over an
+  internal token (`TenantContext.callingService()`); from a user, customer or channel token the upstream id is
+  dropped and wallet funding is refused (`wallet_not_supported`).
 - The payment keeps `fraud_score` (0..1), `fraud_score_id`, `fraud_decision`, `fraud_alert_id`, `fraud_degraded`; the
   tracker shows them under `fraud` (stage `UNDER_REVIEW` while held). customer-channel-service strips them from
   customer responses.

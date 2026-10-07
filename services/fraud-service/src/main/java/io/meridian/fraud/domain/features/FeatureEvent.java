@@ -1,12 +1,10 @@
 package io.meridian.fraud.domain.features;
 
+import io.meridian.fraud.domain.ListValues;
+import io.meridian.fraud.domain.Pseudonyms;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -43,8 +41,9 @@ public record FeatureEvent(String eventId, String type, Instant occurredAt, BigD
      * payments, events without any entity).
      *
      * @param eventTime ce_time, used when the payload carries no created_at
+     * @param ps        the event tenant's pseudonyms (beneficiary account numbers and MSISDNs are keyed by pseudonym)
      */
-    public static Optional<FeatureEvent> from(String eventId, String type, Instant eventTime, JsonNode p) {
+    public static Optional<FeatureEvent> from(String eventId, String type, Instant eventTime, JsonNode p, Pseudonyms ps) {
         if (eventId == null || type == null || p == null || !p.isObject()) {
             return Optional.empty();
         }
@@ -67,8 +66,8 @@ public record FeatureEvent(String eventId, String type, Instant occurredAt, BigD
                 String customer = str(p, "customer_id");
                 String account = coalesce(str(p, "debtor_account_id"), str(p, "debtor_wallet_id"));
                 String merchant = str(p, "creditor_merchant_id");
-                String beneficiary = Keys.beneficiary(str(p, "payee_id"), str(p, "creditor_account_number"),
-                        str(p, "creditor_agent_bic"), str(p, "creditor_wallet_id"), null);
+                String beneficiary = Keys.beneficiary(str(p, "payee_id"), Keys.accountDigest(str(p, "creditor_account_number")),
+                        str(p, "creditor_agent_bic"), str(p, "creditor_wallet_id"), null, ps);
                 put(counters, "CUSTOMER", customer);
                 put(counters, "ACCOUNT", account);
                 put(counters, "MERCHANT", merchant);
@@ -104,7 +103,7 @@ public record FeatureEvent(String eventId, String type, Instant occurredAt, BigD
                 String customer = coalesce(str(p, "customer_id"), str(p.path("metadata"), "customer_id"));
                 String wallet = str(p, "payer_wallet_id");
                 String merchant = str(p, "merchant_id");
-                String beneficiary = Keys.beneficiary(null, null, null, str(p, "payee_wallet_id"), str(p, "payee_msisdn"));
+                String beneficiary = Keys.beneficiary(null, null, null, str(p, "payee_wallet_id"), str(p, "payee_msisdn"), ps);
                 put(counters, "CUSTOMER", customer);
                 put(counters, "ACCOUNT", wallet);
                 put(counters, "MERCHANT", merchant);
@@ -143,40 +142,39 @@ public record FeatureEvent(String eventId, String type, Instant occurredAt, BigD
                 Map.copyOf(counters), Map.copyOf(profiles), List.copyOf(links)));
     }
 
-    /** Stable, non-reversible-at-a-glance keys for entities identified by personal data. */
+    /** Stable keys for entities; entities identified by personal data are keyed by tenant-keyed pseudonyms. */
     public static final class Keys {
         private Keys() {}
 
+        /** Legacy unkeyed beneficiary keys ({@code acct:} / {@code msisdn:} + 40 hex of a plain SHA-256). */
+        public static final java.util.regex.Pattern LEGACY = java.util.regex.Pattern.compile("^(acct|msisdn):[0-9a-f]{40}$");
+
         /**
-         * Beneficiary key: the payee id, else a hash of the account number (+ BIC), else the wallet id, else a hash
-         * of the MSISDN digits. Scoring derives the same key from the evaluate request's context.
+         * Beneficiary key: the payee id, else the pseudonym of the account number (+ BIC), else the wallet id, else
+         * the pseudonym of the MSISDN digits. Scoring derives the same key from the evaluate request's context.
+         *
+         * @param accountDigest the account number's canonical digest ({@link #accountDigest}), never the clear number
          */
-        public static String beneficiary(String payeeId, String account, String bic, String walletId, String msisdn) {
+        public static String beneficiary(String payeeId, String accountDigest, String bic, String walletId, String msisdn,
+                                         Pseudonyms ps) {
             if (payeeId != null && !payeeId.isBlank()) {
                 return "payee:" + payeeId;
             }
-            if (account != null && !account.isBlank()) {
-                String norm = account.replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT)
-                        + "|" + (bic == null ? "" : bic.trim().toUpperCase(Locale.ROOT));
-                return "acct:" + sha(norm);
+            if (accountDigest != null && !accountDigest.isBlank()) {
+                return ps.accountKey(accountDigest, bic);
             }
             if (walletId != null && !walletId.isBlank()) {
                 return "wallet:" + walletId;
             }
             if (msisdn != null && !msisdn.isBlank()) {
-                String digits = msisdn.replaceAll("\\D", "");
-                return digits.isEmpty() ? null : "msisdn:" + sha(digits);
+                return ps.msisdnKey(msisdn);
             }
             return null;
         }
 
-        static String sha(String s) {
-            try {
-                byte[] d = MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-                return HexFormat.of().formatHex(d, 0, 20);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException(e);
-            }
+        /** Canonical digest of a beneficiary account number (as payment-service sends it), or null. */
+        public static String accountDigest(String account) {
+            return account == null || account.isBlank() ? null : ListValues.hash("BENEFICIARY_ACCOUNT", account);
         }
     }
 
