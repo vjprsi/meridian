@@ -335,6 +335,11 @@ One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gat
   (`kubectl -n <ns> logs job/<service>-migrate`). Standby cells (`global.cell.role=standby`) render no migration Jobs.
   `global.migrations.enabled=false` leaves migrations to an external step (e.g. a GitOps PreSync job using the same
   image and arguments). Local development and tests keep in-process Flyway.
+- Audit WORM storage (GAP-07): audit-service seals every UTC day of each tenant's audit chain into the cell's S3
+  Object Lock bucket (tofu cell output `audit_bucket`, COMPLIANCE mode); set `MERIDIAN_AUDIT_WORM_ENDPOINT`
+  (`https://s3.<region>.amazonaws.com`), `MERIDIAN_AUDIT_WORM_BUCKET` and `MERIDIAN_AUDIT_WORM_REGION` in the
+  audit-service `env` of `values-<env>.yaml`, and the Secret keys `pseudonym-key`, `worm-access-key`,
+  `worm-secret-key` in `meridian-audit-service-secrets`.
 - Each component gets a Deployment (zone/host spread, startup/liveness/readiness probes, graceful drain), Service,
   ServiceAccount (no token mounted), HPA, PDB, a NetworkPolicy that only admits Meridian pods and the monitoring
   namespace, and optionally a ServiceMonitor. Services call each other through cluster DNS

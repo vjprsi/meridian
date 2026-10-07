@@ -324,6 +324,8 @@ transaction start (and verify RLS tests still pass) before enabling transaction 
 - operations: list fields (G1); none-responses (G2); undeclared query params (G3); service added endpoints not in
   spec — `POST /v1/operations/business-days` (open first day), `POST/DELETE /v1/search/documents`,
   `GET /v1/files/blobs`, purge approve/reject → add to spec; file content and secret refs missing from create
-  models; purge needs CANCELLED + reason; batch-lock force-release reason column; every data-owning service needs
-  `/v1/internal/data-lifecycle/{count,extract,confirm,purge}` for archive/purge (new cross-cutting capability);
+  models; purge needs CANCELLED + reason; batch-lock force-release reason column; ~~every data-owning service needs
+  `/v1/internal/data-lifecycle/{count,extract,confirm,purge}`~~ done 2026-10-07 (libs/meridian-web
+  `DataLifecycleService` in every service, plus `export` / `erase` for DSAR; GAP-08); remaining: DSAR fan-out to the
+  services not yet listed in `meridian.privacy.services`, S3 file content on erasure, per-jurisdiction AML retention;
   background schedulers blocked by RLS (G8).

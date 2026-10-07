@@ -261,9 +261,31 @@ Full procedure, timings and roles: [docs/MULTI_REGION.md](../MULTI_REGION.md) se
 
 ## 10. Audit chain broken / ledger integrity mismatch
 
-`platform.audit_chain.broken` or a `ledger_verification` with `hash_mismatches > 0` (`POST /v1/ledgers/{id}/verify`):
-SEV1. Preserve evidence (DB snapshot, no fixes in place), restrict DB access, compare with archived manifests and
-replicas, involve security and internal audit. Never "repair" the chain.
+Signals: `platform.audit_chain.broken`, `platform.audit_seal.tampered`, an increase of `meridian.audit.chain.breaks` or
+`meridian.audit.seal.tampered` (alert on any increase), an `audit_chain_verification` row with `valid = false`, or a
+`ledger_verification` with `hash_mismatches > 0` (`POST /v1/ledgers/{id}/verify`): SEV1. Preserve evidence (DB
+snapshot, no fixes in place), restrict DB access, involve security and internal audit. Never "repair" the chain.
+
+Audit integrity jobs (GAP-07): audit-service runs daily at 01:15 UTC per tenant (`meridian.audit.integrity.cron`): a full
+hash-chain verification, then the seal of yesterday to the Object Lock bucket (`audit/<tenant>/<yyyy>/<mm>/<dd>/` with
+`events.jsonl` and `manifest.json`). To investigate, with the tenant's operator token:
+
+```bash
+GET  /v1/audit-chain-verifications?valid=false                  # failed runs: first_broken_sequence, break_reason
+POST /v1/audit-chain-verifications/run {"full": true}           # re-verify everything now (on demand)
+GET  /v1/audit-seals?seal_date=<day>                            # seal of a day: hashes, sequence range, storage URIs
+POST /v1/audit-seals/{id}/verify                                # re-hash storage + database rows of the sealed range
+```
+
+The sealed objects are the reference copy: compare the database with them (`verify` lists every mismatch: storage
+object changed, manifest changed, chain inside the batch, database row differs). A missing seal for a day (job
+failure, bucket unreachable) is caught up by `POST /v1/audit-seals/run {"seal_date": "<day>"}`, oldest day first (days
+are sealed in order; a later sealed day blocks an earlier one). A seal is refused while the chain is broken.
+
+Bucket and keys: `MERIDIAN_AUDIT_WORM_ENDPOINT` / `_BUCKET` / `_REGION` (cell output `audit_bucket`), credentials in
+`meridian-audit-service-secrets` (`worm-access-key`, `worm-secret-key`); `MERIDIAN_AUDIT_PSEUDONYM_KEY` (`pseudonym-key`)
+keys the `psn:` pseudonyms of personal data in stored audit states: rotate only on compromise (pseudonyms recorded
+before and after the rotation no longer correlate).
 
 ## 11. Card authorisation degradation
 
@@ -302,4 +324,4 @@ wired]**. Escalation: primary 5 min -> secondary 10 min -> IC 15 min -> CTO 30 m
 | GAP-10 | Alerting / paging not wired; on-call names TBD | TBD (SRE) | PLT-OBSERVABILITY |
 | GAP-11 | Data mover for tenant moves; game day | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | - | Card ZPK grace period | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
-| - | No EOD jobs for audit chain verification, ledger verification or archive runs | TBD (Operations) | Proposed |
+| - | No EOD jobs for ledger verification or archive runs (audit chain verification and seals run daily since GAP-07) | TBD (Operations) | Proposed |

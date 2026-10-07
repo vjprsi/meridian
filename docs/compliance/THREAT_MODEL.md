@@ -72,7 +72,7 @@ card authorisation, (7) audit trail.
 | S | Forged event on a domain topic (e.g. `platform.approval_request.approved`) | Consumers bind tenant from `ce_tenantid`; approval dispatcher ignores decisions whose `owner_service` is another service (SEC-03); handlers match stored approval ids for most types | No topic ACLs per producer; MSK IAM settings not in the chart (GAP-16, [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs)) |
 | T | Replay / duplicate delivery | Consumers idempotent by `ce_id`; audit `source_event_id` unique; outbox written in the business transaction | - |
 | R | Event history lost | Audit-service consumes every `meridian.*.v1` topic into a hash chain | Outbox rows deleted after relay (no replay window for unplanned failover) |
-| I | Personal data in events and their retention | Contact events carry masked value + hash; OTPs redacted (SEC-10); fraud pseudonyms | Most events carry the full entity representation incl. personal data (GAP-07 / GAP-09) |
+| I | Personal data in events and their retention | Contact events carry masked value + hash; OTPs redacted (SEC-10); fraud pseudonyms | Most events carry the full entity representation incl. personal data on Kafka (GAP-09); audit copies are pseudonymised since GAP-07 |
 | D | Consumer lag (audit, search, fraud features) | Lag metrics for search (`meridian.search.indexer.lag`) | No lag alerting (GAP-10) |
 | E | - | - | - |
 
@@ -81,12 +81,12 @@ card authorisation, (7) audit trail.
 | STRIDE | Threat | Mitigations (evidence) | Residual / reference |
 |---|---|---|---|
 | S | Cross-tenant query | RLS policy on every tenant table, runtime role non-owner, `TenantAwareDataSource` stamps nil UUID when unbound; smoke test in CI | PgBouncer transaction pooling would leak `app.tenant_id` ([SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget), GAP-12) |
-| T | Direct modification of financial history | Append-only tables (trigger), ledger hash chain + `verify`, audit hash chain + `verify-chain`, optimistic locking | Owner (DDL) credentials mounted in every pod (GAP-22); verification not scheduled (GAP-07) |
+| T | Direct modification of financial history | Append-only tables (trigger), ledger hash chain + `verify`, audit hash chain + `verify-chain`, optimistic locking | Owner secret readable in the namespace with Secret read access (RBAC, GAP-24); daily full verification and WORM seals detect but do not prevent rewrites |
 | T | Money races (double reversal, return, refund, FX reuse, duplicate inbound) | Row locks + unique indexes / CHECKs (SEC-04..07), advisory locks for inbound (SEC-28) | No DB unique index for inbound dedupe (advisory lock only) |
 | I | SQL injection | Bound parameters, allow-listed identifiers (`CrudEngine`), no user SQL | - |
 | I | Backup / snapshot theft | KMS-encrypted Aurora, snapshots, S3 | Card data under software keys (GAP-01) |
 | D | Connection exhaustion | Per-service pools, `dbPool` override | GAP-12 |
-| E | Escalation to table owner | Flyway as owner only at startup | Same owner credentials remain in env (GAP-22) |
+| E | Escalation to table owner | Flyway as owner only in the pre-install / pre-upgrade migration Job; running pods hold the RLS-bound runtime role only | Owner secret readable in the namespace by anyone with Secret read access (RBAC, GAP-24) |
 
 ## B6 Provider callbacks (`[public]` routes)
 
@@ -147,9 +147,8 @@ reuse (`IdempotencyFingerprintTest`), oversized body (`ProxyControllerIT`), CVV2
 | GAP-15 | Turn off legacy callback signatures; per-rail secrets | TBD (Payments) | [SEC-17](../SECURITY_REVIEW.md#remediation-status) |
 | GAP-17 | Edge rate limiting / WAF | TBD (Platform) | [SEC-16](../SECURITY_REVIEW.md#remediation-status) |
 | GAP-02 / GAP-23 | CDE segmentation, egress policies, in-cluster mTLS | TBD (Platform) | Proposed |
-| GAP-22 | DDL credentials in runtime pods | TBD (Platform) | Proposed |
 | GAP-18 | Device attestation; offline PIN brute force | TBD (Channels) | [SPEC_BACKLOG agent channel](../SPEC_BACKLOG.md#agent-channel-follow-up-of-customer-channel) |
-| GAP-06 / GAP-07 | Detection: central logs, scheduled integrity checks, read auditing | TBD (SecOps) | Proposed |
+| GAP-06 / GAP-07 | Detection: central logs, read auditing (scheduled integrity checks done 2026-10-07) | TBD (SecOps) | Proposed |
 | - | JIT response signing | TBD (Cards) | [SEC-18 residual](../SECURITY_REVIEW.md#remediation-status) |
 | - | Inbox: any bank-side caller may send as SYSTEM / BOT | TBD (Engagement) | [SPEC_BACKLOG customer channel](../SPEC_BACKLOG.md#customer-channel-security-critical-in-progress) |
 | - | Outbox retention for replay after unplanned failover | TBD (Platform) | [MULTI_REGION section 4](../MULTI_REGION.md#4-data-replication-and-rpo) |
