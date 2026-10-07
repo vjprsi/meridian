@@ -118,6 +118,11 @@ services:
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
           - "approved_by string(64) ro | Checker"
           - "deactivation_reason string(255) ro | Why the rule was disabled"
+          - "submitted_mode enum:FraudRuleStatus ro | Mode (ACTIVE or SHADOW) requested by the pending activation submission"
+          - "submitted_by string(64) ro | Maker who submitted the activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last activation submission"
+          - "rejection_reason string(500) ro | Why the last activation submission was rejected"
 
       - name: fraud_rule_hit
         prefix: frh
@@ -272,7 +277,9 @@ services:
         ops: [list, get, create, update]
         filters: [subject_type, status, action, code]
         actions:
+          - "POST /{id}/submit | Submit the rule for activation in a mode (maker); a checker activates it or rejects the submission | mode enum:FraudRuleStatus nn, comment string(500)"
           - "POST /{id}/activate | Activate a rule (maker-checker) | mode enum:FraudRuleStatus nn"
+          - "POST /{id}/reject | Reject the pending activation submission (checker); the rule keeps its status | reason string(500) nn"
           - "POST /{id}/deactivate | Disable a rule | reason string(255) nn"
           - "POST /{id}/backtest | Replay the rule over historical evaluations (hit rate and precision against labels) | from_ts ts nn, to_ts ts nn, max_events int | object"
           - "POST /test-expression | Evaluate a rule expression against a sample event | expression text nn, sample_event json nn | object"
@@ -340,6 +347,8 @@ services:
       - "risk.fraud_rule.activated | fraud_rule | A fraud rule was activated or put into shadow"
       - "risk.fraud_rule.deactivated | fraud_rule | A fraud rule was disabled"
       - "risk.fraud_rule.changed | fraud_rule | A fraud rule definition changed (new rule_version)"
+      - "risk.fraud_rule.submitted | fraud_rule | A fraud rule was submitted for activation"
+      - "risk.fraud_rule.rejected | fraud_rule | A fraud rule activation submission was rejected"
       - "risk.fraud_alert.raised | fraud_alert | A fraud alert was raised"
       - "risk.fraud_alert.assigned | fraud_alert | A fraud alert was assigned to an analyst"
       - "risk.fraud_alert.customer_contacted | fraud_alert | A confirm-or-deny message was sent to the customer"
@@ -391,6 +400,10 @@ services:
           - "tuning_rationale text | Why thresholds were set or changed (below/above-the-line testing)"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
           - "approved_by string(64) ro | Approver"
+          - "submitted_by string(64) ro | Maker who submitted the version for activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason text ro | Why the last submission was rejected"
         unique: [[tm_scenario_id, scenario_version]]
 
       - name: tm_run
@@ -545,6 +558,9 @@ services:
         table: tm_scenario_version
         ops: [list, get]
         filters: [tm_scenario_id, status]
+        actions:
+          - "POST /{id}/submit | Submit a DRAFT or TUNING version for activation (maker); a checker activates it on the scenario or rejects the submission | comment text"
+          - "POST /{id}/reject | Reject the pending activation submission (checker); the version keeps its status | reason text nn"
 
       - resource: tm-runs
         path: /v1/risk/monitoring/runs
@@ -604,6 +620,8 @@ services:
 
     events:
       - "risk.tm_scenario.version_activated | tm_scenario_version | A scenario version was activated"
+      - "risk.tm_scenario.version_submitted | tm_scenario_version | A scenario version was submitted for activation"
+      - "risk.tm_scenario.version_rejected | tm_scenario_version | A scenario version activation submission was rejected"
       - "risk.tm_scenario.retired | tm_scenario | A scenario was retired"
       - "risk.tm_run.completed | tm_run | A monitoring run finished"
       - "risk.tm_run.cancelled | tm_run | A monitoring run was cancelled"
@@ -939,6 +957,8 @@ services:
           - "acknowledged_at ts ro | FIU acknowledgement time"
           - "regulator_reference string(128) ro | FIU reference number"
           - "rejection_reason text ro | FIU rejection reason"
+          - "returned_by string(64) ro | MLRO who last returned the report to DRAFT for rework"
+          - "return_reason text ro | Why the MLRO returned the report"
 
     apis:
       - resource: aml-cases
@@ -990,6 +1010,7 @@ services:
           - "POST /{id}/draft-narrative | Draft the narrative from case facts (deterministic template) | | object"
           - "POST /{id}/submit-for-approval | Send to the MLRO for approval | comment text"
           - "POST /{id}/approve | Approve the report (MLRO) | comment text"
+          - "POST /{id}/return-to-draft | Return a report pending approval to DRAFT for rework (MLRO; not the preparer) | reason text nn"
           - "POST /{id}/file | File with the FIU (API, EXPORT or PORTAL) | channel string(16) nn"
           - "POST /{id}/acknowledge | Record the FIU acknowledgement | regulator_reference string(128) nn"
           - "POST /{id}/record-rejection | Record an FIU rejection | rejection_reason text nn"
@@ -1007,6 +1028,7 @@ services:
       - "risk.aml_case_disposition.rejected | aml_case_disposition | A case disposition was rejected"
       - "risk.sar_report.submitted_for_approval | sar_report | A SAR/STR was sent to the MLRO"
       - "risk.sar_report.approved | sar_report | A SAR/STR was approved"
+      - "risk.sar_report.returned | sar_report | The MLRO returned a SAR/STR to DRAFT for rework"
       - "risk.sar_report.filed | sar_report | A SAR/STR was filed with the FIU"
       - "risk.sar_report.acknowledged | sar_report | The FIU acknowledged a report"
       - "risk.sar_report.rejected | sar_report | The FIU rejected a report"
@@ -1044,6 +1066,10 @@ services:
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
           - "approved_by string(64) ro | Checker who activated the rule"
           - "deactivation_reason text ro | Why the rule was deactivated"
+          - "submitted_by string(64) ro | Maker who submitted the rule for activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason text ro | Why the last submission was rejected"
         indexes: [[scope, scope_ref]]
 
       - name: limit_usage
@@ -1151,7 +1177,9 @@ services:
         ops: [list, get, create, update]
         filters: [scope, scope_ref, period, status, transaction_type, channel, is_regulatory]
         actions:
+          - "POST /{id}/submit | Submit the rule for activation (maker); a checker activates it or rejects the submission | comment text"
           - "POST /{id}/activate | Activate (maker-checker) | comment text"
+          - "POST /{id}/reject | Reject the pending activation submission (checker); the rule keeps its status | reason text nn"
           - "POST /{id}/deactivate | Deactivate | reason text nn"
           - "POST /simulate | Show which limits would apply to a subject and transaction (including superseded rules) | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount | object"
 
@@ -1197,6 +1225,8 @@ services:
     events:
       - "risk.limit_rule.activated | limit_rule | A limit rule was activated"
       - "risk.limit_rule.changed | limit_rule | A limit rule was changed"
+      - "risk.limit_rule.submitted | limit_rule | A limit rule was submitted for activation"
+      - "risk.limit_rule.rejected | limit_rule | A limit rule activation submission was rejected"
       - "risk.limit.breached | limit_check | A transaction breached a limit"
       - "risk.limit_rule.deactivated | limit_rule | A limit rule was deactivated"
       - "risk.limit_usage.reset | limit_usage | A usage counter was reset by operations"

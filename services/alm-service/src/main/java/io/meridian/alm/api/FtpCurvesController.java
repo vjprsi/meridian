@@ -5,6 +5,8 @@ import io.meridian.alm.api.generated.model.FtpCurve;
 import io.meridian.alm.api.generated.model.FtpCurvePointPage;
 import io.meridian.alm.api.generated.model.FtpCurveUpdate;
 import io.meridian.alm.api.generated.model.FtpCurvesPublishRequest;
+import io.meridian.alm.api.generated.model.FtpCurvesRejectRequest;
+import io.meridian.alm.api.generated.model.FtpCurvesSubmitRequest;
 import io.meridian.alm.application.FtpService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.Crud;
@@ -38,6 +40,18 @@ public class FtpCurvesController implements FtpCurvesApi {
     public ResponseEntity<FtpCurve> ftpCurvesPublish(UUID id, String idempotencyKey, FtpCurvesPublishRequest body) {
         return actions.action(idempotencyKey, id, "publish", body, FtpCurve.class,
                 () -> service.publish(id, Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<FtpCurve> ftpCurvesSubmit(UUID id, String idempotencyKey, FtpCurvesSubmitRequest body) {
+        return actions.action(idempotencyKey, id, "submit", body, FtpCurve.class,
+                () -> service.submit(id, Http.text(actions.tree(body), "comment")));
+    }
+
+    @Override
+    public ResponseEntity<FtpCurve> ftpCurvesReject(UUID id, String idempotencyKey, FtpCurvesRejectRequest body) {
+        return actions.action(idempotencyKey, id, "reject", body, FtpCurve.class,
+                () -> service.reject(id, Http.text(actions.tree(body), "reason")));
     }
 
     @Override

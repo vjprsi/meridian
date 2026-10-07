@@ -145,6 +145,54 @@ class TransactionMonitoringWorkflowApprovalIT {
         verify(serviceClient, never()).post(eq("workflow-service"), startsWith("/v1/approval-requests/"), any(), anyString());
     }
 
+    @Test
+    void scenarioVersionSubmissionIsActivatedOrRejectedFromWorkflow() throws Exception {
+        String scenario = post("/v1/risk/monitoring/scenarios", """
+                {"code":"WF_STRUCT","name":"WF structuring","scenario_type":"STRUCTURING","run_mode":"STREAMING"}""",
+                201, "alice").get("id").asString();
+        String v1 = post("/v1/risk/monitoring/scenarios/" + scenario + "/versions", """
+                {"parameters":{"threshold":10000,"margin_pct":10,"cash_only":true},"lookback_days":7,"min_count":3,
+                 "tuning_rationale":"initial"}""", 200, "alice").get("id").asString();
+        JsonNode submitted = post("/v1/risk/monitoring/scenario-versions/" + v1 + "/submit", "{\"comment\":\"go\"}", 200, "carol");
+        assertThat(submitted.get("submitted_by").asString()).isEqualTo("carol");
+        assertThat(lastRequest.get()).containsEntry("resource_type", "tm_scenario_version").containsEntry("resource_id", v1)
+                .containsEntry("action", "activate");
+        String first = submitted.get("approval_request_id").asString();
+
+        // rejected: the version stays DRAFT with the rejection recorded
+        dispatcher.dispatch(UUID.fromString(TENANT), versionDecision(first, v1, "bob"), Outcome.REJECTED);
+        JsonNode rejected = get("/v1/risk/monitoring/scenario-versions/" + v1);
+        assertThat(rejected.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("bob");
+
+        // resubmitted: the stale request is ignored; the author or submitter cannot approve; another user activates
+        String second = post("/v1/risk/monitoring/scenario-versions/" + v1 + "/submit", "{}", 200, "carol")
+                .get("approval_request_id").asString();
+        dispatcher.dispatch(UUID.fromString(TENANT), versionDecision(first, v1, "bob"), Outcome.APPROVED);
+        dispatcher.dispatch(UUID.fromString(TENANT), versionDecision(second, v1, "alice"), Outcome.APPROVED);
+        dispatcher.dispatch(UUID.fromString(TENANT), versionDecision(second, v1, "carol"), Outcome.APPROVED);
+        assertThat(get("/v1/risk/monitoring/scenario-versions/" + v1).get("status").asString()).isEqualTo("DRAFT");
+        dispatcher.dispatch(UUID.fromString(TENANT), versionDecision(second, v1, "bob"), Outcome.APPROVED);
+        JsonNode active = get("/v1/risk/monitoring/scenario-versions/" + v1);
+        assertThat(active.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(active.get("approved_by").asString()).isEqualTo("bob");
+        assertThat(get("/v1/risk/monitoring/scenarios/" + scenario).get("active_version").asInt()).isEqualTo(1);
+
+        // an active version cannot be submitted again; reject needs a pending submission
+        assertThat(post("/v1/risk/monitoring/scenario-versions/" + v1 + "/submit", "{}", 409, "carol").get("code").asString())
+                .isEqualTo("invalid_transition");
+        assertThat(post("/v1/risk/monitoring/scenario-versions/" + v1 + "/reject", "{\"reason\":\"x\"}", 409, "bob")
+                .get("code").asString()).isEqualTo("no_pending_submission");
+    }
+
+    private ObjectNode versionDecision(String requestId, String version, String approver) {
+        ObjectNode row = decision(version, Map.of(), approver);
+        row.put("id", requestId);
+        row.put("resource_type", "tm_scenario_version");
+        row.put("action", "activate");
+        return row;
+    }
+
     private ObjectNode decision(String rating, Map<?, ?> payload, String approver) {
         ObjectNode row = json.createObjectNode();
         row.put("id", UUID.randomUUID().toString());

@@ -112,12 +112,18 @@ class AlmWorkflowApprovalIT {
         dispatcher.dispatch(UUID.fromString(TENANT), decision(id, payload, "risk"), Outcome.REJECTED);
         JsonNode a = get("/v1/treasury/alm/assumptions/" + id);
         assertThat(a.hasNonNull("approved_by")).isFalse();
+        assertThat(a.get("rejected_by").asString()).isEqualTo("risk");
+        assertThat(a.get("rejection_reason").asString()).contains("workflow");
+        // a rejected assumption cannot be approved until reworked
+        assertThat(post("/v1/treasury/alm/assumptions/" + id + "/approve", "{}", 409, "risk").get("code").asString())
+                .isEqualTo("assumption_rejected");
 
-        // rework resubmits with the new row_version
+        // rework clears the rejection and resubmits with the new row_version
         HttpResponse<String> patched = send("PATCH", "/v1/treasury/alm/assumptions/" + id,
                 "{\"parameters\":{\"core_ratio\":0.7,\"decay_rate\":0.2,\"pass_through\":0.5}}", null, "modeller",
                 a.get("row_version").asString());
         assertThat(patched.statusCode()).as(patched.body()).isEqualTo(200);
+        assertThat(json.readTree(patched.body()).hasNonNull("rejected_by")).isFalse();
         Map<?, ?> resubmitted = (Map<?, ?>) lastRequest.get().get("payload");
         assertThat(resubmitted.get("row_version")).isNotEqualTo(payload.get("row_version"));
 
@@ -138,6 +144,64 @@ class AlmWorkflowApprovalIT {
         assertThat(path.getValue()).contains("resource_id=" + id).contains("status=PENDING")
                 .contains("resource_type=" + RESOURCE);
         verify(serviceClient, never()).post(eq("workflow-service"), startsWith("/v1/approval-requests/"), any(), anyString());
+    }
+
+    @Test
+    void ftpCurveSubmissionIsPublishedOrRejectedFromWorkflow() throws Exception {
+        String curve = post("/v1/treasury/ftp/curves", """
+                {"code":"WF_BASE","currency":"USD","curve_type":"BASE","effective_date":"2026-01-01"}""", 201, "modeller")
+                .get("id").asString();
+        assertThat(post("/v1/treasury/ftp/curves/" + curve + "/submit", "{}", 422, "modeller").get("code").asString())
+                .isEqualTo("curve_has_no_points");
+        post("/v1/treasury/ftp/curve-points", """
+                {"ftp_curve_id":"%s","tenor_days":30,"tenor_label":"1M","rate":"0.05"}""".formatted(curve), 201, "modeller");
+        JsonNode submitted = post("/v1/treasury/ftp/curves/" + curve + "/submit", "{\"comment\":\"ALCO pack\"}", 200, "modeller");
+        assertThat(submitted.get("submitted_by").asString()).isEqualTo("modeller");
+        assertThat(lastRequest.get()).containsEntry("resource_type", "ftp_curve").containsEntry("resource_id", curve)
+                .containsEntry("action", "publish");
+        Map<?, ?> first = (Map<?, ?>) lastRequest.get().get("payload");
+        assertThat(first.get("checksum")).isNotNull();
+        assertThat((List<?>) first.get("points")).hasSize(1);
+
+        // rejected: stays unpublished with the rejection recorded
+        dispatcher.dispatch(UUID.fromString(TENANT), curveDecision(curve, first, "alco"), Outcome.REJECTED);
+        JsonNode rejected = get("/v1/treasury/ftp/curves/" + curve);
+        assertThat(rejected.get("is_published").asBoolean()).isFalse();
+        assertThat(rejected.get("rejected_by").asString()).isEqualTo("alco");
+        assertThat(rejected.hasNonNull("submitted_at")).isFalse();
+
+        // reworked points and resubmitted: the old decision is stale, the new one publishes (maker refused)
+        post("/v1/treasury/ftp/curve-points", """
+                {"ftp_curve_id":"%s","tenor_days":365,"tenor_label":"1Y","rate":"0.055"}""".formatted(curve), 201, "modeller");
+        post("/v1/treasury/ftp/curves/" + curve + "/submit", "{}", 200, "modeller");
+        Map<?, ?> second = (Map<?, ?>) lastRequest.get().get("payload");
+        dispatcher.dispatch(UUID.fromString(TENANT), curveDecision(curve, first, "alco"), Outcome.APPROVED);
+        dispatcher.dispatch(UUID.fromString(TENANT), curveDecision(curve, second, "modeller"), Outcome.APPROVED);
+        assertThat(get("/v1/treasury/ftp/curves/" + curve).get("is_published").asBoolean()).isFalse();
+        dispatcher.dispatch(UUID.fromString(TENANT), curveDecision(curve, second, "alco"), Outcome.APPROVED);
+        JsonNode published = get("/v1/treasury/ftp/curves/" + curve);
+        assertThat(published.get("is_published").asBoolean()).isTrue();
+        assertThat(published.get("approved_by").asString()).isEqualTo("alco");
+        assertThat(post("/v1/treasury/ftp/curves/" + curve + "/reject", "{\"reason\":\"x\"}", 409, "alco").get("code")
+                .asString()).isEqualTo("already_published");
+    }
+
+    @Test
+    void directAssumptionRejectionKeepsFourEyes() throws Exception {
+        String id = create("SEG_D");
+        assertThat(post("/v1/treasury/alm/assumptions/" + id + "/reject", "{\"reason\":\"mine\"}", 422, "modeller")
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        JsonNode r = post("/v1/treasury/alm/assumptions/" + id + "/reject", "{\"reason\":\"decay too slow\"}", 200, "risk");
+        assertThat(r.get("rejection_reason").asString()).isEqualTo("decay too slow");
+        assertThat(post("/v1/treasury/alm/assumptions/" + id + "/reject", "{\"reason\":\"again\"}", 409, "risk")
+                .get("code").asString()).isEqualTo("already_rejected");
+    }
+
+    private ObjectNode curveDecision(String curve, Map<?, ?> payload, String approver) {
+        ObjectNode row = decision(curve, payload, approver);
+        row.put("resource_type", "ftp_curve");
+        row.put("action", "publish");
+        return row;
     }
 
     private ObjectNode decision(String id, Map<?, ?> payload, String approver) {

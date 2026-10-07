@@ -9,12 +9,18 @@ import io.meridian.alm.domain.FtpPricing.ExposureType;
 import io.meridian.alm.domain.FtpPricing.Method;
 import io.meridian.alm.domain.FtpPricing.Rule;
 import io.meridian.alm.infrastructure.Rows;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.common.time.Clocks;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,14 +45,20 @@ public class FtpService {
     private static final BigDecimal MAX_RATE = BigDecimal.ONE;
     private static final BigDecimal MIN_RATE = new BigDecimal("-0.05");
 
+    /** Approval resource type for FTP curve publication submissions in workflow-service (G11). */
+    public static final String CURVE_APPROVAL = "ftp_curve";
+    private static final String CLEAR_SUBMISSION = "submitted_by = null, submitted_at = null";
+
     private final Rows rows;
     private final Events events;
     private final AssumptionService assumptions;
+    private final Approvals approvals;
 
-    public FtpService(Rows rows, Events events, AssumptionService assumptions) {
+    public FtpService(Rows rows, Events events, AssumptionService assumptions, Approvals approvals) {
         this.rows = rows;
         this.events = events;
         this.assumptions = assumptions;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ curves
@@ -61,6 +73,60 @@ public class FtpService {
         }
     }
 
+    /**
+     * Maker step: submits the unpublished curve and its points for ALCO approval. In workflow mode this opens an
+     * approval request whose payload carries the points and a checksum; {@link FtpCurveApprovalHandler} publishes or
+     * rejects. A new submission replaces a pending one.
+     */
+    @Transactional
+    public JsonNode submit(UUID id, String comment) {
+        ObjectNode curve = rows.lock(CURVE, id);
+        if (Rows.bool(curve, "is_published")) {
+            throw ApiException.conflict("already_published", "The curve is already published");
+        }
+        List<ObjectNode> points = curvePoints(id);
+        if (points.isEmpty()) {
+            throw ApiException.unprocessable("curve_has_no_points", "A curve needs at least one point to be published");
+        }
+        OffsetDateTime at = Clocks.now();
+        String maker = TenantContext.principal();
+        ObjectNode submitted = rows.queryOne("""
+                update ftp_curve t set submitted_by = ?, submitted_at = ?, rejected_by = null, rejection_reason = null,
+                updated_by = ? where id = ? returning row_to_json(t)::text""", maker, at, maker, id).orElseThrow();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", Rows.str(curve, "code"));
+        payload.put("currency", Rows.str(curve, "currency"));
+        payload.put("curve_type", Rows.str(curve, "curve_type"));
+        payload.put("effective_date", Rows.str(curve, "effective_date"));
+        List<Map<String, Object>> pts = new ArrayList<>();
+        for (ObjectNode p : points) {
+            pts.add(Map.of("tenor_days", Rows.integer(p, "tenor_days"), "tenor_label", Rows.str(p, "tenor_label"),
+                    "rate", Rows.str(p, "rate")));
+        }
+        payload.put("points", pts);
+        payload.put("checksum", checksum(curve, points));
+        if (comment != null) {
+            payload.put("comment", comment);
+        }
+        UUID requestId = Approvals.idOf(approvals.request(ApprovalSpec.of(CURVE_APPROVAL, id, "publish",
+                "FTP curve " + Rows.str(curve, "code") + " " + Rows.str(curve, "currency") + " "
+                        + Rows.str(curve, "effective_date"), payload), "ftp-curve:" + id + ":" + at));
+        if (requestId != null) {
+            approvals.cancelOpenExcept(CURVE_APPROVAL, id, null, requestId, "superseded");
+        }
+        events.publish("treasury.ftp_curve.submitted", CURVE, submitted);
+        return submitted;
+    }
+
+    /** True while the curve is submitted and unpublished with the submitted content (checksum) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String checksum) {
+        return rows.find(CURVE, id)
+                .filter(c -> !Rows.bool(c, "is_published") && c.hasNonNull("submitted_at"))
+                .filter(c -> checksum != null && checksum.equals(checksum(c, curvePoints(id))))
+                .isPresent();
+    }
+
     @Transactional
     public JsonNode publish(UUID id, String comment) {
         ObjectNode curve = rows.lock(CURVE, id);
@@ -68,8 +134,8 @@ public class FtpService {
             throw ApiException.conflict("already_published", "The curve is already published");
         }
         String approver = TenantContext.principal();
-        if (approver.equals(Rows.str(curve, "created_by"))) {
-            throw ApiException.unprocessable("four_eyes_violation", "The maker of a curve cannot publish it");
+        if (approver.equals(Rows.str(curve, "created_by")) || approver.equals(Rows.str(curve, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The maker or submitter of a curve cannot publish it");
         }
         int points = rows.scalar("select count(*)::int from ftp_curve_point where ftp_curve_id = ?", Integer.class, id)
                 .orElse(0);
@@ -77,10 +143,56 @@ public class FtpService {
             throw ApiException.unprocessable("curve_has_no_points", "A curve needs at least one point to be published");
         }
         ObjectNode published = rows.queryOne("""
-                update ftp_curve t set is_published = true, approved_by = ?, published_at = now(), updated_by = ?
-                where id = ? returning row_to_json(t)::text""", approver, approver, id).orElseThrow();
+                update ftp_curve t set is_published = true, approved_by = ?, published_at = ?, updated_by = ?,
+                submitted_by = null, submitted_at = null
+                where id = ? returning row_to_json(t)::text""", approver, Clocks.now(), approver, id).orElseThrow();
         events.publish("treasury.ftp_curve.published", CURVE, published);
+        approvals.cancelOpen(CURVE_APPROVAL, id, null, "published directly");
         return published;
+    }
+
+    /** Checker step: rejects the submitted curve; it stays unpublished (and editable) for rework. */
+    @Transactional
+    public JsonNode reject(UUID id, String reason) {
+        ObjectNode curve = rows.lock(CURVE, id);
+        if (Rows.bool(curve, "is_published")) {
+            throw ApiException.conflict("already_published", "The curve is already published");
+        }
+        if (!curve.hasNonNull("submitted_at")) {
+            throw ApiException.conflict("no_pending_submission", "The curve has not been submitted for approval");
+        }
+        String checker = TenantContext.principal();
+        if (checker.equals(Rows.str(curve, "created_by")) || checker.equals(Rows.str(curve, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The maker or submitter of a curve cannot reject it");
+        }
+        ObjectNode rejected = rows.queryOne("update ftp_curve t set rejected_by = ?, rejection_reason = ?, updated_by = ?, "
+                + CLEAR_SUBMISSION + " where id = ? returning row_to_json(t)::text", checker, reason, checker, id).orElseThrow();
+        events.publish("treasury.ftp_curve.rejected", CURVE, rejected);
+        approvals.cancelOpen(CURVE_APPROVAL, id, null, "rejected directly");
+        return rejected;
+    }
+
+    private List<ObjectNode> curvePoints(UUID curveId) {
+        return rows.query("select row_to_json(t)::text from ftp_curve_point t where ftp_curve_id = ? order by tenor_days",
+                curveId);
+    }
+
+    /** SHA-256 over the curve identity and its points (tenor and rate), so an edit after submission is detected. */
+    private static String checksum(JsonNode curve, List<ObjectNode> points) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Rows.str(curve, "code")).append('|').append(Rows.str(curve, "currency")).append('|')
+                .append(Rows.str(curve, "curve_type")).append('|').append(Rows.str(curve, "effective_date")).append('\n');
+        for (ObjectNode p : points) {
+            BigDecimal rate = Rows.dec(p, "rate");
+            sb.append(Rows.integer(p, "tenor_days")).append('|')
+                    .append(rate == null ? "" : rate.stripTrailingZeros().toPlainString()).append('\n');
+        }
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Transactional(readOnly = true)

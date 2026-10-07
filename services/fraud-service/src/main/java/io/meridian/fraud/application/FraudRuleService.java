@@ -1,7 +1,10 @@
 package io.meridian.fraud.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.common.time.Clocks;
 import io.meridian.events.OutboxWriter;
 import io.meridian.fraud.domain.DecisionEngine;
 import io.meridian.fraud.domain.expr.ExpressionException;
@@ -26,14 +29,20 @@ import tools.jackson.databind.node.ObjectNode;
 public class FraudRuleService {
     private static final Set<String> EDITABLE = Set.of("DRAFT", "DISABLED");
     private static final int MAX_BACKTEST = 50_000;
+    /** Approval resource type for rule activation submissions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "fraud_rule";
+    private static final String CLEAR_SUBMISSION = "submitted_mode = null, submitted_by = null, submitted_at = null";
 
     private final Db db;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final FraudConfigCache cache;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public FraudRuleService(Db db, CrudEngine crud, OutboxWriter outbox, FraudConfigCache cache, JsonMapper json) {
+    public FraudRuleService(Db db, CrudEngine crud, OutboxWriter outbox, FraudConfigCache cache, JsonMapper json,
+                            Approvals approvals) {
+        this.approvals = approvals;
         this.db = db;
         this.crud = crud;
         this.outbox = outbox;
@@ -62,7 +71,8 @@ public class FraudRuleService {
             throw ApiException.conflict("version_conflict", "If-Match " + expectedVersion + " does not match the current version; reload and retry");
         }
         ObjectNode values = crud.toColumns("fraud_rule", changes);
-        for (String f : List.of("status", "rule_version", "approved_by", "deactivation_reason")) {
+        for (String f : List.of("status", "rule_version", "approved_by", "deactivation_reason", "submitted_mode",
+                "submitted_by", "submitted_at", "rejected_by", "rejection_reason", "approval_request_id")) {
             values.remove(f);
         }
         if (values.has("expression")) {
@@ -73,18 +83,83 @@ public class FraudRuleService {
         }
         values.put("rule_version", rule.get("rule_version").asInt() + 1);
         values.putNull("approved_by");
+        boolean pending = rule.hasNonNull("submitted_at");
+        if (pending) { // an edit withdraws the pending activation submission
+            values.putNull("submitted_mode");
+            values.putNull("submitted_by");
+            values.putNull("submitted_at");
+        }
         String row = crud.updateRow("fraud_rule", Map.of("id", id), values, expectedVersion).orElseThrow();
+        if (pending) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rule changed after submission");
+        }
         outbox.publish("risk.fraud_rule.changed", "fraud_rule", id, json.readTree(row));
         cache.invalidate();
         return row;
     }
 
-    /** Maker-checker: the activating user must differ from the author of the current rule version. */
+    /**
+     * Maker step: asks for activation in a mode. The rule keeps its status until a checker activates it (directly or
+     * in the workflow inbox, {@link FraudRuleApprovalHandler}) or rejects the submission. A new submission replaces
+     * a pending one; an edit withdraws it.
+     */
+    @Transactional
+    public String submit(UUID id, String mode, String comment) {
+        requireMode(mode);
+        JsonNode rule = db.require("fraud_rule", id, true);
+        if (rule.get("status").asString().equals(mode)) {
+            throw ApiException.conflict("invalid_transition", "Rule is already " + mode);
+        }
+        compile(rule.get("expression").asString());
+        OffsetDateTime at = Clocks.now();
+        db.update("update fraud_rule set submitted_mode = ?, submitted_by = ?, submitted_at = ?, rejected_by = null,"
+                + " rejection_reason = null where id = ?", mode, TenantContext.principal(), at, id);
+        int ruleVersion = rule.get("rule_version").asInt();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", Db.str(rule, "code"));
+        payload.put("name", Db.str(rule, "name"));
+        payload.put("subject_type", Db.str(rule, "subject_type"));
+        payload.put("action", Db.str(rule, "action"));
+        payload.put("score_adjustment", rule.path("score_adjustment").asInt());
+        payload.put("current_status", Db.str(rule, "status"));
+        payload.put("mode", mode);
+        payload.put("rule_version", ruleVersion);
+        payload.put("submitted_at", at.toString());
+        if (comment != null) {
+            payload.put("comment", comment);
+        }
+        JsonNode request = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
+                "Fraud rule " + Db.str(rule, "code") + " v" + ruleVersion + " -> " + mode, payload),
+                "fraud-rule:" + id + ":" + ruleVersion + ":" + at);
+        UUID requestId = Approvals.idOf(request);
+        if (requestId != null) {
+            db.update("update fraud_rule set approval_request_id = ? where id = ?", requestId, id);
+            approvals.cancelOpenExcept(APPROVAL_RESOURCE, id, null, requestId, "superseded");
+        }
+        String row = db.text(db.require("fraud_rule", id, false));
+        outbox.publish("risk.fraud_rule.submitted", "fraud_rule", id, json.readTree(row));
+        return row;
+    }
+
+    /** True while the rule waits on the activation submission opened as {@code approvalRequestId}. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, UUID approvalRequestId) {
+        return pending(id)
+                .filter(r -> approvalRequestId != null && approvalRequestId.toString().equals(Db.str(r, "approval_request_id")))
+                .isPresent();
+    }
+
+    /** The rule while an activation submission is pending. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<JsonNode> pending(UUID id) {
+        return db.one("select row_to_json(t)::text from fraud_rule t where id = ?", id)
+                .filter(r -> r.hasNonNull("submitted_at"));
+    }
+
+    /** Maker-checker: the activating user must differ from the author of the rule version and from the submitter. */
     @Transactional
     public String activate(UUID id, String mode) {
-        if (!"ACTIVE".equals(mode) && !"SHADOW".equals(mode)) {
-            throw ApiException.unprocessable("invalid_mode", "mode must be ACTIVE or SHADOW");
-        }
+        requireMode(mode);
         JsonNode rule = db.require("fraud_rule", id, true);
         String status = rule.get("status").asString();
         if (status.equals(mode)) {
@@ -92,18 +167,44 @@ public class FraudRuleService {
         }
         String maker = Db.str(rule, "updated_by") != null ? Db.str(rule, "updated_by") : Db.str(rule, "created_by");
         String checker = TenantContext.principal();
-        if (checker.equals(maker)) {
+        if (checker.equals(maker) || checker.equals(Db.str(rule, "submitted_by"))) {
             throw ApiException.unprocessable("four_eyes_violation",
-                    "The rule version was authored by " + maker + "; another user must activate it");
+                    "The rule version was authored or submitted by " + checker + "; another user must activate it");
         }
         compile(rule.get("expression").asString());
         // updated_by keeps naming the author of the rule version (the maker); the checker is approved_by
-        db.update("update fraud_rule set status = ?, approved_by = ?, deactivation_reason = null where id = ?",
-                mode, checker, id);
+        db.update("update fraud_rule set status = ?, approved_by = ?, deactivation_reason = null, " + CLEAR_SUBMISSION
+                + " where id = ?", mode, checker, id);
         String row = db.text(db.require("fraud_rule", id, false));
         outbox.publish("risk.fraud_rule.activated", "fraud_rule", id, json.readTree(row));
         cache.invalidate();
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "activated directly");
         return row;
+    }
+
+    /** Checker step: rejects the pending activation submission; the rule keeps its status and can be reworked. */
+    @Transactional
+    public String reject(UUID id, String reason) {
+        JsonNode rule = db.require("fraud_rule", id, true);
+        if (!rule.hasNonNull("submitted_at")) {
+            throw ApiException.conflict("no_pending_submission", "Rule " + Db.str(rule, "code") + " has no pending activation");
+        }
+        String checker = TenantContext.principal();
+        if (checker.equals(Db.str(rule, "submitted_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The submitter cannot reject their own submission");
+        }
+        db.update("update fraud_rule set rejected_by = ?, rejection_reason = ?, " + CLEAR_SUBMISSION + " where id = ?",
+                checker, reason != null && reason.length() > 500 ? reason.substring(0, 500) : reason, id);
+        String row = db.text(db.require("fraud_rule", id, false));
+        outbox.publish("risk.fraud_rule.rejected", "fraud_rule", id, json.readTree(row));
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return row;
+    }
+
+    private static void requireMode(String mode) {
+        if (!"ACTIVE".equals(mode) && !"SHADOW".equals(mode)) {
+            throw ApiException.unprocessable("invalid_mode", "mode must be ACTIVE or SHADOW");
+        }
     }
 
     @Transactional
@@ -112,10 +213,12 @@ public class FraudRuleService {
         if ("DISABLED".equals(rule.get("status").asString())) {
             throw ApiException.conflict("invalid_transition", "Rule is already disabled");
         }
-        db.update("update fraud_rule set status = 'DISABLED', deactivation_reason = ? where id = ?", reason, id);
+        db.update("update fraud_rule set status = 'DISABLED', deactivation_reason = ?, " + CLEAR_SUBMISSION
+                + " where id = ?", reason, id);
         String row = db.text(db.require("fraud_rule", id, false));
         outbox.publish("risk.fraud_rule.deactivated", "fraud_rule", id, json.readTree(row));
         cache.invalidate();
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rule deactivated");
         return row;
     }
 

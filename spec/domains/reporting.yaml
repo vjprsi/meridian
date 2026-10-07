@@ -11,7 +11,7 @@ enums:
   ReportFrequency: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AD_HOC, EVENT_DRIVEN]
   ReportFormat: [XBRL, XML, CSV, XLSX, JSON, PDF, FIXED_WIDTH]
   ReportDefinitionStatus: [DRAFT, ACTIVE, DEPRECATED]
-  ReportVersionStatus: [DRAFT, ACTIVE, SUPERSEDED, DEPRECATED]
+  ReportVersionStatus: [DRAFT, ACTIVE, SUPERSEDED, DEPRECATED, REJECTED]
   ReportTrigger: [SCHEDULE, MANUAL, API, RESUBMISSION]
   ReportSubmissionStatus: [PENDING_APPROVAL, APPROVED, SUBMITTED, ACKNOWLEDGED, ACCEPTED, REJECTED, RESUBMISSION_REQUIRED]
   ReportSubmissionChannel: [API, SFTP, PORTAL_UPLOAD, EMAIL, MANUAL]
@@ -88,6 +88,9 @@ services:
           - "change_note text | What changed"
           - "approved_by string(64) ro | Checker who published the version"
           - "approved_at ts ro | Publication time"
+          - "rejected_by string(64) ro | Checker who rejected the version"
+          - "rejected_at ts ro | Rejection time"
+          - "rejection_reason text ro | Why the version was rejected (the maker creates a new version)"
         unique: [[report_definition_id, definition_version]]
 
       - name: report_schedule
@@ -281,6 +284,8 @@ services:
         table: report_definition_version
         ops: [list, get]
         filters: [report_definition_id, status]
+        actions:
+          - "POST /{id}/reject | Reject a DRAFT version (checker: must not be the version's author); the maker creates a new version | reason text nn"
 
       - resource: report-schedules
         path: /v1/reporting/schedules
@@ -354,6 +359,7 @@ services:
 
     events:
       - "reporting.report_definition.published | report_definition_version | A report definition version was published"
+      - "reporting.report_definition.version_rejected | report_definition_version | A report definition version was rejected"
       - "reporting.report_definition.deprecated | report_definition | A report definition was deprecated"
       - "reporting.report_run.completed | report_run | A report run finished"
       - "reporting.report_run.failed | report_run | A report run failed"
@@ -391,6 +397,9 @@ services:
           - "is_certified bool nn default=false ro | Certified by data governance (cleared when the metric changes)"
           - "certified_by string(64) ro | Certifier"
           - "certified_at ts ro | Certification time"
+          - "certification_rejected_by string(64) ro | Data governance reviewer who declined the last certification request"
+          - "certification_rejected_at ts ro | Time certification was declined (cleared when the metric changes)"
+          - "certification_rejection_reason text ro | Why certification was declined"
 
       - name: analytics_saved_query
         prefix: asq
@@ -492,6 +501,7 @@ services:
           - "GET /{id}/values?from:date!&to:date!&granularity:string(8) | KPI series over the dataset's time field, granularity DAY, WEEK or MONTH (default DAY) | | object"
           - "POST /{id}/evaluate | Evaluate the KPI over provided rows (or its dataset when rows are omitted) | rows json[], filters json[] | object"
           - "POST /{id}/certify | Certify the KPI definition (data governance; not the author) | comment text | analytics_kpi"
+          - "POST /{id}/reject-certification | Decline certification of the KPI definition (data governance; not the author); the author reworks the metric | reason text nn | analytics_kpi"
 
       - resource: analytics-saved-queries
         path: /v1/analytics/saved-queries
@@ -560,6 +570,7 @@ services:
       - "reporting.data_share.paused | analytics_data_share | A data share was paused"
       - "reporting.data_share.resumed | analytics_data_share | A data share was resumed"
       - "reporting.analytics_kpi.certified | analytics_kpi | A KPI definition was certified"
+      - "reporting.analytics_kpi.certification_rejected | analytics_kpi | Certification of a KPI definition was declined"
 
   # ------------------------------------------------------------------ ai-platform-service
   - name: ai-platform-service

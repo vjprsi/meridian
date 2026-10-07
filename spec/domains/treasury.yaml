@@ -33,7 +33,7 @@ enums:
   TreasuryEodRunStatus: [RUNNING, COMPLETED, COMPLETED_WITH_ERRORS]
   LiquidityPositionType: [ACTUAL, PROJECTED, FORECAST]
   LiquidityFlowCategory: [DEPOSITS, LOANS, PAYMENTS, CARDS, WALLETS, TREASURY_DEALS, SECURITIES, FEES, OTHER]
-  LiquidityRatioStatus: [DRAFT, CALCULATED, REVIEWED, APPROVED, SUBMITTED]
+  LiquidityRatioStatus: [DRAFT, CALCULATED, REVIEWED, APPROVED, SUBMITTED, REJECTED]
   LiquidityStressSeverity: [MILD, MODERATE, SEVERE, IDIOSYNCRATIC, MARKET_WIDE, COMBINED]
   AlmShockType: [PARALLEL_UP, PARALLEL_DOWN, STEEPENER, FLATTENER, SHORT_UP, SHORT_DOWN, CUSTOM]
   AlmMeasure: [NII, EVE, EAR]
@@ -596,9 +596,12 @@ services:
           - "regulatory_minimum rate nn default=1.0 | Minimum ratio"
           - "breach bool nn default=false ro | Ratio below the regulatory minimum"
           - "components json[] nn ro | Line-level components [{line, code, category, amount, factor, weighted}]"
-          - "status enum:LiquidityRatioStatus nn default=CALCULATED ro | Status"
+          - "status enum:LiquidityRatioStatus nn default=CALCULATED ro | Status (REJECTED: recalculate to resubmit)"
           - "approved_by string(64) ro | Approver (four-eyes)"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the calculation"
+          - "rejected_at ts ro | Rejection time"
+          - "rejection_reason string(500) ro | Why the calculation was rejected"
         unique: [[tenant_id, legal_entity_id, as_of_date, currency]]
 
       - name: nsfr_calculation
@@ -615,9 +618,12 @@ services:
           - "regulatory_minimum rate nn default=1.0 | Minimum ratio"
           - "breach bool nn default=false ro | Ratio below the regulatory minimum"
           - "components json[] nn ro | ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}]"
-          - "status enum:LiquidityRatioStatus nn default=CALCULATED ro | Status"
+          - "status enum:LiquidityRatioStatus nn default=CALCULATED ro | Status (REJECTED: recalculate to resubmit)"
           - "approved_by string(64) ro | Approver (four-eyes)"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected the calculation"
+          - "rejected_at ts ro | Rejection time"
+          - "rejection_reason string(500) ro | Why the calculation was rejected"
         unique: [[tenant_id, legal_entity_id, as_of_date, currency]]
 
       - name: liquidity_stress_scenario
@@ -712,6 +718,7 @@ services:
         actions:
           - "POST /calculate | Calculate LCR for a date from position lines [{line, code, category HQLA/OUTFLOW/INFLOW, amount, factor}] | legal_entity_id uuid nn, as_of_date date nn, currency currency nn, positions json[] nn, regulatory_minimum rate | lcr_calculation"
           - "POST /{id}/approve | Approve for regulatory reporting (checker; not the calculator) | comment string(500)"
+          - "POST /{id}/reject | Reject the calculation (checker; not the calculator); a recalculation resubmits it | reason string(500) nn"
       - resource: nsfr-calculations
         path: /v1/treasury/liquidity/nsfr
         table: nsfr_calculation
@@ -720,6 +727,7 @@ services:
         actions:
           - "POST /calculate | Calculate NSFR for a date from balance-sheet lines [{line, code, side ASF/RSF, amount, factor}] | legal_entity_id uuid nn, as_of_date date nn, currency currency nn, positions json[] nn, regulatory_minimum rate | nsfr_calculation"
           - "POST /{id}/approve | Approve for regulatory reporting (checker; not the calculator) | comment string(500)"
+          - "POST /{id}/reject | Reject the calculation (checker; not the calculator); a recalculation resubmits it | reason string(500) nn"
       - resource: liquidity-stress-scenarios
         path: /v1/treasury/liquidity/stress-scenarios
         table: liquidity_stress_scenario
@@ -753,9 +761,11 @@ services:
       - "treasury.lcr.calculated | lcr_calculation | LCR was calculated"
       - "treasury.lcr.breached | lcr_calculation | LCR fell below the regulatory minimum"
       - "treasury.lcr.approved | lcr_calculation | LCR was approved for reporting"
+      - "treasury.lcr.rejected | lcr_calculation | An LCR calculation was rejected by the checker"
       - "treasury.nsfr.calculated | nsfr_calculation | NSFR was calculated"
       - "treasury.nsfr.breached | nsfr_calculation | NSFR fell below the regulatory minimum"
       - "treasury.nsfr.approved | nsfr_calculation | NSFR was approved for reporting"
+      - "treasury.nsfr.rejected | nsfr_calculation | An NSFR calculation was rejected by the checker"
       - "treasury.liquidity_stress_scenario.approved | liquidity_stress_scenario | A stress scenario was approved"
       - "treasury.liquidity_stress.completed | liquidity_stress_result | A stress test was run"
       - "treasury.liquidity_stress.breached | liquidity_stress_result | A stress test breached the risk appetite"
@@ -784,6 +794,9 @@ services:
           - "model_version string(32) nn | Model version"
           - "approved_by string(64) ro | Model approver (four-eyes)"
           - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Model risk checker who rejected the assumption (cleared when it is reworked)"
+          - "rejected_at ts ro | Rejection time"
+          - "rejection_reason string(500) ro | Why the assumption was rejected"
 
       - name: alm_gap_run
         prefix: agr
@@ -858,6 +871,10 @@ services:
           - "is_published bool nn default=false ro | Published for use (publish action)"
           - "approved_by string(64) ro | ALCO approver (four-eyes)"
           - "published_at ts ro | Publication time"
+          - "submitted_by string(64) ro | Maker who submitted the curve for ALCO approval"
+          - "submitted_at ts ro | Submission time (empty when no publication is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason string(500) ro | Why the last submission was rejected"
         unique: [[tenant_id, code, effective_date]]
 
       - name: ftp_curve_point
@@ -919,6 +936,7 @@ services:
         filters: [assumption_type, product_id, segment, currency]
         actions:
           - "POST /{id}/approve | Approve the model assumption (model risk checker; not the maker) | comment string(500)"
+          - "POST /{id}/reject | Reject the model assumption (model risk checker; not the maker); a PATCH reworks and resubmits it | reason string(500) nn"
       - resource: alm-gap-runs
         path: /v1/treasury/alm/gap-runs
         table: alm_gap_run
@@ -940,7 +958,9 @@ services:
         filters: [code, currency, curve_type, effective_date, is_published]
         actions:
           - "GET /{id}/points | Points of the curve | | ftp_curve_point[]"
+          - "POST /{id}/submit | Submit the curve and its points for ALCO approval (maker) | comment string(500)"
           - "POST /{id}/publish | Publish the curve after ALCO approval (checker; not the maker) | comment string(500)"
+          - "POST /{id}/reject | Reject the submitted curve (checker); it stays unpublished for rework | reason string(500) nn"
           - "GET /{id}/rate?tenor_days:int! | Linearly interpolated rate for a tenor (flat beyond the ends) | | object"
       - resource: ftp-curve-points
         path: /v1/treasury/ftp/curve-points
@@ -963,9 +983,12 @@ services:
 
     events:
       - "treasury.alm_assumption.approved | alm_behavioural_assumption | A behavioural assumption was approved"
+      - "treasury.alm_assumption.rejected | alm_behavioural_assumption | A behavioural assumption was rejected"
       - "treasury.alm_gap_run.completed | alm_gap_run | A repricing gap run completed"
       - "treasury.alm_gap_run.failed | alm_gap_run | A repricing gap run failed"
       - "treasury.alm_sensitivity.completed | alm_sensitivity_run | An NII/EVE sensitivity run completed"
       - "treasury.alm_sensitivity.outlier_breached | alm_sensitivity_run | An EVE shock exceeded the 15% Tier 1 outlier threshold"
       - "treasury.ftp_curve.published | ftp_curve | An FTP curve was published"
+      - "treasury.ftp_curve.submitted | ftp_curve | An FTP curve was submitted for ALCO approval"
+      - "treasury.ftp_curve.rejected | ftp_curve | A submitted FTP curve was rejected"
       - "treasury.ftp_assignment.computed | ftp_assignment | FTP was assigned for a period"

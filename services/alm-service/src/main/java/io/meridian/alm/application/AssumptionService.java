@@ -8,6 +8,7 @@ import io.meridian.approvals.ApprovalSpec;
 import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.common.time.Clocks;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -67,7 +68,14 @@ public class AssumptionService {
      */
     @Transactional
     public void resubmit(UUID id) {
-        rows.find(TABLE, id).filter(r -> Rows.str(r, "approved_by") == null).ifPresent(this::requestApproval);
+        if (rows.find(TABLE, id).filter(r -> Rows.str(r, "approved_by") == null).isEmpty()) {
+            return;
+        }
+        // the rework answers a rejection: clear it and submit the new content
+        rows.execute("""
+                update alm_behavioural_assumption set rejected_by = null, rejected_at = null, rejection_reason = null
+                where id = ? and rejected_by is not null""", id);
+        requestApproval(rows.get(TABLE, id));
     }
 
     /** Central maker-checker: the checker decides in the workflow inbox; AssumptionApprovalHandler applies it. */
@@ -95,9 +103,36 @@ public class AssumptionService {
     @Transactional(readOnly = true)
     public boolean awaitsApproval(UUID id, Integer rowVersion) {
         return rows.find(TABLE, id)
-                .filter(r -> Rows.str(r, "approved_by") == null)
+                .filter(r -> Rows.str(r, "approved_by") == null && Rows.str(r, "rejected_by") == null)
                 .filter(r -> rowVersion == null || rowVersion.equals(Rows.integer(r, "row_version")))
                 .isPresent();
+    }
+
+    /**
+     * Checker step: rejects an unapproved assumption (it is never used by gap, FTP or sensitivity runs). A PATCH
+     * reworks it, clears the rejection and submits it again.
+     */
+    @Transactional
+    public JsonNode reject(UUID id, String reason) {
+        ObjectNode row = rows.lock(TABLE, id);
+        if (Rows.str(row, "approved_by") != null) {
+            throw ApiException.conflict("already_approved", "The assumption was already approved by "
+                    + Rows.str(row, "approved_by"));
+        }
+        if (Rows.str(row, "rejected_by") != null) {
+            throw ApiException.conflict("already_rejected", "The assumption was already rejected by "
+                    + Rows.str(row, "rejected_by") + "; rework it to submit it again");
+        }
+        String checker = TenantContext.principal();
+        if (checker.equals(Rows.str(row, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The maker of an assumption cannot reject it");
+        }
+        ObjectNode rejected = rows.queryOne("""
+                update alm_behavioural_assumption t set rejected_by = ?, rejected_at = ?, rejection_reason = ?, updated_by = ?
+                where id = ? returning row_to_json(t)::text""", checker, Clocks.now(), reason, checker, id).orElseThrow();
+        events.publish("treasury.alm_assumption.rejected", TABLE, rejected);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return rejected;
     }
 
     /** Validates a PATCH against the stored row; throws when the assumption is approved and frozen. */
@@ -130,13 +165,17 @@ public class AssumptionService {
             throw ApiException.conflict("already_approved", "The assumption was already approved by "
                     + Rows.str(row, "approved_by"));
         }
+        if (Rows.str(row, "rejected_by") != null) {
+            throw ApiException.conflict("assumption_rejected", "The assumption was rejected by "
+                    + Rows.str(row, "rejected_by") + "; rework it before approval");
+        }
         String approver = TenantContext.principal();
         if (approver.equals(Rows.str(row, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "The maker of an assumption cannot approve it");
         }
         ObjectNode approved = rows.queryOne("""
-                update alm_behavioural_assumption t set approved_by = ?, approved_at = now(), updated_by = ?
-                where id = ? returning row_to_json(t)::text""", approver, approver, id).orElseThrow();
+                update alm_behavioural_assumption t set approved_by = ?, approved_at = ?, updated_by = ?
+                where id = ? returning row_to_json(t)::text""", approver, Clocks.now(), approver, id).orElseThrow();
         events.publish("treasury.alm_assumption.approved", TABLE, approved);
         approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approved;

@@ -7,6 +7,8 @@ import io.meridian.limits.api.generated.model.LimitRuleCreate;
 import io.meridian.limits.api.generated.model.LimitRuleUpdate;
 import io.meridian.limits.api.generated.model.LimitRulesActivateRequest;
 import io.meridian.limits.api.generated.model.LimitRulesDeactivateRequest;
+import io.meridian.limits.api.generated.model.LimitRulesRejectRequest;
+import io.meridian.limits.api.generated.model.LimitRulesSubmitRequest;
 import io.meridian.limits.api.generated.model.LimitRulesSimulateRequest;
 import io.meridian.limits.application.LimitAdminService;
 import io.meridian.limits.application.LimitCheckService;
@@ -48,6 +50,18 @@ public class LimitRulesController implements LimitRulesApi {
     @Override
     public ResponseEntity<LimitRule> limitRulesActivate(UUID id, String idempotencyKey, LimitRulesActivateRequest body) {
         return http.once(idempotencyKey, body, LimitRule.class, () -> http.ok(admin.activate(id), LimitRule.class));
+    }
+
+    @Override
+    public ResponseEntity<LimitRule> limitRulesSubmit(UUID id, String idempotencyKey, LimitRulesSubmitRequest body) {
+        String comment = Http.text(http.tree(body), "comment");
+        return http.once(idempotencyKey, body, LimitRule.class, () -> http.ok(admin.submit(id, comment), LimitRule.class));
+    }
+
+    @Override
+    public ResponseEntity<LimitRule> limitRulesReject(UUID id, String idempotencyKey, LimitRulesRejectRequest body) {
+        String reason = Http.text(http.tree(body), "reason");
+        return http.once(idempotencyKey, body, LimitRule.class, () -> http.ok(admin.reject(id, reason), LimitRule.class));
     }
 
     @Override
