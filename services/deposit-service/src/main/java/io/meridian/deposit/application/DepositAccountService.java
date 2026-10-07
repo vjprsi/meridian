@@ -300,7 +300,8 @@ public class DepositAccountService {
         if (last == null) {
             last = ts(acc, "created_at");
         }
-        return Math.max(0, ChronoUnit.DAYS.between(last.toLocalDate(), now.toLocalDate()));
+        return Math.max(0, ChronoUnit.DAYS.between(last.withOffsetSameInstant(java.time.ZoneOffset.UTC).toLocalDate(),
+                now.withOffsetSameInstant(java.time.ZoneOffset.UTC).toLocalDate()));
     }
 
     /**

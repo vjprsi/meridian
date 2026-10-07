@@ -126,6 +126,25 @@ public class InterestService {
     // ------------------------------------------------------------------ balances from the ledger
 
     /** End-of-day balances for each day in [from, to], value-dated (see class comment). */
+    /**
+     * Interest day of a ledger entry: its value date (the date interest starts or stops counting, set by the
+     * posting service from the business date), else the UTC date of its effective time.
+     */
+    static LocalDate bucketDate(JsonNode e) {
+        if (e.hasNonNull("value_date")) {
+            return LocalDate.parse(e.get("value_date").asString());
+        }
+        OffsetDateTime eff = e.hasNonNull("effective_at") ? OffsetDateTime.parse(e.get("effective_at").asString())
+                : OffsetDateTime.parse(e.get("created_at").asString());
+        return eff.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate();
+    }
+
+    /** UTC calendar date of a timestamp column (row JSON carries the database session's offset, not UTC). */
+    static LocalDate utcDate(JsonNode row, String column) {
+        OffsetDateTime t = ts(row, column);
+        return t == null ? null : t.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate();
+    }
+
     Map<LocalDate, BigDecimal> dailyBalances(UUID ledgerAccount, LocalDate from, LocalDate to) {
         OffsetDateTime start = from.atStartOfDay().atOffset(ZoneOffset.UTC);
         BigDecimal opening = ledger.balanceAt(ledgerAccount, start.minusNanos(1000));
@@ -137,9 +156,7 @@ public class InterestService {
             for (JsonNode e : page.path("data")) {
                 BigDecimal amt = new BigDecimal(e.path("amount").asString("0"));
                 BigDecimal signed = "CREDIT".equals(e.path("direction").asString()) ? amt : amt.negate();
-                OffsetDateTime eff = e.hasNonNull("effective_at") ? OffsetDateTime.parse(e.get("effective_at").asString())
-                        : OffsetDateTime.parse(e.get("created_at").asString());
-                LocalDate bucket = eff.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate();
+                LocalDate bucket = bucketDate(e);
                 if (bucket.isBefore(from)) {
                     bucket = from;
                 }
@@ -174,7 +191,7 @@ public class InterestService {
             return 0;
         }
         UUID id = uuid(acc, "id");
-        LocalDate opened = ts(acc, "opened_at") == null ? null : ts(acc, "opened_at").toLocalDate();
+        LocalDate opened = utcDate(acc, "opened_at");
         if (opened == null) {
             return 0;
         }
@@ -279,7 +296,7 @@ public class InterestService {
         if (fromDate.isAfter(yesterday)) {
             throw ApiException.unprocessable("invalid_from_date", "from_date must be before today");
         }
-        LocalDate opened = ts(acc, "opened_at") == null ? null : ts(acc, "opened_at").toLocalDate();
+        LocalDate opened = utcDate(acc, "opened_at");
         if (opened == null) {
             throw ApiException.conflict("account_not_open", "Account " + accountId + " was never activated");
         }
