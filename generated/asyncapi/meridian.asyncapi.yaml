@@ -1191,6 +1191,8 @@ channels:
         $ref: '#/components/messages/ReportingReportSubmissionRejected'
       ReportingReportSubmissionDeadlineApproaching:
         $ref: '#/components/messages/ReportingReportSubmissionDeadlineApproaching'
+      ReportingRegulatoryPackInstalled:
+        $ref: '#/components/messages/ReportingRegulatoryPackInstalled'
       ReportingAnalyticsExportCompleted:
         $ref: '#/components/messages/ReportingAnalyticsExportCompleted'
       ReportingAnalyticsExportFailed:
@@ -14218,6 +14220,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReportSubmission'
+    ReportingRegulatoryPackInstalled:
+      name: reporting.regulatory_pack.installed
+      title: A regulatory pack was installed or upgraded
+      summary: A regulatory pack was installed or upgraded
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.regulatory_pack.installed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/RegulatoryPackInstallation'
     ReportingAnalyticsExportCompleted:
       name: reporting.analytics_export.completed
       title: An analytics export finished
@@ -59726,13 +59750,19 @@ components:
         data_sources:
           type: array
           items: {}
-          description: Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end}
-            {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}
+          description: 'Data sources {name, type SERVICE|INLINE|COMBINE, service, path with {as_of_date} {period_start} {period_end}
+            {period_start_ts} {period_end_ts} (exclusive) {legal_entity_id} {reporting_year} {param.x} placeholders, rows_pointer
+            (default /data), id_field, rows (INLINE), resolve {param: {service, path, match, field}} (looks up a missing run
+            parameter, e.g. the GL period of period_end), gl_mapping {table, account_field, rules[{line, code|prefix|from+to,
+            account_class, sign, attributes}]} (adds gl_map.line / gl_map.sign / gl_map.<attribute> to each row; tenant rules
+            from config-service namespace regulatory_reporting key gl_mapping.<table> take precedence), from[{source, key,
+            filter, sum {field: expr}, first {field: expr}}] (COMBINE: groups earlier sources by key)}'
         field_mappings:
           type: array
           items: {}
-          description: Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter
-            (row condition), expression (over other cells), scale, type NUMBER|TEXT}
+          description: 'Cells {cell_ref, label, row, column, source, aggregate SUM|COUNT|COUNT_DISTINCT|AVG|MIN|MAX|FIRST|TOP,
+            value (row expression), filter (row condition), order_by and rank (TOP: value of the rank-th largest row), expression
+            (over other cells), scale, type NUMBER|TEXT}'
         validation_rules:
           type:
           - array
@@ -59804,6 +59834,20 @@ components:
           - string
           - 'null'
           description: Why the version was rejected (the maker creates a new version)
+          readOnly: true
+        pack_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Regulatory pack version that created the version (empty = authored by the tenant)
+          readOnly: true
+        pack_checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checksum of the pack's version content (sources, mappings, rules, GL mapping table)
           readOnly: true
         custom_field_1:
           type:
@@ -59907,8 +59951,8 @@ components:
         report_family:
           type: string
           maxLength: 40
-          description: BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE,
-            OTHER
+          description: BALANCE_SHEET, INCOME_STATEMENT, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, AML_SAR, COMPLAINTS,
+            PAYMENTS_STATS, MOBILE_MONEY, CRS, FATCA, DEPOSIT_INSURANCE, OTHER
         frequency:
           type: string
           enum:
@@ -59943,6 +59987,24 @@ components:
           type: integer
           format: int32
           description: Jurisdiction-specific extension in calendar days added to the deadline
+        business_day_convention:
+          type: string
+          enum:
+          - FOLLOWING
+          - MODIFIED_FOLLOWING
+          - PRECEDING
+          - NONE
+          description: 'How a due date on a weekend or holiday moves: FOLLOWING (next business day), MODIFIED_FOLLOWING (next,
+            unless that leaves the month, then previous), PRECEDING (previous business day), NONE (kept)'
+        holidays:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: date
+          description: Regulator's non-business days besides Saturdays and Sundays (ISO dates), used to count business days
+            and roll due dates
         status:
           type: string
           enum:
@@ -59975,6 +60037,28 @@ components:
           - 'null'
           maxLength: 64
           description: Accountable owner (finance / compliance)
+        pack_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Regulatory pack that installed the definition (empty = tenant-defined; pack upgrades only touch pack-owned
+            definitions)
+          readOnly: true
+        pack_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Version of the pack that last installed or upgraded the definition
+          readOnly: true
+        pack_checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checksum of the pack's definition-level fields last applied (detects pack changes on upgrade)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -60019,6 +60103,7 @@ components:
       - frequency
       - format
       - filing_offset_days
+      - business_day_convention
       - status
     ReportRun:
       type: object
@@ -60549,6 +60634,158 @@ components:
       - report_output_id
       - channel
       - status
+    RegulatoryPackInstallation:
+      type: object
+      description: A versioned regulatory pack (report definitions, versions with mappings and validation rules, filing calendar,
+        GL mapping tables) installed into the tenant; one row per pack, updated by every install or upgrade
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        pack_code:
+          type: string
+          maxLength: 32
+          description: Pack code, e.g. KE_CBK
+          readOnly: true
+        pack_version:
+          type: string
+          maxLength: 32
+          description: Pack version installed last
+          readOnly: true
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Market of the pack (ISO 3166-1 alpha-2)
+          readOnly: true
+        regulator:
+          type: string
+          maxLength: 64
+          description: Regulator / authority
+          readOnly: true
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity the installation was made for (filing calendar default)
+          readOnly: true
+        report_count:
+          type: integer
+          format: int32
+          description: Reports in the installed pack version
+          readOnly: true
+        pending_version_count:
+          type: integer
+          format: int32
+          description: Pack versions created by the last install still waiting for publication (four eyes)
+          readOnly: true
+        installed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who installed the pack first
+          readOnly: true
+        installed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: First installation
+          readOnly: true
+        upgraded_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who applied the last install or upgrade
+          readOnly: true
+        upgraded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last install or upgrade
+          readOnly: true
+        last_result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Outcome of the last install per report (created, updated, unchanged, skipped, retired)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - pack_code
+      - pack_version
+      - country
+      - regulator
+      - report_count
+      - pending_version_count
     AnalyticsExportJob:
       type: object
       description: Asynchronous export of a saved query's results to a file

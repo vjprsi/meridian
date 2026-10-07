@@ -37,11 +37,16 @@ CREATE TABLE report_definition (
   format                       varchar(40) NOT NULL CHECK (format IN ('XBRL', 'XML', 'CSV', 'XLSX', 'JSON', 'PDF', 'FIXED_WIDTH')),
   deadline_rule                varchar(64),
   filing_offset_days           integer NOT NULL DEFAULT 0,
+  business_day_convention      varchar(40) NOT NULL DEFAULT 'FOLLOWING' CHECK (business_day_convention IN ('FOLLOWING', 'MODIFIED_FOLLOWING', 'PRECEDING', 'NONE')),
+  holidays                     jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'DEPRECATED')),
   active_version               integer,
   status_reason                text,
   description                  text,
   owner                        varchar(64),
+  pack_code                    varchar(32),
+  pack_version                 varchar(32),
+  pack_checksum                varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -62,16 +67,21 @@ COMMENT ON COLUMN report_definition.name IS 'Report name';
 COMMENT ON COLUMN report_definition.country_pack IS 'Country pack code, e.g. NG, KE, BR, GB';
 COMMENT ON COLUMN report_definition.jurisdiction IS 'Jurisdiction';
 COMMENT ON COLUMN report_definition.regulator IS 'Regulator / authority';
-COMMENT ON COLUMN report_definition.report_family IS 'BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER';
+COMMENT ON COLUMN report_definition.report_family IS 'BALANCE_SHEET, INCOME_STATEMENT, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, AML_SAR, COMPLAINTS, PAYMENTS_STATS, MOBILE_MONEY, CRS, FATCA, DEPOSIT_INSURANCE, OTHER';
 COMMENT ON COLUMN report_definition.frequency IS 'Frequency';
 COMMENT ON COLUMN report_definition.format IS 'Submission format (XBRL, XML, CSV and JSON are rendered by the service)';
 COMMENT ON COLUMN report_definition.deadline_rule IS 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency';
 COMMENT ON COLUMN report_definition.filing_offset_days IS 'Jurisdiction-specific extension in calendar days added to the deadline';
+COMMENT ON COLUMN report_definition.business_day_convention IS 'How a due date on a weekend or holiday moves: FOLLOWING (next business day), MODIFIED_FOLLOWING (next, unless that leaves the month, then previous), PRECEDING (previous business day), NONE (kept)';
+COMMENT ON COLUMN report_definition.holidays IS 'Regulator''s non-business days besides Saturdays and Sundays (ISO dates), used to count business days and roll due dates';
 COMMENT ON COLUMN report_definition.status IS 'Status (ACTIVE on first publication, DEPRECATED by deprecate)';
 COMMENT ON COLUMN report_definition.active_version IS 'Version currently in force';
 COMMENT ON COLUMN report_definition.status_reason IS 'Reason of the last status change (deprecation)';
 COMMENT ON COLUMN report_definition.description IS 'Purpose and scope';
 COMMENT ON COLUMN report_definition.owner IS 'Accountable owner (finance / compliance)';
+COMMENT ON COLUMN report_definition.pack_code IS 'Regulatory pack that installed the definition (empty = tenant-defined; pack upgrades only touch pack-owned definitions)';
+COMMENT ON COLUMN report_definition.pack_version IS 'Version of the pack that last installed or upgraded the definition';
+COMMENT ON COLUMN report_definition.pack_checksum IS 'Checksum of the pack''s definition-level fields last applied (detects pack changes on upgrade)';
 COMMENT ON COLUMN report_definition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -79,6 +89,7 @@ COMMENT ON COLUMN report_definition.custom_field_4 IS 'Tenant-defined custom fie
 COMMENT ON COLUMN report_definition.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_report_definition_tenant ON report_definition (tenant_id, created_at);
 CREATE INDEX ix_report_definition_country_pack ON report_definition (country_pack);
+CREATE INDEX ix_report_definition_pack_code ON report_definition (pack_code);
 ALTER TABLE report_definition ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON report_definition USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_report_definition_touch BEFORE UPDATE ON report_definition FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -108,6 +119,8 @@ CREATE TABLE report_definition_version (
   rejected_by                  varchar(64),
   rejected_at                  timestamptz,
   rejection_reason             text,
+  pack_version                 varchar(32),
+  pack_checksum                varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -126,8 +139,8 @@ COMMENT ON COLUMN report_definition_version.row_version IS 'Optimistic lock vers
 COMMENT ON COLUMN report_definition_version.report_definition_id IS 'Report definition';
 COMMENT ON COLUMN report_definition_version.definition_version IS 'Version number (server-assigned, 1, 2, ...)';
 COMMENT ON COLUMN report_definition_version.template_document_id IS 'Template file (XBRL taxonomy entry point, XLSX, XSD)';
-COMMENT ON COLUMN report_definition_version.data_sources IS 'Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}';
-COMMENT ON COLUMN report_definition_version.field_mappings IS 'Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT}';
+COMMENT ON COLUMN report_definition_version.data_sources IS 'Data sources {name, type SERVICE|INLINE|COMBINE, service, path with {as_of_date} {period_start} {period_end} {period_start_ts} {period_end_ts} (exclusive) {legal_entity_id} {reporting_year} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE), resolve {param: {service, path, match, field}} (looks up a missing run parameter, e.g. the GL period of period_end), gl_mapping {table, account_field, rules[{line, code|prefix|from+to, account_class, sign, attributes}]} (adds gl_map.line / gl_map.sign / gl_map.<attribute> to each row; tenant rules from config-service namespace regulatory_reporting key gl_mapping.<table> take precedence), from[{source, key, filter, sum {field: expr}, first {field: expr}}] (COMBINE: groups earlier sources by key)}';
+COMMENT ON COLUMN report_definition_version.field_mappings IS 'Cells {cell_ref, label, row, column, source, aggregate SUM|COUNT|COUNT_DISTINCT|AVG|MIN|MAX|FIRST|TOP, value (row expression), filter (row condition), order_by and rank (TOP: value of the rank-th largest row), expression (over other cells), scale, type NUMBER|TEXT}';
 COMMENT ON COLUMN report_definition_version.validation_rules IS 'Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message}';
 COMMENT ON COLUMN report_definition_version.xbrl_taxonomy IS 'XBRL taxonomy and entry point, when XBRL';
 COMMENT ON COLUMN report_definition_version.effective_from IS 'First reporting date this version applies to';
@@ -139,6 +152,8 @@ COMMENT ON COLUMN report_definition_version.approved_at IS 'Publication time';
 COMMENT ON COLUMN report_definition_version.rejected_by IS 'Checker who rejected the version';
 COMMENT ON COLUMN report_definition_version.rejected_at IS 'Rejection time';
 COMMENT ON COLUMN report_definition_version.rejection_reason IS 'Why the version was rejected (the maker creates a new version)';
+COMMENT ON COLUMN report_definition_version.pack_version IS 'Regulatory pack version that created the version (empty = authored by the tenant)';
+COMMENT ON COLUMN report_definition_version.pack_checksum IS 'Checksum of the pack''s version content (sources, mappings, rules, GL mapping table)';
 COMMENT ON COLUMN report_definition_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -632,6 +647,65 @@ CREATE INDEX ix_crs_fatca_record_report_run_id ON crs_fatca_record (report_run_i
 ALTER TABLE crs_fatca_record ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON crs_fatca_record USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_crs_fatca_record_touch BEFORE UPDATE ON crs_fatca_record FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- regulatory_pack_installation: A versioned regulatory pack (report definitions, versions with mappings and validation rules, filing calendar, GL mapping tables) installed into the tenant; one row per pack, updated by every install or upgrade
+CREATE TABLE regulatory_pack_installation (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  pack_code                    varchar(32) NOT NULL,
+  pack_version                 varchar(32) NOT NULL,
+  country                      char(2) NOT NULL,
+  regulator                    varchar(64) NOT NULL,
+  legal_entity_id              uuid,
+  report_count                 integer NOT NULL DEFAULT 0,
+  pending_version_count        integer NOT NULL DEFAULT 0,
+  installed_by                 varchar(64),
+  installed_at                 timestamptz,
+  upgraded_by                  varchar(64),
+  upgraded_at                  timestamptz,
+  last_result                  jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_regulatory_pack_installation_1 UNIQUE (tenant_id, pack_code)
+);
+COMMENT ON TABLE regulatory_pack_installation IS 'A versioned regulatory pack (report definitions, versions with mappings and validation rules, filing calendar, GL mapping tables) installed into the tenant; one row per pack, updated by every install or upgrade';
+COMMENT ON COLUMN regulatory_pack_installation.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN regulatory_pack_installation.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN regulatory_pack_installation.created_at IS 'Creation time';
+COMMENT ON COLUMN regulatory_pack_installation.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN regulatory_pack_installation.updated_at IS 'Last update time';
+COMMENT ON COLUMN regulatory_pack_installation.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN regulatory_pack_installation.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN regulatory_pack_installation.pack_code IS 'Pack code, e.g. KE_CBK';
+COMMENT ON COLUMN regulatory_pack_installation.pack_version IS 'Pack version installed last';
+COMMENT ON COLUMN regulatory_pack_installation.country IS 'Market of the pack';
+COMMENT ON COLUMN regulatory_pack_installation.regulator IS 'Regulator / authority';
+COMMENT ON COLUMN regulatory_pack_installation.legal_entity_id IS 'Legal entity the installation was made for (filing calendar default)';
+COMMENT ON COLUMN regulatory_pack_installation.report_count IS 'Reports in the installed pack version';
+COMMENT ON COLUMN regulatory_pack_installation.pending_version_count IS 'Pack versions created by the last install still waiting for publication (four eyes)';
+COMMENT ON COLUMN regulatory_pack_installation.installed_by IS 'Who installed the pack first';
+COMMENT ON COLUMN regulatory_pack_installation.installed_at IS 'First installation';
+COMMENT ON COLUMN regulatory_pack_installation.upgraded_by IS 'Who applied the last install or upgrade';
+COMMENT ON COLUMN regulatory_pack_installation.upgraded_at IS 'Last install or upgrade';
+COMMENT ON COLUMN regulatory_pack_installation.last_result IS 'Outcome of the last install per report (created, updated, unchanged, skipped, retired)';
+COMMENT ON COLUMN regulatory_pack_installation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN regulatory_pack_installation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN regulatory_pack_installation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN regulatory_pack_installation.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN regulatory_pack_installation.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_regulatory_pack_installation_tenant ON regulatory_pack_installation (tenant_id, created_at);
+CREATE INDEX ix_regulatory_pack_installation_legal_entity_id ON regulatory_pack_installation (legal_entity_id);
+ALTER TABLE regulatory_pack_installation ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON regulatory_pack_installation USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_regulatory_pack_installation_touch BEFORE UPDATE ON regulatory_pack_installation FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- report_job_run: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
 CREATE TABLE report_job_run (

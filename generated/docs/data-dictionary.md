@@ -12610,16 +12610,21 @@ API: /v1/reporting/definitions · Requirements: REG-01
 | country_pack | varchar(16) | no |  | country_pack | Country pack code, e.g. NG, KE, BR, GB |
 | jurisdiction | char(2) | no |  | jurisdiction | Jurisdiction |
 | regulator | varchar(64) | no |  | regulator | Regulator / authority |
-| report_family | varchar(40) | no |  | report_family | BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER |
+| report_family | varchar(40) | no |  | report_family | BALANCE_SHEET, INCOME_STATEMENT, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, AML_SAR, COMPLAINTS, PAYMENTS_STATS, MOBILE_MONEY, CRS, FATCA, DEPOSIT_INSURANCE, OTHER |
 | frequency | varchar(40) (ReportFrequency) | no |  | frequency | Frequency |
 | format | varchar(40) (ReportFormat) | no |  | format | Submission format (XBRL, XML, CSV and JSON are rendered by the service) |
 | deadline_rule | varchar(64) | yes |  | deadline_rule | Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency |
 | filing_offset_days | integer | no |  | filing_offset_days | Jurisdiction-specific extension in calendar days added to the deadline |
+| business_day_convention | varchar(40) (FilingDayConvention) | no |  | business_day_convention | How a due date on a weekend or holiday moves: FOLLOWING (next business day), MODIFIED_FOLLOWING (next, unless that leaves the month, then previous), PRECEDING (previous business day), NONE (kept) |
+| holidays | jsonb | yes |  | holidays | Regulator's non-business days besides Saturdays and Sundays (ISO dates), used to count business days and roll due dates |
 | status | varchar(40) (ReportDefinitionStatus) | no |  | status (read-only) | Status (ACTIVE on first publication, DEPRECATED by deprecate) |
 | active_version | integer | yes |  | active_version (read-only) | Version currently in force |
 | status_reason | text | yes |  | status_reason (read-only) | Reason of the last status change (deprecation) |
 | description | text | yes |  | description | Purpose and scope |
 | owner | varchar(64) | yes |  | owner | Accountable owner (finance / compliance) |
+| pack_code | varchar(32) | yes |  | pack_code (read-only) | Regulatory pack that installed the definition (empty = tenant-defined; pack upgrades only touch pack-owned definitions) |
+| pack_version | varchar(32) | yes |  | pack_version (read-only) | Version of the pack that last installed or upgraded the definition |
+| pack_checksum | varchar(64) | yes |  | pack_checksum (read-only) | Checksum of the pack's definition-level fields last applied (detects pack changes on upgrade) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12644,8 +12649,8 @@ API: /v1/reporting/definition-versions · Requirements: REG-01, REG-02, REG-03
 | report_definition_id | uuid | no | FK → report_definition | report_definition_id | Report definition |
 | definition_version | integer | no |  | definition_version (read-only) | Version number (server-assigned, 1, 2, ...) |
 | template_document_id | uuid | yes | ref → document | template_document_id | Template file (XBRL taxonomy entry point, XLSX, XSD) |
-| data_sources | jsonb | no |  | data_sources | Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)} |
-| field_mappings | jsonb | no |  | field_mappings | Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT} |
+| data_sources | jsonb | no |  | data_sources | Data sources {name, type SERVICE|INLINE|COMBINE, service, path with {as_of_date} {period_start} {period_end} {period_start_ts} {period_end_ts} (exclusive) {legal_entity_id} {reporting_year} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE), resolve {param: {service, path, match, field}} (looks up a missing run parameter, e.g. the GL period of period_end), gl_mapping {table, account_field, rules[{line, code|prefix|from+to, account_class, sign, attributes}]} (adds gl_map.line / gl_map.sign / gl_map.<attribute> to each row; tenant rules from config-service namespace regulatory_reporting key gl_mapping.<table> take precedence), from[{source, key, filter, sum {field: expr}, first {field: expr}}] (COMBINE: groups earlier sources by key)} |
+| field_mappings | jsonb | no |  | field_mappings | Cells {cell_ref, label, row, column, source, aggregate SUM|COUNT|COUNT_DISTINCT|AVG|MIN|MAX|FIRST|TOP, value (row expression), filter (row condition), order_by and rank (TOP: value of the rank-th largest row), expression (over other cells), scale, type NUMBER|TEXT} |
 | validation_rules | jsonb | yes |  | validation_rules | Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message} |
 | xbrl_taxonomy | varchar(255) | yes |  | xbrl_taxonomy | XBRL taxonomy and entry point, when XBRL |
 | effective_from | date | no |  | effective_from | First reporting date this version applies to |
@@ -12657,6 +12662,8 @@ API: /v1/reporting/definition-versions · Requirements: REG-01, REG-02, REG-03
 | rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the version |
 | rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
 | rejection_reason | text | yes |  | rejection_reason (read-only) | Why the version was rejected (the maker creates a new version) |
+| pack_version | varchar(32) | yes |  | pack_version (read-only) | Regulatory pack version that created the version (empty = authored by the tenant) |
+| pack_checksum | varchar(64) | yes |  | pack_checksum (read-only) | Checksum of the pack's version content (sources, mappings, rules, GL mapping table) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12923,6 +12930,39 @@ API: /v1/reporting/crs-fatca-records · Requirements: REG-01
 | is_undocumented | boolean | no |  | is_undocumented | Undocumented account |
 | is_closed | boolean | no |  | is_closed | Account closed in the year |
 | report_run_id | uuid | yes | FK → report_run | report_run_id | Run that reported it |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `regulatory_pack_installation`
+
+A versioned regulatory pack (report definitions, versions with mappings and validation rules, filing calendar, GL mapping tables) installed into the tenant; one row per pack, updated by every install or upgrade
+
+API: /v1/reporting/pack-installations · Requirements: REG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| pack_code | varchar(32) | no |  | pack_code (read-only) | Pack code, e.g. KE_CBK |
+| pack_version | varchar(32) | no |  | pack_version (read-only) | Pack version installed last |
+| country | char(2) | no |  | country (read-only) | Market of the pack |
+| regulator | varchar(64) | no |  | regulator (read-only) | Regulator / authority |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id (read-only) | Legal entity the installation was made for (filing calendar default) |
+| report_count | integer | no |  | report_count (read-only) | Reports in the installed pack version |
+| pending_version_count | integer | no |  | pending_version_count (read-only) | Pack versions created by the last install still waiting for publication (four eyes) |
+| installed_by | varchar(64) | yes |  | installed_by (read-only) | Who installed the pack first |
+| installed_at | timestamptz | yes |  | installed_at (read-only) | First installation |
+| upgraded_by | varchar(64) | yes |  | upgraded_by (read-only) | Who applied the last install or upgrade |
+| upgraded_at | timestamptz | yes |  | upgraded_at (read-only) | Last install or upgrade |
+| last_result | jsonb | yes |  | last_result (read-only) | Outcome of the last install per report (created, updated, unchanged, skipped, retired) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
