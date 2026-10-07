@@ -102,6 +102,22 @@ class TenantFilterTest {
         assertThat(seen.get()).isNull();
     }
 
+    @Test
+    void callingServiceHeaderIsHonouredOnlyWithAnInternalToken() throws Exception {
+        for (Object[] c : new Object[][] {{jwt("meridian-service", "meridian:internal"), "deposit-service"},
+                {jwt("meridian-console", "ledger:write platform:write"), null}}) {
+            SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken((Jwt) c[0]));
+            MockHttpServletRequest req = new MockHttpServletRequest();
+            req.addHeader(TenantFilter.TENANT_HEADER, HOME);
+            req.addHeader(TenantFilter.SERVICE_HEADER, "deposit-service");
+            AtomicReference<String> seen = new AtomicReference<>("unset");
+            filter.doFilter(req, new MockHttpServletResponse(),
+                    (rq, rs) -> seen.set(TenantContext.callingService().orElse(null)));
+            assertThat(seen.get()).isEqualTo(c[1]);
+            assertThat(TenantContext.callingService()).isEmpty();                   // cleared after the request
+        }
+    }
+
     private static Jwt jwtWithCustomer(String azp, String scope) {
         return Jwt.withTokenValue("t").header("alg", "none").subject("user-1").claim("azp", azp)
                 .claim("scope", scope).claim("tenant_id", HOME).claim("customer_id", UUID.randomUUID().toString())

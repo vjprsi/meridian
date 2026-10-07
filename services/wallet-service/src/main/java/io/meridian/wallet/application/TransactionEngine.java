@@ -766,7 +766,49 @@ public class TransactionEngine {
      * also refunds fee and tax). The checker must differ from the reversal maker, or from the original initiator.
      */
     public ObjectNode reverse(UUID id, String reason, BigDecimal requested) {
-        ObjectNode row = rows.get(TABLE, id);
+        String me = TenantContext.principal();
+        // SEC-07: phase 1 reserves the amount under the original's row lock (remaining = amount - reversed_amount,
+        // re-checked under the lock) and records the reversal as PROCESSING before anything is posted, so concurrent
+        // reversals can never together exceed the original. CHECK (reversed_amount <= amount) is the backstop.
+        Reservation r = tx.execute(s -> reserveReversal(id, reason, requested, me));
+        UUID je;
+        try {
+            // deterministic key derived from the reserved reversal row: a retry of this reversal never posts twice
+            je = ledger.post("wtx-" + r.revId() + "-post", "REVERSAL", "Reversal of " + Rows.str(r.original(), "reference")
+                            + (reason == null ? "" : ": " + reason), Rows.str(r.original(), "currency"), r.ref(),
+                    "WALLET_TRANSACTION", r.revId(), r.lines());
+        } catch (ApiException e) {
+            if (e.status() < 500) {
+                // the ledger refused the posting: nothing moved, give the reserved amount back
+                tx.executeWithoutResult(s -> releaseReversal(id, r, e));
+            }
+            // 5xx / unknown outcome: the reservation stays (PROCESSING) so no second reversal can exceed the original
+            throw e;
+        }
+        ObjectNode result = tx.execute(s -> {
+            rows.lock(TABLE, id);
+            ObjectNode v = rows.object();
+            v.put("status", "COMPLETED");
+            v.put("journal_entry_id", je.toString());
+            rows.update(TABLE, r.revId(), v);
+            rows.execute("update wallet_transaction set completed_at = now() where id = ?", r.revId());
+            ObjectNode revRow = rows.get(TABLE, r.revId());
+            writeLegs(revRow, r.lines(), je);
+            ObjectNode after = rows.get(TABLE, id);
+            events.publish("wallets.wallet_transaction.reversed", TABLE, after);
+            events.publish("wallets.wallet_transaction.completed", TABLE, revRow);
+            return revRow;
+        });
+        approvals.cancelOpen(REVERSAL_RESOURCE, id, null, "reversed directly");
+        return result;
+    }
+
+    /** A reversal reserved on the original transaction, not yet posted. */
+    private record Reservation(UUID revId, String ref, BigDecimal amount, boolean full, ObjectNode original,
+                               List<LedgerClient.Line> lines) {}
+
+    private Reservation reserveReversal(UUID id, String reason, BigDecimal requested, String me) {
+        ObjectNode row = rows.lock(TABLE, id);
         if (!"COMPLETED".equals(Rows.str(row, "status"))) {
             throw ApiException.conflict("invalid_transition", "Only a completed transaction can be reversed");
         }
@@ -774,7 +816,6 @@ public class TransactionEngine {
             throw ApiException.unprocessable("cannot_reverse_reversal", "A reversal cannot itself be reversed");
         }
         String maker = Rows.str(row, "reversal_requested_by");
-        String me = TenantContext.principal();
         if (maker != null ? maker.equals(me) : me.equals(Rows.str(row, "initiated_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", maker != null
                     ? "The reversal must be approved by a different user than the one who requested it"
@@ -794,59 +835,69 @@ public class TransactionEngine {
             LedgerClient.Line l = original.get(i);
             lines.add(new LedgerClient.Line(l.account(), "DEBIT", l.amount(), l.description()));
         }
-        UUID je = ledger.post("wtx-" + revId + "-post", "REVERSAL", "Reversal of " + Rows.str(row, "reference")
-                        + (reason == null ? "" : ": " + reason), Rows.str(row, "currency"), ref, "WALLET_TRANSACTION",
-                revId, lines);
-        ObjectNode result = tx.execute(s -> {
-            ObjectNode cur = rows.lock(TABLE, id);
-            ObjectNode rv = rows.object();
-            rv.put("id", revId.toString());
-            rv.put("reference", ref);
-            rv.put("txn_type", "REVERSAL");
-            rv.put("status", "COMPLETED");
-            rv.put("channel", "SYSTEM");
-            rv.put("initiator_type", "STAFF");
-            rv.put("initiated_by", me);
-            copy(cur, rv, "payee_wallet_id", "payer_wallet_id");
-            copy(cur, rv, "payer_wallet_id", "payee_wallet_id");
-            copy(cur, rv, "counterparty_ledger_account_id", "counterparty_ledger_account_id");
-            copy(cur, rv, "agent_id", "agent_id");
-            copy(cur, rv, "merchant_id", "merchant_id");
-            copy(cur, rv, "biller_id", "biller_id");
-            rv.put("amount", amt.toPlainString());
-            rv.put("currency", Rows.str(cur, "currency"));
-            rv.put("fee_amount", refundFees ? Rows.str(cur, "fee_amount") : "0");
-            rv.put("tax_amount", refundFees ? Rows.str(cur, "tax_amount") : "0");
-            rv.put("total_debit_amount", amt.toPlainString());
-            rv.put("original_transaction_id", id.toString());
-            rv.put("journal_entry_id", je.toString());
-            rv.put("idempotency_key", "reversal:" + revId);
-            rv.put("description", ("Reversal of " + Rows.str(cur, "reference") + (reason == null ? "" : ": " + reason)));
-            if (rv.get("description").asString().length() > 255) {
-                rv.put("description", rv.get("description").asString().substring(0, 255));
+        ObjectNode rv = rows.object();
+        rv.put("id", revId.toString());
+        rv.put("reference", ref);
+        rv.put("txn_type", "REVERSAL");
+        rv.put("status", "PROCESSING");
+        rv.put("channel", "SYSTEM");
+        rv.put("initiator_type", "STAFF");
+        rv.put("initiated_by", me);
+        copy(row, rv, "payee_wallet_id", "payer_wallet_id");
+        copy(row, rv, "payer_wallet_id", "payee_wallet_id");
+        copy(row, rv, "counterparty_ledger_account_id", "counterparty_ledger_account_id");
+        copy(row, rv, "agent_id", "agent_id");
+        copy(row, rv, "merchant_id", "merchant_id");
+        copy(row, rv, "biller_id", "biller_id");
+        rv.put("amount", amt.toPlainString());
+        rv.put("currency", Rows.str(row, "currency"));
+        rv.put("fee_amount", refundFees ? Rows.str(row, "fee_amount") : "0");
+        rv.put("tax_amount", refundFees ? Rows.str(row, "tax_amount") : "0");
+        rv.put("total_debit_amount", amt.toPlainString());
+        rv.put("original_transaction_id", id.toString());
+        rv.put("idempotency_key", "reversal:" + revId);
+        rv.put("description", ("Reversal of " + Rows.str(row, "reference") + (reason == null ? "" : ": " + reason)));
+        if (rv.get("description").asString().length() > 255) {
+            rv.put("description", rv.get("description").asString().substring(0, 255));
+        }
+        rows.insert(TABLE, rv);
+        ObjectNode v = rows.object();
+        v.put("reversed_amount", dec(row, "reversed_amount").add(amt).toPlainString());
+        if (full) {
+            v.put("status", "REVERSED");
+        }
+        v.putNull("reversal_requested_by");
+        v.putNull("reversal_requested_amount");
+        v.putNull("reversal_requested_at");
+        if (reason != null) {
+            v.put("reversal_reason", reason);
+        }
+        rows.update(TABLE, id, v);
+        return new Reservation(revId, ref, amt, full, row, lines);
+    }
+
+    /** Gives back a reservation whose posting the ledger refused; a pending reversal request is restored. */
+    private void releaseReversal(UUID id, Reservation r, ApiException cause) {
+        ObjectNode cur = rows.lock(TABLE, id);
+        ObjectNode v = rows.object();
+        v.put("reversed_amount", dec(cur, "reversed_amount").subtract(r.amount()).toPlainString());
+        if (r.full()) {
+            v.put("status", "COMPLETED");
+        }
+        for (String f : List.of("reversal_requested_by", "reversal_requested_amount", "reversal_requested_at", "reversal_reason")) {
+            if (r.original().hasNonNull(f)) {
+                v.set(f, r.original().get(f));
+            } else {
+                v.putNull(f);
             }
-            rows.insert(TABLE, rv);
-            rows.execute("update wallet_transaction set completed_at = now() where id = ?", revId);
-            ObjectNode revRow = rows.get(TABLE, revId);
-            writeLegs(revRow, lines, je);
-            ObjectNode v = rows.object();
-            v.put("reversed_amount", dec(cur, "reversed_amount").add(amt).toPlainString());
-            if (full) {
-                v.put("status", "REVERSED");
-            }
-            v.putNull("reversal_requested_by");
-            v.putNull("reversal_requested_amount");
-            v.putNull("reversal_requested_at");
-            if (reason != null) {
-                v.put("reversal_reason", reason);
-            }
-            ObjectNode after = rows.update(TABLE, id, v);
-            events.publish("wallets.wallet_transaction.reversed", TABLE, after);
-            events.publish("wallets.wallet_transaction.completed", TABLE, revRow);
-            return revRow;
-        });
-        approvals.cancelOpen(REVERSAL_RESOURCE, id, null, "reversed directly");
-        return result;
+        }
+        rows.update(TABLE, id, v);
+        ObjectNode failed = rows.object();
+        failed.put("status", "FAILED");
+        failed.put("failure_code", cause.code());
+        String msg = cause.getMessage() == null ? cause.code() : cause.getMessage();
+        failed.put("failure_reason", msg.length() > 255 ? msg.substring(0, 255) : msg);
+        rows.update(TABLE, r.revId(), failed);
     }
 
     private static void copy(ObjectNode from, ObjectNode to, String src, String dst) {

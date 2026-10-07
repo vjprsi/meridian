@@ -30,7 +30,7 @@ public class FxQuotesController implements FxQuotesApi {
     @Override
     public ResponseEntity<FxDeal> fxQuotesAccept(UUID id, String idempotencyKey, FxQuotesAcceptRequest body) {
         return actions.action(idempotencyKey, id, "accept", body, FxDeal.class,
-                () -> quotes.accept(id, Rows.uuid(actions.tree(body), "payment_id")));
+                () -> quotes.accept(id, actions.tree(body)));
     }
 
     @Override

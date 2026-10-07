@@ -514,6 +514,57 @@ class WorkflowFlowIT {
         assertThat(claim.statusCode()).isEqualTo(404);
     }
 
+    // ------------------------------------------------------------------ SEC-03 who may open a request
+
+    /** Set to null to send requests without the automatic owning-service header (a user token). */
+    String asService = "auto";
+
+    @Test
+    @Order(50)
+    void onlyTheOwningServiceOpensRequestsForItsResourceTypes() throws Exception {
+        String elevate = """
+                {"resource_type":"user_role","resource_id":"%s","action":"elevate","title":"Benign title",
+                 "payload":{"user_id":"%s","role_id":"%s","duration_minutes":10000000}}"""
+                .formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        // a user (any platform:write holder) cannot forge a service-owned request
+        assertThat(post("/v1/approval-requests", elevate, "mallory", "", 403).get("code").asString())
+                .isEqualTo("service_owned_resource_type");
+        // another service cannot open requests for identity-service's types
+        assertThat(postAs("payment-service", elevate, 403).get("code").asString()).isEqualTo("not_resource_owner");
+        // unregistered types are refused even for services
+        assertThat(postAs("payment-service", """
+                {"resource_type":"made_up","action":"x","title":"x","payload":{}}""", 403).get("code").asString())
+                .isEqualTo("unregistered_resource_type");
+        // the owner can; the request records it, so only identity-service's handler acts on the decision
+        JsonNode ok = postAs("identity-service", elevate, 201);
+        assertThat(ok.get("owner_service").asString()).isEqualTo("identity-service");
+        assertThat(ok.get("maker").asString()).isEqualTo("mallory");
+        // a body cannot choose the owner
+        JsonNode spoof = postAs("payment-service", """
+                {"resource_type":"payment","action":"release","title":"x","payload":{},"owner_service":"identity-service",
+                 "amount":"1","currency":"USD"}""", 201);
+        assertThat(spoof.get("owner_service").asString()).isEqualTo("payment-service");
+    }
+
+    @Test
+    @Order(51)
+    void aRequestWithoutAnAmountGetsEveryLevel() throws Exception {
+        JsonNode req = postAs("payment-service", """
+                {"resource_type":"payment","action":"release","title":"No amount","payload":{"payment_id":"p-9"}}""", 201);
+        assertThat(req.get("required_approvals").asInt()).isEqualTo(2);
+        assertThat(req.get("approval_route")).hasSize(2);
+    }
+
+    private JsonNode postAs(String service, String body, int expected) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/approval-requests"))
+                .header("X-Tenant-Id", TENANT).header("X-User", "mallory").header("Content-Type", "application/json")
+                .header("Idempotency-Key", key()).header("X-Meridian-Service", service)
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(expected);
+        return json.readTree(r.body());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String newRequest(String maker) throws Exception {
@@ -573,6 +624,14 @@ class WorkflowFlowIT {
                 .header("X-Tenant-Id", tenant).header("X-User", user).header("Content-Type", "application/json");
         if (roles != null && !roles.isEmpty()) {
             b.header("X-Roles", roles);
+        }
+        // approval requests are opened by the owning service with its service identity (SEC-03), as Approvals does
+        if ("POST".equals(method) && "/v1/approval-requests".equals(path) && body != null && asService != null) {
+            String type = json.readTree(body).path("resource_type").asString("");
+            String owner = "payment".equals(type) ? "payment-service" : "config_entry".equals(type) ? "config-service" : null;
+            if (owner != null) {
+                b.header("X-Meridian-Service", owner);
+            }
         }
         if (key != null) {
             b.header("Idempotency-Key", key);

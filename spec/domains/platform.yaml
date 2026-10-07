@@ -27,6 +27,7 @@ enums:
   StaffUserType: [STAFF, PLATFORM_OPERATOR, AGENT_STAFF, AUDITOR, SERVICE_ACCOUNT]
   RoleType: [SYSTEM, CUSTOM]
   RoleScopeType: [TENANT, LEGAL_ENTITY, BRANCH]
+  PrivilegedChangeStatus: [PENDING, APPLIED, REJECTED, CANCELLED, FAILED]
   PolicyEffect: [ALLOW, DENY]
   SsoProtocol: [OIDC, SAML2]
   ProviderIntegrationStatus: [ACTIVE, INACTIVE, ERROR, TESTING]
@@ -532,6 +533,21 @@ services:
           - "granted_by string(64) ro | Who granted it"
           - "approval_request_id uuid ref=approval_request ro | Approval for privileged roles"
           - "justification string(500) | Business justification"
+
+      - name: privileged_change
+        prefix: pch
+        description: A privileged identity change (elevation, role permission grant, MFA reset) as submitted by its maker; executed from this record, never from the approval payload (SEC-03)
+        fr: [ADM-02, ADM-03]
+        columns:
+          - "operation string(64) nn ro | resource_type/action, e.g. user_role/elevate, role/add_permissions, app_user/reset_mfa"
+          - "resource_id uuid nn idx ro | User or role the change applies to"
+          - "details json nn ro | What was requested, as validated at submission (role_id, duration_minutes, permission_ids, ...)"
+          - "requested_by string(64) nn ro | Maker (principal that submitted the change)"
+          - "approval_request_id uuid nn uq ref=approval_request ro | Central approval request deciding this change"
+          - "status enum:PrivilegedChangeStatus nn default=PENDING ro | Lifecycle"
+          - "decided_by string(64) ro | Checker whose approval executed (or rejected) the change"
+          - "decided_at ts ro | Decision time"
+          - "failure_reason string(255) ro | Why an approved change could not be applied"
 
       - name: access_policy
         prefix: apo
@@ -1392,11 +1408,12 @@ services:
           - "summary text | Human-readable description of the change"
           - "payload json nn | Operation to execute once approved"
           - "diff json | Before/after diff for updates"
-          - "amount amount | Amount, for threshold routing"
+          - "amount amount | Amount, for threshold routing (a request without an amount gets every level of an amount-tiered policy)"
           - "currency currency | Currency of the amount"
           - "priority enum:WorkTaskPriority nn default=NORMAL | Priority"
           - "status enum:ApprovalRequestStatus nn default=PENDING ro | Status"
           - "maker string(64) nn ro | Requesting user"
+          - "owner_service string(64) ro | Service that owns the resource type and executes the decision; set from the caller's service identity (X-Meridian-Service with an internal token), workflow-service for generic requests opened by users (SEC-03)"
           - "required_approvals int nn ro | Approvals required"
           - "approvals_received int nn default=0 ro | Approvals received"
           - "current_level int nn default=1 ro | Current approval level"

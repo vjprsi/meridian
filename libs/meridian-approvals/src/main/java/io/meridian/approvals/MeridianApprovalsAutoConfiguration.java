@@ -31,7 +31,8 @@ public class MeridianApprovalsAutoConfiguration {
     /** Always registered with handlers (tests dispatch directly); its Kafka listener starts per the switch. */
     @Bean
     @ConditionalOnBean(ApprovalOutcomeHandler.class)
-    ApprovalEventsDispatcher approvalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json) {
-        return new ApprovalEventsDispatcher(handlers, json);
+    ApprovalEventsDispatcher approvalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json,
+                                                      @Value("${spring.application.name}") String application) {
+        return new ApprovalEventsDispatcher(handlers, json, application);
     }
 }

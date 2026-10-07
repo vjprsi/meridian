@@ -211,6 +211,12 @@ public class OverdraftService {
         }
         ObjectNode v = rows.object();
         v.put("limit_amount", newLimit.toPlainString());
+        if ("ACTIVE".equals(status) && newLimit.compareTo(decOr0(f, "limit_amount")) > 0) {
+            // SEC-12: an approved facility is only ever lowered directly; more credit needs a new credit approval
+            // (maker-checker), never a single user's change-limit
+            throw ApiException.unprocessable("limit_increase_requires_approval",
+                    "Raising the limit of an active facility needs a new approval: cancel it and submit a facility with the new limit");
+        }
         if ("ACTIVE".equals(status)) {
             UUID ledgerAccount = accounts.requireLedger(acc);
             BigDecimal utilised = utilisation(ledgerAccount);

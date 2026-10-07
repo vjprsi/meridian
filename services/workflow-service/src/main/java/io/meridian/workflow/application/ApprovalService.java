@@ -42,9 +42,11 @@ public class ApprovalService {
     private final JsonMapper json;
     private final Map<String, ApprovalExecutor> executors;
     private final TransactionTemplate nested;
+    private final ApprovalOwners owners;
 
     public ApprovalService(WorkflowStore store, OutboxWriter outbox, JsonMapper json, List<ApprovalExecutor> executors,
-                           PlatformTransactionManager txManager) {
+                           PlatformTransactionManager txManager, ApprovalOwners owners) {
+        this.owners = owners;
         this.store = store;
         this.outbox = outbox;
         this.json = json;
@@ -65,13 +67,25 @@ public class ApprovalService {
 
     // ------------------------------------------------------------------ create
 
+    /**
+     * {@code POST /v1/approval-requests}. SEC-03: the caller must own the resource type ({@link ApprovalOwners}): the
+     * owning service with its own service identity, or a user for an explicitly allowed generic type. The owner is
+     * recorded as {@code owner_service}; only that service's handler acts on the decision.
+     */
     @Transactional
-    public ObjectNode create(ObjectNode values, Caller caller) {
+    public ObjectNode create(ObjectNode values, Caller caller, Optional<String> callingService) {
+        values.remove("owner_service");
+        String owner = owners.authorize(values.path("resource_type").asString(""), callingService);
+        return create(values, caller, owner);
+    }
+
+    private ObjectNode create(ObjectNode values, Caller caller, String owner) {
         String resourceType = values.path("resource_type").asString("");
         String action = values.path("action").asString("");
         if (resourceType.isBlank() || action.isBlank()) {
             throw ApiException.unprocessable("validation_failed", "resource_type and action are required");
         }
+        values.put("owner_service", owner);
         if (!values.path("payload").isObject()) {
             throw ApiException.unprocessable("validation_failed", "payload must be an object describing the operation");
         }
@@ -147,7 +161,7 @@ public class ApprovalService {
             values.put("summary", summary);
         }
         values.set("payload", payload);
-        return create(values, caller);
+        return create(values, caller, ApprovalOwners.WORKFLOW);
     }
 
     // ------------------------------------------------------------------ decisions
@@ -190,7 +204,7 @@ public class ApprovalService {
         outbox.publish("platform.approval_request.approved", TABLE, id, row);
         boolean autoExecute = policy == null || policy.path("auto_execute").asBoolean(true);
         ApprovalExecutor executor = executors.get(key(row.path("resource_type").asString(), row.path("action").asString()));
-        if (autoExecute && executor != null) {
+        if (autoExecute && executor != null && ApprovalOwners.WORKFLOW.equals(row.path("owner_service").asString(ApprovalOwners.WORKFLOW))) {
             return execute(row, executor);
         }
         return row;

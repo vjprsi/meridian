@@ -67,7 +67,10 @@ public class Approvals {
             body.put("currency", spec.currency());
         }
         body.put("priority", spec.priority());
-        JsonNode created = client.post(WORKFLOW, "/v1/approval-requests", body, key(idempotencyKey));
+        // SEC-03: opened with this service's own identity (X-User stays the maker) so workflow-service can check that
+        // the resource type belongs to the calling service; user tokens may not open service-owned request types.
+        String key = key(idempotencyKey);
+        JsonNode created = ServiceClient.asService(() -> client.post(WORKFLOW, "/v1/approval-requests", body, key));
         if (idOf(created) == null) {
             throw new io.meridian.common.error.ApiException(502, "upstream_error",
                     "workflow-service did not return an approval request id");

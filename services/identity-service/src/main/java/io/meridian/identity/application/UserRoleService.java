@@ -133,6 +133,15 @@ public class UserRoleService {
             throw ApiException.conflict("user_not_active", "User is " + user.get("status").asString());
         }
         JsonNode role = store.require("role", roleId);
+        // SEC-03: the elevation policy holds at execution time too (the role may have changed since submission)
+        if (!role.get("is_privileged").asBoolean()) {
+            throw ApiException.unprocessable("role_not_privileged", "Elevation is only for privileged roles");
+        }
+        int max = Math.min(MAX_ELEVATION_MINUTES, role.get("max_session_minutes").asInt());
+        int minutes = payload.path("duration_minutes").asInt(0);
+        if (minutes < 1 || minutes > max) {
+            throw ApiException.unprocessable("invalid_duration", "duration_minutes must be between 1 and " + max);
+        }
         checkSegregationOfDuties(userId, role);
         // Database clock: validity is evaluated with now() in SQL, so the grant must use the same clock
         // (the JVM and database clocks can differ by milliseconds).

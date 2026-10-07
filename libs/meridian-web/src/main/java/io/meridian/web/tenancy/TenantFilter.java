@@ -26,6 +26,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class TenantFilter extends OncePerRequestFilter {
     public static final String TENANT_HEADER = "X-Tenant-Id";
     public static final String USER_HEADER = "X-User";
+    /** Name of the calling Meridian service; honoured only with an internal token (and in dev mode). */
+    public static final String SERVICE_HEADER = "X-Meridian-Service";
 
     private final MeridianProperties props;
 
@@ -39,6 +41,7 @@ public class TenantFilter extends OncePerRequestFilter {
         UUID tenant = null;
         String principal = "anonymous";
         String via = null;
+        String callingService = null;
         CustomerPrincipal customer = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
@@ -54,6 +57,7 @@ public class TenantFilter extends OncePerRequestFilter {
                 String onBehalf = req.getHeader(USER_HEADER);
                 via = jwt.getClaimAsString("azp");
                 principal = onBehalf == null || onBehalf.isBlank() ? "svc:" + via : onBehalf;
+                callingService = req.getHeader(SERVICE_HEADER);
             } else {
                 customer = CustomerContext.fromJwt(jwt).orElse(null);
             }
@@ -61,6 +65,7 @@ public class TenantFilter extends OncePerRequestFilter {
             tenant = parse(req.getHeader(TENANT_HEADER));
             String user = req.getHeader(USER_HEADER);
             principal = user == null || user.isBlank() ? "dev-user" : user;
+            callingService = req.getHeader(SERVICE_HEADER);
             customer = CustomerContext.fromDevHeaders(req.getHeader(CustomerContext.CUSTOMER_HEADER),
                     req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
                     .orElse(null);
@@ -71,6 +76,7 @@ public class TenantFilter extends OncePerRequestFilter {
         try {
             if (tenant != null) {
                 TenantContext.set(tenant, principal, via);
+                TenantContext.setCallingService(callingService);
             }
             if (customer != null) {
                 CustomerContext.set(customer);

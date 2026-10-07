@@ -38,6 +38,17 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.ledger.v1
+  ledger:
+    # SEC-12: service that may change the overdraft limit / allow_negative of accounts with this owner_type
+    # (POST /v1/ledger-accounts/{id}/overdraft-limit with its own service identity). Other owner types: any service.
+    account-owners:
+      DEPOSIT_ACCOUNT: deposit-service
+      SAVINGS_POT: deposit-service
+      TERM_DEPOSIT: deposit-service
+      VIRTUAL_ACCOUNT: deposit-service
+      WALLET: wallet-service
+      LOAN: loan-service
+      CREDIT_LINE: loan-service
 
 management:
   endpoints:

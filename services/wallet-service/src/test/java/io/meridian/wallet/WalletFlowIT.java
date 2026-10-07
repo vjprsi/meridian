@@ -605,6 +605,80 @@ class WalletFlowIT {
         }
     }
 
+    // ------------------------------------------------------------------ 13. SEC-07 concurrent reversals
+
+    @Test
+    @Order(13)
+    void concurrentPartialReversalsNeverExceedTheOriginal() throws Exception {
+        ledger.credit(aliceLedger, "1000", null);
+        String dan = post("/v1/wallets", walletBody("CUSTOMER", "Dan Kamau", "+254700000009", null), "ops", 201)
+                .get("id").asString();
+        post("/v1/wallets/" + dan + "/activate", "{\"reason\":\"KYC tier 0\"}", "ops", 200);
+        UUID danLedger = ledgerOf(dan);
+        JsonNode t = post("/v1/wallet-transactions/p2p", p2p("+254700000009", "100", "4826"), "alice", 200);
+        String txn = t.get("id").asString();
+        assertThat(t.get("status").asString()).isEqualTo("COMPLETED");
+        ledger.credit(danLedger, "500", null);
+        UUID bobLedger = danLedger; // the payee of this test
+        BigDecimal bobBefore = ledger.balanceOf(bobLedger);
+        int n = 6;
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<Integer> codes = Collections.synchronizedList(new ArrayList<>());
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            List<java.util.concurrent.Future<?>> fs = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                String checker = "ops-race-" + i; // distinct checkers, each reversing 40 of 100
+                fs.add(pool.submit(() -> {
+                    start.await();
+                    codes.add(raw("POST", "/v1/wallet-transactions/" + txn + "/reverse",
+                            "{\"reason\":\"race\",\"amount\":\"40\"}", UUID.randomUUID().toString(), checker, TENANT)
+                            .statusCode());
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var f : fs) {
+                f.get();
+            }
+        }
+        assertThat(codes).filteredOn(c -> c == 200).hasSize(2);
+        assertThat(codes).filteredOn(c -> c == 422).hasSize(n - 2);
+        JsonNode orig = get("/v1/wallet-transactions/" + txn);
+        assertThat(new BigDecimal(orig.get("reversed_amount").asString())).isEqualByComparingTo("80");
+        assertThat(orig.get("status").asString()).isEqualTo("COMPLETED");
+        Long completed = asTenant(() -> jdbc.sql("""
+                select count(*) from wallet_transaction where original_transaction_id = ?::uuid and txn_type = 'REVERSAL'
+                and status = 'COMPLETED'""").param(txn).query(Long.class).single());
+        assertThat(completed).isEqualTo(2L);
+        assertThat(bobBefore.subtract(ledger.balanceOf(bobLedger))).isEqualByComparingTo("80");
+
+        // the remaining 20 races too: exactly one full reversal completes the transaction
+        codes.clear();
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            List<java.util.concurrent.Future<?>> fs = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                String checker = "ops-full-" + i;
+                fs.add(pool.submit(() -> {
+                    go.await();
+                    codes.add(raw("POST", "/v1/wallet-transactions/" + txn + "/reverse", "{\"reason\":\"rest\"}",
+                            UUID.randomUUID().toString(), checker, TENANT).statusCode());
+                    return null;
+                }));
+            }
+            go.countDown();
+            for (var f : fs) {
+                f.get();
+            }
+        }
+        assertThat(codes).filteredOn(c -> c == 200).hasSize(1);
+        assertThat(codes).allMatch(c -> c == 200 || c == 409 || c == 422);
+        orig = get("/v1/wallet-transactions/" + txn);
+        assertThat(new BigDecimal(orig.get("reversed_amount").asString())).isEqualByComparingTo("100");
+        assertThat(orig.get("status").asString()).isEqualTo("REVERSED");
+        assertThat(bobBefore.subtract(ledger.balanceOf(bobLedger))).isEqualByComparingTo("100");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private UUID ledgerOf(String wallet) throws Exception {

@@ -132,6 +132,7 @@ public class LedgerAccountsController implements LedgerAccountsApi {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
         return ok(accounts.setOverdraftLimit(id, new BigDecimal(req.get("limit").asString()),
+                req.hasNonNull("allow_negative") ? req.get("allow_negative").asBoolean() : null,
                 req.hasNonNull("reason") ? req.get("reason").asString() : null));
     }
 

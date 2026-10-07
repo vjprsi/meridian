@@ -337,7 +337,10 @@ class FxFlowIT {
         String q2 = post("/v1/fx/quotes", Map.of("sell_currency", "EUR", "buy_currency", "USD", "sell_amount", "30.00"),
                 key()).body().get("id").asString();
         String paymentId = UUID.randomUUID().toString();
-        JsonNode deal = post("/v1/fx/quotes/" + q2 + "/accept", Map.of("payment_id", paymentId), key()).body();
+        assertThat(code(post("/v1/fx/quotes/" + q2 + "/accept", Map.of("payment_id", paymentId), key())))
+                .isEqualTo("fx_binding_required");
+        JsonNode deal = post("/v1/fx/quotes/" + q2 + "/accept", Map.of("payment_id", paymentId, "sell_currency", "EUR",
+                "sell_amount", "30.00", "buy_currency", "USD"), key()).body();
         assertThat(deal.get("payment_id").asString()).isEqualTo(paymentId);
         assertThat(deal.get("value_date").asString()).isEqualTo(LocalDate.now(ZoneOffset.UTC).toString());
         Res cancelled = post("/v1/fx/deals/" + deal.get("id").asString() + "/cancel", Map.of("reason", "payment cancelled"),
@@ -453,6 +456,62 @@ class FxFlowIT {
                 "select distinct event_type from outbox").query(String.class).list());
         assertThat(types).contains("payments.fx_quote.created", "payments.fx_quote.cancelled", "payments.fx_deal.booked",
                 "payments.fx_deal.settled", "payments.fx_deal.cancelled", "payments.remittance_corridor.status_changed");
+    }
+
+    // ------------------------------------------------------------------ SEC-04 binding to the payment
+
+    @Test
+    @Order(12)
+    void quoteAcceptedForAPaymentMustMatchItAndIsSingleUse() throws Exception {
+        String customer = UUID.randomUUID().toString();
+        String q = post("/v1/fx/quotes", Map.of("sell_currency", "EUR", "buy_currency", "USD", "sell_amount", "100.00",
+                "customer_id", customer), key()).body().get("id").asString();
+        String pay = UUID.randomUUID().toString();
+        Map<String, Object> ok = new HashMap<>(Map.of("payment_id", pay, "customer_id", customer, "sell_currency", "EUR",
+                "sell_amount", "100.00", "buy_currency", "USD"));
+        Map<String, Object> small = new HashMap<>(ok);
+        small.put("sell_amount", "1.00");
+        assertThat(code(post("/v1/fx/quotes/" + q + "/accept", small, key()))).isEqualTo("fx_quote_amount_mismatch");
+        Map<String, Object> pair = new HashMap<>(ok);
+        pair.put("buy_currency", "GBP");
+        assertThat(code(post("/v1/fx/quotes/" + q + "/accept", pair, key()))).isEqualTo("fx_quote_mismatch");
+        Map<String, Object> other = new HashMap<>(ok);
+        other.put("customer_id", UUID.randomUUID().toString());
+        assertThat(code(post("/v1/fx/quotes/" + q + "/accept", other, key()))).isEqualTo("fx_quote_customer_mismatch");
+        Map<String, Object> buy = new HashMap<>(ok);
+        buy.put("buy_amount", "9999.00");
+        assertThat(code(post("/v1/fx/quotes/" + q + "/accept", buy, key()))).isEqualTo("fx_quote_amount_mismatch");
+        assertThat(get("/v1/fx/quotes/" + q, TENANT).body().get("status").asString()).isEqualTo("ACTIVE");
+
+        // two payments race for the quote: exactly one deal is booked; the winner's replay returns the same deal
+        String pay2 = UUID.randomUUID().toString();
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<Res> results = Collections.synchronizedList(new ArrayList<>());
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            List<java.util.concurrent.Future<?>> fs = new ArrayList<>();
+            for (String p : List.of(pay, pay2, pay, pay2)) {
+                Map<String, Object> b = new HashMap<>(ok);
+                b.put("payment_id", p);
+                fs.add(pool.submit(() -> {
+                    start.await();
+                    results.add(post("/v1/fx/quotes/" + q + "/accept", b, key()));
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var f : fs) {
+                f.get();
+            }
+        }
+        List<String> winners = results.stream().filter(r -> r.status() == 200)
+                .map(r -> r.body().get("payment_id").asString()).distinct().toList();
+        assertThat(winners).hasSize(1);
+        assertThat(results.stream().filter(r -> r.status() == 200).map(r -> r.body().get("id").asString()).distinct())
+                .hasSize(1);
+        assertThat(results.stream().filter(r -> r.status() != 200).map(FxFlowIT::code)).allMatch("quote_already_accepted"::equals);
+        Long deals = TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "select count(*) from fx_deal where fx_quote_id = ?::uuid").param(q).query(Long.class).single());
+        assertThat(deals).isEqualTo(1L);
     }
 
     // ------------------------------------------------------------------ http helpers

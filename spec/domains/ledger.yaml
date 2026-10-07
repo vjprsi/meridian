@@ -55,22 +55,22 @@ services:
         description: An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts
         fr: [LED-01, LED-02, LED-03, LED-08]
         columns:
-          - "ledger_id uuid nn fk=ledger idx | Ledger book"
+          - "ledger_id uuid nn fk=ledger idx | Ledger book (immutable after creation)"
           - "code string(64) nn uq | Account code / number inside the ledger"
           - "name string(160) nn | Display name"
-          - "account_type enum:LedgerAccountType nn | Accounting class"
-          - "normal_balance enum:NormalBalance nn | Side that increases the balance"
-          - "currency currency nn | Account currency (single-currency accounts)"
+          - "account_type enum:LedgerAccountType nn | Accounting class (immutable after creation)"
+          - "normal_balance enum:NormalBalance nn | Side that increases the balance (immutable after creation)"
+          - "currency currency nn | Account currency (single-currency accounts; immutable after creation)"
           - "parent_id uuid fk=ledger_account idx | Parent for hierarchies, sub-ledgers and virtual accounts"
           - "gl_account_id uuid ref=gl_account idx | GL control account this account rolls up to"
-          - "owner_type string(40) | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN"
-          - "owner_id uuid idx | Id of the owning business object in its service"
+          - "owner_type string(40) | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN (immutable after creation)"
+          - "owner_id uuid idx | Id of the owning business object in its service (immutable after creation)"
           - "status enum:LedgerAccountStatus nn default=ACTIVE ro | Posting restrictions (changed by /freeze, /unfreeze, /close)"
-          - "allow_negative bool nn default=false | Whether available balance may go below zero"
-          - "overdraft_limit amount nn default=0 | Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)"
-          - "min_balance amount nn default=0 | Minimum balance that must remain"
-          - "opened_at ts nn default=now | Opening time"
-          - "closed_at ts | Closing time"
+          - "allow_negative bool nn default=false | Whether available balance may go below zero (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH)"
+          - "overdraft_limit amount nn default=0 | Arranged overdraft; available = balance + limit - holds (set at creation; changed only by the owning service via POST /{id}/overdraft-limit, never by PATCH)"
+          - "min_balance amount nn default=0 | Minimum balance that must remain (immutable after creation)"
+          - "opened_at ts nn default=now | Opening time (immutable after creation)"
+          - "closed_at ts ro | Closing time (set by /close)"
           - "metadata json | Client-defined key/value metadata"
         indexes: [[owner_type, owner_id]]
 
@@ -87,7 +87,7 @@ services:
           - "effective_at ts nn default=now | Economic time of the transaction (default: now)"
           - "value_date date nn default=now | Date interest starts or stops counting (default: today)"
           - "booked_at ts nn default=now ro | Time the ledger committed the entry"
-          - "reversal_of_id uuid fk=journal_entry idx ro | Entry this one reverses (set by POST /{id}/reverse)"
+          - "reversal_of_id uuid fk=journal_entry uq ro | Entry this one reverses (set by POST /{id}/reverse); unique, so an entry can be reversed only once (SEC-05)"
           - "source_service string(64) nn ro | Service or client that requested the posting (from the caller identity)"
           - "source_type string(64) | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION"
           - "source_id uuid idx | Business object id"
@@ -248,7 +248,7 @@ services:
           - "GET /{id}/entries?from:ts&to:ts | Ledger entries for this account, newest first | | ledger_entry[]"
           - "POST /{id}/freeze | Restrict debits, credits or both (idempotent: an account already in the target status is returned unchanged) | status enum:LedgerAccountStatus nn, reason string(255) nn"
           - "POST /{id}/unfreeze | Remove posting restrictions (idempotent: an ACTIVE account is returned unchanged) | reason string(255) nn"
-          - "POST /{id}/overdraft-limit | Set the arranged overdraft limit and recompute the available balance (idempotent: the same limit returns the account unchanged) | limit amount nn, reason string(255)"
+          - "POST /{id}/overdraft-limit | Set the arranged overdraft limit (and optionally allow_negative) and recompute the available balance. Service identity only: callable by the service owning the account (X-Meridian-Service with an internal token, e.g. deposit-service applying an approved overdraft facility); user tokens get 403 service_identity_required (idempotent: the same values return the account unchanged) | limit amount nn, allow_negative bool, reason string(255)"
           - "POST /{id}/close | Close an account with zero balance | reason string(255)"
 
       - resource: journal-entries

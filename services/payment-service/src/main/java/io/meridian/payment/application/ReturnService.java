@@ -70,6 +70,21 @@ public class ReturnService {
         JsonNode account = core.depositAccount(uuid(p, "creditor_account_id"), "creditor");
         UUID settlement = settlementAccount(p);
         ObjectNode ret = tx.execute(s -> {
+            // SEC-06: re-check under the payment's row lock and record the return before posting, so a concurrent
+            // return (or a recall acceptance) sees it; a unique index allows one live return per payment and direction.
+            ObjectNode locked = records.lock(paymentId);
+            if (!"SETTLED".equals(str(locked, "status"))) {
+                throw ApiException.conflict("invalid_transition", "Only SETTLED payments can be returned (status " + str(locked, "status") + ")");
+            }
+            if (liveReturn(paymentId, "OUTBOUND").isPresent()) {
+                throw ApiException.conflict("return_in_progress", "Payment " + paymentId + " is already being returned");
+            }
+            // refunds already sent back count against what can still be returned
+            BigDecimal left = refundable(locked, paymentId);
+            if (returned.compareTo(left) > 0) {
+                throw ApiException.unprocessable("invalid_return_amount", "At most " + left.toPlainString()
+                        + " can still be returned (part of the payment was refunded)");
+            }
             ObjectNode r = rows.object();
             r.put("payment_id", paymentId.toString());
             r.put("direction", "OUTBOUND");
@@ -87,7 +102,8 @@ public class ReturnService {
         UUID returnId = UUID.fromString(str(ret, "id"));
         UUID je;
         try {
-            je = ledger.post("prt-post:" + returnId, "TRANSFER", "Return of " + str(p, "end_to_end_id") + " (" + reasonCode + ")",
+            // deterministic per payment: at most one return of a payment can ever post
+            je = ledger.post("prt-post:" + paymentId, "TRANSFER", "Return of " + str(p, "end_to_end_id") + " (" + reasonCode + ")",
                     str(p, "currency"), "PAYMENT_RETURN", returnId, List.of(
                             LedgerClient.Leg.debit(uuid(account, "ledger_account_id"), returned, "Return " + reasonCode),
                             LedgerClient.Leg.credit(settlement, returned, "Return to " + str(p, "debtor_name"))));
@@ -146,7 +162,22 @@ public class ReturnService {
                                   UUID recallId) {
         UUID paymentId = UUID.fromString(str(p, "id"));
         UUID settlement = settlementAccount(p);
+        ObjectNode[] completed = new ObjectNode[1];
         ObjectNode ret = tx.execute(s -> {
+            // SEC-06: one credit-back per payment, decided under the payment's row lock (pacs.004 redelivery, a
+            // recall acceptance and a rail return can race)
+            ObjectNode locked = records.lock(paymentId);
+            Optional<ObjectNode> live = liveReturn(paymentId, "INBOUND");
+            if (live.isPresent()) {
+                if ("COMPLETED".equals(str(live.get(), "status"))) {
+                    completed[0] = live.get();
+                    return null;
+                }
+                throw ApiException.conflict("return_in_progress", "A return of payment " + paymentId + " is being processed");
+            }
+            if (!"SETTLED".equals(str(locked, "status"))) {
+                throw ApiException.conflict("invalid_transition", "Only SETTLED payments can be returned (status " + str(locked, "status") + ")");
+            }
             ObjectNode r = rows.object();
             r.put("payment_id", paymentId.toString());
             r.put("direction", "INBOUND");
@@ -161,11 +192,23 @@ public class ReturnService {
             r.put("return_id", railReturnId != null ? PaymentProcessor.truncate(railReturnId, 35) : PaymentProcessor.reference("RTR"));
             return rows.insert("payment_return", r);
         });
+        if (completed[0] != null) {
+            return completed[0];
+        }
         UUID returnId = UUID.fromString(str(ret, "id"));
-        UUID je = ledger.post("prt-credit:" + returnId, "TRANSFER", "Returned payment " + str(p, "end_to_end_id"),
-                str(p, "currency"), "PAYMENT_RETURN", returnId, List.of(
-                        LedgerClient.Leg.debit(settlement, amount, "Return from " + str(p, "creditor_name")),
-                        LedgerClient.Leg.credit(uuid(p, "debtor_ledger_account_id"), amount, "Returned " + reasonCode)));
+        UUID je;
+        try {
+            // deterministic per payment: the debtor is credited back at most once
+            je = ledger.post("prt-credit:" + paymentId, "TRANSFER", "Returned payment " + str(p, "end_to_end_id"),
+                    str(p, "currency"), "PAYMENT_RETURN", returnId, List.of(
+                            LedgerClient.Leg.debit(settlement, amount, "Return from " + str(p, "creditor_name")),
+                            LedgerClient.Leg.credit(uuid(p, "debtor_ledger_account_id"), amount, "Returned " + reasonCode)));
+        } catch (ApiException e) {
+            if (e.status() == 422) {
+                tx.execute(s -> rows.update("payment_return", returnId, rows.object().put("status", "FAILED")));
+            }
+            throw e;
+        }
         return tx.execute(s -> {
             ObjectNode c = rows.object();
             c.put("status", "COMPLETED");
@@ -337,14 +380,9 @@ public class ReturnService {
         if (!"INBOUND".equals(str(p, "direction")) || !"SETTLED".equals(str(p, "status"))) {
             throw ApiException.conflict("invalid_transition", "Only SETTLED inbound payments can be refunded");
         }
-        BigDecimal already = rows.scalar("""
-                select coalesce(sum(amount), 0) from payment where original_payment_id = ? and payment_type = 'REFUND'
-                and status not in ('REJECTED', 'FAILED', 'CANCELLED')""", BigDecimal.class, paymentId).orElse(BigDecimal.ZERO);
-        BigDecimal refundable = dec(p, "amount").subtract(already);
+        BigDecimal refundable = refundable(p, paymentId);
         BigDecimal value = amount == null ? refundable : amount;
-        if (value.signum() <= 0 || value.compareTo(refundable) > 0) {
-            throw ApiException.unprocessable("invalid_refund_amount", "Refund must be positive and at most " + refundable.toPlainString());
-        }
+        checkRefund(value, refundable);
         if (p.get("debtor_account_number") == null || p.get("debtor_account_number").isNull()) {
             throw ApiException.unprocessable("payer_unknown", "The original payer account is unknown; use a return instead");
         }
@@ -368,7 +406,36 @@ public class ReturnService {
         req.put("charge_bearer", "SLEV");
         req.put("remittance_unstructured", PaymentProcessor.truncate("Refund " + str(p, "end_to_end_id")
                 + (reason == null ? "" : " " + reason), 140));
-        return processor.initiate(req, "refund:" + paymentId + ":" + idempotencyKey, PaymentProcessor.Options.DEFAULT);
+        // SEC-06: the cumulative check is repeated under the original payment's row lock in the transaction that
+        // inserts the refund payment, so concurrent refunds can never together exceed the original amount
+        return processor.initiate(req, "refund:" + paymentId + ":" + idempotencyKey, PaymentProcessor.Options.DEFAULT, () -> {
+            ObjectNode locked = records.lock(paymentId);
+            if (!"SETTLED".equals(str(locked, "status"))) {
+                throw ApiException.conflict("invalid_transition", "Only SETTLED inbound payments can be refunded");
+            }
+            checkRefund(value, refundable(locked, paymentId));
+        });
+    }
+
+    private BigDecimal refundable(ObjectNode original, UUID paymentId) {
+        BigDecimal already = rows.scalar("""
+                select coalesce(sum(amount), 0) from payment where original_payment_id = ? and payment_type = 'REFUND'
+                and status not in ('REJECTED', 'FAILED', 'CANCELLED')""", BigDecimal.class, paymentId).orElse(BigDecimal.ZERO);
+        BigDecimal returning = liveReturn(paymentId, "OUTBOUND").map(r -> dec(r, "amount")).orElse(BigDecimal.ZERO);
+        return dec(original, "amount").subtract(already).subtract(returning);
+    }
+
+    private static void checkRefund(BigDecimal value, BigDecimal refundable) {
+        if (value.signum() <= 0 || value.compareTo(refundable) > 0) {
+            throw ApiException.unprocessable("invalid_refund_amount", "Refund must be positive and at most " + refundable.toPlainString());
+        }
+    }
+
+    /** The return of this payment in this direction that is not FAILED / REJECTED (at most one, by unique index). */
+    private Optional<ObjectNode> liveReturn(UUID paymentId, String direction) {
+        return rows.queryOne("""
+                select row_to_json(t)::text from payment_return t where payment_id = ? and direction = ?
+                and status not in ('FAILED', 'REJECTED') limit 1""", paymentId, direction);
     }
 
     private UUID settlementAccount(ObjectNode p) {

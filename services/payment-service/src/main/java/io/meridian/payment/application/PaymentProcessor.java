@@ -94,6 +94,15 @@ public class PaymentProcessor {
      * idempotency key resumes and returns the existing payment.
      */
     public ObjectNode initiate(ObjectNode request, String idempotencyKey, Options options) {
+        return initiate(request, idempotencyKey, options, null);
+    }
+
+    /**
+     * Like {@link #initiate(ObjectNode, String, Options)}; {@code beforeInsert} runs in the transaction that stores the
+     * payment, right before the insert (e.g. to lock the original payment and re-check a cumulative amount, so the
+     * check and the new row commit together).
+     */
+    public ObjectNode initiate(ObjectNode request, String idempotencyKey, Options options, Runnable beforeInsert) {
         TenantContext.require();
         Optional<ObjectNode> existing = rows.queryOne(
                 "select row_to_json(t)::text from payment t where idempotency_key = ?", idempotencyKey);
@@ -103,6 +112,9 @@ public class PaymentProcessor {
         ObjectNode v = prepare(request, options);
         v.put("idempotency_key", idempotencyKey);
         ObjectNode created = inTx(() -> {
+            if (beforeInsert != null) {
+                beforeInsert.run();
+            }
             ObjectNode p = rows.insert(PaymentRecords.TABLE, v);
             UUID id = UUID.fromString(str(p, "id"));
             records.history(id, null, "INITIATED", null, "Payment initiated via " + str(p, "channel"), null);
@@ -110,6 +122,45 @@ public class PaymentProcessor {
             return p;
         });
         return process(UUID.fromString(str(created, "id")), options);
+    }
+
+    /**
+     * SEC-04: an FX quote funds only the payment it was priced for. The quote must be ACTIVE and unexpired, belong to
+     * the debtor's customer (a quote priced for another customer is refused; an unbound quote only for staff, never
+     * when a customer acts), sell the payment currency and buy the instructed currency, and its sell amount must equal
+     * the payment amount (the amount debited and used for approval thresholds); an instructed_amount, when given,
+     * must equal the quote's buy amount. fx-service re-checks the same binding atomically when the quote is accepted.
+     */
+    static void requireFxQuoteFits(JsonNode quote, ObjectNode v, UUID customer) {
+        String status = str(quote, "status");
+        if (!"ACTIVE".equals(status)) {
+            throw ApiException.unprocessable("fx_quote_not_active", "The FX quote is " + status);
+        }
+        if (quote.hasNonNull("expires_at")
+                && !java.time.OffsetDateTime.parse(quote.get("expires_at").asString()).isAfter(io.meridian.common.time.Clocks.now())) {
+            throw ApiException.unprocessable("fx_quote_expired", "The FX quote has expired; request a new quote");
+        }
+        UUID quoteCustomer = quote.hasNonNull("customer_id") ? UUID.fromString(quote.get("customer_id").asString()) : null;
+        if (quoteCustomer != null ? !quoteCustomer.equals(customer)
+                : io.meridian.web.security.CustomerContext.current().isPresent()) {
+            throw ApiException.unprocessable("fx_quote_customer_mismatch", "The FX quote was not priced for this customer");
+        }
+        if (!str(v, "currency").equals(quote.path("sell_currency").asString(null))
+                || !str(v, "instructed_currency").equals(quote.path("buy_currency").asString(null))) {
+            throw ApiException.unprocessable("fx_quote_mismatch", "The FX quote sells " + quote.path("sell_currency").asString(null)
+                    + " for " + quote.path("buy_currency").asString(null) + "; the payment needs " + str(v, "currency")
+                    + " to " + str(v, "instructed_currency"));
+        }
+        BigDecimal sell = quote.hasNonNull("sell_amount") ? new BigDecimal(quote.get("sell_amount").asString()) : null;
+        if (sell == null || sell.compareTo(dec(v, "amount")) != 0) {
+            throw ApiException.unprocessable("fx_quote_amount_mismatch", "The FX quote sells "
+                    + (sell == null ? "?" : sell.toPlainString()) + " " + str(v, "currency") + "; the payment amount must be the same");
+        }
+        BigDecimal buy = quote.hasNonNull("buy_amount") ? new BigDecimal(quote.get("buy_amount").asString()) : null;
+        if (v.hasNonNull("instructed_amount") && (buy == null || buy.compareTo(dec(v, "instructed_amount")) != 0)) {
+            throw ApiException.unprocessable("fx_quote_amount_mismatch", "instructed_amount must equal the quote's buy amount "
+                    + (buy == null ? "?" : buy.toPlainString()));
+        }
     }
 
     /** Continues a payment from wherever it stopped (used for replays and the business-day scheduler). */
@@ -191,6 +242,9 @@ public class PaymentProcessor {
         }
         if (!v.hasNonNull("debtor_name")) {
             core.customerName(customer).ifPresent(n -> v.put("debtor_name", truncate(n, 140)));
+        }
+        if (v.hasNonNull("fx_quote_id")) {
+            requireFxQuoteFits(risk.fxQuote(uuid(v, "fx_quote_id")), v, customer);
         }
 
         UUID payeeId = uuid(v, "payee_id");
@@ -598,12 +652,17 @@ public class PaymentProcessor {
         if (p.hasNonNull("fx_quote_id") && !p.hasNonNull("fx_rate")) {
             JsonNode deal;
             try {
-                deal = risk.acceptFxQuote(uuid(p, "fx_quote_id"), id, "pay-fx:" + id);
+                deal = risk.acceptFxQuote(uuid(p, "fx_quote_id"), id, "pay-fx:" + id, p);
             } catch (ApiException e) {
                 if (e.status() >= 500) {
                     throw e;
                 }
                 return inTx(() -> rejectLocked(records.lock(id), "FF01", "FX quote could not be used: " + e.getMessage(), null));
+            }
+            // SEC-04 defence in depth: the booked deal must sell exactly what this payment debits
+            if (!str(p, "currency").equals(deal.path("sell_currency").asString(str(p, "currency")))
+                    || (deal.hasNonNull("sell_amount") && new BigDecimal(deal.get("sell_amount").asString()).compareTo(dec(p, "amount")) != 0)) {
+                return inTx(() -> rejectLocked(records.lock(id), "FF01", "FX deal does not match the payment amount", null));
             }
             ObjectNode fx = rows.object();
             fx.put("fx_rate", deal.path("rate").asString());
