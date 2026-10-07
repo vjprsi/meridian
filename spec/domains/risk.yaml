@@ -20,6 +20,8 @@ enums:
   FraudLabel: [FRAUD, NOT_FRAUD, UNKNOWN]
   FraudTypology: [ACCOUNT_TAKEOVER, CARD_NOT_PRESENT, CARD_PRESENT_COUNTERFEIT, AUTHORISED_PUSH_PAYMENT_SCAM,
                   FIRST_PARTY, SYNTHETIC_IDENTITY, MONEY_MULE, FRIENDLY_FRAUD, SIM_SWAP, INSIDER, OTHER]
+  FraudScoreCombination: [ADDITIVE, MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY]
+  FraudModelRole: [CHAMPION, CANARY, CHALLENGER, SHADOW]
   RiskChannel: [MOBILE_APP, WEB, API, USSD, AGENT, BRANCH, POS, ATM, ECOMMERCE, CONTACTLESS, OPEN_BANKING]
   TmScenarioType: [STRUCTURING, RAPID_MOVEMENT, MULE_ACCOUNT, DORMANT_REACTIVATION, HIGH_RISK_JURISDICTION,
                    LARGE_CASH, ROUND_AMOUNTS, FAN_IN, FAN_OUT, PROFILE_DEVIATION, TERRORIST_FINANCING, CUSTOM]
@@ -94,6 +96,12 @@ services:
           - "session_id string(128) | App session (links behavioural signals)"
           - "fraud_alert_id uuid ro | Alert raised for REVIEW / BLOCK decisions"
           - "idempotency_key string(128) ro | Client key; a replay returns the original evaluation"
+          - "rules_component_score int ro | Rule-based score (built-in heuristic model + rule adjustments) before it is combined with the ML score"
+          - "combination enum:FraudScoreCombination ro | How the rule-based and ML scores were combined (empty = no ML model in the policy)"
+          - "ml_model_version_id uuid ref=ml_model_version ro | ML model version (ai-platform) that decided"
+          - "ml_deployment_id uuid ref=model_deployment ro | ai-platform deployment (champion or canary) that decided"
+          - "degraded bool nn default=false ro | The ML model was unavailable, failed or exceeded its budget; rules decided"
+          - "degraded_reason string(64) ro | MODEL_UNAVAILABLE, NO_CHAMPION, CHECKSUM_MISMATCH, INVALID_ARTIFACT, MODEL_ERROR, MODEL_TIMEOUT, FEATURES_UNAVAILABLE"
         unique: [[tenant_id, idempotency_key]]
         indexes: [[subject_type, subject_id], [customer_id, created_at], [device_fingerprint_id, created_at]]
 
@@ -152,6 +160,12 @@ services:
           - "timeout_ms int nn default=50 | Time budget; on timeout the fallback decision applies"
           - "fallback_decision enum:FraudDecision nn default=ALLOW | Decision when scoring times out"
           - "is_active bool nn default=true | Active"
+          - "combination enum:FraudScoreCombination nn default=ADDITIVE | How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged)"
+          - "model_weight rate nn default=0.5 | WEIGHTED - share of the ML score (0..1)"
+          - "model_confidence rate nn default=0.8 | MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides"
+          - "model_timeout_ms int nn default=10 | In-process inference budget; a slower or failing model falls back to rules (degraded)"
+          - "channel_thresholds json | Threshold overrides per channel {CHANNEL: {step_up, review, block}}"
+          - "use_model_thresholds bool nn default=false | Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win)"
 
       - name: fraud_alert
         prefix: fal
@@ -259,6 +273,91 @@ services:
           - "recovered_amount amount | Amount recovered"
           - "reported_at ts nn | When the outcome became known"
 
+      - name: fraud_model_score
+        prefix: fms
+        description: Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only; feeds monitoring
+        immutable: true
+        fr: [FRM-01, AI-02]
+        columns:
+          - "fraud_score_id uuid nn fk=fraud_score idx | Evaluation"
+          - "subject_type enum:FraudSubjectType nn | Event type"
+          - "channel enum:RiskChannel | Channel"
+          - "ml_model_id uuid nn ref=ml_model idx | ai-platform model"
+          - "ml_model_version_id uuid nn ref=ml_model_version | ai-platform model version"
+          - "model_deployment_id uuid ref=model_deployment | ai-platform deployment"
+          - "model_version string(32) | Version label"
+          - "role enum:FraudModelRole nn | Role of the deployment for this evaluation"
+          - "decided bool nn default=false | This score decided (champion or canary slice); challengers and shadows never decide"
+          - "score int | Score 0-1000 (empty on error)"
+          - "probability rate | Fraud probability"
+          - "would_decide enum:FraudDecision | Decision this score alone would have produced"
+          - "latency_us int nn default=0 | Inference time in microseconds"
+          - "error string(255) | Why the model produced no score"
+          - "feature_vector json | Model inputs (for drift monitoring and retraining)"
+          - "top_contributions json[] | Largest feature contributions {feature, value, contribution}"
+        indexes: [[model_deployment_id, created_at], [ml_model_id, created_at]]
+
+      - name: fraud_feature_event
+        prefix: ffe
+        description: Domain event consumed by the real-time feature store (de-duplication by CloudEvent id); pruned after the retention
+        fr: [FRM-01]
+        columns:
+          - "event_id string(128) nn | CloudEvent id"
+          - "event_type string(96) nn | CloudEvent type"
+          - "occurred_at ts nn | Event time"
+          - "applied bool nn default=false | Counters were updated (false = ignored, e.g. inbound or late)"
+        unique: [[tenant_id, event_id]]
+        indexes: [[created_at]]
+
+      - name: fraud_feature_counter
+        prefix: ffc
+        description: Time-bucketed event count and amount per entity (5-minute buckets for the 1 h window, hourly for 24 h / 7 d)
+        fr: [FRM-01]
+        columns:
+          - "entity_type string(24) nn | CUSTOMER, CARD, ACCOUNT, DEVICE, MERCHANT, BENEFICIARY, CUSTOMER_LOGIN"
+          - "entity_key string(128) nn | Entity id or hash"
+          - "granularity string(4) nn | M5 or H1"
+          - "bucket_start ts nn | Bucket start (UTC)"
+          - "currency currency nn | Amount currency (XXX = no amount)"
+          - "event_count int nn default=0 | Events in the bucket"
+          - "amount_sum amount nn default=0 | Sum of amounts in the bucket"
+        unique: [[tenant_id, entity_type, entity_key, granularity, bucket_start, currency]]
+        indexes: [[bucket_start]]
+
+      - name: fraud_feature_profile
+        prefix: ffp
+        description: Long-run behaviour profile per entity and currency (exponentially weighted amount mean and variance, hour of day, labels)
+        fr: [FRM-01]
+        columns:
+          - "entity_type string(24) nn | CUSTOMER, CARD, ACCOUNT, MERCHANT, BENEFICIARY, DEVICE"
+          - "entity_key string(128) nn | Entity id or hash"
+          - "currency currency nn | Currency of the amount statistics (XXX = none)"
+          - "first_seen_at ts nn | First event"
+          - "last_seen_at ts nn | Last event"
+          - "event_count bigint nn default=0 | Events seen"
+          - "amount_mean amount nn default=0 | Exponentially weighted mean amount"
+          - "amount_var amount nn default=0 | Exponentially weighted amount variance"
+          - "hour_sin rate nn default=0 | Weighted mean of sin(hour of day)"
+          - "hour_cos rate nn default=0 | Weighted mean of cos(hour of day)"
+          - "fraud_count int nn default=0 | Confirmed fraud labels"
+          - "label_count int nn default=0 | Outcome labels"
+        unique: [[tenant_id, entity_type, entity_key, currency]]
+        indexes: [[last_seen_at]]
+
+      - name: fraud_feature_link
+        prefix: ffl
+        description: First and last time two entities were seen together (customer-beneficiary, customer-device, customer-country, card-merchant)
+        fr: [FRM-01]
+        columns:
+          - "link_type string(32) nn | CUSTOMER_BENEFICIARY, CUSTOMER_DEVICE, CUSTOMER_COUNTRY, CUSTOMER_MERCHANT, CARD_MERCHANT, CARD_COUNTRY"
+          - "from_key string(128) nn | First entity"
+          - "to_key string(128) nn | Second entity"
+          - "first_seen_at ts nn | First seen together"
+          - "last_seen_at ts nn | Last seen together"
+          - "event_count int nn default=0 | Events"
+        unique: [[tenant_id, link_type, from_key, to_key]]
+        indexes: [[last_seen_at]]
+
     apis:
       - resource: fraud-scores
         path: /v1/risk/fraud/scores
@@ -340,6 +439,20 @@ services:
         table: fraud_feedback
         ops: [list, get, create]
         filters: [fraud_score_id, label, typology, source]
+        actions:
+          - "GET /training-set?from_ts:ts!&to_ts:ts!&limit:int | Labelled ML feature vectors of a period for offline retraining (latest label per evaluation) | | object"
+
+      - resource: fraud-model-scores
+        path: /v1/risk/fraud/model-scores
+        table: fraud_model_score
+        ops: [list, get]
+        filters: [fraud_score_id, ml_model_id, model_deployment_id, role, decided]
+        actions:
+          - "GET /runtime | ML runtime of the tenant - deployments loaded from ai-platform, artefact checksums, degraded reasons | | object"
+          - "POST /reload | Reload the tenant's fraud model deployments from ai-platform-service now | | object"
+          - "POST /register-features | Create or update the real-time feature definitions in ai-platform's feature catalogue | | object"
+          - "POST /preview-features | Feature vector the store computes for an event (nothing is stored or scored) | customer_id uuid, card_id uuid, account_id uuid, device_fingerprint string(128), amount amount, currency currency, channel enum:RiskChannel, counterparty_country country, context json | object"
+          - "POST /publish-monitoring | Scheduled (per tenant) - push score and feature distributions (PSI), latency, degraded rate and label metrics of a window to ai-platform monitoring | window_start ts nn, window_end ts nn | object"
 
     events:
       - "risk.fraud_score.evaluated | fraud_score | An event was scored"

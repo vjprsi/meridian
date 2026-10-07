@@ -18,7 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
 /** Feature catalogue: names, entities, types and freshness are validated. */
 @RestController
 public class MlFeaturesController implements MlFeaturesApi {
-    static final Set<String> ENTITIES = Set.of("CUSTOMER", "ACCOUNT", "CARD", "DEVICE", "MERCHANT");
+    static final Set<String> ENTITIES = Set.of("CUSTOMER", "ACCOUNT", "CARD", "DEVICE", "MERCHANT", "BENEFICIARY",
+            "TRANSACTION", "SESSION");
     static final Set<String> DTYPES = Set.of("INT", "FLOAT", "STRING", "BOOL", "LIST");
 
     private final CrudEngine crud;
@@ -55,6 +56,14 @@ public class MlFeaturesController implements MlFeaturesApi {
         String dtype = Fields.text(f, "dtype");
         if (dtype != null && !DTYPES.contains(dtype)) {
             throw Fields.invalid("dtype", "invalid_dtype", "dtype must be one of " + DTYPES);
+        }
+        String set = Fields.text(f, "feature_set");
+        if (set != null && !set.matches("[a-z][a-z0-9_.-]{0,63}")) {
+            throw Fields.invalid("feature_set", "invalid_feature_set", "feature_set is a lower-case identifier, e.g. fraud-realtime-v1");
+        }
+        JsonNode definition = f.get("definition");
+        if (definition != null && !definition.isNull() && !definition.isObject()) {
+            throw Fields.invalid("definition", "invalid_definition", "definition must be an object describing the computation");
         }
         Integer sla = Fields.integer(f, "freshness_sla_seconds");
         if (sla != null && sla < 0) {

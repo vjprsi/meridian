@@ -91,6 +91,43 @@ public class ExplanationService {
         result.put("reasons", reasons);
         result.put("feature_contributions", contributions);
         result.put("rule_hits", hits);
+        JsonNode ml = s.path("features").path("ml");
+        if (ml.isObject()) {
+            // governed ML model: contributions as recorded at scoring time (logistic: coefficient x value; trees: Saabas path)
+            ml.path("contributions").forEach(c -> descriptions.put(c.path("reason_code").asString(), c.path("description").asString()));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ml_model_id", Db.str(ml, "ml_model_id"));
+            m.put("ml_model_version_id", Db.str(ml, "ml_model_version_id"));
+            m.put("deployment_id", Db.str(ml, "deployment_id"));
+            m.put("model_version", Db.str(ml, "model_version"));
+            m.put("role", Db.str(ml, "role"));
+            m.put("algorithm", Db.str(ml, "algorithm"));
+            m.put("score", Db.integer(ml, "score"));
+            m.put("probability", ml.hasNonNull("probability") ? ml.get("probability").asDouble() : null);
+            m.put("bias", ml.hasNonNull("bias") ? ml.get("bias").asDouble() : null);
+            m.put("combination", Db.str(ml, "combination"));
+            m.put("degraded_reason", Db.str(ml, "degraded_reason"));
+            List<Map<String, Object>> mlContributions = new ArrayList<>();
+            ml.path("contributions").forEach(c -> {
+                Map<String, Object> cm = new LinkedHashMap<>();
+                cm.put("feature", c.path("feature").asString());
+                cm.put("value", c.hasNonNull("value") ? c.get("value").asDouble() : null);
+                cm.put("contribution", c.path("contribution").asDouble());
+                cm.put("direction", c.path("contribution").asDouble() >= 0 ? "INCREASES_RISK" : "DECREASES_RISK");
+                cm.put("reason_code", c.path("reason_code").asString());
+                cm.put("description", c.path("description").asString());
+                mlContributions.add(cm);
+            });
+            m.put("contributions", mlContributions);
+            m.put("rules_component_score", Db.integer(s, "rules_component_score"));
+            result.put("ml", m);
+            if (ml.hasNonNull("score")) {
+                result.put("model", "ml:" + Db.str(ml, "ml_model_id") + "@" + Db.str(ml, "model_version"));
+                result.put("model_probability", ml.path("probability").asDouble());
+            }
+            result.put("degraded", Db.bool(s, "degraded"));
+            reasons.forEach(r -> r.put("description", describe((String) r.get("code"), descriptions, ruleNames)));
+        }
         result.put("summary", summary(s, reasons));
         return result;
     }

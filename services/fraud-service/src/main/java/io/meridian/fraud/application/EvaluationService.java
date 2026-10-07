@@ -6,6 +6,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.fraud.domain.DecisionEngine;
 import io.meridian.fraud.domain.FeatureEngineering;
 import io.meridian.fraud.domain.ListValues;
+import io.meridian.fraud.domain.ml.MlExecution;
 import io.meridian.fraud.domain.model.FraudModel;
 import io.meridian.fraud.infrastructure.Db;
 import io.meridian.fraud.infrastructure.EvaluationStore;
@@ -19,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
@@ -43,15 +45,22 @@ public class EvaluationService {
     private final TransactionTemplate tx;
     private final Db db;
     private final JsonMapper json;
+    private final FeatureService features;
+    private final MlScoringService ml;
+    private final boolean featureLogging;
 
     public EvaluationService(EvaluationStore store, FraudConfigCache config, ModelRegistry models, TransactionTemplate tx,
-                             Db db, JsonMapper json) {
+                             Db db, JsonMapper json, FeatureService features, MlScoringService ml,
+                             @Value("${meridian.fraud.ml.feature-logging:true}") boolean featureLogging) {
         this.store = store;
         this.config = config;
         this.models = models;
         this.tx = tx;
         this.db = db;
         this.json = json;
+        this.features = features;
+        this.ml = ml;
+        this.featureLogging = featureLogging;
     }
 
     public Map<String, Object> evaluate(JsonNode req, String idempotencyKey) {
@@ -87,6 +96,18 @@ public class EvaluationService {
             }
         }
         EvaluationStore.DeviceInput device = deviceInput(req);
+        // real-time features from the feature store: one read outside the scoring transaction, so a failure there
+        // degrades the ML model to rules instead of failing the evaluation
+        boolean governed = ml.governed(policy);
+        Map<String, Double> storeFeatures = null;
+        if (governed || featureLogging) {
+            try {
+                storeFeatures = features.compute(req);
+            } catch (RuntimeException e) {
+                log.warn("feature store unavailable: {}", e.toString());
+            }
+        }
+        Map<String, Double> realTime = storeFeatures;
         try {
             return tx.execute(s -> {
                 JsonNode loaded = store.loadFacts(idempotencyKey, device, customerId, currency, Db.str(req, "session_id"),
@@ -94,7 +115,7 @@ public class EvaluationService {
                 if (loaded.hasNonNull("replay")) {
                     return replay(loaded.get("replay"), subjectId);
                 }
-                return score(req, idempotencyKey, cfg, policy, loaded, context, started);
+                return score(req, idempotencyKey, cfg, policy, loaded, context, started, governed, realTime);
             });
         } catch (TransientDataAccessException | DataAccessResourceFailureException e) {
             // the store is unavailable: answer with the policy's fallback decision rather than failing the payment
@@ -105,13 +126,16 @@ public class EvaluationService {
             out.put("score", null);
             out.put("reason_codes", List.of("SCORING_UNAVAILABLE"));
             out.put("fallback", true);
+            out.put("degraded", true);
+            out.put("degraded_reason", "SCORING_UNAVAILABLE");
             out.put("latency_ms", (System.nanoTime() - started) / 1_000_000);
             return out;
         }
     }
 
     private Map<String, Object> score(JsonNode req, String key, FraudConfigCache.Snapshot cfg, DecisionEngine.Policy policy,
-                                      JsonNode loaded, JsonNode context, long started) {
+                                      JsonNode loaded, JsonNode context, long started, boolean governed,
+                                      Map<String, Double> storeFeatures) {
         String subjectType = req.get("subject_type").asString();
         Set<String> listHits = new LinkedHashSet<>();
         Set<String> blockHits = new LinkedHashSet<>();
@@ -137,12 +161,32 @@ public class EvaluationService {
         FraudModel shadow = models.shadow(policy.shadowModelId());
         FraudModel.Output out = champion.score(engineered);
         FraudModel.Output shadowOut = shadow.score(engineered);
+        String channel = Db.str(req, "channel");
+        UUID subjectId = UUID.fromString(req.get("subject_id").asString());
+        MlExecution.Result mlResult = null;
+        String degraded = null;
+        if (governed) {
+            if (storeFeatures == null) {
+                degraded = "FEATURES_UNAVAILABLE";
+            } else {
+                Map<String, Double> mlFeatures = new LinkedHashMap<>(engineered);
+                mlFeatures.putAll(storeFeatures);
+                mlResult = ml.score(policy, subjectId, mlFeatures);
+                degraded = mlResult.degradedReason();
+            }
+        }
         facts.put("model_score", out.score());
         facts.put("engineered", engineered);
+        if (storeFeatures != null) {
+            facts.put("store", FeatureService.jsonSafe(storeFeatures));
+        }
         DecisionEngine.Outcome o = DecisionEngine.decide(cfg.rules(subjectType), facts, listHits, blockHits, out,
-                shadowOut, policy);
+                shadowOut, policy, channel, MlScoringService.input(mlResult, channel));
         if (!o.ruleErrors().isEmpty()) {
             log.warn("fraud rules failed at runtime: {}", o.ruleErrors());
+        }
+        if (governed) {
+            facts.put("ml", ml.explanation(mlResult, policy.modelId(), o, degraded));
         }
 
         UUID scoreId = Ids.newId();
@@ -166,13 +210,39 @@ public class EvaluationService {
         score.put("score", o.score());
         score.put("model_score", o.modelScore());
         score.put("rule_score", o.ruleScore());
-        score.put("model_id", champion.id().toString());
-        score.put("model_version", champion.name() + "@" + champion.version());
+        MlExecution.Run deciding = mlResult == null ? null : mlResult.deciding();
+        if (deciding != null) {
+            score.put("model_id", policy.modelId().toString());
+            String label = deciding.deployment().version() == null ? "" : deciding.deployment().version();
+            score.put("model_version", label.length() > 32 ? label.substring(0, 32) : label);
+            score.put("ml_model_version_id", deciding.deployment().versionId().toString());
+            score.put("ml_deployment_id", deciding.deployment().deploymentId().toString());
+        } else {
+            score.put("model_id", champion.id().toString());
+            score.put("model_version", champion.name() + "@" + champion.version());
+        }
+        score.put("rules_component_score", o.rulesComponentScore());
+        if (governed) {
+            score.put("combination", policy.combination().name());
+        }
+        score.put("degraded", degraded != null);
+        if (degraded != null) {
+            score.put("degraded_reason", degraded);
+        }
         score.put("decision", o.decision().name());
         score.set("reason_codes", json.valueToTree(o.reasonCodes()));
         score.set("features", json.valueToTree(facts));
-        if (o.shadowDecision() != null) {
-            score.put("shadow_decision", o.shadowDecision().name());
+        String shadowDecision = o.shadowDecision() == null ? null : o.shadowDecision().name();
+        ArrayNode modelScores = governed
+                ? ml.rows(mlResult, policy.modelId(), scoreId, subjectType, channel, o, policy) : json.createArrayNode();
+        for (JsonNode r : modelScores) {
+            if (!r.path("decided").asBoolean() && r.hasNonNull("would_decide")) {
+                shadowDecision = r.get("would_decide").asString(); // the governed challenger or shadow, if any
+                break;
+            }
+        }
+        if (shadowDecision != null) {
+            score.put("shadow_decision", shadowDecision);
         }
         score.put("latency_ms", latency);
         if (alertId != null) {
@@ -193,7 +263,7 @@ public class EvaluationService {
             hitView.add(hitMap(h.rule().id(), h.rule().code(), h.rule().action(),
                     h.shadow() ? 0 : h.rule().scoreAdjustment(), h.shadow()));
         }
-        JsonNode stored = store.persist(score, hits, alert, TenantContext.principal());
+        JsonNode stored = store.persist(score, hits, alert, modelScores, TenantContext.principal());
         if (stored == null) {
             // a concurrent request with the same key committed first
             JsonNode prior = db.one("select row_to_json(s)::text from fraud_score s where idempotency_key = ?", key)
@@ -241,6 +311,12 @@ public class EvaluationService {
         out.put("fraud_alert_id", Db.str(row, "fraud_alert_id"));
         out.put("device_fingerprint_id", Db.str(row, "device_fingerprint_id"));
         out.put("latency_ms", row.get("latency_ms").asInt());
+        out.put("rules_component_score", Db.integer(row, "rules_component_score"));
+        out.put("combination", Db.str(row, "combination"));
+        out.put("ml_model_version_id", Db.str(row, "ml_model_version_id"));
+        out.put("ml_deployment_id", Db.str(row, "ml_deployment_id"));
+        out.put("degraded", Db.bool(row, "degraded"));
+        out.put("degraded_reason", Db.str(row, "degraded_reason"));
         out.put("replayed", replayed);
         out.put("created_at", Db.str(row, "created_at"));
         return out;

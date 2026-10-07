@@ -352,6 +352,9 @@ public class FraudRuleService {
 
     // ------------------------------------------------------------------ decision policies
 
+    static final java.util.Set<String> CHANNELS = java.util.Set.of("MOBILE_APP", "WEB", "API", "USSD", "AGENT", "BRANCH",
+            "POS", "ATM", "ECOMMERCE", "CONTACTLESS", "OPEN_BANKING");
+
     public void validatePolicy(JsonNode current, JsonNode changes) {
         int stepUp = pick(changes, current, "step_up_threshold");
         int review = pick(changes, current, "review_threshold");
@@ -364,6 +367,31 @@ public class FraudRuleService {
                 : current != null && current.hasNonNull("timeout_ms") ? current.get("timeout_ms").asInt() : 50;
         if (timeout < 5 || timeout > 2000) {
             throw ApiException.unprocessable("invalid_timeout", "timeout_ms must be between 5 and 2000");
+        }
+        double weight = changes.hasNonNull("model_weight") ? changes.get("model_weight").asDouble() : 0.5;
+        double confidence = changes.hasNonNull("model_confidence") ? changes.get("model_confidence").asDouble() : 0.8;
+        if (weight < 0 || weight > 1 || confidence < 0 || confidence > 1) {
+            throw ApiException.unprocessable("invalid_combination", "model_weight and model_confidence must be between 0 and 1");
+        }
+        if (changes.hasNonNull("model_timeout_ms")
+                && (changes.get("model_timeout_ms").asInt() < 1 || changes.get("model_timeout_ms").asInt() > timeout)) {
+            throw ApiException.unprocessable("invalid_timeout", "model_timeout_ms must be between 1 and timeout_ms");
+        }
+        JsonNode channels = changes.get("channel_thresholds");
+        if (channels != null && !channels.isNull()) {
+            if (!channels.isObject()) {
+                throw ApiException.unprocessable("invalid_thresholds", "channel_thresholds must be {CHANNEL: {step_up, review, block}}");
+            }
+            for (var e : channels.properties()) {
+                JsonNode t = e.getValue();
+                int s = t.path("step_up").asInt(-1);
+                int r = t.path("review").asInt(-1);
+                int b = t.path("block").asInt(-1);
+                if (!CHANNELS.contains(e.getKey()) || s < 0 || b > 1000 || !(s <= r && r <= b)) {
+                    throw ApiException.unprocessable("invalid_thresholds", "channel_thresholds." + e.getKey()
+                            + " must be a risk channel with 0 <= step_up <= review <= block <= 1000");
+                }
+            }
         }
         if ("BLOCK".equals(Db.str(changes, "fallback_decision"))) {
             // a blocking fallback turns a scoring outage into a payments outage

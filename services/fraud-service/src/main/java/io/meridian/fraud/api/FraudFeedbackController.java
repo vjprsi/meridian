@@ -17,10 +17,18 @@ import tools.jackson.databind.node.ObjectNode;
 public class FraudFeedbackController implements FraudFeedbackApi {
     private final FraudAlertService alerts;
     private final Http http;
+    private final io.meridian.fraud.application.MlOperationsService ops;
 
-    public FraudFeedbackController(FraudAlertService alerts, Http http) {
+    public FraudFeedbackController(FraudAlertService alerts, Http http, io.meridian.fraud.application.MlOperationsService ops) {
         this.alerts = alerts;
         this.http = http;
+        this.ops = ops;
+    }
+
+    @Override
+    public ResponseEntity<java.util.Map<String, Object>> fraudFeedbackTrainingSet(java.time.OffsetDateTime fromTs,
+                                                                                java.time.OffsetDateTime toTs, Integer limit) {
+        return ResponseEntity.ok(ops.trainingSet(fromTs, toTs, limit));
     }
 
     @Override
