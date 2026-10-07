@@ -18,7 +18,18 @@ export default function AuthCallback() {
         const s = sessionFromOidc(user);
         saveSession(s);
         setSession(s);
-        router.replace("/");
+        // back from an identity provider action (enrol / remove a factor): return to the page that started it, with
+        // Keycloak's kc_action_status (success, cancelled, error) for the notice there
+        let to = "/";
+        try {
+          const saved = sessionStorage.getItem("meridian.customer.returnTo");
+          sessionStorage.removeItem("meridian.customer.returnTo");
+          if (saved && /^\/[A-Za-z0-9/_-]*$/.test(saved)) {
+            const status = new URLSearchParams(window.location.search).get("kc_action_status");
+            to = status ? `${saved}?action=${encodeURIComponent(status)}` : saved;
+          }
+        } catch { /* storage unavailable: home */ }
+        router.replace(to);
       })
       .catch((e) => setError(String(e)));
   }, [router, setSession]);

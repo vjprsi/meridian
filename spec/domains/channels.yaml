@@ -18,6 +18,7 @@ description: >
 
 enums:
   CustomerActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
+  CustomerSessionStatus: [ACTIVE, REVOKED, ENDED]
   LostCardReason: [LOST, STOLEN]
   MyPaymentKind: [OWN_TRANSFER, PAYEE]
   AgentActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, SIGNATURE_INVALID, RATE_LIMITED, FAILED]
@@ -51,7 +52,11 @@ services:
     database: customer_channel_db
     description: >
       Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning
-      services); keeps only the audit trail of what each customer did or was refused.
+      services); keeps the audit trail of what each customer did or was refused and the registry of the customer's
+      sign-in sessions (keyed by the identity provider's session id, the token's sid claim). Step-up follows the
+      identity provider's Levels of Authentication: money movement and security changes need acr 2 (password plus a
+      second factor) from an authentication at most a few minutes old, per operation configurable; otherwise 401
+      step_up_required with an RFC 9470 WWW-Authenticate challenge (acr_values, max_age).
     tables:
       - name: customer_action
         prefix: cact
@@ -61,7 +66,7 @@ services:
         columns:
           - "customer_id uuid nn ref=customer idx | Signed-in customer (from the token)"
           - "action string(64) nn | Operation (operation id of the /v1/me endpoint)"
-          - "object_type string(40) | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT"
+          - "object_type string(40) | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT, SESSION"
           - "object_id uuid | Object acted on, or the object id that was refused"
           - "outcome enum:CustomerActionOutcome nn | Result"
           - "error_code string(64) | Problem code when not SUCCEEDED"
@@ -73,7 +78,57 @@ services:
           - "user_agent string(255) | Client user agent"
         indexes: [[customer_id, created_at], [outcome, created_at]]
 
+      - name: customer_session
+        prefix: csess
+        description: >
+          A sign-in session of the customer, registered the first time the channel sees the identity provider session
+          (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access
+          tokens stay valid at the identity provider until they expire) and ended at the identity provider when the
+          sessions client is configured. A session from a device the customer never used before raises
+          channels.customer_session.new_device.
+        ext: false
+        columns:
+          - "customer_id uuid nn ref=customer idx | Signed-in customer (from the token)"
+          - "session_id string(64) nn | Identity provider session id (sid claim)"
+          - "subject string(64) | Identity provider user id (token sub)"
+          - "device_hash string(64) | SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent"
+          - "device_label string(120) | Readable device, e.g. Chrome on Windows"
+          - "user_agent string(255) | Client user agent when the session was first seen"
+          - "ip_address inet | Client address when the session was first seen"
+          - "last_ip_address inet | Client address of the latest request"
+          - "first_seen_at ts nn | First request of the session through the channel"
+          - "last_seen_at ts nn | Latest request (updated at most once a minute)"
+          - "auth_time ts | Last authentication of the session (token auth_time)"
+          - "acr string(16) | Highest authentication level seen in the session"
+          - "new_device bool nn default=false | The device had not been used by the customer before (alert sent)"
+          - "status enum:CustomerSessionStatus nn default=ACTIVE | ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)"
+          - "revoked_at ts | When the session was signed out"
+          - "revoked_reason string(255) | Why (customer's reason, SIGN_OUT_EVERYWHERE, ...)"
+          - "idp_session_ended bool nn default=false | The identity provider confirmed the session was ended"
+        response_only:
+          - "is_current bool | The session of the request"
+        unique: [[customer_id, session_id]]
+        indexes: [[customer_id, status, last_seen_at]]
+
     apis:
+      - resource: my-sessions
+        path: /v1/me/sessions
+        table: customer_session
+        description: The customer's sign-in sessions and devices; sign out one session or everywhere
+        ops: []
+        actions:
+          - "GET / | The customer's sessions, active ones first (refreshed from the identity provider when the sessions client is configured; is_current marks this session) | | customer_session[]"
+          - "POST /{session_id}/revoke | Sign out one of the customer's sessions: refused by the channel at once and ended at the identity provider | reason string(255) | customer_session"
+          - "POST /revoke-all | Sign out everywhere: every active session of the customer, including this one unless include_current is false | include_current bool | customer_session[]"
+
+      - resource: my-security
+        path: /v1/me/security
+        table: customer_action
+        description: The customer's sign-in security (authentication strength, second factors, step-up policy)
+        ops: []
+        actions:
+          - "GET / | The current authentication (acr, amr, auth_time, session), the second factors enrolled at the identity provider ({id, type, label, created_at}; empty when the sessions client is not configured) and the step-up policy per operation ({operation, acr, max_age_seconds}) | | object"
+
       - resource: my-profile
         path: /v1/me/profile
         table: customer_action
@@ -304,6 +359,8 @@ services:
 
     events:
       - "channels.customer_action.denied | customer_action | A customer referenced an object that is not theirs (object-level authorization denial)"
+      - "channels.customer_session.new_device | customer_session | A customer signed in from a device they had not used before (notification rule NEW_DEVICE_SIGN_IN alerts the customer)"
+      - "channels.customer_session.revoked | customer_session | A customer signed out one of their sessions or everywhere"
 
   # ------------------------------------------------------------------ agent-channel-service
   - name: agent-channel-service

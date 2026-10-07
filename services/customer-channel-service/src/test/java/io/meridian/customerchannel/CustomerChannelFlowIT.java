@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -540,6 +541,13 @@ class CustomerChannelFlowIT {
                         h -> assertThat(h).contains("insufficient_user_authentication").contains("max_age=300"));
             }
         }
+        // a recent password-only authentication (acr 1) is not enough: RFC 9470 challenge asks for acr 2
+        HttpResponse<String> weak = send(A, now(), "1", Map.of(), "POST", "/v1/me/payments", transfer,
+                UUID.randomUUID().toString());
+        assertThat(weak.statusCode()).isEqualTo(401);
+        assertThat(weak.headers().firstValue("WWW-Authenticate")).hasValueSatisfying(h -> assertThat(h)
+                .contains("error=\"insufficient_user_authentication\"").contains("acr_values=\"2\"")
+                .contains("max_age=300"));
         assertThat(bank.writes()).hasSize(writes);
         // validation needs no step-up; a fresh authentication passes
         assertThat(call(A, null, "POST", "/v1/me/payments/validate", transfer).statusCode()).isEqualTo(200);
@@ -594,6 +602,101 @@ class CustomerChannelFlowIT {
         assertThat(events).isGreaterThanOrEqualTo(30);
     }
 
+    // ------------------------------------------------------------------ sessions and devices
+
+    @Test
+    @Order(8)
+    void sessionsAreRegisteredNewDevicesAlertedAndSignedOutSessionsRefused() throws Exception {
+        String laptop = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36";
+        String phone = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0 Mobile Safari/537.36";
+        String s1 = "sess-" + UUID.randomUUID();
+        String s2 = "sess-" + UUID.randomUUID();
+        String s3 = "sess-" + UUID.randomUUID();
+        Map<String, String> h1 = Map.of("X-Session-Id", s1, "User-Agent", laptop, "X-Device-Id", "laptop-1");
+        Map<String, String> h2 = Map.of("X-Session-Id", s2, "User-Agent", phone, "X-Device-Id", "phone-1");
+        Map<String, String> h3 = Map.of("X-Session-Id", s3, "User-Agent", laptop, "X-Device-Id", "laptop-1");
+        // first session ever: registered, no alert; a second device: alert; the first device again: no alert
+        assertThat(send(B, now(), "2", h1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        assertThat(send(B, now(), "2", h2, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        assertThat(send(B, now(), "2", h3, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        assertThat(newDeviceEvents(B)).isEqualTo(1);
+
+        HttpResponse<String> listed = send(B, now(), "2", h1, "GET", "/v1/me/sessions", null, null);
+        JsonNode sessions = ok(listed, "list sessions").path("data");
+        assertThat(sessions).hasSize(3);
+        JsonNode current = null;
+        JsonNode phoneSession = null;
+        for (JsonNode s : sessions) {
+            assertThat(s.path("customer_id").asString()).isEqualTo(B);
+            if (s.path("is_current").asBoolean()) {
+                current = s;
+            }
+            if (s.path("session_id").asString().equals(s2)) {
+                phoneSession = s;
+            }
+        }
+        assertThat(current).isNotNull();
+        assertThat(current.path("session_id").asString()).isEqualTo(s1);
+        assertThat(current.path("device_label").asString()).isEqualTo("Chrome on Windows");
+        assertThat(phoneSession.path("new_device").asBoolean()).isTrue();
+        assertThat(phoneSession.path("device_label").asString()).isEqualTo("Chrome on Android");
+        // another customer cannot see or revoke B's sessions
+        for (JsonNode s : ok(send(A, now(), "2", Map.of("X-Session-Id", "a-" + UUID.randomUUID()), "GET",
+                "/v1/me/sessions", null, null), "A sessions").path("data")) {
+            assertThat(s.path("customer_id").asString()).isEqualTo(A);
+        }
+        assertThat(send(A, now(), "2", Map.of(), "POST", "/v1/me/sessions/" + id(phoneSession) + "/revoke", "{}",
+                UUID.randomUUID().toString()).statusCode()).isEqualTo(404);
+
+        // sign out the phone: its next request is refused at once
+        JsonNode revoked = ok(send(B, now(), "2", h1, "POST", "/v1/me/sessions/" + id(phoneSession) + "/revoke",
+                "{\"reason\":\"lost phone\"}", UUID.randomUUID().toString()), "revoke");
+        assertThat(revoked.path("status").asString()).isEqualTo("REVOKED");
+        assertThat(revoked.path("revoked_reason").asString()).isEqualTo("lost phone");
+        HttpResponse<String> refused = send(B, now(), "2", h2, "GET", "/v1/me/cards", null, null);
+        assertThat(refused.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(refused.body()).path("code").asString()).isEqualTo("session_revoked");
+
+        // sign out everywhere except this session, then everywhere
+        JsonNode others = ok(send(B, now(), "2", h1, "POST", "/v1/me/sessions/revoke-all",
+                "{\"include_current\":false}", UUID.randomUUID().toString()), "revoke others").path("data");
+        assertThat(others).hasSize(1);
+        assertThat(others.get(0).path("session_id").asString()).isEqualTo(s3);
+        assertThat(send(B, now(), "2", h3, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(401);
+        assertThat(send(B, now(), "2", h1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        ok(send(B, now(), "2", h1, "POST", "/v1/me/sessions/revoke-all", "{}", UUID.randomUUID().toString()),
+                "revoke all");
+        assertThat(send(B, now(), "2", h1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(401);
+        long revokedEvents = TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "select count(*) from outbox where event_type = 'channels.customer_session.revoked' "
+                        + "and payload ->> 'customer_id' = ?").param(B).query(Long.class).single());
+        assertThat(revokedEvents).isEqualTo(3);
+    }
+
+    @Test
+    @Order(9)
+    void securityOverviewShowsTheAuthenticationAndThePolicy() {
+        JsonNode sec = ok(send(A, now(), "2", Map.of("X-Amr", "pwd,otp", "X-Session-Id", "sec-" + UUID.randomUUID()),
+                "GET", "/v1/me/security", null, null), "security");
+        assertThat(sec.path("authentication").path("level").asInt()).isEqualTo(2);
+        assertThat(sec.path("authentication").path("amr").toString()).contains("otp");
+        assertThat(sec.path("factors_available").asBoolean()).isFalse();     // no identity provider client in tests
+        JsonNode ops = sec.path("step_up").path("operations");
+        assertThat(ops.size()).isEqualTo(10);
+        ops.forEach(o -> {
+            assertThat(o.path("acr").asString()).isEqualTo("2");
+            assertThat(o.path("satisfied").asBoolean()).isTrue();
+        });
+        JsonNode weak = ok(send(A, now(), "1", Map.of(), "GET", "/v1/me/security", null, null), "security acr 1");
+        weak.path("step_up").path("operations").forEach(o -> assertThat(o.path("satisfied").asBoolean()).isFalse());
+    }
+
+    private long newDeviceEvents(String customer) throws Exception {
+        return TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "select count(*) from outbox where event_type = 'channels.customer_session.new_device' "
+                        + "and payload ->> 'customer_id' = ?").param(customer).query(Long.class).single());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static String id(JsonNode n) {
@@ -641,12 +744,23 @@ class CustomerChannelFlowIT {
 
     private HttpResponse<String> send(String customer, Long authTime, String method, String path, String body,
                                       String key) {
+        // a dev-mode authentication with a time is a strong one (acr 2: password + second factor)
+        return send(customer, authTime, authTime == null ? null : "2", Map.of(), method, path, body, key);
+    }
+
+    /** Dev-mode request with an explicit acr and extra headers (X-Session-Id, X-Device-Id, User-Agent...). */
+    HttpResponse<String> send(String customer, Long authTime, String acr, Map<String, String> headers, String method,
+                              String path, String body, String key) {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(base() + path))
                 .header("X-Tenant-Id", TENANT).header("X-Customer-Id", customer)
                 .header("Content-Type", "application/json");
         if (authTime != null) {
             b.header("X-Auth-Time", String.valueOf(authTime));
         }
+        if (acr != null) {
+            b.header("X-Acr", acr);
+        }
+        headers.forEach(b::header);
         if (!method.equals("GET")) {
             b.header("Idempotency-Key", key);
         }

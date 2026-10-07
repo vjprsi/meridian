@@ -3,7 +3,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths as MePaths } from "./gen/customer-channel";
 import type { paths as CustomerPaths } from "./gen/customer";
-import { authHeaders } from "@/lib/auth";
+import { authHeaders, parseChallenge, type StepUpChallenge } from "@/lib/auth";
 
 /** RFC 9457 problem returned by every Meridian service. */
 export interface Problem {
@@ -17,10 +17,23 @@ export interface Problem {
 }
 
 export class ApiError extends Error {
-  /** Seconds to wait before retrying (429: Retry-After header or a server hint), when known. */
-  constructor(public problem: Problem, public retryAfterS?: number) {
+  /**
+   * @param retryAfterS seconds to wait before retrying (429: Retry-After header or a server hint), when known
+   * @param challenge   401 step_up_required: what the server asks for (WWW-Authenticate acr_values / max_age)
+   */
+  constructor(public problem: Problem, public retryAfterS?: number, public challenge?: StepUpChallenge) {
     super(problem.detail ?? problem.title ?? "Request failed");
   }
+}
+
+/** The server wants a stronger or more recent authentication (RFC 9470); the app steps up and retries. */
+export function isStepUpRequired(e: unknown): e is ApiError {
+  return e instanceof ApiError && e.problem.code === "step_up_required";
+}
+
+/** The session was signed out (from another device or "sign out everywhere"): the app signs out locally. */
+export function isSessionRevoked(e: unknown): e is ApiError {
+  return e instanceof ApiError && e.problem.code === "session_revoked";
 }
 
 const auth: Middleware = {
@@ -68,7 +81,8 @@ export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }):
   if (r.error !== undefined || !r.response.ok) {
     const p = r.error;
     throw new ApiError({ status: r.response.status,
-      ...(p && typeof p === "object" ? (p as Problem) : { detail: p ? String(p) : r.response.statusText }) });
+      ...(p && typeof p === "object" ? (p as Problem) : { detail: p ? String(p) : r.response.statusText }) },
+      undefined, r.response.status === 401 ? parseChallenge(r.response.headers.get("WWW-Authenticate")) : undefined);
   }
   return r.data as T;
 }

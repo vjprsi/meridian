@@ -111,6 +111,18 @@ customer_id from filters/bodies and do no ownership checks, so customer scoping 
 step-up for money movement), Keycloak customer client + customer_id claim, customer tokens rejected by operator
 APIs. Follow-ups: customer sessions; customer MFA/passkeys.
 
+Done (2026-10-07, CHN-CUSTOMER-MFA): Keycloak Levels of Authentication for `meridian-customer-web` (browser flow
+override: acr 1 password, acr 2 WebAuthn / passkey / TOTP; `acr.loa.map`, amr references, enrolment and removal as
+application-initiated actions; realm validated against Keycloak 26.4); channel step-up on acr + auth_time (+ optional
+amr) per operation with RFC 9470 challenges (`acr_values`, `max_age`); customer sessions (`customer_session` keyed
+by sid, `/v1/me/sessions` list / revoke / revoke-all, 401 `session_revoked`, Keycloak admin client
+`meridian-customer-sessions`), `GET /v1/me/security`, new-device alert (`channels.customer_session.new_device`,
+starter-pack rule NEW_DEVICE_SIGN_IN); customer-web Security page and acr 2 step-up popup. The realm now also defines
+the OIDC `profile` / `email` / `web-origins` scopes (a freshly imported realm refused `openid profile email`).
+Remaining (CHN-CUSTOMER-MFA-2): the first second factor is enrolled with the password only; no SMS OTP factor or
+recovery codes; factor changes are not alerted; `/v1/me/security` untyped; Keycloak has no role narrower than
+`manage-users` for ending sessions (consider fine-grained admin permissions v2).
+
 Done: inbox derives the caller (`X-On-Behalf-Of-Customer` honoured only for internal tokens; sender/reader/opened_by
 server-set; include_internal staff-only; customers confined to their own threads, deny-by-default). Onboarding public
 applicant surface (`/v1/onboarding/public/applications`: rate-limited start, hashed applicant tokens bound to the
