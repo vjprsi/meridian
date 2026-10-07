@@ -162,6 +162,9 @@ class Domain:
     description: str
     enums: dict
     services: list
+    # One scope for every operation of the domain instead of <domain>:read / <domain>:write (e.g. channels:customer
+    # for the customer channel: the token of a signed-in customer, never granted to staff or integration clients).
+    scope: str | None = None
 
 
 def parse_column(text: str, ctx: str) -> Column:
@@ -310,8 +313,11 @@ def load_domains() -> list:
                                     parts[2] if len(parts) > 2 else "", did, sname))
             services.append(Service(sname, did, db, s.get("language", "java"),
                                     s.get("description", ""), tables, apis, events))
+        scope = raw.get("scope")
+        if scope is not None and not re.fullmatch(rf"{re.escape(did)}:[a-z][a-z0-9_-]*", str(scope)):
+            raise SpecError(f"{path.name}: scope must be '{did}:<name>', got {scope!r}")
         domains.append(Domain(did, raw.get("title", did), int(raw.get("phase", 1)),
-                              raw.get("description", ""), enums, services))
+                              raw.get("description", ""), enums, services, scope))
     return domains
 
 
@@ -402,7 +408,8 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
                 if api.resource in seen_res and seen_res[api.resource] != d.id:
                     errors.append(f"[{d.id}] resource name '{api.resource}' also used in domain {seen_res[api.resource]}")
                 seen_res[api.resource] = d.id
-                bases = [api.path, api.path + "/{id}"] + [api.path + act.path for act in api.actions]
+                bases = [api.path, api.path + "/{id}"] + [api.path if act.path == "/" else api.path + act.path
+                                                          for act in api.actions]
                 shapes += [(d.id, b) for b in bases]
     for i, (da, pa) in enumerate(shapes):
         sa = pa.strip("/").split("/")
@@ -866,7 +873,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                "info": {"title": f"Meridian Core — {d.title} API", "version": "1.0.0", "description": d.description, "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}},
                "servers": bundle["servers"], "security": [{"oauth2": []}], "tags": [], "paths": {},
                "components": copy.deepcopy(COMMON_COMPONENTS)}
-        scopes = {f"{d.id}:read": f"Read {d.title}", f"{d.id}:write": f"Change {d.title}"}
+        scopes = ({d.scope: f"{d.title} (signed-in customer)"} if d.scope
+                  else {f"{d.id}:read": f"Read {d.title}", f"{d.id}:write": f"Change {d.title}"})
         for flow in doc["components"]["securitySchemes"]["oauth2"]["flows"].values():
             flow["scopes"] = dict(scopes)
         for flow in bundle["components"]["securitySchemes"]["oauth2"]["flows"].values():
@@ -894,8 +902,9 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         oid = f"{op}{i}"
                         i += 1
                     used_ids.add(oid)
+                    granted = d.scope or f"{d.id}:{scope}"
                     o = {"operationId": oid, "summary": summary, "tags": [tag],
-                         "security": [{"oauth2": [f"{d.id}:{scope}"]}],
+                         "security": [{"oauth2": [granted]}],
                          "parameters": (params or []), "responses": {}}
                     if request is not None:
                         o["requestBody"] = {"required": True, "content": {"application/json": {"schema": request}}}
@@ -919,7 +928,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     else:
                         # Platform-global tables (no tenant column) are shared by every tenant: only platform
                         # operators (meridian:admin) may change them; reads use the normal domain scope.
-                        need = "meridian:admin" if (scope == "write" and not t.tenant) else f"{d.id}:{scope}"
+                        need = "meridian:admin" if (scope == "write" and not t.tenant and not d.scope) else granted
                         o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
                         o["x-required-scope"] = need
                     o["x-table"] = t.name
@@ -929,7 +938,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     for target in (doc, bundle):
                         target["paths"].setdefault(path, {})[method] = o
                     endpoints.append(Endpoint(oid, method.upper(), path, summary, d.id, s.name, a.resource,
-                                              t.name, kind, "public" if public else f"{d.id}:{scope}", req_schema,
+                                              t.name, kind, "public" if public else granted, req_schema,
                                               resp_schema, sorted(set(a.fr + t.fr)), public))
 
                 rn = camel(a.resource)
@@ -970,11 +979,18 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     add("delete", ipath, f"{rn}Delete", "delete", f"Delete {noun[:-1] if noun.endswith('s') else noun}",
                         params=iparams, status="204", scope="write", extra_errs=ERR(("404", "NotFound")))
                 for act in a.actions:
-                    full = a.path + act.path
+                    # "/" addresses the resource path itself (/v1/me/cards); action paths made only of path
+                    # parameters (/{card_id}) are named by verb: <resource>List / Get / Create / Update / Delete.
+                    full = a.path if act.path == "/" else a.path + act.path
                     segs = [x for x in act.path.split("/") if x and not x.startswith("{")]
-                    aname = camel(a.resource) + pascal("-".join(segs) or act.method.lower())
-                    if act.method == "GET":
-                        aname += "Get" if not segs else ""
+                    if not segs and (act.path == "/" or "{" in act.path):
+                        verb = {"GET": "List" if (act.response or "").endswith("[]") else "Get", "POST": "Create",
+                                "PUT": "Replace", "PATCH": "Update", "DELETE": "Delete"}[act.method]
+                        aname = camel(a.resource) + verb
+                    else:
+                        aname = camel(a.resource) + pascal("-".join(segs) or act.method.lower())
+                        if act.method == "GET":
+                            aname += "Get" if not segs else ""
                     if aname in used_ids:  # same segments, different method/params: name the verb
                         verb = {"GET": "Get", "POST": "Add", "PUT": "Replace", "PATCH": "Update",
                                 "DELETE": "Remove"}[act.method]
@@ -983,7 +999,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     req = None
                     req_name = ""
                     if act.body:
-                        req_name = f"{pascal(a.resource)}{pascal('-'.join(segs) or 'Action')}Request"
+                        req_name = (f"{pascal(a.resource)}"
+                                    f"{pascal('-'.join(segs)) or aname[len(camel(a.resource)):] or 'Action'}Request")
                         bprops = dict((c.name, oa_type(c, enums)) for c in act.body)
                         breq = [c.name for c in act.body if c.nn]
                         sch = {"type": "object", "properties": bprops}
@@ -1166,6 +1183,8 @@ def gen_manifest(domains):
                 "tags": sorted({" ".join(w.capitalize() for w in a.resource.split("-")) for a in s.apis}),
                 "tables": len(s.tables), "events": [e.name for e in s.events],
             })
+            if d.scope:
+                out[-1]["scope"] = d.scope
     mp.write_text(json.dumps(out, indent=2), encoding="utf-8", newline="\n")
 
 

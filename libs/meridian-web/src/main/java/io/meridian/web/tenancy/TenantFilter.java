@@ -2,6 +2,8 @@ package io.meridian.web.tenancy;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.MeridianProperties;
+import io.meridian.web.security.CustomerContext;
+import io.meridian.web.security.CustomerContext.CustomerPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +18,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Binds the request's tenant to {@link TenantContext}. In JWT mode the tenant comes only from the token's
  * tenant claim; in dev mode from the {@code X-Tenant-Id} header. Runs after Spring Security.
+ *
+ * <p>Also binds {@link CustomerContext} for customer tokens (scope {@code channels:customer} with a
+ * {@code customer_id} claim; dev mode: {@code X-Customer-Id}). The principal of a customer request is
+ * {@code customer:<id>}.
  */
 public class TenantFilter extends OncePerRequestFilter {
     public static final String TENANT_HEADER = "X-Tenant-Id";
@@ -33,6 +39,7 @@ public class TenantFilter extends OncePerRequestFilter {
         UUID tenant = null;
         String principal = "anonymous";
         String via = null;
+        CustomerPrincipal customer = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
             String claim = jwt.getClaimAsString(props.tenantClaim());
@@ -47,19 +54,31 @@ public class TenantFilter extends OncePerRequestFilter {
                 String onBehalf = req.getHeader(USER_HEADER);
                 via = jwt.getClaimAsString("azp");
                 principal = onBehalf == null || onBehalf.isBlank() ? "svc:" + via : onBehalf;
+            } else {
+                customer = CustomerContext.fromJwt(jwt).orElse(null);
             }
         } else if (props.devMode()) {
             tenant = parse(req.getHeader(TENANT_HEADER));
             String user = req.getHeader(USER_HEADER);
             principal = user == null || user.isBlank() ? "dev-user" : user;
+            customer = CustomerContext.fromDevHeaders(req.getHeader(CustomerContext.CUSTOMER_HEADER),
+                    req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
+                    .orElse(null);
+        }
+        if (customer != null) {
+            principal = customer.principalName();
         }
         try {
             if (tenant != null) {
                 TenantContext.set(tenant, principal, via);
             }
+            if (customer != null) {
+                CustomerContext.set(customer);
+            }
             chain.doFilter(req, res);
         } finally {
             TenantContext.clear();
+            CustomerContext.clear();
         }
     }
 

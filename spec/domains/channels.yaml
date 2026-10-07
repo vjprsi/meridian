@@ -1,0 +1,277 @@
+domain: channels
+title: Customer Channels
+phase: 3
+scope: channels:customer
+description: >
+  Experience API for the bank's own customer apps (web banking, mobile). Every operation acts for the signed-in
+  customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never
+  from a path, query or body. The service calls the domain services with its own service identity and the
+  customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order,
+  thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds
+  request bodies server-side and requires a recent authentication (step-up) for money movement and security
+  changes. Domain services keep their operator APIs; customer tokens carry no domain scope and are rejected there.
+
+enums:
+  CustomerActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
+  LostCardReason: [LOST, STOLEN]
+  MyPaymentKind: [OWN_TRANSFER, PAYEE]
+
+services:
+  # ------------------------------------------------------------------ customer-channel-service
+  - name: customer-channel-service
+    database: customer_channel_db
+    description: >
+      Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning
+      services); keeps only the audit trail of what each customer did or was refused.
+    tables:
+      - name: customer_action
+        prefix: cact
+        description: Audit trail of customer actions through the channel, including object-level denials and step-up refusals
+        immutable: true
+        ext: false
+        columns:
+          - "customer_id uuid nn ref=customer idx | Signed-in customer (from the token)"
+          - "action string(64) nn | Operation (operation id of the /v1/me endpoint)"
+          - "object_type string(40) | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT"
+          - "object_id uuid | Object acted on, or the object id that was refused"
+          - "outcome enum:CustomerActionOutcome nn | Result"
+          - "error_code string(64) | Problem code when not SUCCEEDED"
+          - "result_id uuid | Id of the record created downstream (payment, payee, standing order...)"
+          - "auth_age_seconds int | Seconds since the customer's last authentication when the action ran"
+          - "acr string(64) | Authentication context class of the token"
+          - "channel string(16) | WEB or MOBILE"
+          - "ip_address inet | Client address (first X-Forwarded-For hop)"
+          - "user_agent string(255) | Client user agent"
+        indexes: [[customer_id, created_at], [outcome, created_at]]
+
+    apis:
+      - resource: my-profile
+        path: /v1/me/profile
+        table: customer_action
+        description: The signed-in customer's own customer record
+        ops: []
+        actions:
+          - "GET / | The signed-in customer's profile | | customer"
+          - "PATCH / | Change the customer's own preferences (allow-listed fields only; name and identity changes go through KYC) | preferred_language string(10) nn | customer"
+
+      - resource: my-contacts
+        path: /v1/me/contacts
+        table: customer_action
+        description: The customer's phone numbers and e-mail addresses, with OTP verification
+        ops: []
+        actions:
+          - "GET / | The customer's contact points | | customer_contact[]"
+          - "POST / | Add a contact point (step-up; unverified until the OTP is confirmed) | contact_type enum:CustomerContactType nn, phone phone, email email, label string(40) | customer_contact"
+          - "POST /{contact_id}/send-verification | Send a verification code to one of the customer's contact points | | contact_verification"
+          - "POST /{contact_id}/verify | Confirm a contact point with the code that was sent | code string(12) nn | customer_contact"
+
+      - resource: my-addresses
+        path: /v1/me/addresses
+        table: customer_action
+        description: The customer's postal addresses (read-only; changes need proof of address)
+        ops: []
+        actions:
+          - "GET / | The customer's addresses | | customer_address[]"
+
+      - resource: my-devices
+        path: /v1/me/devices
+        table: customer_action
+        description: Devices bound to the customer's digital banking
+        ops: []
+        actions:
+          - "GET / | The customer's devices | | customer_device[]"
+          - "POST /{device_id}/revoke | Revoke one of the customer's devices (step-up) | reason string(255) | customer_device"
+
+      - resource: my-notification-preferences
+        path: /v1/me/notification-preferences
+        table: customer_action
+        description: Notification channels the customer opted in to or out of
+        ops: []
+        actions:
+          - "GET / | The customer's notification preferences | | notification_preference[]"
+          - "PUT / | Set the preference for one category and channel (created or updated) | category enum:NotificationCategory nn, channel enum:NotificationChannel nn, is_enabled bool nn | notification_preference"
+
+      - resource: my-accounts
+        path: /v1/me/accounts
+        table: customer_action
+        description: Deposit accounts the customer owns or holds (joint holder, signatory with view rights)
+        ops: []
+        actions:
+          - "GET / | Accounts the customer owns or holds with view rights (closed and rejected accounts excluded) | | deposit_account[]"
+          - "GET /holdings | The customer's active holder records on accounts owned by someone else (role, can_view, can_transact) | | account_holder[]"
+          - "GET /{account_id} | One of the customer's accounts | | deposit_account"
+          - "GET /{account_id}/balance | Balance of one of the customer's accounts | | account_balance"
+          - "GET /{account_id}/transactions?from:ts&to:ts | Posted entries of one of the customer's accounts | | ledger_entry[]"
+          - "GET /{account_id}/statements | Statements of one of the customer's accounts | | statement[]"
+          - "POST /{account_id}/statements | Request an on-demand statement for one of the customer's accounts | period_start date nn, period_end date nn, format enum:StatementFormat | statement"
+          - "GET /{account_id}/statements/{statement_id}/download | Download a statement of one of the customer's accounts | | application/octet-stream"
+          - "GET /{account_id}/confirmation-letter | Account confirmation letter for one of the customer's accounts | | text/plain"
+
+      - resource: my-standing-orders
+        path: /v1/me/standing-orders
+        table: customer_action
+        description: Standing orders on the customer's accounts
+        ops: []
+        actions:
+          - "GET /?account_id:uuid | Standing orders on the customer's accounts (optionally one account) | | standing_order[]"
+          - "POST / | Create a standing order from an account the customer may transact on, to one of the customer's payees or own accounts (step-up) | account_id uuid nn, payee_id uuid, beneficiary_account_id uuid, amount amount nn, frequency enum:ScheduleFrequency nn, start_date date nn, end_date date, reference string(140) | standing_order"
+          - "POST /{standing_order_id}/pause | Pause one of the customer's standing orders | | standing_order"
+          - "POST /{standing_order_id}/resume | Resume one of the customer's standing orders (step-up) | | standing_order"
+          - "POST /{standing_order_id}/cancel | Cancel one of the customer's standing orders | | standing_order"
+
+      - resource: my-payees
+        path: /v1/me/payees
+        table: customer_action
+        description: The customer's saved beneficiaries
+        ops: []
+        actions:
+          - "GET / | The customer's payees (deleted ones excluded) | | payee[]"
+          - "POST / | Add a payee (step-up) | name string(140) nn, nickname string(64), beneficiary_type string(16), account_id_type enum:PaymentAccountIdType nn, account_number string(64) nn, bank_name string(140), agent_bic string(11), agent_clearing_id string(35), country country nn, currency currency | payee"
+          - "DELETE /{payee_id} | Remove one of the customer's payees | | none"
+          - "POST /{payee_id}/verify | Confirmation of Payee check on one of the customer's payees | | payee_verification"
+          - "POST /{payee_id}/trust | Trust one of the customer's payees (skips the cooling-off period; step-up) | | payee"
+
+      - resource: my-payments
+        path: /v1/me/payments
+        table: customer_action
+        description: Payments initiated by or for the customer
+        ops: []
+        actions:
+          - "GET /?account_id:uuid&status:enum:PaymentStatus | The customer's payments, newest first | | payment[]"
+          - "POST /validate | Check a payment before confirmation (account, payee, route, cut-off, fees, Confirmation of Payee); the body is the same as for create | kind enum:MyPaymentKind nn, from_account_id uuid nn, to_account_id uuid, payee_id uuid, amount amount nn, reference string(140), requested_execution_date date, channel enum:PaymentChannel | object"
+          - "POST / | Make a payment from an account the customer may transact on, to an own account or a payee (step-up; one Idempotency-Key per confirmation) | kind enum:MyPaymentKind nn, from_account_id uuid nn, to_account_id uuid, payee_id uuid, amount amount nn, reference string(140), requested_execution_date date, channel enum:PaymentChannel | payment"
+          - "GET /{payment_id} | One of the customer's payments | | payment"
+          - "GET /{payment_id}/receipt | Receipt of one of the customer's payments | | application/pdf"
+
+      - resource: my-cards
+        path: /v1/me/cards
+        table: customer_action
+        description: The customer's cards, their channel blocks and spend limits
+        ops: []
+        actions:
+          - "GET / | The customer's cards (closed and replaced cards excluded) | | card[]"
+          - "GET /{card_id} | One of the customer's cards | | card"
+          - "POST /{card_id}/freeze | Freeze one of the customer's cards | | card"
+          - "POST /{card_id}/unfreeze | Unfreeze one of the customer's cards (step-up) | | card"
+          - "POST /{card_id}/report-lost | Block one of the customer's cards as lost or stolen, optionally ordering a replacement | reason enum:LostCardReason nn, replace bool | card"
+          - "GET /{card_id}/controls | Controls on one of the customer's cards | | card_control[]"
+          - "PUT /{card_id}/channels/{channel} | Block or allow a channel (e-commerce, contactless, ATM, POS) on one of the customer's cards | blocked bool nn | card_control"
+          - "GET /{card_id}/limits | Spend limits of one of the customer's cards | | card_spend_limit[]"
+          - "PUT /{card_id}/limits | Set the spend limit for one period and channel on one of the customer's cards (step-up) | period enum:CardLimitPeriod nn, channel enum:CardChannel, max_amount amount nn, currency currency | card_spend_limit"
+
+      - resource: my-loans
+        path: /v1/me/loans
+        table: customer_action
+        description: The customer's loans
+        ops: []
+        actions:
+          - "GET / | The customer's loans | | loan[]"
+          - "GET /{loan_id} | One of the customer's loans | | loan"
+          - "GET /{loan_id}/schedule | Repayment schedule of one of the customer's loans | | schedule_installment[]"
+          - "GET /{loan_id}/repayments | Repayments of one of the customer's loans | | loan_repayment[]"
+          - "POST /{loan_id}/repay | Repay one of the customer's loans from an account the customer may transact on (step-up) | amount amount nn, source_account_id uuid nn | loan_repayment"
+
+      - resource: my-wallets
+        path: /v1/me/wallets
+        table: customer_action
+        description: The customer's mobile money wallets
+        ops: []
+        actions:
+          - "GET / | The customer's wallets (closed ones excluded) | | wallet[]"
+          - "GET /{wallet_id} | One of the customer's wallets | | wallet"
+          - "GET /{wallet_id}/balance | Balance of one of the customer's wallets | | account_balance"
+          - "GET /{wallet_id}/transactions?from:ts&to:ts | Transactions of one of the customer's wallets | | wallet_transaction[]"
+
+      - resource: my-insights
+        path: /v1/me/insights
+        table: customer_action
+        description: Spending analytics and insight cards for the customer
+        ops: []
+        actions:
+          - "GET /spending?from:date!&to:date!&currency:currency | The customer's spend and income per category for a date range | | object"
+          - "GET /categories | Spend categories (reference data for budgets) | | spend_category[]"
+          - "GET /cards | The customer's insight cards (dismissed and expired excluded) | | financial_insight[]"
+          - "POST /cards/{insight_id}/dismiss | Dismiss one of the customer's insight cards | | financial_insight"
+
+      - resource: my-budgets
+        path: /v1/me/budgets
+        table: customer_action
+        description: The customer's budgets
+        ops: []
+        actions:
+          - "GET / | The customer's budgets (archived excluded) | | budget[]"
+          - "POST / | Create a budget for the customer | name string(120) nn, spend_category_id uuid, period_type enum:BudgetPeriodType, amount amount nn, currency currency nn, starts_on date | budget"
+          - "GET /{budget_id}/current-period | Current period of one of the customer's budgets | | budget_period"
+          - "POST /{budget_id}/archive | Archive one of the customer's budgets | | budget"
+
+      - resource: my-rewards
+        path: /v1/me/rewards
+        table: customer_action
+        description: The customer's points and cashback
+        ops: []
+        actions:
+          - "GET /points-accounts | The customer's points accounts | | points_account[]"
+          - "GET /points-accounts/{points_account_id}/entries | Entries of one of the customer's points accounts | | points_ledger_entry[]"
+          - "GET /cashback | The customer's cashback | | cashback_transaction[]"
+
+      - resource: my-threads
+        path: /v1/me/inbox/threads
+        table: customer_action
+        description: Secure messaging between the customer and the bank (staff-only notes never shown)
+        ops: []
+        actions:
+          - "GET / | The customer's message threads | | secure_message_thread[]"
+          - "POST / | Open a thread with the bank (opened by the customer) | subject string(255) nn, topic string(64), related_type string(40), related_id uuid, initial_message text nn, attachment_document_ids uuid[] | secure_message_thread"
+          - "GET /{thread_id} | One of the customer's threads | | secure_message_thread"
+          - "GET /{thread_id}/messages | Messages of one of the customer's threads (internal notes excluded) | | secure_message[]"
+          - "POST /{thread_id}/messages | Send a message in one of the customer's threads (as the customer) | body text nn, attachment_document_ids uuid[], client_message_id string(64) | secure_message"
+          - "POST /{thread_id}/read | Mark one of the customer's threads read by the customer | | secure_message_thread"
+
+      - resource: my-announcements
+        path: /v1/me/announcements
+        table: customer_action
+        description: Announcements targeted at the customer
+        ops: []
+        actions:
+          - "GET /?app:string(32)&placement:string(32)&language:string(10) | Announcements currently shown to the customer | | announcement[]"
+
+      - resource: my-notifications
+        path: /v1/me/notifications
+        table: customer_action
+        description: In-app notifications sent to the customer
+        ops: []
+        actions:
+          - "GET /?channel:enum:NotificationChannel | The customer's notifications | | notification[]"
+          - "POST /{notification_id}/mark-read | Mark one of the customer's notifications read | | notification"
+
+      - resource: my-kyc
+        path: /v1/me/kyc
+        table: customer_action
+        description: The customer's KYC status and identity documents
+        ops: []
+        actions:
+          - "GET /profile | The customer's KYC profile (404 when none exists yet) | | kyc_profile"
+          - "GET /documents | Identity documents the customer submitted | | kyc_document[]"
+          - "POST /documents | Submit an uploaded document (one of the customer's documents) as KYC evidence | document_type enum:KycDocumentType nn, document_id uuid nn, back_document_id uuid, issuing_country country, document_number string(64), issue_date date, expiry_date date | kyc_document"
+
+      - resource: my-documents
+        path: /v1/me/documents
+        table: customer_action
+        description: Files the customer uploads (owner = the customer)
+        ops: []
+        actions:
+          - "GET / | Documents owned by the customer | | document[]"
+          - "POST / | Register a document the customer is about to upload | document_type enum:PlatformDocumentType nn, file_name string(255) nn, content_type string(100) nn, issuing_country country, document_number string(64), issued_on date, expires_on date | document"
+          - "POST /{document_id}/upload-url | Pre-signed upload target for one of the customer's documents | | object"
+          - "POST /{document_id}/complete-upload | Confirm the upload of one of the customer's documents (size and SHA-256) | size_bytes bigint nn, checksum string(64) nn | document"
+
+      - resource: my-activity
+        path: /v1/me/activity
+        table: customer_action
+        description: The customer's own channel activity (security log)
+        ops: []
+        actions:
+          - "GET / | What the customer did through the channel, newest first | | customer_action[]"
+
+    events:
+      - "channels.customer_action.denied | customer_action | A customer referenced an object that is not theirs (object-level authorization denial)"
