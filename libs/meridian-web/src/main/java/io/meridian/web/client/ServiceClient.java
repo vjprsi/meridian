@@ -70,6 +70,10 @@ public class ServiceClient {
                 .header("Accept", "application/json");
         TenantContext.current().ifPresent(t -> b.header("X-Tenant-Id", t.toString()));
         b.header("X-User", TenantContext.principal());
+        // dev-mode caller attributes (roles, step-up MFA): receivers only honour them in dev mode; with JWTs the
+        // forwarded token carries them
+        forwardInbound(b, "X-Roles");
+        forwardInbound(b, "X-MFA-Verified");
         String auth = currentAuthorization();
         if (auth != null) {
             b.header("Authorization", auth);                         // act on behalf of the calling user
@@ -123,6 +127,15 @@ public class ServiceClient {
             throw new IllegalArgumentException("unknown service " + service);
         }
         return "http://localhost:" + port;
+    }
+
+    private static void forwardInbound(HttpRequest.Builder b, String header) {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
+            String v = a.getRequest().getHeader(header);
+            if (v != null && !v.isBlank()) {
+                b.header(header, v);
+            }
+        }
     }
 
     private static String currentAuthorization() {
