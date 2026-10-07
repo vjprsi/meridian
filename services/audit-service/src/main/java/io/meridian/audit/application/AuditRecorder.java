@@ -9,7 +9,12 @@ import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
+import io.meridian.common.time.Clocks;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -68,29 +73,108 @@ public class AuditRecorder {
         return append(e, true);
     }
 
+    /**
+     * An event validated and masked outside any transaction (CPU work that batch ingestion runs in parallel):
+     * {@code before} / {@code after} are the masked states as JSON text (not yet normalised by jsonb).
+     */
+    public record Prepared(NewAuditEvent event, String before, String after) {}
+
+    /** Validates and masks an event of {@code tenant}; thread-safe, no database access. */
+    public Prepared prepare(UUID tenant, NewAuditEvent e) {
+        validate(e);
+        JsonNode beforeState = masker.mask(tenant, e.resourceType(), e.beforeState());
+        JsonNode afterState = masker.mask(tenant, e.resourceType(), e.afterState());
+        return new Prepared(e, beforeState == null || beforeState.isNull() ? null : json.writeValueAsString(beforeState),
+                afterState == null || afterState.isNull() ? null : json.writeValueAsString(afterState));
+    }
+
     private Optional<String> append(NewAuditEvent e, boolean dedupe) {
         UUID tenant = TenantContext.require();
-        validate(e);
+        Prepared p = prepare(tenant, e);
         store.lockTenantChain(tenant);
         if (dedupe && e.sourceEventId() != null && store.existsBySourceEventId(e.sourceEventId())) {
             return Optional.empty();
         }
-        JsonNode beforeState = masker.mask(tenant, e.resourceType(), e.beforeState());
-        JsonNode afterState = masker.mask(tenant, e.resourceType(), e.afterState());
-        String before = store.normaliseJson(beforeState == null || beforeState.isNull()
-                ? null : json.writeValueAsString(beforeState));
-        String after = store.normaliseJson(afterState == null || afterState.isNull()
-                ? null : json.writeValueAsString(afterState));
+        String before = store.normaliseJson(p.before());
+        String after = store.normaliseJson(p.after());
         String ip = store.normaliseInet(blankToNull(e.ipAddress()));
-        AuditRecord rec = new AuditRecord(Ids.newId(), tenant, 0,
-                e.occurredAt() == null ? Instant.now() : e.occurredAt(), e.actorType(), e.actorId(),
+        Optional<AuditEventStore.Head> head = store.head();
+        AuditRecord linked = HashChain.link(record(tenant, e, before, after, ip),
+                head.map(h -> h.sequenceNo() + 1).orElse(1L),
+                head.map(AuditEventStore.Head::hash).orElse(HashChain.GENESIS));
+        String row = crud.insert("audit_event", row(linked, before, after));
+        outbox.publish("platform.audit_event.recorded", "audit_event", linked.id(), json.readTree(row));
+        return Optional.of(row);
+    }
+
+    /**
+     * Appends a batch of consumed events of the bound tenant in one transaction (batch ingestion): one advisory lock
+     * (the same per-tenant lock as {@link #record}, so API writes and other consumers still serialise), one
+     * de-duplication query on the source event ids (duplicates inside the batch keep their first occurrence), one
+     * jsonb / inet normalisation round trip, the chain head read once and the hashes linked in memory in batch order,
+     * then a multi-row insert of the events and one of their outbox records. Returns how many events were stored.
+     */
+    @Transactional
+    public int appendBatch(List<Prepared> batch) {
+        UUID tenant = TenantContext.require();
+        if (batch.isEmpty()) {
+            return 0;
+        }
+        store.lockTenantChain(tenant);
+        Set<String> seen = new HashSet<>(store.existingSourceEventIds(batch.stream()
+                .map(p -> p.event().sourceEventId()).filter(Objects::nonNull).distinct().toList()));
+        List<Prepared> fresh = new ArrayList<>(batch.size());
+        for (Prepared p : batch) {
+            String src = p.event().sourceEventId();
+            if (src == null || seen.add(src)) {
+                fresh.add(p);
+            }
+        }
+        if (fresh.isEmpty()) {
+            return 0;
+        }
+        List<String> docs = new ArrayList<>(fresh.size() * 2);
+        List<String> ips = new ArrayList<>(fresh.size());
+        for (Prepared p : fresh) {
+            docs.add(p.before());
+            docs.add(p.after());
+            ips.add(blankToNull(p.event().ipAddress()));
+        }
+        List<String> normalised = store.normaliseJsonAll(docs);
+        List<String> inets = store.normaliseInetAll(ips);
+        Optional<AuditEventStore.Head> head = store.head();
+        long seq = head.map(AuditEventStore.Head::sequenceNo).orElse(0L);
+        String prev = head.map(AuditEventStore.Head::hash).orElse(HashChain.GENESIS);
+        List<ObjectNode> rows = new ArrayList<>(fresh.size());
+        for (int i = 0; i < fresh.size(); i++) {
+            String before = normalised.get(2 * i);
+            String after = normalised.get(2 * i + 1);
+            AuditRecord linked = HashChain.link(record(tenant, fresh.get(i).event(), before, after, inets.get(i)),
+                    ++seq, prev);
+            prev = linked.hash();
+            rows.add(row(linked, before, after));
+        }
+        List<String> stored = crud.insertMany("audit_event", rows);
+        List<OutboxWriter.Event> events = new ArrayList<>(stored.size());
+        for (String r : stored) {
+            JsonNode n = json.readTree(r);
+            events.add(new OutboxWriter.Event("platform.audit_event.recorded", "audit_event",
+                    UUID.fromString(n.get("id").asString()), n));
+        }
+        outbox.publishMany(events);
+        return stored.size();
+    }
+
+    private AuditRecord record(UUID tenant, NewAuditEvent e, String before, String after, String ip) {
+        return new AuditRecord(Ids.newId(), tenant, 0,
+                e.occurredAt() == null ? Clocks.now().toInstant() : e.occurredAt(), e.actorType(), e.actorId(),
                 e.actorDisplay(), e.impersonatorId(), e.action(), e.resourceType(), e.resourceId(), e.outcome(),
                 e.reason(), store.parse(before), store.parse(after), e.legalEntityId(), e.approvalRequestId(), ip,
                 e.userAgent(), e.sessionId(), e.requestId(), e.traceId(), e.serviceName(), e.sourceEventId(), null, null);
-        Optional<AuditEventStore.Head> head = store.head();
-        AuditRecord linked = HashChain.link(rec, head.map(h -> h.sequenceNo() + 1).orElse(1L),
-                head.map(AuditEventStore.Head::hash).orElse(HashChain.GENESIS));
+    }
 
+    /** The stored columns of a linked event (every key present, so a batch shares one column set). */
+    private ObjectNode row(AuditRecord linked, String before, String after) {
         ObjectNode v = json.createObjectNode();
         v.put("id", linked.id().toString());
         v.put("occurred_at", linked.occurredAt().toString());
@@ -104,12 +188,8 @@ public class AuditRecorder {
         v.put("resource_id", linked.resourceId());
         v.put("outcome", linked.outcome());
         v.put("reason", linked.reason());
-        if (before != null) {
-            v.set("before_state", json.readTree(before));
-        }
-        if (after != null) {
-            v.set("after_state", json.readTree(after));
-        }
+        v.set("before_state", before == null ? json.nullNode() : json.readTree(before));
+        v.set("after_state", after == null ? json.nullNode() : json.readTree(after));
         v.put("legal_entity_id", str(linked.legalEntityId()));
         v.put("approval_request_id", str(linked.approvalRequestId()));
         v.put("ip_address", linked.ipAddress());
@@ -121,9 +201,7 @@ public class AuditRecorder {
         v.put("source_event_id", linked.sourceEventId());
         v.put("prev_hash", linked.prevHash());
         v.put("hash", linked.hash());
-        String row = crud.insert("audit_event", v);
-        outbox.publish("platform.audit_event.recorded", "audit_event", linked.id(), json.readTree(row));
-        return Optional.of(row);
+        return v;
     }
 
     private static void validate(NewAuditEvent e) {

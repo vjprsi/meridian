@@ -48,8 +48,15 @@ meridian:
     # GAP-07: personal data in stored before/after states is replaced by tenant-keyed psn: pseudonyms (spec pii columns
     # of every service + personal field names). MERIDIAN_AUDIT_PSEUDONYM_KEY from the vault outside the local stack.
     pseudonym-key: ${MERIDIAN_AUDIT_PSEUDONYM_KEY:dev-only-audit-pseudonym-key-not-for-production}
+    ingest:
+      # Batch ingestion of consumed domain events (DomainEventAuditListener): records per poll, threads that parse and
+      # mask a poll (0 = CPU count, max 8), tenant chains appended concurrently (each holds one DB connection).
+      # Measured locally (AuditIngestionThroughputIT, 20k events, 4 tenants): ~460 events/s per-record, ~4,000-4,400 batched.
+      max-poll-records: ${MERIDIAN_AUDIT_INGEST_MAX_POLL_RECORDS:1000}
+      mask-parallelism: ${MERIDIAN_AUDIT_INGEST_MASK_PARALLELISM:0}
+      tenant-parallelism: ${MERIDIAN_AUDIT_INGEST_TENANT_PARALLELISM:4}
     integrity:
-      enabled: true                 # daily per tenant: incremental hash-chain verification, then seal of yesterday
+      enabled: true                # daily per tenant: incremental hash-chain verification, then seal of yesterday
       cron: "0 15 1 * * *"          # UTC
     worm:
       # Sealed daily batches (events + manifest) on S3 with Object Lock (bucket created with object lock enabled:

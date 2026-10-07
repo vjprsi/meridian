@@ -56,6 +56,57 @@ public class AuditEventStore {
         return ip == null ? null : jdbc.sql("select ?::inet::text").param(ip).query(String.class).single();
     }
 
+    /** The given source event ids that are already recorded for the current tenant (batch de-duplication). */
+    public List<String> existingSourceEventIds(List<String> sourceEventIds) {
+        if (sourceEventIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                select source_event_id from audit_event
+                where source_event_id in (select jsonb_array_elements_text(?::jsonb))""")
+                .param(json.writeValueAsString(sourceEventIds)).query(String.class).list();
+    }
+
+    /**
+     * {@link #normaliseJson} for many documents in one round trip (same jsonb text form); nulls stay null and the
+     * result is in input order.
+     */
+    public List<String> normaliseJsonAll(List<String> jsonTexts) {
+        StringBuilder arr = new StringBuilder(jsonTexts.size() * 256).append('[');
+        List<Integer> positions = new ArrayList<>();
+        for (int i = 0; i < jsonTexts.size(); i++) {
+            String t = jsonTexts.get(i);
+            if (t != null) {
+                if (!positions.isEmpty()) {
+                    arr.append(',');
+                }
+                arr.append(t);
+                positions.add(i);
+            }
+        }
+        List<String> out = new ArrayList<>(java.util.Collections.nCopies(jsonTexts.size(), (String) null));
+        if (positions.isEmpty()) {
+            return out;
+        }
+        List<String> normalised = jdbc.sql("""
+                select e.value::text from jsonb_array_elements(?::jsonb) with ordinality as e(value, ord) order by e.ord""")
+                .param(arr.append(']').toString()).query(String.class).list();
+        for (int i = 0; i < positions.size(); i++) {
+            out.set(positions.get(i), normalised.get(i));
+        }
+        return out;
+    }
+
+    /** {@link #normaliseInet} for many addresses (one round trip only when any is present); input order. */
+    public List<String> normaliseInetAll(List<String> ips) {
+        if (ips.stream().allMatch(java.util.Objects::isNull)) {
+            return new ArrayList<>(java.util.Collections.nCopies(ips.size(), (String) null));
+        }
+        return jdbc.sql("""
+                select (e.value #>> '{}')::inet::text from jsonb_array_elements(?::jsonb) with ordinality as e(value, ord)
+                order by e.ord""").param(json.writeValueAsString(ips)).query((rs, i) -> rs.getString(1)).list();
+    }
+
     public List<AuditRecord> range(long from, long to) {
         return jdbc.sql("select " + COLUMNS + " from audit_event where sequence_no between ? and ? order by sequence_no")
                 .params(from, to).query(this::map).list();
