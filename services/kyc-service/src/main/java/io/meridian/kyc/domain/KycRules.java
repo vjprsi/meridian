@@ -92,9 +92,7 @@ public final class KycRules {
     // ------------------------------------------------------------------ four-eyes
 
     public static void requireFourEyes(String maker, String checker, String what) {
-        if (maker != null && maker.equals(checker)) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    "The " + what + " must be reviewed by a different user than the one who created it");
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker, checker,
+                "The " + what + " must be reviewed by a different user than the one who created it");
     }
 }

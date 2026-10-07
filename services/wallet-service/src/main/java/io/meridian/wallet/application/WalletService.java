@@ -151,10 +151,8 @@ public class WalletService {
         String maker = rows.scalar("""
                 select changed_by from wallet_status_history where wallet_id = ? and to_status = ?
                 order by created_at desc, id desc limit 1""", String.class, id, from).orElse(null);
-        if (maker != null && maker.equals(TenantContext.principal())) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    "The wallet must be reactivated by a different user than the one who " + from.toLowerCase() + " it");
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker,
+                "The wallet must be reactivated by a different user than the one who " + from.toLowerCase() + " it");
         ledger.restrict("wal-" + id + "-reactivate-" + Ids.newId(), Rows.uuid(w, "ledger_account_id"), "ACTIVE", reason);
         ObjectNode v = rows.object();
         v.put("status", "ACTIVE");

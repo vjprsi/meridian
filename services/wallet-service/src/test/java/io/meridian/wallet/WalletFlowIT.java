@@ -379,7 +379,10 @@ class WalletFlowIT {
     @Test
     @Order(6)
     void reversalNeedsADifferentCheckerAndRefundsFees() throws Exception {
-        post("/v1/wallet-transactions/" + p2pTxn + "/reverse", "{\"reason\":\"self\"}", "alice", 422, "four_eyes_violation");
+        // SEC-21: no direct reversal without a prior request by someone else (customer transactions have no staff
+        // initiator, so "not the initiator" alone allowed one staff member to reverse them)
+        post("/v1/wallet-transactions/" + p2pTxn + "/reverse", "{\"reason\":\"self\"}", "alice", 422, "reversal_request_required");
+        post("/v1/wallet-transactions/" + p2pTxn + "/reverse", "{\"reason\":\"insider\"}", "ops9", 422, "reversal_request_required");
         JsonNode requested = post("/v1/wallet-transactions/" + p2pTxn + "/request-reversal",
                 "{\"reason\":\"Sent to wrong number\"}", "ops1", 200);
         assertThat(requested.get("reversal_requested_by").asString()).isEqualTo("ops1");
@@ -622,27 +625,33 @@ class WalletFlowIT {
         UUID bobLedger = danLedger; // the payee of this test
         BigDecimal bobBefore = ledger.balanceOf(bobLedger);
         int n = 6;
-        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
         List<Integer> codes = Collections.synchronizedList(new ArrayList<>());
-        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
-            List<java.util.concurrent.Future<?>> fs = new ArrayList<>();
-            for (int i = 0; i < n; i++) {
-                String checker = "ops-race-" + i; // distinct checkers, each reversing 40 of 100
-                fs.add(pool.submit(() -> {
-                    start.await();
-                    codes.add(raw("POST", "/v1/wallet-transactions/" + txn + "/reverse",
-                            "{\"reason\":\"race\",\"amount\":\"40\"}", UUID.randomUUID().toString(), checker, TENANT)
-                            .statusCode());
-                    return null;
-                }));
-            }
-            start.countDown();
-            for (var f : fs) {
-                f.get();
+        for (int round = 0; round < 2; round++) {
+            // SEC-21: each reversal needs its own request; distinct checkers race to reverse 40 of 100
+            post("/v1/wallet-transactions/" + txn + "/request-reversal", "{\"reason\":\"race\",\"amount\":\"40\"}",
+                    "ops-maker", 200);
+            java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+            int r = round;
+            try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+                List<java.util.concurrent.Future<?>> fs = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    String checker = "ops-race-" + r + "-" + i;
+                    fs.add(pool.submit(() -> {
+                        start.await();
+                        codes.add(raw("POST", "/v1/wallet-transactions/" + txn + "/reverse",
+                                "{\"reason\":\"race\",\"amount\":\"40\"}", UUID.randomUUID().toString(), checker, TENANT)
+                                .statusCode());
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (var f : fs) {
+                    f.get();
+                }
             }
         }
         assertThat(codes).filteredOn(c -> c == 200).hasSize(2);
-        assertThat(codes).filteredOn(c -> c == 422).hasSize(n - 2);
+        assertThat(codes).filteredOn(c -> c == 422).hasSize(2 * n - 2);
         JsonNode orig = get("/v1/wallet-transactions/" + txn);
         assertThat(new BigDecimal(orig.get("reversed_amount").asString())).isEqualByComparingTo("80");
         assertThat(orig.get("status").asString()).isEqualTo("COMPLETED");
@@ -653,6 +662,7 @@ class WalletFlowIT {
         assertThat(bobBefore.subtract(ledger.balanceOf(bobLedger))).isEqualByComparingTo("80");
 
         // the remaining 20 races too: exactly one full reversal completes the transaction
+        post("/v1/wallet-transactions/" + txn + "/request-reversal", "{\"reason\":\"rest\"}", "ops-maker", 200);
         codes.clear();
         java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
         try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {

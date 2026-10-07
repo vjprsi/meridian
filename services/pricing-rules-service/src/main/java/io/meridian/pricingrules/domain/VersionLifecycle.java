@@ -54,9 +54,7 @@ public final class VersionLifecycle {
 
     /** Four-eyes: the checker must differ from the maker. */
     public static void requireDifferentChecker(String maker, String checker) {
-        if (maker != null && Objects.equals(maker, checker)) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    "The version was submitted by " + maker + "; a different user must approve it");
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker, checker,
+                "The version was submitted by " + maker + "; a different user must approve it");
     }
 }

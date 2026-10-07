@@ -71,6 +71,9 @@ public class ApprovalExecutor {
         }
         String principal = TenantContext.principal();
         String maker = change.get("requested_by").asString();
+        if (maker == null || maker.isBlank()) {
+            io.meridian.common.tenancy.FourEyes.require(maker, principal, "unknown maker"); // SEC-35: fail closed
+        }
         if (isHuman(principal) && principal.equals(maker)) {
             throw ApiException.unprocessable("four_eyes_violation",
                     "The maker of an approval request cannot execute it as checker");
@@ -146,7 +149,7 @@ public class ApprovalExecutor {
     }
 
     static boolean isHuman(String principal) {
-        return !SYSTEM_PRINCIPALS.contains(principal) && !principal.startsWith("service:") && !principal.startsWith("svc:");
+        return !SYSTEM_PRINCIPALS.contains(principal) && !io.meridian.common.tenancy.FourEyes.isService(principal);
     }
 
     private static UUID uuid(JsonNode n, String f) {

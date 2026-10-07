@@ -763,7 +763,8 @@ public class TransactionEngine {
 
     /**
      * Reverses a completed transaction with a compensating journal entry (principal back to the payer; a full reversal
-     * also refunds fee and tax). The checker must differ from the reversal maker, or from the original initiator.
+     * also refunds fee and tax). Needs a prior reversal request; the checker must differ from the reversal maker and
+     * from the original initiator (SEC-21).
      */
     public ObjectNode reverse(UUID id, String reason, BigDecimal requested) {
         String me = TenantContext.principal();
@@ -815,11 +816,16 @@ public class TransactionEngine {
         if ("REVERSAL".equals(Rows.str(row, "txn_type"))) {
             throw ApiException.unprocessable("cannot_reverse_reversal", "A reversal cannot itself be reversed");
         }
+        // SEC-21: a reversal always has a maker (request-reversal) and a different checker; customer, agent and
+        // merchant transactions have no staff initiator, so "not the initiator" alone let one person reverse them
         String maker = Rows.str(row, "reversal_requested_by");
-        if (maker != null ? maker.equals(me) : me.equals(Rows.str(row, "initiated_by"))) {
-            throw ApiException.unprocessable("four_eyes_violation", maker != null
-                    ? "The reversal must be approved by a different user than the one who requested it"
-                    : "A transaction cannot be reversed by the user who initiated it");
+        if (maker == null) {
+            throw ApiException.unprocessable("reversal_request_required",
+                    "Request the reversal first (request-reversal); a different user then reverses it");
+        }
+        if (maker.equals(me) || me.equals(Rows.str(row, "initiated_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation",
+                    "The reversal must be approved by a different user than the one who requested or initiated it");
         }
         BigDecimal amt = reversalAmount(row, requested != null ? requested : Rows.dec(row, "reversal_requested_amount"));
         boolean full = dec(row, "reversed_amount").add(amt).compareTo(dec(row, "amount")) == 0;

@@ -92,11 +92,8 @@ public class Support {
 
     /** Four-eyes: the checker must not be the maker. */
     public static void fourEyes(String maker, String what) {
-        String checker = TenantContext.principal();
-        if (maker != null && maker.equals(checker)) {
-            throw ApiException.unprocessable("four_eyes_violation",
-                    what + " must be approved by a different user than " + maker);
-        }
+        io.meridian.common.tenancy.FourEyes.require(maker, TenantContext.principal(),
+                what + " must be approved by a different user than " + maker);
     }
 
     /** The application's PRIMARY applicant (null when none yet). */
