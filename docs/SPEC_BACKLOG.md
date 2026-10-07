@@ -87,6 +87,13 @@ Spec gaps (flows still local or with no place to record a rejection):
   re-open a request after an approved decision fails a business check (e.g. insufficient funding).
 - Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
 
+## Connection budget
+
+63 services x pool 20 exceed a single PostgreSQL's connections. Local launcher uses pool 6 (`MERIDIAN_DB_POOL`);
+clusters need PgBouncer (transaction mode) or per-domain Aurora clusters, and pool sizes per service in Helm values
+(`dbPool`). Note RLS uses `set_config('app.tenant_id', ..., true)` per transaction, which is compatible with
+transaction pooling.
+
 ## Developer portal gaps (from portal v1)
 
 - API clients: no revoke/delete action (status is read-only); no developer/organisation ownership, so "my apps" are

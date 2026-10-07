@@ -127,10 +127,12 @@ def up(names: list[str], reset: bool = False) -> None:
         proc = subprocess.Popen([JAVA, "-XX:+UseZGC", "-Xms128m", "-Xmx512m", "-jar", str(jar)],
                                 cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
                                 # central maker-checker through workflow-service (tests default to local mode)
-                                env={**os.environ, "MERIDIAN_APPROVALS_MODE": os.environ.get("MERIDIAN_APPROVALS_MODE", "workflow")})
+                                env={**os.environ, "MERIDIAN_APPROVALS_MODE": os.environ.get("MERIDIAN_APPROVALS_MODE", "workflow"),
+                                     # 63 services share one local PostgreSQL (max_connections=600)
+                                     "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6")})
         pid_file(t["name"]).write_text(str(proc.pid))
         print(f"  started {t['name']} (pid {proc.pid}, port {t['port']})")
-    deadline = time.time() + 180
+    deadline = time.time() + int(os.environ.get("MERIDIAN_START_TIMEOUT", "420"))
     pending = {t["name"]: t["port"] for t in targets}
     while pending and time.time() < deadline:
         for n, port in list(pending.items()):
@@ -139,7 +141,7 @@ def up(names: list[str], reset: bool = False) -> None:
                 del pending[n]
         time.sleep(1)
     for n in pending:
-        print(f"  {n} NOT healthy after 180s; see .run/logs/{n}.log")
+        print(f"  {n} NOT healthy in time; see .run/logs/{n}.log")
     if pending:
         sys.exit(1)
 
