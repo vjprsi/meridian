@@ -23,7 +23,7 @@ public class IdentityStore {
             Set.of("password_hash", "totp_seed_enc", "public_key", "key_hash", "client_secret_hash");
     private static final Set<String> TABLES = Set.of("app_user", "role", "permission", "role_permission", "user_role",
             "access_policy", "mfa_factor", "user_session", "api_client", "api_key", "sso_provider", "oauth_scope",
-            "rate_limit_policy", "api_request_log");
+            "rate_limit_policy", "api_request_log", "access_review", "access_review_item");
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
