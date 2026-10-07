@@ -94,6 +94,28 @@ public class VaultStore {
                 .params(pin, TenantContext.principal(), id).update();
     }
 
+    /** SEC-24: records a CVV2 outcome; returns the consecutive failure count (0 after a match). */
+    public int cvvOutcome(UUID id, boolean matched, int blockAfter) {
+        if (matched) {
+            jdbc.sql("update card_data_vault set cvv_fail_count = 0 where id = ? and cvv_blocked_at is null").param(id).update();
+            return 0;
+        }
+        return jdbc.sql("""
+                update card_data_vault set cvv_fail_count = cvv_fail_count + 1,
+                  cvv_blocked_at = case when cvv_fail_count + 1 >= ? then coalesce(cvv_blocked_at, now()) else cvv_blocked_at end
+                where id = ? returning cvv_fail_count""").params(blockAfter, id).query(Integer.class).single();
+    }
+
+    public boolean cvvBlocked(UUID id) {
+        return jdbc.sql("select cvv_blocked_at is not null from card_data_vault where id = ?").param(id)
+                .query(Boolean.class).single();
+    }
+
+    /** SEC-24: unblocks CVV2 checks (vault admin, e.g. after the card was reviewed or reissued). */
+    public void resetCvvBlock(UUID id) {
+        jdbc.sql("update card_data_vault set cvv_fail_count = 0, cvv_blocked_at = null where id = ?").param(id).update();
+    }
+
     public void setPinTries(UUID id, int tries) {
         jdbc.sql("update card_data_vault set pin_try_count = ?, last_detokenized_at = now(), updated_by = ? where id = ?")
                 .params(tries, TenantContext.principal(), id).update();
