@@ -65,6 +65,8 @@ public class RecordProcessor {
         public BigDecimal interchange;
         public String exceptionReason;
         public final List<Fee> fees = new ArrayList<>();
+        /** Payment references of the record's postings (scheme reference, clearing file, merchant). */
+        JsonNode refs;
 
         Outcome(UUID recordId) {
             this.recordId = recordId;
@@ -84,7 +86,14 @@ public class RecordProcessor {
      *                rules still apply
      */
     public Outcome process(UUID recordId, String scheme, UUID fileProgramId, ParsedRecord r, AuthView forced) {
+        return process(recordId, scheme, fileProgramId, null, r, forced);
+    }
+
+    /** @param fileId clearing file of the record: the batch id of its postings */
+    public Outcome process(UUID recordId, String scheme, UUID fileProgramId, UUID fileId, ParsedRecord r,
+                           AuthView forced) {
         Outcome o = new Outcome(recordId);
+        o.refs = clients.refs(ref(r), fileId == null ? null : fileId.toString(), r.merchantName());
         o.cardId = r.cardId();
         o.programId = fileProgramId;
         o.interchange = r.interchangeAmount();
@@ -158,7 +167,7 @@ public class RecordProcessor {
                 String desc = "Card presentment " + nz(r.merchantName(), "") + " " + r.transactionDate();
                 if (a.holdId() != null && capture.signum() > 0) {
                     o.journalId = clients.capture(a.holdId(), capture, settle, desc.trim(), true,
-                            "clearing-capture:" + o.recordId);
+                            "clearing-capture:" + o.recordId, ref(r), o.refs);
                     o.holdId = a.holdId();
                 } else {
                     capture = BigDecimal.ZERO;
@@ -168,7 +177,7 @@ public class RecordProcessor {
                     UUID account = a.holdAccountId() != null ? a.holdAccountId() : cardAccount(o.cardId);
                     UUID adj = clients.post(props.ledgerId(), capture.signum() == 0 ? "CARD_SETTLEMENT" : "ADJUSTMENT",
                             "Clearing adjustment over authorised amount", r.billingCurrency(), "CLEARING_RECORD",
-                            o.recordId, ref(r), List.of(new Leg(account, "DEBIT", excess, desc.trim()),
+                            o.recordId, ref(r), o.refs, List.of(new Leg(account, "DEBIT", excess, desc.trim()),
                                     new Leg(settle, "CREDIT", excess, "Scheme settlement")),
                             "clearing-adjust:" + o.recordId);
                     if (o.journalId == null) {
@@ -216,7 +225,7 @@ public class RecordProcessor {
         o.programId = o.programId != null ? o.programId : uuid(card.get(), "card_program_id");
         UUID settle = settlementAccount(scheme);
         o.journalId = clients.post(props.ledgerId(), "CARD_SETTLEMENT", "Card refund " + nz(r.merchantName(), ""),
-                r.billingCurrency(), "CLEARING_RECORD", o.recordId, ref(r),
+                r.billingCurrency(), "CLEARING_RECORD", o.recordId, ref(r), o.refs,
                 List.of(new Leg(settle, "DEBIT", r.billingAmount(), "Scheme settlement"),
                         new Leg(uuid(card.get(), "ledger_account_id"), "CREDIT", r.billingAmount(), "Refund")),
                 "clearing-refund:" + o.recordId);
@@ -244,7 +253,7 @@ public class RecordProcessor {
         UUID settle = settlementAccount(scheme);
         o.journalId = clients.post(props.ledgerId(), "CARD_SETTLEMENT",
                 "Card presentment (force post) " + nz(r.merchantName(), ""), r.billingCurrency(), "CLEARING_RECORD",
-                o.recordId, ref(r), List.of(new Leg(cardholderAccount, "DEBIT", r.billingAmount(), "Card purchase"),
+                o.recordId, ref(r), o.refs, List.of(new Leg(cardholderAccount, "DEBIT", r.billingAmount(), "Card purchase"),
                         new Leg(settle, "CREDIT", r.billingAmount(), "Scheme settlement")),
                 "clearing-post:" + o.recordId);
         o.matchStatus = "FORCE_POST";
@@ -270,7 +279,7 @@ public class RecordProcessor {
                 UUID account = cardAccount(o.cardId);
                 UUID feeId = Ids.newId();
                 UUID j = clients.post(props.ledgerId(), "FEE", "ATM withdrawal fee", r.billingCurrency(), "CARD_FEE",
-                        feeId, ref(r), List.of(new Leg(account, "DEBIT", atmFee, "ATM withdrawal fee"),
+                        feeId, ref(r), o.refs, List.of(new Leg(account, "DEBIT", atmFee, "ATM withdrawal fee"),
                                 new Leg(props.clearing().feeIncomeAccount(), "CREDIT", atmFee, "ATM fee income")),
                         "clearing-fee-atm:" + o.recordId);
                 o.fees.add(new Fee(feeId, "ATM_WITHDRAWAL", atmFee, r.billingCurrency(), account, j,
@@ -283,7 +292,7 @@ public class RecordProcessor {
             try {
                 UUID feeId = Ids.newId();
                 UUID j = clients.post(props.ledgerId(), "CARD_SETTLEMENT", "Interchange income", r.settlementCurrency(),
-                        "CARD_FEE", feeId, ref(r),
+                        "CARD_FEE", feeId, ref(r), o.refs,
                         List.of(new Leg(settlementAccount(scheme), "DEBIT", o.interchange, "Interchange receivable"),
                                 new Leg(props.clearing().interchangeIncomeAccount(), "CREDIT", o.interchange,
                                         "Interchange income")),

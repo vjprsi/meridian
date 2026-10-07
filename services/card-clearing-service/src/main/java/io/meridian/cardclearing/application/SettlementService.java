@@ -99,8 +99,13 @@ public class SettlementService {
             List<Leg> legs = net.signum() > 0
                     ? List.of(new Leg(settle, "DEBIT", abs, "Scheme settlement paid"), new Leg(nostro, "CREDIT", abs, "Nostro"))
                     : List.of(new Leg(nostro, "DEBIT", abs, "Nostro"), new Leg(settle, "CREDIT", abs, "Scheme settlement received"));
+            // the nostro line of the scheme's net settlement: bank reference from the statement, scheme, batch = settlement
+            ObjectNode refs = clients.refs(scheme + " " + ClearingStore.text(s, "settlement_date"), id.toString(), scheme);
+            if (reconReference != null && !reconReference.isBlank()) {
+                refs.put("bank_reference", reconReference.length() > 64 ? reconReference.substring(0, 64) : reconReference);
+            }
             journal = clients.post(props.ledgerId(), "CARD_SETTLEMENT", scheme + " settlement "
-                    + ClearingStore.text(s, "settlement_date"), currency, "CARD_SETTLEMENT", id, reconReference, legs,
+                    + ClearingStore.text(s, "settlement_date"), currency, "CARD_SETTLEMENT", id, reconReference, refs, legs,
                     "settlement-confirm:" + id);
         }
         UUID j = journal;

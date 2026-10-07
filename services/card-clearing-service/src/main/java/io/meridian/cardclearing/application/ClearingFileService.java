@@ -123,7 +123,7 @@ public class ClearingFileService {
         BigDecimal total = BigDecimal.ZERO;
         Set<String> currencies = new java.util.HashSet<>();
         for (ParsedRecord r : parsed.records()) {
-            Outcome o = processor.process(Ids.newId(), scheme, fileProgram, r, null);
+            Outcome o = processor.process(Ids.newId(), scheme, fileProgram, fileId, r, null);
             tx.executeWithoutResult(s -> store.insertRecord(fileId, scheme, r, o, null));
             switch (o.matchStatus) {
                 case "MATCHED", "FORCE_POST" -> matched++;
@@ -185,7 +185,7 @@ public class ClearingFileService {
                 continue;
             }
             ParsedRecord r = ClearingStore.parsed(rec);
-            Outcome o = processor.process(Ids.newId(), scheme, uuid(file, "card_program_id"), r, null);
+            Outcome o = processor.process(Ids.newId(), scheme, uuid(file, "card_program_id"), fileId, r, null);
             if (!o.posted()) {
                 continue;
             }
@@ -221,7 +221,7 @@ public class ClearingFileService {
         ParsedRecord r = ClearingStore.parsed(rec);
         UUID fileId = uuid(rec, "clearing_file_id");
         JsonNode file = store.row("clearing_file", fileId);
-        Outcome o = processor.process(Ids.newId(), text(rec, "scheme"), uuid(file, "card_program_id"), r, auth);
+        Outcome o = processor.process(Ids.newId(), text(rec, "scheme"), uuid(file, "card_program_id"), fileId, r, auth);
         if (!o.posted()) {
             throw ApiException.unprocessable("force_match_failed", o.exceptionReason == null
                     ? "the record could not be posted" : o.exceptionReason);
