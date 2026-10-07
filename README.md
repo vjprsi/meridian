@@ -65,6 +65,11 @@ cd ../.. && bash tools/db/apply-ddl.sh          # (re)create all 52 service data
 Services must connect as `meridian_app` (not the superuser) so row-level tenant isolation applies.
 `tools/db/smoke-test.sql` verifies RLS, append-only tables, optimistic locking, enums and custom fields.
 
+> WSL note: the Ubuntu distro stops when no Windows-side WSL process is attached, taking Docker (and every
+> Testcontainers run) with it. Keep it alive while working: `wsl -d Ubuntu-22.04 -e sleep infinity` in a spare
+> terminal (or background). Symptom when it stops: "Could not find a valid Docker environment" / connection
+> refused to 127.0.0.1:2375 or to a container's mapped port.
+
 ## Running services locally
 
 ```bash

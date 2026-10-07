@@ -32,7 +32,9 @@ tasks.withType<Test>().configureEach {
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceAtLeast(1)
     systemProperty("user.timezone", "UTC")
     // Testcontainers: on this Windows host Docker runs inside WSL and is relayed on tcp://localhost:2375.
-    environment("DOCKER_HOST", System.getenv("DOCKER_HOST") ?: "tcp://localhost:2375")
+    // 127.0.0.1, not localhost: WSL forwards IPv4 loopback reliably, ::1 not always (containers would be unreachable)
+    environment("DOCKER_HOST", System.getenv("DOCKER_HOST") ?: "tcp://127.0.0.1:2375")
+    environment("TESTCONTAINERS_HOST_OVERRIDE", System.getenv("TESTCONTAINERS_HOST_OVERRIDE") ?: "127.0.0.1")
     environment("TESTCONTAINERS_RYUK_DISABLED", System.getenv("TESTCONTAINERS_RYUK_DISABLED") ?: "false")
     testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }

@@ -384,7 +384,9 @@ class BillingFlowIT {
     }
 
     private String payment(String amount) {
-        return "{\"amount\":\"%s\",\"paid_at\":\"%sT10:00:00Z\",\"reference\":\"WIRE-1\"}".formatted(amount, today);
+        // a moment ago, not a fixed time of day: paid_at in the future is rejected (fails before 10:00 UTC otherwise)
+        String paidAt = java.time.OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1).withNano(0).toString();
+        return "{\"amount\":\"%s\",\"paid_at\":\"%s\",\"reference\":\"WIRE-1\"}".formatted(amount, paidAt);
     }
 
     private static JsonNode metric(JsonNode summary, String metric) {
