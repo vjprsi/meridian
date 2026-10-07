@@ -31,7 +31,8 @@ public final class HeaderPolicy {
     /** Identity headers that only the local dev stack or Meridian services themselves may send. */
     static final Set<String> INTERNAL = Set.of("x-tenant-id", "x-user", "x-roles", "x-permissions",
             "x-mfa-verified", "x-customer-id", "x-auth-time", "x-acr", "x-on-behalf-of-customer",
-            "x-meridian-service", "x-caller-service", "x-agent-id");
+            "x-meridian-service", "x-caller-service", "x-agent-id", "x-business-customer-id",
+            "x-business-user-id");
 
     private final boolean devMode;
     private final List<Cidr> trustedProxies;

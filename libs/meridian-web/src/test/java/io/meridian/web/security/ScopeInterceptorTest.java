@@ -145,10 +145,12 @@ class ScopeInterceptorTest {
         Set<String> staff = new TreeSet<>(needs);
         staff.remove(CustomerContext.CUSTOMER_SCOPE);
         staff.remove(AgentContext.AGENT_SCOPE);
+        staff.remove(BusinessContext.BUSINESS_SCOPE);
         staff.add("channels:*");
         for (String need : needs) {
             boolean customerOp = need.equals(CustomerContext.CUSTOMER_SCOPE);
-            boolean channelOp = customerOp || need.equals(AgentContext.AGENT_SCOPE);
+            boolean channelOp = customerOp || need.equals(AgentContext.AGENT_SCOPE)
+                    || need.equals(BusinessContext.BUSINESS_SCOPE);
             assertThat(ScopeInterceptor.permits(customer, need)).as("customer token on %s", need).isEqualTo(customerOp);
             assertThat(ScopeInterceptor.permits(staff, need)).as("staff token on %s", need).isEqualTo(!channelOp);
         }
