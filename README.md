@@ -79,7 +79,9 @@ python tools/dev.py status | logs <name> | down # inspect / stop
 ```
 
 The edge gateway serves every API at `http://localhost:18000/v1/...` (routes generated from the spec) and the
-bundled contract at `http://localhost:18000/openapi.yaml`. Local mode uses `X-Tenant-Id: <uuid>` instead of tokens.
+bundled contract at `http://localhost:18000/openapi.yaml`. Local mode uses `X-Tenant-Id: <uuid>` instead of tokens:
+the launcher starts services and gateway with `MERIDIAN_SECURITY_MODE=dev`; without it every component runs in `jwt`
+mode (the default) and the gateway drops identity headers from clients.
 When a service's generated schema changes, the launcher recreates that local database (dev data only).
 
 ## Developer portal

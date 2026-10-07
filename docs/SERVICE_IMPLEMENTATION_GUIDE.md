@@ -274,11 +274,38 @@ date; rolling windows stay on the clock. Adopted in payment, deposit, loan, wall
 treasury-deal, statement, fx, routing, rewards, insights, campaign, agent-network, commission, crm, disbursement,
 limits, sanctions and product-catalog services.
 
+## Security defaults and helpers (security wave 3)
+
+- **Security mode.** `meridian.security-mode` is `jwt` everywhere by default. Dev mode (headers instead of tokens) is
+  opt-in: `tools/dev.py` sets `MERIDIAN_SECURITY_MODE=dev` for services and gateway, and the Gradle test tasks of every
+  service set it too (a test can still pick `jwt` in `@SpringBootTest(properties=...)`). Dev mode refuses to start in a
+  Kubernetes pod unless `meridian.security.allow-dev-mode-in-cluster=true`. In jwt mode the edge gateway strips the
+  internal identity headers (`X-Tenant-Id`, `X-User`, `X-Roles`, `X-MFA-Verified`, `X-Customer-Id`, `X-Agent-Id`,
+  `X-Auth-Time`, `X-Acr`, `X-On-Behalf-Of-Customer`, `X-Meridian-Service`, ...) and owns `X-Forwarded-For`.
+- **Tokens.** Every access token must carry the audience `meridian-api` (or the service name):
+  `meridian.security.audiences`; restrict clients per service with `meridian.security.allowed-clients`.
+- **Scopes.** Every `/v1` handler needs `@RequiredScope` (generated) or `@PublicEndpoint`; spec-`[public]` routes are
+  the only other exception. `platform:operator` (generated for platform-global writes and `operator_only: true` tables)
+  is honoured only for internal tokens or users of `meridian.security.platform-operator-tenant`; `meridian:admin` is a
+  tenant superuser and does not imply it.
+- **Provider callbacks.** Verify with `CallbackVerifier.verify(provider, tenantOrEntity, body, signature,
+  CallbackVerifier.Headers.of(request), signer)`, ship `V001_50__callback_nonce.sql`, and document the v2 scheme to the
+  provider: HMAC over `<X-Callback-Timestamp>.<X-Callback-Nonce>.<tenant or entity>.<body>`, nonce unique per delivery
+  attempt. `CallbackVerifier.cachedBody()` gives the raw body of `[public]` requests.
+- **Idempotency.** The stored fingerprint covers method, path, caller and body: never reuse a key for another resource,
+  operation or user (422 `idempotency_key_reused`). Deterministic keys must embed the resource id.
+- **Four-eyes.** Use `io.meridian.common.tenancy.FourEyes.require(maker, checker, message)`; it fails closed when the
+  maker is unknown (422 `four_eyes_maker_unknown`).
+- **Tenant regexes.** Match with `io.meridian.common.text.SafeRegex` and validate on save with `SafeRegex.problem`.
+- **Check-then-act across replicas** (inbound messages, external callbacks): `AdvisoryLocks.withLock(key, wait, work)`.
+- **Body size.** `meridian.http.max-body-size` (16MB default); raise it only for upload services.
+
 ## Tests (required per service)
 
 - Keep the generated `<Name>ApplicationTests` (context + migration).
 - Add `<Name>FlowIT` (see `LedgerPostingIT`): `@SpringBootTest(webEnvironment = RANDOM_PORT, properties =
-  {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})`, `@Import(MeridianTestContainers.class)`,
+  {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})` (the test task already sets dev mode; keep it
+  explicit in ITs), `@Import(MeridianTestContainers.class)`,
   plain `java.net.http.HttpClient` with `X-Tenant-Id` and `Idempotency-Key` headers. Cover: happy path of each
   main flow, invalid transitions, validation errors, idempotent replay, tenant isolation.
 - Stub other services with `@MockitoBean ServiceClient` (`org.springframework.test.context.bean.override.mockito`).
