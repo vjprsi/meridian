@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Wires tenancy, security, errors, request ids and idempotency into every Meridian service. */
 @AutoConfiguration
-@EnableConfigurationProperties(MeridianProperties.class)
+@EnableConfigurationProperties({MeridianProperties.class, io.meridian.web.security.SecurityProperties.class})
 @Import(ProblemHandler.class)
 public class MeridianWebAutoConfiguration {
 
@@ -154,13 +154,26 @@ public class MeridianWebAutoConfiguration {
     }
 
     @Bean
-    WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props) {
+    WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props,
+                                              io.meridian.web.security.SecurityProperties security,
+                                              JsonMapper json, Environment env) {
+        var publicRoutes = ScopeInterceptor.routes(publicRoutes(json, env.getProperty("spring.application.name", "")));
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
-                registry.addInterceptor(new ScopeInterceptor(props)).addPathPatterns("/v1/**");
+                registry.addInterceptor(new ScopeInterceptor(props, security, publicRoutes)).addPathPatterns("/v1/**");
             }
         };
+    }
+
+    /**
+     * SEC-14: audience (and optional client allow-list) check, added by Spring Boot to the auto-configured
+     * {@code JwtDecoder} next to the issuer / expiry validators.
+     */
+    @Bean
+    org.springframework.security.oauth2.core.OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt>
+            meridianAudienceValidator(io.meridian.web.security.SecurityProperties security, Environment env) {
+        return new io.meridian.web.security.AudienceValidator(security, env.getProperty("spring.application.name", ""));
     }
 
     /**

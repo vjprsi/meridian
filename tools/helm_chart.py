@@ -293,6 +293,11 @@ data:
   MERIDIAN_APPROVALS_MODE: {{ $g.approvalsMode | quote }}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ $g.kafka.bootstrapServers | quote }}
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: {{ $g.auth.issuerUri | quote }}
+  # SEC-14: tokens must carry this audience; SEC-15: only this tenant's users may use platform:operator
+  MERIDIAN_SECURITY_AUDIENCES: {{ $g.auth.audience | quote }}
+  MERIDIAN_SECURITY_PLATFORM_OPERATOR_TENANT: {{ $g.auth.platformOperatorTenant | quote }}
+  # SEC-16: load balancer / ingress addresses whose X-Forwarded-* the edge gateway believes (comma separated CIDRs)
+  MERIDIAN_GATEWAY_TRUSTED_PROXIES: {{ join "," $g.trustedProxies | quote }}
   MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
@@ -405,6 +410,9 @@ def values_yaml(rows, app_version):
         "  auth:",
         '    issuerUri: "https://auth.example.com/realms/meridian"',
         '    serviceClientSecret: "meridian-service-client"',
+        '    audience: "meridian-api"          # SEC-14: required aud of every access token',
+        '    platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)',
+        "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress in front of the edge gateway",
         "  otel:",
         '    endpoint: "http://otel-collector.monitoring:4318"',
         "    samplingProbability: 0.1",

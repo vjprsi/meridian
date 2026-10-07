@@ -46,6 +46,14 @@ class ScopeInterceptorTest {
 
         @RequiredScope("channels:customer")
         public void myAccountsList() {}
+
+        @RequiredScope("platform:operator")
+        public void tenantsList() {}
+
+        public void handWritten() {}
+
+        @PublicEndpoint
+        public void markedPublic() {}
     }
 
     @AfterEach
@@ -81,6 +89,43 @@ class ScopeInterceptorTest {
                 new HandlerMethod(new Endpoints(), Endpoints.class.getMethod("paymentsCreate")))).isTrue();
     }
 
+    @Test
+    void operatorScopeNeedsTheOperatorTenantOrAnInternalTokenAndIsNotImpliedByAdmin() throws Exception {
+        String operatorTenant = "0199a000-0000-7000-8000-0000000000f0";
+        ScopeInterceptor op = new ScopeInterceptor(new MeridianProperties("jwt", "tenant_id"),
+                new SecurityProperties(null, null, operatorTenant), r -> false);
+        for (Jwt notOperator : new Jwt[] {jwt("meridian-console", "meridian:admin platform:*"),
+                jwt("meridian-console", "platform:operator"),          // right scope, a bank's tenant
+                jwt("meridian-service", "meridian:admin")}) {
+            assertThatThrownBy(() -> call(op, notOperator, "tenantsList")).isInstanceOf(ApiException.class);
+        }
+        Jwt operatorUser = Jwt.withTokenValue("t").header("alg", "none").subject("op-1").claim("azp", "meridian-console")
+                .claim("scope", "platform:operator").claim("tenant_id", operatorTenant)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        assertThat(call(op, operatorUser, "tenantsList")).isTrue();
+        assertThat(call(op, jwt("meridian-service", "platform:operator meridian:internal"), "tenantsList")).isTrue();
+        // without a configured operator tenant only service tokens qualify
+        assertThatThrownBy(() -> call(interceptor, operatorUser, "tenantsList"))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo("operator_tenant_required"));
+    }
+
+    @Test
+    void handlersWithoutAScopeAreRefusedUnlessPublic() throws Exception {
+        Jwt admin = jwt("meridian-console", "meridian:admin");
+        assertThatThrownBy(() -> call(interceptor, admin, "handWritten")).isInstanceOf(ApiException.class);
+        assertThat(call(interceptor, admin, "markedPublic")).isTrue();
+        ScopeInterceptor withRoutes = new ScopeInterceptor(new MeridianProperties("jwt", "tenant_id"),
+                SecurityProperties.defaults(), ScopeInterceptor.routes(java.util.List.<String[]>of(
+                        new String[] {"POST", "/v1/payment-rails/*/inbound"})));
+        SecurityContextHolder.clearContext();
+        MockHttpServletRequest callback = new MockHttpServletRequest("POST", "/v1/payment-rails/abc/inbound");
+        assertThat(withRoutes.preHandle(callback, new MockHttpServletResponse(),
+                new HandlerMethod(new Endpoints(), Endpoints.class.getMethod("handWritten")))).isTrue();
+        MockHttpServletRequest other = new MockHttpServletRequest("POST", "/v1/payment-rails/abc/other");
+        assertThatThrownBy(() -> withRoutes.preHandle(other, new MockHttpServletResponse(),
+                new HandlerMethod(new Endpoints(), Endpoints.class.getMethod("handWritten")))).isInstanceOf(ApiException.class);
+    }
+
     /**
      * Every operation scope in the generated contract: a customer token satisfies only channels:customer; a token with
      * every staff scope satisfies all the others but not channels:customer.
@@ -107,6 +152,10 @@ class ScopeInterceptorTest {
     }
 
     private boolean call(Jwt jwt, String method) throws Exception {
+        return call(interceptor, jwt, method);
+    }
+
+    private static boolean call(ScopeInterceptor interceptor, Jwt jwt, String method) throws Exception {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         return interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(),
                 new HandlerMethod(new Endpoints(), Endpoints.class.getMethod(method)));

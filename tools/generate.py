@@ -93,6 +93,7 @@ class Table:
     prefix: str = ""
     immutable: bool = False
     tenant: bool = True
+    operator_only: bool = False   # SEC-15: platform-global registry readable and writable by platform operators only
     std: bool = True
     fr: list = field(default_factory=list)
     columns: list = field(default_factory=list)
@@ -296,6 +297,7 @@ def load_domains() -> list:
                     name=t["name"], domain=did, service=sname, database=db,
                     description=t.get("description", ""), prefix=t.get("prefix", ""),
                     immutable=imm, tenant=ten, std=std, fr=t.get("fr", []) or [],
+                    operator_only=bool(t.get("operator_only", False)),
                     columns=cols, unique=t.get("unique", []) or [], indexes=t.get("indexes", []) or [],
                     nested=[parse_nested(x, ctx) for x in (t.get("nested", []) or [])],
                     response_only=[parse_column(x, ctx) for x in (t.get("response_only", []) or [])],
@@ -927,8 +929,15 @@ def gen_openapi(domains, enums, tables_global) -> list:
                                             "the referenced entity.")
                     else:
                         # Platform-global tables (no tenant column) are shared by every tenant: only platform
-                        # operators (meridian:admin) may change them; reads use the normal domain scope.
-                        need = "meridian:admin" if (scope == "write" and not t.tenant and not d.scope) else granted
+                        # operators (platform:operator, SEC-15) may change them; reads use the normal domain scope,
+                        # except operator_only tables (tenant registry, cells), which operators alone may read.
+                        operator = not d.scope and ((scope == "write" and not t.tenant) or t.operator_only)
+                        need = "platform:operator" if operator else granted
+                        if operator:
+                            o["security"] = [{"oauth2": [need]}]
+                            for target in (doc, bundle):
+                                for flow in target["components"]["securitySchemes"]["oauth2"]["flows"].values():
+                                    flow["scopes"].setdefault(need, "Platform operator (operator tenant or service only)")
                         o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
                         o["x-required-scope"] = need
                     o["x-table"] = t.name

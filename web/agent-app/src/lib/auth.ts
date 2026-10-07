@@ -33,7 +33,7 @@ export async function oidc(): Promise<UserManager> {
     const origin = window.location.origin;
     manager = new UserManager({
       authority: process.env.NEXT_PUBLIC_OIDC_AUTHORITY ?? "http://localhost:15180/realms/meridian",
-      client_id: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "meridian-console",
+      client_id: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "meridian-agent-app",
       redirect_uri: `${origin}/auth/callback`,
       post_logout_redirect_uri: `${origin}/login`,
       response_type: "code",
