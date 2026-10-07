@@ -26635,6 +26635,7 @@ paths:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - COMPLETED
           - REJECTED
           - CANCELLED
@@ -26739,7 +26740,8 @@ paths:
     post:
       operationId: merchantAppRefundsApprove
       summary: Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created
-        in merchant-service as the requester and approved there as the approver
+        in merchant-service as the requester and approved there as the approver; when the bank reviews it (amount threshold,
+        merchant risk) it waits as PENDING_BANK_APPROVAL for the bank's checkers
       tags:
       - Merchant App Refunds
       security:
@@ -27126,6 +27128,7 @@ paths:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - APPLIED
           - REJECTED
           - CANCELLED
@@ -27223,7 +27226,8 @@ paths:
   /v1/merchant/payout-changes/{change_id}/approve:
     post:
       operationId: merchantAppPayoutChangesApprove
-      summary: Approve and apply a payout account change (another OWNER or MANAGER; step-up)
+      summary: 'Approve a payout account change (another OWNER or MANAGER; step-up): applied at once, or PENDING_BANK_APPROVAL
+        until the bank''s checkers decide in central approvals (meridian.merchant.payout-bank-review)'
       tags:
       - Merchant App Payout Changes
       security:
@@ -82623,6 +82627,8 @@ paths:
       - Cells
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
@@ -82705,8 +82711,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: cell
       x-crud: true
       x-crud-list: true
@@ -82757,6 +82766,8 @@ paths:
       - Cells
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - &id168
@@ -82782,8 +82793,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: cell
       x-crud: true
       x-crud-get: true
@@ -83501,6 +83515,8 @@ paths:
       - Tenants
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - name: id
@@ -83527,8 +83543,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: tenant
   /v1/platform/tenants/provision-from-template:
     post:
@@ -115313,6 +115332,50 @@ paths:
       x-service: fraud-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-required-scope: risk:write
+      x-table: fraud_score
+  /v1/risk/fraud/scores/pseudonymise-stored:
+    post:
+      operationId: fraudScoresPseudonymiseStored
+      summary: 'One-off operator migration of the tenant: re-pseudonymise raw identifiers stored before keyed pseudonymisation
+        (fraud_score.features context, list entries) and drop unkeyed feature-store keys; idempotent, resumable in batches'
+      tags:
+      - Fraud Scores
+      security:
+      - oauth2:
+        - risk:*
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudScoresPseudonymiseStoredRequest'
+      x-requirements:
+      - FRM-01
+      - FRM-05
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:*")'
+      x-required-scope: risk:*
       x-table: fraud_score
   /v1/risk/fraud/rules:
     get:
@@ -148369,6 +148432,7 @@ paths:
           type: string
           enum:
           - REQUESTED
+          - PENDING_BANK_APPROVAL
           - APPROVED
           - COMPLETED
           - REJECTED
@@ -148501,7 +148565,8 @@ paths:
   /v1/merchant-refunds/{id}/approve:
     post:
       operationId: merchantRefundsApprove
-      summary: Approve (checker differs from the maker) and execute the refund
+      summary: Approve (checker differs from the maker) and execute the refund; a merchant app user's approval of a refund
+        the bank reviews moves it to PENDING_BANK_APPROVAL instead (bank checkers decide)
       tags:
       - Merchant Refunds
       security:
@@ -184708,11 +184773,27 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - APPLIED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review)
+            -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request of the bank's review
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided the change
           readOnly: true
         requested_by:
           type: string
@@ -185085,11 +185166,20 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - COMPLETED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central
+            approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided a refund the bank reviewed
           readOnly: true
         requested_by:
           type: string
@@ -189238,6 +189328,26 @@ components:
           type: boolean
           description: Fraud scoring timed out or was unavailable; the configured fallback decided
           readOnly: true
+        fraud_rescore_attempts:
+          type: integer
+          format: int32
+          description: Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+          readOnly: true
+        fraud_next_rescore_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+          readOnly: true
+        upstream_fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent
+            ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token'
+          readOnly: true
         hold_reason:
           type:
           - string
@@ -189376,6 +189486,7 @@ components:
       - charge_bearer
       - end_to_end_id
       - fraud_degraded
+      - fraud_rescore_attempts
     PaymentCreate:
       type: object
       properties:
@@ -189624,6 +189735,18 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        upstream_fraud_score_id:
+          type: string
+          format: uuid
+          description: 'Server-to-server only (wallet-service payouts, internal token): fraud-service evaluation the originating
+            service already made; ignored from any other caller (write-only; not stored as a column)'
+          writeOnly: true
+        debtor_clearing_ledger_account_id:
+          type: string
+          format: uuid
+          description: 'Server-to-server only (wallet-service payouts): ledger account the wallet transaction already credited,
+            debited by the payment instead of a deposit account (write-only; not stored as a column)'
+          writeOnly: true
       required:
       - payment_type
       - direction
@@ -269990,6 +270113,14 @@ components:
       required:
       - label
       - source
+    FraudScoresPseudonymiseStoredRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+        batch_size:
+          type: integer
+          format: int32
     FraudRulePage:
       type: object
       description: One page of FraudRule results (newest first)
@@ -274476,7 +274607,8 @@ components:
         value_hash:
           type: string
           maxLength: 128
-          description: SHA-256 of the normalised value
+          description: 'Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant''s pseudonymisation
+            key)'
         value_masked:
           type:
           - string
@@ -275355,7 +275487,8 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit, explainability and rule backtesting)
+          description: Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers,
+            IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw
         shadow_decision:
           type:
           - string
@@ -300224,11 +300357,34 @@ components:
           type: string
           enum:
           - REQUESTED
+          - PENDING_BANK_APPROVAL
           - APPROVED
           - COMPLETED
           - REJECTED
           - FAILED
-          description: Status
+          description: REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews
+            it) -> COMPLETED; REJECTED, FAILED
+          readOnly: true
+        merchant_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund
+          readOnly: true
+        merchant_approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Merchant-side approval time
+          readOnly: true
+        bank_review_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK)
           readOnly: true
         approved_by:
           type:
@@ -303738,12 +303894,14 @@ components:
             payments:write: Change Payments Hub
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:routing-read: Narrow scope platform:routing-read
             product:read: Read Product Studio and Pricing
             product:write: Change Product Studio and Pricing
             reporting:read: Read Regulatory Reporting, Analytics and AI
             reporting:write: Change Regulatory Reporting, Analytics and AI
             risk:read: Read Risk, Fraud, AML and Limits
             risk:write: Change Risk, Fraud, AML and Limits
+            risk:*: Narrow scope risk:*
             servicing:read: Read Servicing and CRM
             servicing:write: Change Servicing and CRM
             treasury:read: Read Treasury and ALM
@@ -303779,12 +303937,14 @@ components:
             payments:write: Change Payments Hub
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:routing-read: Narrow scope platform:routing-read
             product:read: Read Product Studio and Pricing
             product:write: Change Product Studio and Pricing
             reporting:read: Read Regulatory Reporting, Analytics and AI
             reporting:write: Change Regulatory Reporting, Analytics and AI
             risk:read: Read Risk, Fraud, AML and Limits
             risk:write: Change Risk, Fraud, AML and Limits
+            risk:*: Narrow scope risk:*
             servicing:read: Read Servicing and CRM
             servicing:write: Change Servicing and CRM
             treasury:read: Read Treasury and ALM

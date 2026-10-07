@@ -459,6 +459,9 @@ CREATE TABLE payment (
   fraud_decision               varchar(40) CHECK (fraud_decision IN ('ALLOW', 'STEP_UP', 'REVIEW', 'BLOCK')),
   fraud_alert_id               uuid,
   fraud_degraded               boolean NOT NULL DEFAULT false,
+  fraud_rescore_attempts       integer NOT NULL DEFAULT 0,
+  fraud_next_rescore_at        timestamptz,
+  upstream_fraud_score_id      uuid,
   hold_reason                  varchar(32),
   risk_context                 jsonb,
   rejection_code               varchar(8),
@@ -549,6 +552,9 @@ COMMENT ON COLUMN payment.fraud_score_id IS 'fraud-service evaluation of this pa
 COMMENT ON COLUMN payment.fraud_decision IS 'Fraud decision applied: fraud-service''s, or the fail-open / fail-closed fallback when scoring was unavailable';
 COMMENT ON COLUMN payment.fraud_alert_id IS 'Fraud alert whose resolution releases or rejects a payment held for review';
 COMMENT ON COLUMN payment.fraud_degraded IS 'Fraud scoring timed out or was unavailable; the configured fallback decided';
+COMMENT ON COLUMN payment.fraud_rescore_attempts IS 'Automatic re-scoring attempts of a payment held because fraud scoring was unavailable';
+COMMENT ON COLUMN payment.fraud_next_rescore_at IS 'Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)';
+COMMENT ON COLUMN payment.upstream_fraud_score_id IS 'Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token';
 COMMENT ON COLUMN payment.hold_reason IS 'Why the payment is ON_HOLD (FRAUD_REVIEW)';
 COMMENT ON COLUMN payment.risk_context IS 'Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) [PII]';
 COMMENT ON COLUMN payment.rejection_code IS 'ISO 20022 status reason code';
@@ -587,6 +593,7 @@ CREATE INDEX ix_payment_screening_result_id ON payment (screening_result_id);
 CREATE INDEX ix_payment_limit_check_id ON payment (limit_check_id);
 CREATE INDEX ix_payment_fraud_score_id ON payment (fraud_score_id);
 CREATE INDEX ix_payment_fraud_alert_id ON payment (fraud_alert_id);
+CREATE INDEX ix_payment_upstream_fraud_score_id ON payment (upstream_fraud_score_id);
 CREATE INDEX ix_payment_bulk_payment_id ON payment (bulk_payment_id);
 CREATE INDEX ix_payment_mandate_id ON payment (mandate_id);
 CREATE INDEX ix_payment_request_to_pay_id ON payment (request_to_pay_id);
@@ -594,6 +601,7 @@ CREATE INDEX ix_payment_original_payment_id ON payment (original_payment_id);
 CREATE INDEX ix_payment_ob_consent_id ON payment (ob_consent_id);
 CREATE INDEX ix_payment_c1 ON payment (status, requested_execution_date);
 CREATE INDEX ix_payment_c2 ON payment (customer_id, created_at);
+CREATE INDEX ix_payment_c3 ON payment (status, fraud_next_rescore_at);
 ALTER TABLE payment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON payment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_payment_touch BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION touch_row();

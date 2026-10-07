@@ -11380,6 +11380,7 @@ paths:
           type: string
           enum:
           - REQUESTED
+          - PENDING_BANK_APPROVAL
           - APPROVED
           - COMPLETED
           - REJECTED
@@ -11512,7 +11513,8 @@ paths:
   /v1/merchant-refunds/{id}/approve:
     post:
       operationId: merchantRefundsApprove
-      summary: Approve (checker differs from the maker) and execute the refund
+      summary: Approve (checker differs from the maker) and execute the refund; a merchant app user's approval of a refund
+        the bank reviews moves it to PENDING_BANK_APPROVAL instead (bank checkers decide)
       tags:
       - Merchant Refunds
       security:
@@ -27012,11 +27014,34 @@ components:
           type: string
           enum:
           - REQUESTED
+          - PENDING_BANK_APPROVAL
           - APPROVED
           - COMPLETED
           - REJECTED
           - FAILED
-          description: Status
+          description: REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews
+            it) -> COMPLETED; REJECTED, FAILED
+          readOnly: true
+        merchant_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund
+          readOnly: true
+        merchant_approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Merchant-side approval time
+          readOnly: true
+        bank_review_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK)
           readOnly: true
         approved_by:
           type:

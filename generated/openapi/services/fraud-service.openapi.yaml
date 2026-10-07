@@ -361,6 +361,50 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-required-scope: risk:write
       x-table: fraud_score
+  /v1/risk/fraud/scores/pseudonymise-stored:
+    post:
+      operationId: fraudScoresPseudonymiseStored
+      summary: 'One-off operator migration of the tenant: re-pseudonymise raw identifiers stored before keyed pseudonymisation
+        (fraud_score.features context, list entries) and drop unkeyed feature-store keys; idempotent, resumable in batches'
+      tags:
+      - Fraud Scores
+      security:
+      - oauth2:
+        - risk:*
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudScoresPseudonymiseStoredRequest'
+      x-requirements:
+      - FRM-01
+      - FRM-05
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:*")'
+      x-required-scope: risk:*
+      x-table: fraud_score
   /v1/risk/fraud/rules:
     get:
       operationId: fraudRulesList
@@ -3196,6 +3240,14 @@ components:
       required:
       - label
       - source
+    FraudScoresPseudonymiseStoredRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+        batch_size:
+          type: integer
+          format: int32
     FraudRulePage:
       type: object
       description: One page of FraudRule results (newest first)
@@ -5395,7 +5447,8 @@ components:
         value_hash:
           type: string
           maxLength: 128
-          description: SHA-256 of the normalised value
+          description: 'Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant''s pseudonymisation
+            key)'
         value_masked:
           type:
           - string
@@ -6274,7 +6327,8 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit, explainability and rule backtesting)
+          description: Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers,
+            IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw
         shadow_decision:
           type:
           - string
@@ -6492,6 +6546,7 @@ components:
           scopes:
             risk:read: Read Risk, Fraud, AML and Limits
             risk:write: Change Risk, Fraud, AML and Limits
+            risk:*: Narrow scope risk:*
             platform:operator: Platform operator (operator tenant or service only)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
@@ -6499,4 +6554,5 @@ components:
           scopes:
             risk:read: Read Risk, Fraud, AML and Limits
             risk:write: Change Risk, Fraud, AML and Limits
+            risk:*: Narrow scope risk:*
             platform:operator: Platform operator (operator tenant or service only)

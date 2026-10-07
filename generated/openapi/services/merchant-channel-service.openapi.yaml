@@ -747,6 +747,7 @@ paths:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - COMPLETED
           - REJECTED
           - CANCELLED
@@ -851,7 +852,8 @@ paths:
     post:
       operationId: merchantAppRefundsApprove
       summary: Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created
-        in merchant-service as the requester and approved there as the approver
+        in merchant-service as the requester and approved there as the approver; when the bank reviews it (amount threshold,
+        merchant risk) it waits as PENDING_BANK_APPROVAL for the bank's checkers
       tags:
       - Merchant App Refunds
       security:
@@ -1238,6 +1240,7 @@ paths:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - APPLIED
           - REJECTED
           - CANCELLED
@@ -1335,7 +1338,8 @@ paths:
   /v1/merchant/payout-changes/{change_id}/approve:
     post:
       operationId: merchantAppPayoutChangesApprove
-      summary: Approve and apply a payout account change (another OWNER or MANAGER; step-up)
+      summary: 'Approve a payout account change (another OWNER or MANAGER; step-up): applied at once, or PENDING_BANK_APPROVAL
+        until the bank''s checkers decide in central approvals (meridian.merchant.payout-bank-review)'
       tags:
       - Merchant App Payout Changes
       security:
@@ -3926,11 +3930,27 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - APPLIED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review)
+            -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request of the bank's review
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided the change
           readOnly: true
         requested_by:
           type: string
@@ -4194,11 +4214,20 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - COMPLETED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central
+            approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided a refund the bank reviewed
           readOnly: true
         requested_by:
           type: string

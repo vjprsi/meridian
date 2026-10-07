@@ -13636,6 +13636,26 @@ components:
           type: boolean
           description: Fraud scoring timed out or was unavailable; the configured fallback decided
           readOnly: true
+        fraud_rescore_attempts:
+          type: integer
+          format: int32
+          description: Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+          readOnly: true
+        fraud_next_rescore_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+          readOnly: true
+        upstream_fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent
+            ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token'
+          readOnly: true
         hold_reason:
           type:
           - string
@@ -13774,6 +13794,7 @@ components:
       - charge_bearer
       - end_to_end_id
       - fraud_degraded
+      - fraud_rescore_attempts
     PaymentCreate:
       type: object
       properties:
@@ -14022,6 +14043,18 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        upstream_fraud_score_id:
+          type: string
+          format: uuid
+          description: 'Server-to-server only (wallet-service payouts, internal token): fraud-service evaluation the originating
+            service already made; ignored from any other caller (write-only; not stored as a column)'
+          writeOnly: true
+        debtor_clearing_ledger_account_id:
+          type: string
+          format: uuid
+          description: 'Server-to-server only (wallet-service payouts): ledger account the wallet transaction already credited,
+            debited by the payment instead of a deposit account (write-only; not stored as a column)'
+          writeOnly: true
       required:
       - payment_type
       - direction

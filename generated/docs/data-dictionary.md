@@ -2443,7 +2443,8 @@ API: /v1/merchant/refunds
 | amount | numeric(28,8) | no |  | amount | Refund amount |
 | currency | char(3) | no |  | currency (read-only) | Currency of the payment |
 | reason | varchar(255) | no |  | reason | Reason |
-| status | varchar(40) (MerchantRefundRequestStatus) | no |  | status (read-only) | PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED |
+| status | varchar(40) (MerchantRefundRequestStatus) | no |  | status (read-only) | PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED |
+| bank_decided_by | varchar(64) | yes |  | bank_decided_by (read-only) | Bank checker who decided a refund the bank reviewed |
 | requested_by | uuid | no | FK → merchant_user | requested_by (read-only) | User that requested the refund |
 | decided_by | uuid | yes |  | decided_by (read-only) | Approver or rejecter |
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
@@ -2474,7 +2475,9 @@ API: /v1/merchant/payout-account, /v1/merchant/payout-changes
 | account_number_masked | varchar(40) | yes |  | account_number_masked (read-only) | New account number, masked |
 | previous_settlement_account_id | uuid | yes |  | previous_settlement_account_id (read-only) | Payout account before the change |
 | reason | varchar(255) | yes |  | reason | Why the account changes |
-| status | varchar(40) (MerchantChangeStatus) | no |  | status (read-only) | PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED |
+| status | varchar(40) (MerchantChangeStatus) | no |  | status (read-only) | PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review) -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request of the bank's review |
+| bank_decided_by | varchar(64) | yes |  | bank_decided_by (read-only) | Bank checker who decided the change |
 | requested_by | uuid | no | FK → merchant_user | requested_by (read-only) | OWNER that requested the change |
 | decided_by | uuid | yes |  | decided_by (read-only) | Approver or rejecter |
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
@@ -8837,6 +8840,9 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | fraud_decision | varchar(40) (PaymentFraudDecision) | yes |  | fraud_decision (read-only) | Fraud decision applied: fraud-service's, or the fail-open / fail-closed fallback when scoring was unavailable |
 | fraud_alert_id | uuid | yes | ref → fraud_alert | fraud_alert_id (read-only) | Fraud alert whose resolution releases or rejects a payment held for review |
 | fraud_degraded | boolean | no |  | fraud_degraded (read-only) | Fraud scoring timed out or was unavailable; the configured fallback decided |
+| fraud_rescore_attempts | integer | no |  | fraud_rescore_attempts (read-only) | Automatic re-scoring attempts of a payment held because fraud scoring was unavailable |
+| fraud_next_rescore_at | timestamptz | yes |  | fraud_next_rescore_at (read-only) | Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled) |
+| upstream_fraud_score_id | uuid | yes | ref → fraud_score | upstream_fraud_score_id (read-only) | Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token |
 | hold_reason | varchar(32) | yes |  | hold_reason (read-only) | Why the payment is ON_HOLD (FRAUD_REVIEW) |
 | risk_context | jsonb | yes |  | risk_context | Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) PII |
 | rejection_code | varchar(8) | yes |  | rejection_code (read-only) | ISO 20022 status reason code |
@@ -14161,7 +14167,7 @@ API: /v1/risk/fraud/scores · Requirements: FRM-01, FRM-05
 | model_version | varchar(32) | yes |  | model_version | Model version used |
 | decision | varchar(40) (FraudDecision) | no |  | decision | Decision returned to the caller |
 | reason_codes | jsonb | no |  | reason_codes | Ordered reason codes explaining the decision |
-| features | jsonb | yes |  | features | Feature values used (for audit, explainability and rule backtesting) |
+| features | jsonb | yes |  | features | Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers, IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw |
 | shadow_decision | varchar(40) (FraudDecision) | yes |  | shadow_decision | Decision of the shadow / challenger model |
 | latency_ms | integer | no |  | latency_ms | Evaluation time in milliseconds |
 | correlation_id | varchar(128) | yes |  | correlation_id | Trace / saga correlation id |
@@ -14433,7 +14439,7 @@ API: /v1/risk/fraud/list-entries · Requirements: FRM-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | fraud_list_id | uuid | no | FK → fraud_list | fraud_list_id | List |
-| value_hash | varchar(128) | no |  | value_hash | SHA-256 of the normalised value |
+| value_hash | varchar(128) | no |  | value_hash | Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant's pseudonymisation key) |
 | value_masked | varchar(64) | yes |  | value_masked | Masked value for display |
 | reason | varchar(255) | yes |  | reason | Why it was added |
 | source | varchar(40) | yes |  | source | ANALYST, CONSORTIUM, CHARGEBACK, AUTOMATED |
@@ -14545,7 +14551,7 @@ API: internal only · Requirements: FRM-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | entity_type | varchar(24) | no |  | entity_type | CUSTOMER, CARD, ACCOUNT, DEVICE, MERCHANT, BENEFICIARY, CUSTOMER_LOGIN |
-| entity_key | varchar(128) | no |  | entity_key | Entity id or hash |
+| entity_key | varchar(128) | no |  | entity_key | Entity id or tenant-keyed pseudonym (acct:h1:..., msisdn:h1:...) |
 | granularity | varchar(4) | no |  | granularity | M5 or H1 |
 | bucket_start | timestamptz | no |  | bucket_start | Bucket start (UTC) |
 | currency | char(3) | no |  | currency | Amount currency (XXX = no amount) |
@@ -14573,7 +14579,7 @@ API: internal only · Requirements: FRM-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | entity_type | varchar(24) | no |  | entity_type | CUSTOMER, CARD, ACCOUNT, MERCHANT, BENEFICIARY, DEVICE |
-| entity_key | varchar(128) | no |  | entity_key | Entity id or hash |
+| entity_key | varchar(128) | no |  | entity_key | Entity id or tenant-keyed pseudonym (acct:h1:..., msisdn:h1:...) |
 | currency | char(3) | no |  | currency | Currency of the amount statistics (XXX = none) |
 | first_seen_at | timestamptz | no |  | first_seen_at | First event |
 | last_seen_at | timestamptz | no |  | last_seen_at | Last event |
@@ -18578,7 +18584,10 @@ API: /v1/merchant-refunds · Requirements: WAL-06
 | amount | numeric(28,8) | no |  | amount | Refund amount |
 | currency | char(3) | no |  | currency | Currency |
 | reason | varchar(255) | no |  | reason | Reason |
-| status | varchar(40) (MerchantRefundStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (MerchantRefundStatus) | no |  | status (read-only) | REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews it) -> COMPLETED; REJECTED, FAILED |
+| merchant_approved_by | varchar(64) | yes |  | merchant_approved_by (read-only) | Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund |
+| merchant_approved_at | timestamptz | yes |  | merchant_approved_at (read-only) | Merchant-side approval time |
+| bank_review_reason | varchar(64) | yes |  | bank_review_reason (read-only) | Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK) |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
 | rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Rejection reason |

@@ -163,6 +163,8 @@ paths:
       - Cells
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - $ref: '#/components/parameters/Limit'
@@ -249,8 +251,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: cell
       x-crud: true
       x-crud-list: true
@@ -301,6 +306,8 @@ paths:
       - Cells
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - &id005
@@ -326,8 +333,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: cell
       x-crud: true
       x-crud-get: true
@@ -1045,6 +1055,8 @@ paths:
       - Tenants
       security:
       - oauth2:
+        - platform:routing-read
+      - oauth2:
         - platform:operator
       parameters:
       - name: id
@@ -1071,8 +1083,11 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
-      x-required-scope: platform:operator
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope(value = "platform:routing-read", anyOf = {"platform:operator"})'
+      x-accepted-scopes:
+      - platform:routing-read
+      - platform:operator
+      x-required-scope: platform:routing-read
       x-table: tenant
   /v1/platform/tenants/provision-from-template:
     post:
@@ -36175,6 +36190,7 @@ components:
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:routing-read: Narrow scope platform:routing-read
             platform:operator: Platform operator (operator tenant or service only)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
@@ -36182,4 +36198,5 @@ components:
           scopes:
             platform:read: Read Platform and Administration
             platform:write: Change Platform and Administration
+            platform:routing-read: Narrow scope platform:routing-read
             platform:operator: Platform operator (operator tenant or service only)

@@ -500,7 +500,10 @@ CREATE TABLE merchant_refund (
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   reason                       varchar(255) NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED', 'FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'PENDING_BANK_APPROVAL', 'APPROVED', 'COMPLETED', 'REJECTED', 'FAILED')),
+  merchant_approved_by         varchar(64),
+  merchant_approved_at         timestamptz,
+  bank_review_reason           varchar(64),
   approved_by                  varchar(64),
   approved_at                  timestamptz,
   rejection_reason             varchar(255),
@@ -528,7 +531,10 @@ COMMENT ON COLUMN merchant_refund.original_transaction_id IS 'Payment refunded';
 COMMENT ON COLUMN merchant_refund.amount IS 'Refund amount';
 COMMENT ON COLUMN merchant_refund.currency IS 'Currency';
 COMMENT ON COLUMN merchant_refund.reason IS 'Reason';
-COMMENT ON COLUMN merchant_refund.status IS 'Status';
+COMMENT ON COLUMN merchant_refund.status IS 'REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant''s own approval when the bank reviews it) -> COMPLETED; REJECTED, FAILED';
+COMMENT ON COLUMN merchant_refund.merchant_approved_by IS 'Merchant-side approver (merchant app four-eyes) when the bank''s checkers review the refund';
+COMMENT ON COLUMN merchant_refund.merchant_approved_at IS 'Merchant-side approval time';
+COMMENT ON COLUMN merchant_refund.bank_review_reason IS 'Why the bank''s checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK)';
 COMMENT ON COLUMN merchant_refund.approved_by IS 'Approver';
 COMMENT ON COLUMN merchant_refund.approved_at IS 'Approval time';
 COMMENT ON COLUMN merchant_refund.rejection_reason IS 'Rejection reason';

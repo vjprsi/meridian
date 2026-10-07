@@ -169,7 +169,8 @@ CREATE TABLE merchant_refund_request (
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   reason                       varchar(255) NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'PENDING_BANK_APPROVAL', 'COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED')),
+  bank_decided_by              varchar(64),
   requested_by                 uuid NOT NULL REFERENCES merchant_user(id),
   decided_by                   uuid,
   decided_at                   timestamptz,
@@ -194,7 +195,8 @@ COMMENT ON COLUMN merchant_refund_request.merchant_sale_id IS 'Sale of the payme
 COMMENT ON COLUMN merchant_refund_request.amount IS 'Refund amount';
 COMMENT ON COLUMN merchant_refund_request.currency IS 'Currency of the payment';
 COMMENT ON COLUMN merchant_refund_request.reason IS 'Reason';
-COMMENT ON COLUMN merchant_refund_request.status IS 'PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED';
+COMMENT ON COLUMN merchant_refund_request.status IS 'PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank''s checkers review it in central approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED';
+COMMENT ON COLUMN merchant_refund_request.bank_decided_by IS 'Bank checker who decided a refund the bank reviewed';
 COMMENT ON COLUMN merchant_refund_request.requested_by IS 'User that requested the refund';
 COMMENT ON COLUMN merchant_refund_request.decided_by IS 'Approver or rejecter';
 COMMENT ON COLUMN merchant_refund_request.decided_at IS 'Decision time';
@@ -232,7 +234,9 @@ CREATE TABLE merchant_change_request (
   account_number_masked        varchar(40),
   previous_settlement_account_id uuid,
   reason                       varchar(255),
-  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPLIED', 'REJECTED', 'CANCELLED', 'FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'PENDING_BANK_APPROVAL', 'APPLIED', 'REJECTED', 'CANCELLED', 'FAILED')),
+  approval_request_id          uuid,
+  bank_decided_by              varchar(64),
   requested_by                 uuid NOT NULL REFERENCES merchant_user(id),
   decided_by                   uuid,
   decided_at                   timestamptz,
@@ -253,7 +257,9 @@ COMMENT ON COLUMN merchant_change_request.settlement_account_id IS 'New payout a
 COMMENT ON COLUMN merchant_change_request.account_number_masked IS 'New account number, masked';
 COMMENT ON COLUMN merchant_change_request.previous_settlement_account_id IS 'Payout account before the change';
 COMMENT ON COLUMN merchant_change_request.reason IS 'Why the account changes';
-COMMENT ON COLUMN merchant_change_request.status IS 'PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED';
+COMMENT ON COLUMN merchant_change_request.status IS 'PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review) -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED';
+COMMENT ON COLUMN merchant_change_request.approval_request_id IS 'Central approval request of the bank''s review';
+COMMENT ON COLUMN merchant_change_request.bank_decided_by IS 'Bank checker who decided the change';
 COMMENT ON COLUMN merchant_change_request.requested_by IS 'OWNER that requested the change';
 COMMENT ON COLUMN merchant_change_request.decided_by IS 'Approver or rejecter';
 COMMENT ON COLUMN merchant_change_request.decided_at IS 'Decision time';
@@ -262,6 +268,7 @@ COMMENT ON COLUMN merchant_change_request.failure_reason IS 'Problem when applyi
 CREATE INDEX ix_merchant_change_request_tenant ON merchant_change_request (tenant_id, created_at);
 CREATE INDEX ix_merchant_change_request_merchant_id ON merchant_change_request (merchant_id);
 CREATE INDEX ix_merchant_change_request_settlement_account_id ON merchant_change_request (settlement_account_id);
+CREATE INDEX ix_merchant_change_request_approval_request_id ON merchant_change_request (approval_request_id);
 CREATE INDEX ix_merchant_change_request_requested_by ON merchant_change_request (requested_by);
 CREATE INDEX ix_merchant_change_request_c1 ON merchant_change_request (merchant_id, status);
 ALTER TABLE merchant_change_request ENABLE ROW LEVEL SECURITY;

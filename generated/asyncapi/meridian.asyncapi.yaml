@@ -219,6 +219,10 @@ channels:
         $ref: '#/components/messages/ChannelsMerchantChangeRequestApplied'
       ChannelsMerchantChangeRequestRejected:
         $ref: '#/components/messages/ChannelsMerchantChangeRequestRejected'
+      ChannelsMerchantRefundRequestPendingBankApproval:
+        $ref: '#/components/messages/ChannelsMerchantRefundRequestPendingBankApproval'
+      ChannelsMerchantChangeRequestPendingBankApproval:
+        $ref: '#/components/messages/ChannelsMerchantChangeRequestPendingBankApproval'
   engagement:
     address: meridian.engagement.v1
     description: 'Engagement: Rewards, Insights and Campaigns events'
@@ -1759,6 +1763,8 @@ channels:
         $ref: '#/components/messages/WalletsMerchantRefundCompleted'
       WalletsMerchantRefundRejected:
         $ref: '#/components/messages/WalletsMerchantRefundRejected'
+      WalletsMerchantRefundPendingBankApproval:
+        $ref: '#/components/messages/WalletsMerchantRefundPendingBankApproval'
       WalletsUssdMenuPublished:
         $ref: '#/components/messages/WalletsUssdMenuPublished'
       WalletsUssdMenuSubmitted:
@@ -4036,6 +4042,50 @@ components:
           ce_type:
             type: string
             const: channels.merchant_change_request.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantChangeRequest'
+    ChannelsMerchantRefundRequestPendingBankApproval:
+      name: channels.merchant_refund_request.pending_bank_approval
+      title: A refund approved in the merchant app waits for the bank's checkers
+      summary: A refund approved in the merchant app waits for the bank's checkers
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_refund_request.pending_bank_approval
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantRefundRequest'
+    ChannelsMerchantChangeRequestPendingBankApproval:
+      name: channels.merchant_change_request.pending_bank_approval
+      title: A payout account change approved in the merchant app waits for the bank's review
+      summary: A payout account change approved in the merchant app waits for the bank's review
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.merchant_change_request.pending_bank_approval
           ce_source:
             type: string
           ce_id:
@@ -20374,6 +20424,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/MerchantRefund'
+    WalletsMerchantRefundPendingBankApproval:
+      name: wallets.merchant_refund.pending_bank_approval
+      title: A refund approved inside the merchant waits for the bank's checkers
+      summary: A refund approved inside the merchant waits for the bank's checkers
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.merchant_refund.pending_bank_approval
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MerchantRefund'
     WalletsUssdMenuPublished:
       name: wallets.ussd_menu.published
       title: A USSD menu version was published
@@ -28839,11 +28911,20 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - COMPLETED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central
+            approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided a refund the bank reviewed
           readOnly: true
         requested_by:
           type: string
@@ -28988,11 +29069,27 @@ components:
           type: string
           enum:
           - PENDING_APPROVAL
+          - PENDING_BANK_APPROVAL
           - APPLIED
           - REJECTED
           - CANCELLED
           - FAILED
-          description: PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+          description: PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review)
+            -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request of the bank's review
+          readOnly: true
+        bank_decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank checker who decided the change
           readOnly: true
         requested_by:
           type: string
@@ -50061,6 +50158,26 @@ components:
           type: boolean
           description: Fraud scoring timed out or was unavailable; the configured fallback decided
           readOnly: true
+        fraud_rescore_attempts:
+          type: integer
+          format: int32
+          description: Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+          readOnly: true
+        fraud_next_rescore_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+          readOnly: true
+        upstream_fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent
+            ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token'
+          readOnly: true
         hold_reason:
           type:
           - string
@@ -50199,6 +50316,7 @@ components:
       - charge_bearer
       - end_to_end_id
       - fraud_degraded
+      - fraud_rescore_attempts
     PaymentApproval:
       type: object
       description: Approval step for payments needing one or more approvers (business multi-signature)
@@ -65496,7 +65614,8 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit, explainability and rule backtesting)
+          description: Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers,
+            IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw
         shadow_decision:
           type:
           - string
@@ -66274,7 +66393,8 @@ components:
         value_hash:
           type: string
           maxLength: 128
-          description: SHA-256 of the normalised value
+          description: 'Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant''s pseudonymisation
+            key)'
         value_masked:
           type:
           - string
@@ -80481,11 +80601,34 @@ components:
           type: string
           enum:
           - REQUESTED
+          - PENDING_BANK_APPROVAL
           - APPROVED
           - COMPLETED
           - REJECTED
           - FAILED
-          description: Status
+          description: REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews
+            it) -> COMPLETED; REJECTED, FAILED
+          readOnly: true
+        merchant_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund
+          readOnly: true
+        merchant_approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Merchant-side approval time
+          readOnly: true
+        bank_review_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK)
           readOnly: true
         approved_by:
           type:
