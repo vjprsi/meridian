@@ -58,6 +58,25 @@ class MatchingEngineTest {
     }
 
     @Test
+    void ledgerPaymentReferencesFeedTheBankReferenceAndCounterpartyAccount() {
+        // RECON-REAL-REFS: the ledger entry's clearing-system and scheme references match the statement's bank ref
+        ExternalLine clr = line("510.00").bankRef("SCT000123456789").build();
+        InternalItem iclr = item("510.00").reference("E2E-OTHER-1").bankRef("SCT000123456789").build();
+        ExternalLine arn = line("520.00").bankRef("74987654321098765432101").build();
+        InternalItem iarn = item("520.00").schemeRef("74987654321098765432101").build();
+        // same pseudonymised account: identifies the payer although the statement shortens the name beyond fuzzy reach
+        ExternalLine acct = line("530.00").counterparty("ACME", "h1:" + "ab".repeat(32)).build();
+        InternalItem iacct = item("530.00").counterparty("Northwind Trading GmbH", "h1:" + "ab".repeat(32)).build();
+        InternalItem decoy = item("530.00").counterparty("Northwind Trading GmbH", "h1:" + "cd".repeat(32)).build();
+        MatchingEngine.Result r = run(List.of(clr, arn, acct), List.of(iclr, iarn, iacct, decoy));
+        assertThat(match(r, clr).internalIds()).containsExactly(iclr.id());
+        assertThat(match(r, clr).ruleCode()).isEqualTo("exact_bank_ref");
+        assertThat(match(r, arn).internalIds()).containsExactly(iarn.id());
+        assertThat(match(r, acct).internalIds()).containsExactly(iacct.id());
+        assertThat(match(r, acct).explanation().get("components").toString()).contains("counterparty_account=EQUAL");
+    }
+
+    @Test
     void feeChargesAndFxDifferencesAreExplained() {
         ExternalLine fee = line("97.50").endToEndId("E2E-F").build();
         InternalItem ifee = item("100.00").reference("E2E-F").build();

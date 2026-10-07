@@ -53,8 +53,11 @@ public class LedgerGateway {
     }
 
     /**
-     * The same entries as engine items: the journal reference (end-to-end id, bank / scheme reference, invoice) and
-     * the line narrative; ledger entries carry no counterparty or UETR, so those rules match on the reference only.
+     * The same entries as engine items, with the payment references ledger-service copies onto every ledger entry
+     * (RECON-REAL-REFS): UETR, end-to-end id, instruction id, bank (clearing-system) reference, scheme / rail reference,
+     * batch id, counterparty name and the keyed pseudonym of the counterparty account, plus the journal reference,
+     * the line narrative and whether the entry is a ledger reversal. Postings made before payment references existed
+     * carry only the reference, which the engine also indexes as end-to-end id / instruction id / bank reference.
      */
     public List<io.meridian.reconciliation.domain.matching.InternalItem> items(UUID ledgerAccountId, LocalDate from,
                                                                                LocalDate to) {
@@ -70,12 +73,7 @@ public class LedgerGateway {
             for (JsonNode e : body.path("data")) {
                 Matcher.Internal i = toInternal(e);
                 if (!i.valueDate().isBefore(from) && !i.valueDate().isAfter(to)) {
-                    String narrative = text(e, "description");
-                    out.add(new io.meridian.reconciliation.domain.matching.InternalItem(i.id(), i.valueDate(),
-                            i.direction(), i.amount(), i.currency(), i.reference(), text(e, "end_to_end_id"),
-                            text(e, "instruction_id"), text(e, "uetr"), text(e, "batch_ref"),
-                            text(e, "counterparty_name"), text(e, "counterparty_account"), narrative,
-                            "REVERSAL".equals(text(e, "entry_type"))));
+                    out.add(item(i, e));
                 }
             }
             if (!body.path("has_more").asBoolean(false) || !body.hasNonNull("next_cursor")) {
@@ -85,6 +83,17 @@ public class LedgerGateway {
         }
         throw new ApiException(502, "upstream_error", "ledger-service returned more than "
                 + PAGE_SIZE * MAX_PAGES + " entries for account " + ledgerAccountId + "; narrow the run's date range");
+    }
+
+    /** Engine item of a ledger entry row (fields as returned by GET /v1/ledger-entries). */
+    static io.meridian.reconciliation.domain.matching.InternalItem item(Matcher.Internal i, JsonNode e) {
+        String batch = text(e, "batch_id") != null ? text(e, "batch_id") : text(e, "batch_ref");
+        String account = text(e, "counterparty_account_hash") != null ? text(e, "counterparty_account_hash")
+                : text(e, "counterparty_account");
+        return new io.meridian.reconciliation.domain.matching.InternalItem(i.id(), i.valueDate(), i.direction(),
+                i.amount(), i.currency(), i.reference(), text(e, "end_to_end_id"), text(e, "instruction_id"),
+                text(e, "uetr"), batch, text(e, "counterparty_name"), account, text(e, "description"),
+                "REVERSAL".equals(text(e, "entry_type")), text(e, "bank_reference"), text(e, "scheme_reference"));
     }
 
     private static String text(JsonNode n, String field) {
