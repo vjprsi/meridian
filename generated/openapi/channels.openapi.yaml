@@ -141,6 +141,16 @@ tags:
   description: API clients and keys of the business (ADMIN users only)
 - name: Business Webhooks
   description: Webhook endpoints of the business; subscriptions only ever deliver the business's own events
+- name: Business Onboarding
+  description: KYB of the business through the channel (ADMIN users) - applications on the bank's published business onboarding
+    journeys, their steps (company details, directors, shareholders and UBOs as declared), documents and submission; only
+    the business's own applications, never risk or review fields
+- name: Business Provisioning
+  description: 'Bank staff operations on business portal users (scope channels:admin, or meridian:admin; never business, customer,
+    agent or merchant tokens). Provisioning the first ADMIN of a business replaces trust in the identity provider''s attributes
+    alone; the returned id is set as the person''s business_user_id attribute.
+
+    '
 - name: Business Activity
   description: The business's portal activity (security log)
 - name: Merchant App Me
@@ -6573,6 +6583,13 @@ paths:
           - INTERNATIONAL
           - BULK
           - PAYROLL
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
       - name: account_id
         in: query
         required: false
@@ -7213,7 +7230,9 @@ paths:
     post:
       operationId: businessMandatesCreate
       summary: Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or
-        ADMIN; step-up)
+        ADMIN; step-up; matrix type MANDATE, amount max_amount or 0). Returns the created object (200), or, when a rule of
+        the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status
+        PENDING_APPROVAL; released once after the final approval)
       tags:
       - Business Mandates
       security:
@@ -7227,7 +7246,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentMandate'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7362,7 +7383,9 @@ paths:
       x-table: business_action
     post:
       operationId: businessMandatesAddCollections
-      summary: Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up)
+      summary: Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up; matrix type COLLECTION).
+        Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the
+        business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval)
       tags:
       - Business Mandates
       security:
@@ -7382,7 +7405,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DirectDebitCollection'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7440,7 +7465,10 @@ paths:
       x-table: business_action
     post:
       operationId: businessVirtualAccountsCreate
-      summary: Open a virtual account on an account the user may initiate on (MAKER or ADMIN)
+      summary: Open a virtual account on an account the user may initiate on (MAKER or ADMIN; matrix type VIRTUAL_ACCOUNT,
+        amount expected_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the
+        operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once
+        after the final approval)
       tags:
       - Business Virtual Accounts
       security:
@@ -7454,7 +7482,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VirtualAccount'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7618,7 +7648,10 @@ paths:
       x-table: business_action
     post:
       operationId: businessPaymentLinksCreate
-      summary: Create a payment link crediting an account the user may initiate on (MAKER or ADMIN)
+      summary: Create a payment link crediting an account the user may initiate on (MAKER or ADMIN; matrix type PAYMENT_LINK,
+        amount amount, else max_amount, else 0). Returns the created object (200), or, when a rule of the approval matrix
+        covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL;
+        released once after the final approval)
       tags:
       - Business Payment Links
       security:
@@ -7632,7 +7665,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentLink'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8310,7 +8345,9 @@ paths:
   /v1/business/loans/{loan_id}/repay:
     post:
       operationId: businessLoansRepay
-      summary: Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up)
+      summary: Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type LOAN_REPAYMENT).
+        Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the
+        business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval)
       tags:
       - Business Loans
       security:
@@ -8330,7 +8367,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoanRepayment'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8451,7 +8490,9 @@ paths:
   /v1/business/credit-lines/{credit_line_id}/draw:
     post:
       operationId: businessCreditLinesDraw
-      summary: Draw funds into an account of the business the user may initiate on (ADMIN; step-up)
+      summary: Draw funds into an account of the business the user may initiate on (ADMIN; step-up; matrix type CREDIT_LINE_DRAW).
+        Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the
+        business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval)
       tags:
       - Business Credit Lines
       security:
@@ -8471,7 +8512,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreditLineDrawdown'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8495,7 +8538,9 @@ paths:
   /v1/business/credit-lines/{credit_line_id}/repay:
     post:
       operationId: businessCreditLinesRepay
-      summary: Repay from an account the user may initiate on (MAKER or ADMIN; step-up)
+      summary: Repay from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type CREDIT_LINE_REPAYMENT).
+        Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the
+        business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval)
       tags:
       - Business Credit Lines
       security:
@@ -8515,7 +8560,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoanRepayment'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8567,8 +8614,11 @@ paths:
       x-table: business_object
     post:
       operationId: businessApiClientsCreate
-      summary: Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business
-        integrations
+      summary: 'Create an API client for the business (ADMIN; step-up); scopes are limited to the bank''s allow-list for business
+        integrations. The client is tagged with the business and a TECHNICAL portal user (role technical_role: MAKER or VIEWER,
+        default VIEWER; entitlements are set like any user''s) whose id its machine-to-machine tokens carry as business_user_id
+        with the m2m marker. auth_method CLIENT_SECRET_BASIC (default; the secret is returned once) or PRIVATE_KEY_JWT with
+        an https jwks_uri'
       tags:
       - Business Api Clients
       security:
@@ -9135,6 +9185,526 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
       x-required-scope: channels:business
       x-table: business_object
+  /v1/business/onboarding/journeys:
+    get:
+      operationId: businessOnboardingJourneys
+      summary: Published business (non-individual) onboarding journeys open to the WEB channel
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourneyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications:
+    get:
+      operationId: businessOnboardingApplications
+      summary: KYB applications of the business
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplicationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+    post:
+      operationId: businessOnboardingAddApplications
+      summary: Start a KYB application for the business on a published business journey (ADMIN; step-up); the business and
+        the bank entity come from the customer record
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessOnboardingAddApplicationsRequest'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}:
+    get:
+      operationId: businessOnboardingGetApplicationsById
+      summary: One application of the business
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/steps:
+    get:
+      operationId: businessOnboardingApplicationsSteps
+      summary: Steps of one application and their states
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStepPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/next-step:
+    get:
+      operationId: businessOnboardingApplicationsNextStep
+      summary: The next step to complete, with its typed fields
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/steps/{step_code}:
+    post:
+      operationId: businessOnboardingAddApplicationsSteps
+      summary: Submit data for one step, e.g. directors and UBOs on a UBO_DECLARATION step (ADMIN)
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: step_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessOnboardingAddApplicationsStepsRequest'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/documents:
+    get:
+      operationId: businessOnboardingApplicationsDocuments
+      summary: Documents registered for one application
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+    post:
+      operationId: businessOnboardingAddApplicationsDocuments
+      summary: Register a document of one step (owner ONBOARDING_APPLICATION) and get its pre-signed upload (document_id,
+        method, url, headers, expires_at) (ADMIN)
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessOnboardingAddApplicationsDocumentsRequest'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/documents/{document_id}/complete:
+    post:
+      operationId: businessOnboardingApplicationsDocumentsComplete
+      summary: Confirm the uploaded content of one of the application's documents (ADMIN)
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessOnboardingApplicationsDocumentsCompleteRequest'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/applications/{application_id}/submit:
+    post:
+      operationId: businessOnboardingApplicationsSubmit
+      summary: Submit the application for the bank's decision (ADMIN; step-up)
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - name: application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business/onboarding/related-parties:
+    get:
+      operationId: businessOnboardingRelatedParties
+      summary: Directors, shareholders, UBOs and signatories the bank holds for the business
+      tags:
+      - Business Onboarding
+      security:
+      - oauth2:
+        - channels:business
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRelationshipPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:business")'
+      x-required-scope: channels:business
+      x-table: business_action
+  /v1/business-provisioning/admins:
+    post:
+      operationId: businessProvisioningAdmins
+      summary: Provision the first ADMIN of a business customer (active, not an individual) that has no active ADMIN; returns
+        the user whose id is set as business_user_id in the identity provider
+      tags:
+      - Business Provisioning
+      security:
+      - oauth2:
+        - channels:admin
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessProvisioningAdminsRequest'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:admin")'
+      x-required-scope: channels:admin
+      x-table: business_user
+  /v1/business-provisioning/users:
+    get:
+      operationId: businessProvisioningUsers
+      summary: Portal users of one business (support view)
+      tags:
+      - Business Provisioning
+      security:
+      - oauth2:
+        - channels:admin
+      parameters:
+      - name: business_customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUserPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: business-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:admin")'
+      x-required-scope: channels:admin
+      x-table: business_user
   /v1/business/activity:
     get:
       operationId: businessActivityList
@@ -13599,6 +14169,13 @@ components:
           - ALL
           - SINGLE
           - BULK
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13643,6 +14220,13 @@ components:
           - ALL
           - SINGLE
           - BULK
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13769,6 +14353,13 @@ components:
           - INTERNATIONAL
           - BULK
           - PAYROLL
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
         debtor_account_id:
           type: string
           format: uuid
@@ -13851,6 +14442,13 @@ components:
           - INTERNATIONAL
           - BULK
           - PAYROLL
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
         debtor_account_id:
           type: string
           format: uuid
@@ -14379,6 +14977,19 @@ components:
           type: string
           format: email
           maxLength: 320
+        technical_role:
+          type: string
+          enum:
+          - ADMIN
+          - MAKER
+          - APPROVER
+          - VIEWER
+        auth_method:
+          type: string
+          maxLength: 32
+        jwks_uri:
+          type: string
+          maxLength: 500
       required:
       - name
     BusinessApiClientsSuspendRequest:
@@ -14514,6 +15125,94 @@ components:
       required:
       - data
       - has_more
+    BusinessOnboardingAddApplicationsRequest:
+      type: object
+      properties:
+        onboarding_journey_id:
+          type: string
+          format: uuid
+        product_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - onboarding_journey_id
+    BusinessOnboardingAddApplicationsStepsRequest:
+      type: object
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+      required:
+      - input
+    BusinessOnboardingAddApplicationsDocumentsRequest:
+      type: object
+      properties:
+        step_code:
+          type: string
+          maxLength: 64
+        document_type:
+          type: string
+          maxLength: 40
+        file_name:
+          type: string
+          maxLength: 255
+        content_type:
+          type: string
+          maxLength: 120
+      required:
+      - step_code
+      - document_type
+      - file_name
+      - content_type
+    BusinessOnboardingApplicationsDocumentsCompleteRequest:
+      type: object
+      properties:
+        size_bytes:
+          type: integer
+          format: int64
+        checksum:
+          type: string
+          maxLength: 64
+      required:
+      - size_bytes
+      - checksum
+    CustomerRelationshipPage:
+      type: object
+      description: One page of CustomerRelationship results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerRelationship'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BusinessProvisioningAdminsRequest:
+      type: object
+      properties:
+        business_customer_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          maxLength: 160
+        email:
+          type: string
+          format: email
+          maxLength: 320
+      required:
+      - business_customer_id
+      - display_name
+      - email
     BusinessActionPage:
       type: object
       description: One page of BusinessAction results (newest first)
@@ -17390,6 +18089,19 @@ components:
           - 'null'
           format: date-time
           description: Expiry
+        business_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id,
+            business_user_id and the m2m marker; only channels:business allowed)'
+        business_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: TECHNICAL business portal user (business-channel-service) the client's tokens act as
         custom_field_1:
           type:
           - string
@@ -18732,7 +19444,16 @@ components:
           - ALL
           - SINGLE
           - BULK
-          description: Single payments, bulk/payroll batches or both
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
+          description: 'Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment,
+            credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming
+            that type; without such a rule the operation runs immediately)'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -18913,7 +19634,15 @@ components:
           - INTERNATIONAL
           - BULK
           - PAYROLL
-          description: Own transfer, domestic payee payment, international payment, bulk or payroll batch
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
+          description: Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment
+            operation held for approval by a matrix rule of its type
         status:
           type: string
           enum:
@@ -18929,7 +19658,7 @@ components:
         debtor_account_id:
           type: string
           format: uuid
-          description: Business account debited
+          description: 'Business account debited (operations: the account involved, whose approve entitlement approvers need)'
         payee_id:
           type:
           - string
@@ -19159,6 +19888,30 @@ components:
           format: uuid
           description: User that cancelled it
           readOnly: true
+        operation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key
+            bzp-release:<id>, as the initiator); part of the approved content'
+          readOnly: true
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual
+            account, payment link)
+          readOnly: true
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date of the submission (legal entity of the debit account, business-day-service); daily limits
+            count per business date
+          readOnly: true
       required:
       - id
       - created_at
@@ -19342,6 +20095,35 @@ components:
           maxLength: 255
           description: Reason of the last suspension or removal
           readOnly: true
+        user_type:
+          type: string
+          enum:
+          - HUMAN
+          - TECHNICAL
+          description: HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine
+            tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)
+          readOnly: true
+        client_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp)
+          readOnly: true
+        api_client_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: identity-service API client a TECHNICAL user stands for
+          readOnly: true
+        provisioned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank staff principal that provisioned the user (first admin, staff operation)
+          readOnly: true
       required:
       - id
       - created_at
@@ -19351,6 +20133,7 @@ components:
       - display_name
       - role
       - status
+      - user_type
     Card:
       type: object
       description: A payment card. Holds only tokens and masked data; PAN and CVV live in the vault.
@@ -22935,6 +23718,181 @@ components:
       - platform
       - status
       - is_rooted
+    CustomerRelationship:
+      type: object
+      description: Relationship between two customers (director, UBO, guardian, joint holder, signatory, spouse)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Subject customer (e.g. the company or the minor)
+        related_customer_id:
+          type: string
+          format: uuid
+          description: Related customer (e.g. the director or guardian)
+        relationship_type:
+          type: string
+          enum:
+          - DIRECTOR
+          - SHAREHOLDER
+          - ULTIMATE_BENEFICIAL_OWNER
+          - AUTHORISED_SIGNATORY
+          - GUARDIAN
+          - MINOR
+          - JOINT_HOLDER
+          - POWER_OF_ATTORNEY
+          - SPOUSE
+          - PARENT_COMPANY
+          - SUBSIDIARY
+          - PARTNER
+          - TRUSTEE
+          - SETTLOR
+          - BENEFICIARY
+          - EMPLOYER
+          - EMPLOYEE
+          description: Relationship type
+        ownership_percentage:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Direct ownership share 0..100 (shareholders and UBOs)
+        indirect_ownership_percentage:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Indirect ownership share through chains
+        control_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT
+        position_title:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Title, e.g. CEO, Company Secretary
+        signing_authority:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE
+        signing_limit:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount this signatory may approve alone
+        limit_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of the signing limit (ISO 4217)
+        valid_from:
+          type: string
+          format: date
+          description: Start date
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: End date
+        verified:
+          type: boolean
+          description: Verified by registry or documents
+          readOnly: true
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: DECLARED, REGISTRY, KYC_PROVIDER
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - related_customer_id
+      - relationship_type
+      - valid_from
+      - verified
     DepositAccount:
       type: object
       description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
@@ -32268,6 +33226,7 @@ components:
             channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
             channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
             channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)
+            channels:admin: Narrow scope channels:admin
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
@@ -32276,3 +33235,4 @@ components:
             channels:agent: Customer, Agent, Business and Merchant Channels (signed-in agent)
             channels:business: Customer, Agent, Business and Merchant Channels (signed-in business)
             channels:merchant: Customer, Agent, Business and Merchant Channels (signed-in merchant)
+            channels:admin: Narrow scope channels:admin

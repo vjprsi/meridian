@@ -3680,8 +3680,8 @@ components:
         $ref: '#/components/schemas/BusinessAction'
     ChannelsBusinessUserChanged:
       name: channels.business_user.changed
-      title: A business user was added, bootstrapped, changed, suspended, reactivated or removed
-      summary: A business user was added, bootstrapped, changed, suspended, reactivated or removed
+      title: A business user was added, provisioned by the bank, bootstrapped, changed, suspended, reactivated or removed
+      summary: A business user was added, provisioned by the bank, bootstrapped, changed, suspended, reactivated or removed
       headers:
         type: object
         properties:
@@ -27996,6 +27996,35 @@ components:
           maxLength: 255
           description: Reason of the last suspension or removal
           readOnly: true
+        user_type:
+          type: string
+          enum:
+          - HUMAN
+          - TECHNICAL
+          description: HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine
+            tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)
+          readOnly: true
+        client_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp)
+          readOnly: true
+        api_client_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: identity-service API client a TECHNICAL user stands for
+          readOnly: true
+        provisioned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank staff principal that provisioned the user (first admin, staff operation)
+          readOnly: true
       required:
       - id
       - created_at
@@ -28005,6 +28034,7 @@ components:
       - display_name
       - role
       - status
+      - user_type
     BusinessEntitlement:
       type: object
       description: What one business user may do on one account of the business
@@ -28135,7 +28165,16 @@ components:
           - ALL
           - SINGLE
           - BULK
-          description: Single payments, bulk/payroll batches or both
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
+          description: 'Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment,
+            credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming
+            that type; without such a rule the operation runs immediately)'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -28238,7 +28277,15 @@ components:
           - INTERNATIONAL
           - BULK
           - PAYROLL
-          description: Own transfer, domestic payee payment, international payment, bulk or payroll batch
+          - LOAN_REPAYMENT
+          - CREDIT_LINE_DRAW
+          - CREDIT_LINE_REPAYMENT
+          - MANDATE
+          - COLLECTION
+          - VIRTUAL_ACCOUNT
+          - PAYMENT_LINK
+          description: Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment
+            operation held for approval by a matrix rule of its type
         status:
           type: string
           enum:
@@ -28254,7 +28301,7 @@ components:
         debtor_account_id:
           type: string
           format: uuid
-          description: Business account debited
+          description: 'Business account debited (operations: the account involved, whose approve entitlement approvers need)'
         payee_id:
           type:
           - string
@@ -28483,6 +28530,30 @@ components:
           - 'null'
           format: uuid
           description: User that cancelled it
+          readOnly: true
+        operation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key
+            bzp-release:<id>, as the initiator); part of the approved content'
+          readOnly: true
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual
+            account, payment link)
+          readOnly: true
+        business_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date of the submission (legal entity of the debit account, business-day-service); daily limits
+            count per business date
           readOnly: true
       required:
       - id
@@ -56570,6 +56641,19 @@ components:
           - 'null'
           format: date-time
           description: Expiry
+        business_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id,
+            business_user_id and the m2m marker; only channels:business allowed)'
+        business_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: TECHNICAL business portal user (business-channel-service) the client's tokens act as
         custom_field_1:
           type:
           - string

@@ -351,7 +351,7 @@
     "schema": "business_channel",
     "package": "io.meridian.businesschannel",
     "port": 9166,
-    "description": "Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration.",
+    "description": "Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration. Loan and credit-line repayments, credit-line draws, mandates, collections, virtual accounts and payment links go through the approval matrix when a rule names their type and covers the amount (released once after the final approval), else run immediately. Machine-to-machine access: client-credentials tokens of an API client created for the business carry the business, its TECHNICAL user and the m2m marker (docs/BUSINESS_M2M_API.md). Bank staff provision a business's first ADMIN (/v1/business-provisioning, scope channels:admin).",
     "tags": [
       "Business Accounts",
       "Business Activity",
@@ -368,9 +368,11 @@
       "Business Loans",
       "Business Mandates",
       "Business Me",
+      "Business Onboarding",
       "Business Payees",
       "Business Payment Links",
       "Business Payments",
+      "Business Provisioning",
       "Business Users",
       "Business Virtual Accounts",
       "Business Webhooks"

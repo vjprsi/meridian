@@ -2145,14 +2145,14 @@ API: /v1/agent/customer-wallets
 
 ### Service `business-channel-service` — database `business_channel_db`
 
-Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration.
+Business banking portal BFF behind /v1/business. Every operation acts for the signed-in business user only: the business (a non-individual customer of customer-service) and the user come from the access token (business_customer_id and business_user_id claims, scope channels:business), never from a path, query or body. Owns the business-user model: users and roles (ADMIN, MAKER, APPROVER, VIEWER) managed by the business admin, per-user account entitlements (view, initiate, approve, per-payment cap), the approval matrix (amount bands per currency, number of approvers, any-order or sequential approvers, self-approval never allowed) and per-user daily limits. Payments, bulk payments and payroll are drafted and approved here and released to payment-service with the service identity only after the final approval (idempotent). Calls the domain services with its own service identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection, virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and requires a recent authentication (step-up) for approvals, money movement and administration. Loan and credit-line repayments, credit-line draws, mandates, collections, virtual accounts and payment links go through the approval matrix when a rule names their type and covers the amount (released once after the final approval), else run immediately. Machine-to-machine access: client-credentials tokens of an API client created for the business carry the business, its TECHNICAL user and the m2m marker (docs/BUSINESS_M2M_API.md). Bank staff provision a business's first ADMIN (/v1/business-provisioning, scope channels:admin).
 
 
 #### `business_user`
 
 A person using the business portal for one business customer, with a role and an optional daily limit
 
-API: /v1/business/me, /v1/business/users
+API: /v1/business-provisioning, /v1/business/me, /v1/business/users
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2172,6 +2172,10 @@ API: /v1/business/me, /v1/business/users
 | limit_currency | char(3) | yes |  | limit_currency | Currency of daily_limit |
 | last_login_at | timestamptz | yes |  | last_login_at (read-only) | Last time the user opened the portal |
 | status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last suspension or removal |
+| user_type | varchar(40) (BusinessUserType) | no |  | user_type (read-only) | HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine tokens with the m2m marker; MAKER or VIEWER only, never approves or administers) |
+| client_id | varchar(64) | yes |  | client_id (read-only) | Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp) |
+| api_client_id | uuid | yes | ref → api_client | api_client_id (read-only) | identity-service API client a TECHNICAL user stands for |
+| provisioned_by | varchar(64) | yes |  | provisioned_by (read-only) | Bank staff principal that provisioned the user (first admin, staff operation) |
 
 #### `business_entitlement`
 
@@ -2213,7 +2217,7 @@ API: /v1/business/approval-rules
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
 | name | varchar(120) | no |  | name | Rule name |
-| applies_to | varchar(40) (BusinessPaymentScope) | no |  | applies_to | Single payments, bulk/payroll batches or both |
+| applies_to | varchar(40) (BusinessPaymentScope) | no |  | applies_to | Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming that type; without such a rule the operation runs immediately) |
 | currency | char(3) | no |  | currency | Currency of the band (payments in other currencies use other rules) |
 | min_amount | numeric(28,8) | no |  | min_amount | Band starts at this amount (inclusive) |
 | max_amount | numeric(28,8) | yes |  | max_amount | Band ends at this amount (inclusive; empty = no upper bound) |
@@ -2238,9 +2242,9 @@ API: /v1/business/approval-queue, /v1/business/bulk-payments, /v1/business/payme
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | business_customer_id | uuid | no | ref → customer | business_customer_id | Business customer |
-| kind | varchar(40) (BusinessPaymentKind) | no |  | kind | Own transfer, domestic payee payment, international payment, bulk or payroll batch |
+| kind | varchar(40) (BusinessPaymentKind) | no |  | kind | Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment operation held for approval by a matrix rule of its type |
 | status | varchar(40) (BusinessPaymentStatus) | no |  | status (read-only) | Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED) |
-| debtor_account_id | uuid | no | ref → deposit_account | debtor_account_id | Business account debited |
+| debtor_account_id | uuid | no | ref → deposit_account | debtor_account_id | Business account debited (operations: the account involved, whose approve entitlement approvers need) |
 | payee_id | uuid | yes | ref → payee | payee_id | Payee of the business (domestic and international) |
 | creditor_account_id | uuid | yes | ref → deposit_account | creditor_account_id | Other account of the business (own transfer) |
 | creditor_name | varchar(140) | yes |  | creditor_name (read-only) | Beneficiary name (from the payee or account) |
@@ -2276,6 +2280,9 @@ API: /v1/business/approval-queue, /v1/business/bulk-payments, /v1/business/payme
 | rejected_by | uuid | yes |  | rejected_by (read-only) | Approver that rejected it |
 | rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Rejection reason |
 | cancelled_by | uuid | yes |  | cancelled_by (read-only) | User that cancelled it |
+| operation | jsonb | yes |  | operation (read-only) | Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key bzp-release:<id>, as the initiator); part of the approved content |
+| result_id | uuid | yes |  | result_id (read-only) | Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual account, payment link) |
+| business_date | date | yes |  | business_date (read-only) | Business date of the submission (legal entity of the debit account, business-day-service); daily limits count per business date |
 
 #### `business_payment_approval` (append-only)
 
@@ -2322,7 +2329,7 @@ API: /v1/business/api-clients, /v1/business/webhook-endpoints
 
 Audit trail of business users' actions through the portal, including object-level and entitlement denials and step-up refusals
 
-API: /v1/business/accounts, /v1/business/activity, /v1/business/card-products, /v1/business/cards, /v1/business/cash-position, /v1/business/credit-lines, /v1/business/fx-deals, /v1/business/fx-quotes, /v1/business/loans, /v1/business/mandates, /v1/business/payees, /v1/business/payment-links, /v1/business/virtual-accounts
+API: /v1/business/accounts, /v1/business/activity, /v1/business/card-products, /v1/business/cards, /v1/business/cash-position, /v1/business/credit-lines, /v1/business/fx-deals, /v1/business/fx-quotes, /v1/business/loans, /v1/business/mandates, /v1/business/onboarding, /v1/business/payees, /v1/business/payment-links, /v1/business/virtual-accounts
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -10704,6 +10711,8 @@ API: /v1/api-clients · Requirements: API-02, OBK-01
 | fapi_profile | boolean | no |  | fapi_profile | Enforce FAPI 2.0 security profile |
 | last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last token issued |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
+| business_customer_id | uuid | yes | ref → customer | business_customer_id | Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed) |
+| business_user_id | uuid | yes |  | business_user_id | TECHNICAL business portal user (business-channel-service) the client's tokens act as |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

@@ -332,6 +332,8 @@ CREATE TABLE api_client (
   fapi_profile                 boolean NOT NULL DEFAULT false,
   last_used_at                 timestamptz,
   expires_at                   timestamptz,
+  business_customer_id         uuid,
+  business_user_id             uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -366,6 +368,8 @@ COMMENT ON COLUMN api_client.tpp_registration_id IS 'Open banking TPP registrati
 COMMENT ON COLUMN api_client.fapi_profile IS 'Enforce FAPI 2.0 security profile';
 COMMENT ON COLUMN api_client.last_used_at IS 'Last token issued';
 COMMENT ON COLUMN api_client.expires_at IS 'Expiry';
+COMMENT ON COLUMN api_client.business_customer_id IS 'Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)';
+COMMENT ON COLUMN api_client.business_user_id IS 'TECHNICAL business portal user (business-channel-service) the client''s tokens act as';
 COMMENT ON COLUMN api_client.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN api_client.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN api_client.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -373,6 +377,7 @@ COMMENT ON COLUMN api_client.custom_field_4 IS 'Tenant-defined custom field 4; l
 COMMENT ON COLUMN api_client.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_api_client_tenant ON api_client (tenant_id, created_at);
 CREATE INDEX ix_api_client_rate_limit_policy_id ON api_client (rate_limit_policy_id);
+CREATE INDEX ix_api_client_business_customer_id ON api_client (business_customer_id);
 ALTER TABLE api_client ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON api_client USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_api_client_touch BEFORE UPDATE ON api_client FOR EACH ROW EXECUTE FUNCTION touch_row();

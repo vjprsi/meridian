@@ -35,7 +35,11 @@ CREATE TABLE business_user (
   daily_limit                  numeric(28,8),
   limit_currency               char(3),
   last_login_at                timestamptz,
-  status_reason                varchar(255)
+  status_reason                varchar(255),
+  user_type                    varchar(40) NOT NULL DEFAULT 'HUMAN' CHECK (user_type IN ('HUMAN', 'TECHNICAL')),
+  client_id                    varchar(64),
+  api_client_id                uuid,
+  provisioned_by               varchar(64)
 );
 COMMENT ON TABLE business_user IS 'A person using the business portal for one business customer, with a role and an optional daily limit';
 COMMENT ON COLUMN business_user.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -54,8 +58,13 @@ COMMENT ON COLUMN business_user.daily_limit IS 'Maximum total the user may submi
 COMMENT ON COLUMN business_user.limit_currency IS 'Currency of daily_limit';
 COMMENT ON COLUMN business_user.last_login_at IS 'Last time the user opened the portal';
 COMMENT ON COLUMN business_user.status_reason IS 'Reason of the last suspension or removal';
+COMMENT ON COLUMN business_user.user_type IS 'HUMAN signs in to the portal; TECHNICAL is the identity of one of the business''s API clients (machine-to-machine tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)';
+COMMENT ON COLUMN business_user.client_id IS 'Public client identifier of the API client a TECHNICAL user stands for (must match the token''s azp)';
+COMMENT ON COLUMN business_user.api_client_id IS 'identity-service API client a TECHNICAL user stands for';
+COMMENT ON COLUMN business_user.provisioned_by IS 'Bank staff principal that provisioned the user (first admin, staff operation)';
 CREATE INDEX ix_business_user_tenant ON business_user (tenant_id, created_at);
 CREATE INDEX ix_business_user_business_customer_id ON business_user (business_customer_id);
+CREATE INDEX ix_business_user_api_client_id ON business_user (api_client_id);
 CREATE INDEX ix_business_user_c1 ON business_user (business_customer_id, status);
 ALTER TABLE business_user ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON business_user USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -113,7 +122,7 @@ CREATE TABLE business_approval_rule (
   row_version                  integer NOT NULL DEFAULT 1,
   business_customer_id         uuid NOT NULL,
   name                         varchar(120) NOT NULL,
-  applies_to                   varchar(40) NOT NULL DEFAULT 'ALL' CHECK (applies_to IN ('ALL', 'SINGLE', 'BULK')),
+  applies_to                   varchar(40) NOT NULL DEFAULT 'ALL' CHECK (applies_to IN ('ALL', 'SINGLE', 'BULK', 'LOAN_REPAYMENT', 'CREDIT_LINE_DRAW', 'CREDIT_LINE_REPAYMENT', 'MANDATE', 'COLLECTION', 'VIRTUAL_ACCOUNT', 'PAYMENT_LINK')),
   currency                     char(3) NOT NULL,
   min_amount                   numeric(28,8) NOT NULL DEFAULT 0,
   max_amount                   numeric(28,8),
@@ -132,7 +141,7 @@ COMMENT ON COLUMN business_approval_rule.updated_by IS 'Principal that last upda
 COMMENT ON COLUMN business_approval_rule.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN business_approval_rule.business_customer_id IS 'Business customer';
 COMMENT ON COLUMN business_approval_rule.name IS 'Rule name';
-COMMENT ON COLUMN business_approval_rule.applies_to IS 'Single payments, bulk/payroll batches or both';
+COMMENT ON COLUMN business_approval_rule.applies_to IS 'Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming that type; without such a rule the operation runs immediately)';
 COMMENT ON COLUMN business_approval_rule.currency IS 'Currency of the band (payments in other currencies use other rules)';
 COMMENT ON COLUMN business_approval_rule.min_amount IS 'Band starts at this amount (inclusive)';
 COMMENT ON COLUMN business_approval_rule.max_amount IS 'Band ends at this amount (inclusive; empty = no upper bound)';
@@ -157,7 +166,7 @@ CREATE TABLE business_payment (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   business_customer_id         uuid NOT NULL,
-  kind                         varchar(40) NOT NULL CHECK (kind IN ('OWN_TRANSFER', 'DOMESTIC', 'INTERNATIONAL', 'BULK', 'PAYROLL')),
+  kind                         varchar(40) NOT NULL CHECK (kind IN ('OWN_TRANSFER', 'DOMESTIC', 'INTERNATIONAL', 'BULK', 'PAYROLL', 'LOAN_REPAYMENT', 'CREDIT_LINE_DRAW', 'CREDIT_LINE_REPAYMENT', 'MANDATE', 'COLLECTION', 'VIRTUAL_ACCOUNT', 'PAYMENT_LINK')),
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'RELEASED', 'RELEASE_FAILED', 'REJECTED', 'CANCELLED')),
   debtor_account_id            uuid NOT NULL,
   payee_id                     uuid,
@@ -194,7 +203,10 @@ CREATE TABLE business_payment (
   release_error                varchar(255),
   rejected_by                  uuid,
   rejection_reason             varchar(255),
-  cancelled_by                 uuid
+  cancelled_by                 uuid,
+  operation                    jsonb,
+  result_id                    uuid,
+  business_date                date
 );
 COMMENT ON TABLE business_payment IS 'A payment, bulk payment or payroll drafted in the portal, with its approvals and release to payment-service';
 COMMENT ON COLUMN business_payment.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -205,9 +217,9 @@ COMMENT ON COLUMN business_payment.updated_at IS 'Last update time';
 COMMENT ON COLUMN business_payment.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN business_payment.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN business_payment.business_customer_id IS 'Business customer';
-COMMENT ON COLUMN business_payment.kind IS 'Own transfer, domestic payee payment, international payment, bulk or payroll batch';
+COMMENT ON COLUMN business_payment.kind IS 'Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment operation held for approval by a matrix rule of its type';
 COMMENT ON COLUMN business_payment.status IS 'Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED)';
-COMMENT ON COLUMN business_payment.debtor_account_id IS 'Business account debited';
+COMMENT ON COLUMN business_payment.debtor_account_id IS 'Business account debited (operations: the account involved, whose approve entitlement approvers need)';
 COMMENT ON COLUMN business_payment.payee_id IS 'Payee of the business (domestic and international)';
 COMMENT ON COLUMN business_payment.creditor_account_id IS 'Other account of the business (own transfer)';
 COMMENT ON COLUMN business_payment.creditor_name IS 'Beneficiary name (from the payee or account)';
@@ -243,6 +255,9 @@ COMMENT ON COLUMN business_payment.release_error IS 'Problem of the last failed 
 COMMENT ON COLUMN business_payment.rejected_by IS 'Approver that rejected it';
 COMMENT ON COLUMN business_payment.rejection_reason IS 'Rejection reason';
 COMMENT ON COLUMN business_payment.cancelled_by IS 'User that cancelled it';
+COMMENT ON COLUMN business_payment.operation IS 'Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key bzp-release:<id>, as the initiator); part of the approved content';
+COMMENT ON COLUMN business_payment.result_id IS 'Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual account, payment link)';
+COMMENT ON COLUMN business_payment.business_date IS 'Business date of the submission (legal entity of the debit account, business-day-service); daily limits count per business date';
 CREATE INDEX ix_business_payment_tenant ON business_payment (tenant_id, created_at);
 CREATE INDEX ix_business_payment_business_customer_id ON business_payment (business_customer_id);
 CREATE INDEX ix_business_payment_debtor_account_id ON business_payment (debtor_account_id);
@@ -255,6 +270,7 @@ CREATE INDEX ix_business_payment_payment_id ON business_payment (payment_id);
 CREATE INDEX ix_business_payment_bulk_payment_id ON business_payment (bulk_payment_id);
 CREATE INDEX ix_business_payment_c1 ON business_payment (business_customer_id, status);
 CREATE INDEX ix_business_payment_c2 ON business_payment (initiated_by, submitted_at);
+CREATE INDEX ix_business_payment_c3 ON business_payment (initiated_by, business_date);
 ALTER TABLE business_payment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON business_payment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_business_payment_touch BEFORE UPDATE ON business_payment FOR EACH ROW EXECUTE FUNCTION touch_row();
