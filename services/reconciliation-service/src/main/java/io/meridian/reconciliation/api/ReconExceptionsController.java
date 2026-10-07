@@ -52,10 +52,8 @@ public class ReconExceptionsController implements ReconExceptionsApi {
                                                                  ReconExceptionsResolveRequest body) {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
-        JsonNode adjustment = req.hasNonNull("adjustment") ? req.get("adjustment") : null;
         return idempotency.execute(idempotencyKey, responses.action("resolve", id, req), ReconException.class,
-                () -> responses.ok(exceptions.resolve(id, Fields.text(req, "resolution_note"), adjustment,
-                        idempotencyKey), ReconException.class));
+                () -> responses.ok(exceptions.resolve(id, Fields.text(req, "resolution_note")), ReconException.class));
     }
 
     @Override

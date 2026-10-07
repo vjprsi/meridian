@@ -14,7 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Repository
 public class ReconStore {
     private static final Set<String> TABLES = Set.of("recon_source", "recon_file", "recon_record", "recon_rule",
-            "recon_run", "recon_match", "recon_exception");
+            "recon_run", "recon_match", "recon_exception", "recon_rule_set", "recon_adjustment");
 
     /** Matches that are in force: not compensating records and not undone by a later compensating record. */
     public static final String ACTIVE_MATCHES = """

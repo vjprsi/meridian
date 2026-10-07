@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>MSG-20261006-01</MsgId><CreDtTm>2026-10-06T22:00:00Z</CreDtTm></GrpHdr>
+    <Stmt>
+      <Id>STMT-2026-10-06-EUR</Id>
+      <ElctrncSeqNb>279</ElctrncSeqNb>
+      <LglSeqNb>279</LglSeqNb>
+      <CreDtTm>2026-10-06T22:00:00Z</CreDtTm>
+      <Acct><Id><IBAN>DE89370400440532013000</IBAN></Id><Ccy>EUR</Ccy></Acct>
+      <Bal><Tp><CdOrPrtry><Cd>PRCD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">10000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-05</Dt></Dt></Bal>
+      <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">13662.50</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-06</Dt></Dt></Bal>
+      <!-- 1: incoming SWIFT credit with UETR, instruction id, charges deducted and the instructed amount -->
+      <Ntry>
+        <NtryRef>1</NtryRef>
+        <Amt Ccy="EUR">4987.50</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-06</Dt></ValDt>
+        <AcctSvcrRef>BR2026100600001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>XBCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <Chrgs><Rcrd><Amt Ccy="EUR">12.50</Amt><CdtDbtInd>DBIT</CdtDbtInd></Rcrd></Chrgs>
+        <NtryDtls><TxDtls>
+          <Refs><InstrId>INSTR-77</InstrId><EndToEndId>E2E-ACME-0001</EndToEndId><UETR>3f2504e0-4f89-41d3-9a0c-0305e82c3301</UETR></Refs>
+          <AmtDtls><InstdAmt><Amt Ccy="EUR">5000.00</Amt></InstdAmt></AmtDtls>
+          <RltdPties><Dbtr><Pty><Nm>ACME Trading Ltd</Nm></Pty></Dbtr><DbtrAcct><Id><IBAN>GB29NWBK60161331926819</IBAN></Id></DbtrAcct></RltdPties>
+          <RmtInf><Ustrd>Invoice INV-2026-00042</Ustrd></RmtInf>
+        </TxDtls></NtryDtls>
+      </Ntry>
+      <!-- 2: batch booking of a supplier run (3 transactions) -->
+      <Ntry>
+        <Amt Ccy="EUR">1250.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-06</Dt></ValDt>
+        <AcctSvcrRef>BR2026100600002</AcctSvcrRef>
+        <NtryDtls>
+          <Btch><PmtInfId>BATCH-7Q2X9</PmtInfId><NbOfTxs>3</NbOfTxs></Btch>
+          <TxDtls><Refs><EndToEndId>E2E-S1</EndToEndId></Refs></TxDtls>
+          <TxDtls><Refs><EndToEndId>E2E-S2</EndToEndId></Refs></TxDtls>
+          <TxDtls><Refs><EndToEndId>E2E-S3</EndToEndId></Refs></TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>SEPA BULK DEBIT</AddtlNtryInf>
+      </Ntry>
+      <!-- 3: return of an earlier debit (reversal) -->
+      <Ntry>
+        <Amt Ccy="EUR">75.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><RvslInd>true</RvslInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-06</Dt></ValDt>
+        <AcctSvcrRef>BR2026100500009</AcctSvcrRef>
+        <NtryDtls><TxDtls><Refs><EndToEndId>NOTPROVIDED</EndToEndId></Refs>
+          <RmtInf><Strd><CdtrRefInf><Ref>RF18539007547034</Ref></CdtrRefInf></Strd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+      <!-- 4: pending entry: not booked, skipped -->
+      <Ntry>
+        <Amt Ccy="EUR">999.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts><Cd>PDNG</Cd></Sts>
+        <ValDt><Dt>2026-10-07</Dt></ValDt>
+      </Ntry>
+      <!-- 5: date-time value date (camt.053.001.08 allows DtTm) -->
+      <Ntry>
+        <Amt Ccy="EUR">150.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><DtTm>2026-10-06T10:15:00Z</DtTm></BookgDt><ValDt><DtTm>2026-10-06T10:15:00Z</DtTm></ValDt>
+        <AcctSvcrRef>BR2026100600003</AcctSvcrRef>
+        <NtryDtls><TxDtls><Refs><EndToEndId>E2E-OUT-9</EndToEndId></Refs>
+          <RltdPties><Cdtr><Nm>Nordic Logistics AB</Nm></Cdtr><CdtrAcct><Id><Othr><Id>SE4550000000058398257466</Id></Othr></Id></CdtrAcct></RltdPties>
+        </TxDtls></NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

@@ -230,6 +230,23 @@ class StandardJobPackTest {
     }
 
     @Test
+    void reconciliationRunsDailyPerTenantAfterTheLedgerClose() {
+        StandardJobPack.Job recon = pack.jobs().stream().filter(j -> j.code().equals("RECON_DAILY")).findFirst().orElseThrow();
+        assertThat(recon.service()).isEqualTo("reconciliation-service");
+        assertThat(recon.method()).isEqualTo("POST");
+        assertThat(recon.path()).isEqualTo("/v1/reconciliation/runs/eod?business_date={business_date}");
+        assertThat(recon.columns().get("job_type").asString()).isEqualTo("RECONCILIATION");
+        assertThat(recon.active()).as("tenant-wide, no parameters: ships active").isTrue();
+        assertThat(recon.requiredParameters()).isEmpty();
+        assertThat(recon.columns().get("cycle_types").toString()).contains("\"EOD\"");
+        assertBefore(pack.graph(), "LEDGER_EOD", "RECON_DAILY");
+        assertBefore(pack.graph(), "PAYMENT_EXECUTE_DUE", "RECON_DAILY");
+        assertThat(JobTemplates.renderPath(recon.path(), JSON.readTree("""
+                {"business_date":"2026-10-06","legal_entity_id":"e1","parameters":{}}""")))
+                .isEqualTo("/v1/reconciliation/runs/eod?business_date=2026-10-06");
+    }
+
+    @Test
     void parameterPlaceholdersRender() {
         JsonNode ctx = JSON.readTree("""
                 {"business_date":"2026-10-06","legal_entity_id":"e1","parameters":{"ledger_id":"L 1"}}""");

@@ -132,7 +132,23 @@ public class MatchService {
 
     String insertMatch(UUID runId, UUID ruleId, String type, Collection<UUID> ext, Collection<UUID> in,
                        BigDecimal difference, BigDecimal confidence, String confirmedBy) {
+        return insertMatch(runId, ruleId, type, ext, in, difference, confidence, confirmedBy, null, null, null);
+    }
+
+    /** A match produced by a rule set version: rule code and explanation (keys and score components) are kept. */
+    String insertMatch(UUID runId, UUID ruleId, String type, Collection<UUID> ext, Collection<UUID> in,
+                       BigDecimal difference, BigDecimal confidence, String confirmedBy, UUID ruleSetId,
+                       String ruleCode, JsonNode explanation) {
         ObjectNode v = json.createObjectNode();
+        if (ruleSetId != null) {
+            v.put("recon_rule_set_id", ruleSetId.toString());
+        }
+        if (ruleCode != null) {
+            v.put("rule_code", ruleCode);
+        }
+        if (explanation != null) {
+            v.set("explanation", explanation);
+        }
         if (runId != null) {
             v.put("recon_run_id", runId.toString());
         }

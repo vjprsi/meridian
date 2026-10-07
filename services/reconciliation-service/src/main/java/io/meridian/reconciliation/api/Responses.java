@@ -35,6 +35,15 @@ public class Responses {
         return n;
     }
 
+    /** Idempotent action returning a computed JSON object. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public ResponseEntity<java.util.Map<String, Object>> objectAction(io.meridian.web.idempotency.Idempotency idempotency,
+                                                                      String key, Object fingerprint,
+                                                                      java.util.function.Supplier<java.util.Map<String, Object>> work) {
+        ResponseEntity raw = idempotency.execute(key, fingerprint, java.util.Map.class, () -> ResponseEntity.ok(work.get()));
+        return (ResponseEntity<java.util.Map<String, Object>>) raw;
+    }
+
     public <T> ResponseEntity<T> ok(String row, Class<T> type) {
         return of(HttpStatus.OK, row, type);
     }

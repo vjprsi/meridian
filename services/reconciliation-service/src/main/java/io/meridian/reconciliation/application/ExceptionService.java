@@ -5,7 +5,6 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.reconciliation.domain.ExceptionLifecycle;
 import io.meridian.reconciliation.infrastructure.ReconStore;
-import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -20,8 +19,9 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Reconciliation breaks: assignment to an investigator, resolution (optionally posting an adjustment to the ledger),
- * accepting the suggested counterpart as a match. Status only changes through these actions.
+ * Reconciliation breaks: assignment to an investigator, resolution with a note, accepting the suggested
+ * counterpart as a match. Postings and write-offs go through {@link AdjustmentService} (four-eyes). Status only
+ * changes through these actions.
  */
 @Service
 public class ExceptionService {
@@ -31,16 +31,14 @@ public class ExceptionService {
     private final ReconStore store;
     private final CrudEngine crud;
     private final MatchService matches;
-    private final ServiceClient services;
     private final OutboxWriter outbox;
     private final JsonMapper json;
 
-    public ExceptionService(ReconStore store, CrudEngine crud, MatchService matches, ServiceClient services,
-                            OutboxWriter outbox, JsonMapper json) {
+    public ExceptionService(ReconStore store, CrudEngine crud, MatchService matches, OutboxWriter outbox,
+                            JsonMapper json) {
         this.store = store;
         this.crud = crud;
         this.matches = matches;
-        this.services = services;
         this.outbox = outbox;
         this.json = json;
     }
@@ -58,42 +56,25 @@ public class ExceptionService {
     }
 
     /**
-     * Resolves a break. An {@code adjustment} is posted to ledger-service as a journal entry (body as for
-     * POST /v1/journal-entries: ledger_id, entries[, description]) before the break closes; with
-     * {@code "write_off": true} the break is closed as WRITTEN_OFF.
+     * Resolves a break with a note and no posting (explained, e.g. matched outside the system). Postings and
+     * write-offs go through {@link AdjustmentService} under four-eyes; a break with a pending adjustment request
+     * cannot be resolved directly.
      */
     @Transactional
-    public String resolve(UUID id, String note, JsonNode adjustment, String idempotencyKey) {
+    public String resolve(UUID id, String note) {
         if (note == null || note.isBlank()) {
             throw Fields.invalid("resolution_note", "required", "resolution_note is required");
         }
         JsonNode e = store.requireLocked(T, id);
-        boolean writeOff = adjustment != null && adjustment.path("write_off").asBoolean(false);
-        ExceptionLifecycle.Status to = ExceptionLifecycle.next(status(e),
-                writeOff ? ExceptionLifecycle.Action.WRITE_OFF : ExceptionLifecycle.Action.RESOLVE);
-        String finalNote = note.trim();
-        if (adjustment != null && adjustment.isObject() && adjustment.has("entries")) {
-            if (!adjustment.hasNonNull("ledger_id") || !adjustment.get("entries").isArray()
-                    || adjustment.get("entries").size() < 2) {
-                throw ApiException.unprocessable("invalid_adjustment",
-                        "adjustment needs ledger_id and at least two balanced entries");
-            }
-            ObjectNode body = ((ObjectNode) adjustment).deepCopy();
-            body.remove("write_off");
-            body.put("entry_type", "ADJUSTMENT");
-            body.put("source_type", "RECON_EXCEPTION");
-            body.put("source_id", id.toString());
-            if (!body.hasNonNull("description")) {
-                body.put("description", "Reconciliation adjustment for break " + id);
-            }
-            String key = ("recon-adj:" + id + ":" + idempotencyKey);
-            JsonNode posted = services.post("ledger-service", "/v1/journal-entries", body,
-                    key.substring(0, Math.min(128, key.length())));
-            finalNote = finalNote + " [ledger adjustment " + posted.path("id").asString() + "]";
+        ExceptionLifecycle.Status to = ExceptionLifecycle.next(status(e), ExceptionLifecycle.Action.RESOLVE);
+        if (store.count("select count(*) from recon_adjustment where recon_exception_id = ? and status = 'PENDING_APPROVAL'",
+                id) > 0) {
+            throw ApiException.conflict("adjustment_pending", "Exception " + id
+                    + " has an adjustment waiting for approval; approve or reject it first");
         }
         store.update("""
                 update recon_exception set status = ?, resolution_note = ?, resolved_at = now(), updated_by = ?
-                where id = ?""", to.name(), finalNote, TenantContext.principal(), id);
+                where id = ?""", to.name(), note.trim(), TenantContext.principal(), id);
         JsonNode row = store.require(T, id);
         outbox.publish("ledger.recon_exception.resolved", T, id, row);
         return row.toString();
@@ -105,7 +86,9 @@ public class ExceptionService {
         JsonNode e = store.requireLocked(T, id);
         ExceptionLifecycle.next(status(e), ExceptionLifecycle.Action.ACCEPT_SUGGESTION);
         JsonNode s = e.path("suggested_match");
-        if (!s.isObject() || !s.path("internal_entry_ids").isArray() || s.path("internal_entry_ids").isEmpty()
+        boolean pairOfLines = s.path("external_record_ids").size() >= 2; // reversal pair: no ledger side
+        if (!s.isObject() || !s.path("internal_entry_ids").isArray()
+                || (s.path("internal_entry_ids").isEmpty() && !pairOfLines)
                 || !s.path("external_record_ids").isArray() || s.path("external_record_ids").isEmpty()) {
             throw ApiException.conflict("no_suggestion", "Exception " + id + " has no suggested match to accept");
         }
@@ -116,7 +99,8 @@ public class ExceptionService {
         String row = matches.insertMatch(UUID.fromString(e.get("recon_run_id").asString()),
                 Fields.uuid(s, "recon_rule_id"), Fields.text(s, "match_type") == null ? "ONE_TO_ONE" : s.get("match_type").asString(),
                 ext, in, Fields.decimal(s, "difference") == null ? BigDecimal.ZERO : Fields.decimal(s, "difference"),
-                Fields.decimal(s, "confidence"), TenantContext.principal());
+                Fields.decimal(s, "confidence"), TenantContext.principal(), Fields.uuid(s, "recon_rule_set_id"),
+                Fields.text(s, "rule_code"), s.hasNonNull("explanation") ? s.get("explanation") : null);
         String matchId = json.readTree(row).get("id").asString();
         matches.resolveOpenExceptions(ext, in, "Accepted suggested match " + matchId + " by " + TenantContext.principal());
         matches.refreshFileStatus(ext);

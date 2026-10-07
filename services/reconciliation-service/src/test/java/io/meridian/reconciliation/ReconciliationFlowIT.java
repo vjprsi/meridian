@@ -47,6 +47,7 @@ class ReconciliationFlowIT {
     static final String TENANT = "0199a000-0000-7000-8000-0000000000d1";
     static final String OTHER_TENANT = "0199a000-0000-7000-8000-0000000000d2";
     static final String USER = "recon-analyst";
+    static final String CHECKER = "recon-supervisor";
 
     static final String CSV = """
             date,amount,ccy,dc,ref,e2e,name,text
@@ -265,22 +266,59 @@ class ReconciliationFlowIT {
                 .isEqualTo("no_suggestion");
         assertThat(code(post("/v1/reconciliation/exceptions/" + missingInternal + "/resolve",
                 "{\"resolution_note\":\"  \"}", 422))).isEqualTo("validation_failed");
-        JsonNode resolved = post("/v1/reconciliation/exceptions/" + missingInternal + "/resolve", """
-                {"resolution_note":"Booked missing receipt","adjustment":{"ledger_id":"%s","entries":[
+        // a posting needs four-eyes: the analyst requests it, another user approves it
+        String adjustment = """
+                {"recon_exception_id":"%s","kind":"ADJUSTMENT","amount":"999.00","currency":"USD","ledger_id":"%s",
+                 "reason":"Booked missing receipt","entries":[
                   {"ledger_account_id":"%s","direction":"DEBIT","amount":"999.00","currency":"USD"},
-                  {"ledger_account_id":"%s","direction":"CREDIT","amount":"999.00","currency":"USD"}]}}"""
-                .formatted(UUID.randomUUID(), nostro, UUID.randomUUID()), 200);
+                  {"ledger_account_id":"%s","direction":"CREDIT","amount":"%s","currency":"USD"}]}""";
+        assertThat(code(post("/v1/reconciliation/adjustments", adjustment.formatted(missingInternal, UUID.randomUUID(),
+                nostro, UUID.randomUUID(), "998.00"), 422))).isEqualTo("unbalanced_adjustment");
+        JsonNode adj = post("/v1/reconciliation/adjustments", adjustment.formatted(missingInternal, UUID.randomUUID(),
+                nostro, UUID.randomUUID(), "999.00"), 201);
+        String adjId = adj.get("id").asString();
+        assertThat(adj.get("status").asString()).isEqualTo("PENDING_APPROVAL");
+        assertThat(adj.get("requested_by").asString()).isEqualTo(USER);
+        assertThat(code(post("/v1/reconciliation/adjustments", adjustment.formatted(missingInternal, UUID.randomUUID(),
+                nostro, UUID.randomUUID(), "999.00"), 409))).isEqualTo("adjustment_pending");
+        assertThat(code(post("/v1/reconciliation/exceptions/" + missingInternal + "/resolve",
+                "{\"resolution_note\":\"shortcut\"}", 409))).isEqualTo("adjustment_pending");
+        assertThat(code(post("/v1/reconciliation/adjustments/" + adjId + "/approve", null, 422)))
+                .as("the requester cannot approve").isEqualTo("four_eyes_violation");
+        JsonNode approved = postAs(CHECKER, "/v1/reconciliation/adjustments/" + adjId + "/approve", null, 200);
+        assertThat(approved.get("status").asString()).isEqualTo("APPROVED");
+        assertThat(approved.get("approved_by").asString()).isEqualTo(CHECKER);
+        assertThat(approved.hasNonNull("journal_entry_id")).isTrue();
+        JsonNode resolved = get("/v1/reconciliation/exceptions/" + missingInternal, TENANT);
         assertThat(resolved.get("status").asString()).isEqualTo("RESOLVED");
         assertThat(resolved.get("resolution_note").asString()).contains("ledger adjustment");
-        verify(services).post(eq("ledger-service"), eq("/v1/journal-entries"), any(), startsWith("recon-adj:" + missingInternal));
+        verify(services).post(eq("ledger-service"), eq("/v1/journal-entries"), any(), eq("recon-adj:" + adjId));
         assertThat(code(post("/v1/reconciliation/exceptions/" + missingInternal + "/resolve",
                 "{\"resolution_note\":\"again\"}", 409))).isEqualTo("invalid_transition");
+        assertThat(code(postAs(CHECKER, "/v1/reconciliation/adjustments/" + adjId + "/approve", null, 409)))
+                .isEqualTo("invalid_transition");
 
+        // a write-off without a posting: rejected once (break stays open), then approved
         String missingExternal = breaks.get("MISSING_EXTERNAL").get("id").asString();
-        JsonNode writtenOff = post("/v1/reconciliation/exceptions/" + missingExternal + "/resolve",
-                "{\"resolution_note\":\"Immaterial\",\"adjustment\":{\"write_off\":true}}", 200);
+        String writeOff = """
+                {"recon_exception_id":"%s","kind":"WRITE_OFF","amount":"40.00","currency":"USD","reason":"Immaterial"}"""
+                .formatted(missingExternal);
+        String wo1 = post("/v1/reconciliation/adjustments", writeOff, 201).get("id").asString();
+        assertThat(code(post("/v1/reconciliation/adjustments/" + wo1 + "/reject", "{\"reason\":\"self\"}", 422)))
+                .isEqualTo("four_eyes_violation");
+        JsonNode rejected = postAs(CHECKER, "/v1/reconciliation/adjustments/" + wo1 + "/reject",
+                "{\"reason\":\"Attach the bank confirmation\"}", 200);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(get("/v1/reconciliation/exceptions/" + missingExternal, TENANT).get("status").asString()).isEqualTo("OPEN");
+        String wo2 = post("/v1/reconciliation/adjustments", writeOff, 201).get("id").asString();
+        assertThat(postAs(CHECKER, "/v1/reconciliation/adjustments/" + wo2 + "/approve", null, 200)
+                .get("status").asString()).isEqualTo("APPROVED");
+        JsonNode writtenOff = get("/v1/reconciliation/exceptions/" + missingExternal, TENANT);
         assertThat(writtenOff.get("status").asString()).isEqualTo("WRITTEN_OFF");
+        assertThat(writtenOff.get("resolution_note").asString()).contains("approved by " + CHECKER);
         assertThat(outboxCount("ledger.recon_exception.resolved")).isEqualTo(3);
+        assertThat(outboxCount("ledger.recon_adjustment.approved")).isEqualTo(2);
+        assertThat(outboxCount("ledger.recon_adjustment.rejected")).isEqualTo(1);
     }
 
     @Test
@@ -383,6 +421,16 @@ class ReconciliationFlowIT {
 
     private JsonNode post(String path, String body, int expected) throws Exception {
         HttpResponse<String> r = send("POST", path, body, key(), null, TENANT);
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(expected);
+        return json.readTree(r.body());
+    }
+
+    private JsonNode postAs(String user, String path, String body, int expected) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("X-Tenant-Id", TENANT).header("X-User", user).header("Content-Type", "application/json")
+                .header("Idempotency-Key", key());
+        b.method("POST", body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
         assertThat(r.statusCode()).as(r.body()).isEqualTo(expected);
         return json.readTree(r.body());
     }
