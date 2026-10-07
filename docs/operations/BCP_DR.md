@@ -37,7 +37,7 @@ Other scenarios:
 | Bad release | Error budget burn, e2e journeys | `helm rollback` ([RUNBOOKS section 1](RUNBOOKS.md#1-deploy-and-rollback-helm)) | Minutes / 0 |
 | Logical data corruption (bug, operator error, ransomware) | Ledger `verify`, audit `verify-chain`, recon breaks | Aurora point-in-time restore to a new cluster, extract affected rows, correct through compensating postings (financial tables are append-only; never overwrite) | Hours / restore point chosen (PITR within retention: 35 d prod, 7 d other) |
 | KMS key deletion / loss | Decrypt failures | KMS keys have a 30-day deletion window (`deletion_window_in_days = 30`); cancel deletion | Minutes / 0 |
-| Card-vault master key loss | Vault refuses to start / decrypt | Restore from the secret store (Secrets Manager replica in the DR region); without it vaulted PANs are unrecoverable **[GAP-01: no HSM key backup ceremony]** | - |
+| Card-vault master key loss | Vault refuses to start / decrypt | `aws-kms`: the CDE key is a multi-region key with a replica in the DR cell (tofu `cde_kms_replica_of`), deletion has a 30-day window (cancel it); data keys replicate with the database and unwrap in either region (`mrk-` reference). `software`: restore the master key from the secret store. `pkcs11`: HSM backup / cluster restore **[GAP-01: no HSM key backup ceremony documented]** | Minutes / 0 |
 | Kafka cluster loss (single region) | Producer errors, outbox backlog grows | Outbox rows stay in each service database until relayed; recreate MSK, relays resume; consumers de-duplicate by `ce_id` | Events delayed, 0 loss |
 | IdP outage | Login SLI (J4) | Existing tokens valid until expiry (access token lifespan 900 s in the shipped realm); IdP DR is the IdP's | Logins blocked until IdP back |
 
@@ -106,7 +106,7 @@ the tracker and in this document's history.
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
 | GAP-11 | No game day yet; data mover, FIS, outbox retention, control-plane DR, MSK IAM config, reverse replicator | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
-| GAP-01 | No HSM key backup / ceremony for card keys | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
+| GAP-01 | No HSM key backup / ceremony for card keys (KMS mode covered by the multi-region CDE key); a dedicated CDE database cluster (`cde_dedicated_db`) has no cross-region replica yet | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-10 | Dashboards / alerts for detection and RTO measurement | TBD (SRE) | PLT-OBSERVABILITY |
 | - | S3 lifecycle rules and tofu-state bucket versioning not managed in the repo | TBD (Platform) | Proposed |
 | - | Restore verification has never been run; no automation | TBD (SRE / DBA) | Proposed |

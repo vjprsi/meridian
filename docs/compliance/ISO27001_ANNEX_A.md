@@ -116,7 +116,7 @@ apply to Meridian's own premises and are organisational.
 | 8.19 Installation of software on operational systems | Yes | Immutable images, read-only root FS, no package manager use at runtime | Partial | GAP-04 (signature verification at admission) |
 | 8.20 Networks security | Yes | Private subnets, SG rules (DB / Kafka from EKS only), TLS, NetworkPolicies | Partial | GAP-23 |
 | 8.21 Security of network services | Yes | Route 53 health checks, ALB / ingress TLS (values `ingress.tls`), MSK IAM | Partial | GAP-17 |
-| 8.22 Segregation of networks | Yes | VPC per cell; NetworkPolicy admits only Meridian pods + monitoring namespace | Partial | GAP-02 |
+| 8.22 Segregation of networks | Yes | VPC per cell; NetworkPolicy admits only Meridian pods + monitoring namespace; cardholder data environment default-deny with named callers, optional own namespace / database cluster / egress policy, no gateway route to the vault | Partial | GAP-02 residual |
 | 8.23 Web filtering | Partly | Outbound: `OutboundUrlPolicy` (https, public addresses, pinned DNS, no redirects); staff browsing filtering is organisational | Partial | GAP-24 |
 | 8.24 Use of cryptography | Yes | AES-256-GCM with random IV and AAD, HMAC-SHA256 constant-time, PBKDF2, RSA-OAEP-256 for reveals, KMS CMK with rotation, TLS | Partial | GAP-01, GAP-09 |
 | 8.25 Secure development life cycle | Yes | Spec-first contracts, generated authz, security review, required tests per service | Partial | GAP-04 |

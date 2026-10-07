@@ -61,7 +61,7 @@ card authorisation, (7) audit trail.
 | S | Compromised service claims to be another (`X-Meridian-Service`) | Header honoured only with an internal token (`TenantFilterTest.callingServiceHeaderIsHonouredOnlyWithAnInternalToken`); approval creation restricted to owner service (SEC-03); ledger limit changes only by owning service (SEC-12) | **One shared client `meridian-service` for all services**: the calling-service name is asserted, not proven (SEC-03 / SEC-12 residual, GAP-16) |
 | T | Tampering in transit inside the cluster | NetworkPolicy ingress from Meridian pods only | Plain HTTP `http://{name}` (no mTLS); no egress policies (GAP-23) |
 | R | Actions performed "as service" with no human | On-behalf-of principal is the human (`X-User`), service principals `svc:` / `service:` recognised by `FourEyes.isService` (SEC-35) | - |
-| I | Card data reachable from any pod | Vault lookup / verify / PIN service-only and exact scopes | Any pod with the shared client can call them (GAP-02, GAP-16) |
+| I | Card data reachable from any pod | Vault lookup / verify / PIN / tokenize service-only, exact scopes, named callers per operation; CDE NetworkPolicy admits only card-service, card-authorization, card-tokenization and card-threeds; no gateway route | A compromised CDE caller with the shared client can still call them (GAP-16); no mTLS inside the CDE (GAP-02 residual) |
 | D | Cascading failures, retries | Timeouts (e.g. fraud 2 s budget), fraud fail-open / fail-closed thresholds, card stand-in | Resilience4j not uniformly applied (not verified) |
 | E | Customer token forwarded downstream | Channels call with their own service identity + `X-On-Behalf-Of-Customer`; customer token never forwarded | - |
 
@@ -84,7 +84,7 @@ card authorisation, (7) audit trail.
 | T | Direct modification of financial history | Append-only tables (trigger), ledger hash chain + `verify`, audit hash chain + `verify-chain`, optimistic locking | Owner secret readable in the namespace with Secret read access (RBAC, GAP-24); daily full verification and WORM seals detect but do not prevent rewrites |
 | T | Money races (double reversal, return, refund, FX reuse, duplicate inbound) | Row locks + unique indexes / CHECKs (SEC-04..07), advisory locks for inbound (SEC-28) | No DB unique index for inbound dedupe (advisory lock only) |
 | I | SQL injection | Bound parameters, allow-listed identifiers (`CrudEngine`), no user SQL | - |
-| I | Backup / snapshot theft | KMS-encrypted Aurora, snapshots, S3 | Card data under software keys (GAP-01) |
+| I | Backup / snapshot theft | KMS-encrypted Aurora, snapshots, S3; card data under data keys wrapped by the CDE KMS key (or HSM keys), no CVV2 stored | A backup plus the vault's IAM role can unwrap; key ceremony / dual control organisational (GAP-01 residual) |
 | D | Connection exhaustion | Per-service pools, `dbPool` override | GAP-12 |
 | E | Escalation to table owner | Flyway as owner only in the pre-install / pre-upgrade migration Job; running pods hold the RLS-bound runtime role only | Owner secret readable in the namespace by anyone with Secret read access (RBAC, GAP-24) |
 

@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Master key rotation job (GAP-01; runbook docs/operations/RUNBOOKS.md section 22): for every tenant holding vault
+ * Master key rotation job (GAP-01; runbook docs/operations/RUNBOOKS.md section 2.2): for every tenant holding vault
  * keys, re-wraps the data keys still wrapped under an older master key (KMS ReEncrypt; nothing else changes,
  * envelope encryption needs no bulk re-encryption of card data) and adopts keys from before envelope encryption.
  * Idempotent: keys already under the current master key are left alone, so the daily run costs one query per tenant

@@ -122,3 +122,30 @@ Caveat: the synthetic internal items carry what payment-service / card-clearing 
 counterparty, batch id). Ledger entries read through ledger-service today carry only the journal `reference` and
 the line description, so for nostro sources the exact-key rules match on the reference (end-to-end id / bank
 reference) and the name / batch rules only apply once postings carry counterparty and batch data (SPEC_BACKLOG).
+
+## Audit ingestion throughput (2026-10-07)
+
+Symptom: after a restart audit-service lagged more than 30 s behind the domain topics in live e2e journey B (PII
+masking and per-tenant hash chaining per event, one transaction and advisory lock per event).
+
+Change: `DomainEventAuditListener` is a Spring Kafka batch listener (`meridian.audit.ingest.max-poll-records`, default
+1000); each poll is parsed and PII-masked in parallel (`mask-parallelism`), grouped per tenant, and each tenant group is
+appended in one transaction with one advisory lock (the same lock key as the API path), one chain-head read, in-memory
+hash linking and one multi-row insert (`AuditRecorder.appendBatch`); tenant groups run concurrently
+(`tenant-parallelism`, default 4). Source-event-id de-duplication is kept; a failing poll falls back to per-record
+processing and reports the failed index (`BatchListenerFailedException`), so a poison record is retried / skipped as
+before without blocking the rest.
+
+Measurement: `AuditIngestionThroughputIT` (Testcontainers Kafka 4.1 + PostgreSQL 18, developer laptop, Gradle
+`--max-workers=2`): 20,000 CloudEvents of 4 tenants on a 3-partition topic, published while the listener is stopped
+(restart backlog), timed from listener start until all are stored; all four chains then verify in full (5,000 events
+each) and personal data is masked.
+
+| Code | Time for 20,000 events | Throughput |
+|---|---|---|
+| Before (one event per transaction) | 43.4 s | 460 events/s |
+| After (batch ingestion) | 4.5 - 5.0 s | 3,965 - 4,440 events/s (target 2,000) |
+
+`AuditBatchIngestionIT` covers interleaved tenants with API writes between polls, duplicates inside a poll, a fully
+redelivered poll and a poison record: every chain stays gapless and verifies. The 2,000 events/s assertion runs only
+with `-Daudit.perf.enforce=true` (CI machines vary).

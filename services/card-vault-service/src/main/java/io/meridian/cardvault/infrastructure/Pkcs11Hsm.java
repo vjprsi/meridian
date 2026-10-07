@@ -17,7 +17,7 @@ import javax.crypto.SecretKey;
  * PKCS#11 HSM adapter (GAP-01) for AWS CloudHSM, Thales Luna, Utimaco or SoftHSM2, through the JDK's SunPKCS11
  * provider. Configuration-driven: {@code meridian.cards.vault.pkcs11.config} is a SunPKCS11 configuration file
  * (library path, slot, and the key attribute template - generated secret keys must be {@code CKA_TOKEN=true},
- * {@code CKA_SENSITIVE=true}, {@code CKA_EXTRACTABLE=false}; see docs/operations/RUNBOOKS.md section 22), the user
+ * {@code CKA_SENSITIVE=true}, {@code CKA_EXTRACTABLE=false}; see docs/operations/RUNBOOKS.md section 2.2), the user
  * PIN comes from {@code MERIDIAN_CARDS_VAULT_PKCS11_PIN} (a Secret, never git).
  *
  * <p>Every key lives on the token under the alias {@code <prefix><label>:v<version>}; the vault stores only metadata

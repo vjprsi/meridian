@@ -85,21 +85,63 @@ weakening. After updating a Secret: `kubectl -n $NS rollout restart deploy/<serv
 
 ### 2.2 Card-vault keys
 
-Key hierarchy: one master key (`MERIDIAN_CARDS_VAULT_MASTER_KEY` or `..._MASTER_KEY_FILE`, Secret
-`meridian-card-vault-service-secrets/master-key`, 32 random bytes base64) -> versioned keys derived per label
-(PAN_DEK, CVV_KEY, PIN_KEY tenant-scoped `<label>@<tenant>`; ZPK, CVK, MDK shared) by `SoftwareHsm`.
+Key hierarchy (GAP-01, envelope encryption; `card-vault-service` `meridian.cards.vault.key-management`):
 
-- **DEK rotation (routine, e.g. yearly)** **[4-eyes]**: a user with `cards:vault_admin` and a recent step-up (or the
-  service identity) calls `POST /v1/card-vault/rotate-keys {"key_type":"PAN_DEK"}`. Records are re-encrypted in
-  500-record transactions; after 20 batches the rest continues in the background (`status: IN_PROGRESS`). If the pod
-  dies mid-way, records stay readable under the old version; run the same call again to finish. Event
-  `cards.card_vault.keys_rotated`. Check `GET /v1/card-vault/keys?key_type=PAN_DEK` shows one ACTIVE version.
-- **ZPK / PIN key rotation**: coordinate with the card gateway / scheme (zone keys are shared with the counterparty);
-  there is no grace period for the old ZPK **[gap: SPEC_BACKLOG Cards "ZPK grace period"]**. Schedule a cut-over.
-- **Master key rotation**: **not supported in place** - every key derives from the master, and no tool re-encrypts the
-  vault under a new master **[gap: GAP-01]**. Until a real HSM / KMS adapter exists, a master key change requires a
-  dedicated migration (decrypt with old, encrypt with new, verify counts and fingerprints) run under dual control in a
-  maintenance window. Treat any suspicion of master key exposure as a PCI incident (section 3).
+| Mode | Master key | Vault keys (PAN_DEK, PIN_KEY tenant-scoped `<label>@<tenant>`; CVK, ZPK, MDK, CVV_KEY, FINGERPRINT) | PIN blocks |
+|---|---|---|---|
+| `aws-kms` (production) | CDE KMS key of the cell (`alias/meridian-<cell>-cde`, tofu output `cde_kms_key_arn`; multi-region with a replica in the DR cell) | one 256-bit data key per tenant, purpose and version from `GenerateDataKey`, stored only wrapped (`card_vault_key.wrapped_key`, `master_key_ref`), encryption context `{tenant, purpose, key}` (enforced by the IRSA role policy), unwrapped on use and cached in memory 5 min (`MERIDIAN_CARDS_VAULT_DATA_KEY_CACHE_TTL`) | translated in JVM memory (KMS has no PIN primitives) |
+| `pkcs11` | the HSM's own hierarchy (CloudHSM / Luna, SunPKCS11) | generated on the token, alias `meridian/<label>:v<version>`, non-extractable; only metadata in the database | translated inside the HSM: never clear in the JVM |
+| `software` (development) | `MERIDIAN_CARDS_VAULT_MASTER_KEY` / `_FILE` (Secret `meridian-card-vault-service-secrets/master-key`) | data keys derived from the master (documented KDF) and wrapped under it | JVM memory |
+
+What is stored per card (GAP-03): PAN and expiry under the PAN DEK (`dek_key_id`), **no CVV2** (derived on demand under
+the card's CVK, `cvk_key_id`), and the PIN only as the ISO 9564 block encrypted with AES-KWP under the PIN key
+(`pin_key_id`), compared as ciphertext. Startup logs `Card vault key management: <mode, master key reference>`.
+
+- **Master key rotation (no data re-encryption)** **[4-eyes]**:
+  1. `aws-kms` with automatic rotation: nothing to do (KMS rotates the backing key yearly; old ciphertexts stay
+     decryptable). Manual rotation (suspected compromise, policy): create the new key with tofu (or a new key
+     version), re-point `alias/meridian-<cell>-cde`, wait 10 min (the vault re-resolves the alias), then run
+     `POST /v1/card-vault/keys/rewrap` per tenant (vault admin with step-up, or the service identity) or let the daily
+     `MasterKeyRotationJob` (02:40 UTC, all tenants) do it. Each data key is `ReEncrypt`ed server side; the response
+     and the event `cards.card_vault.keys_rewrapped` give `{master_key_ref, rewrapped, adopted, unchanged}`. Verify:
+     `select master_key_ref, count(*) from card_vault.card_vault_key group by 1` shows only the new key (as the
+     schema owner), then schedule deletion of the old key **only after** the database backup retention (35 days in
+     prod) has passed, or old backups become unreadable.
+  2. `software`: set the new key in `MERIDIAN_CARDS_VAULT_MASTER_KEY` and the old one in
+     `MERIDIAN_CARDS_VAULT_MASTER_KEY_PREVIOUS` (comma separated), rolling restart, run the re-wrap as above, then drop
+     the previous key and restart again.
+  3. `pkcs11`: rotation is an HSM key ceremony (new token keys = new versions via `rotate-keys`); the re-wrap is a
+     no-op.
+  Keys created before envelope encryption (no `wrapped_key`) are derived from the configured software master key;
+  the first re-wrap **adopts** them (wraps the derived material under the master key). Run it **before** removing
+  the software key or switching to `aws-kms` without `MERIDIAN_CARDS_VAULT_MASTER_KEY`.
+- **DEK rotation (routine, e.g. yearly)** **[4-eyes]**: `POST /v1/card-vault/rotate-keys {"key_type":"PAN_DEK"}`.
+  Records are re-encrypted in 500-record transactions; after 20 batches the rest continues in the background
+  (`status: IN_PROGRESS`). If the pod dies mid-way, records stay readable under the old version; run the same call
+  again to finish. Event `cards.card_vault.keys_rotated`. Check `GET /v1/card-vault/keys?key_type=PAN_DEK` shows
+  one ACTIVE version.
+- **PIN key rotation**: `rotate-keys {"key_type":"PIN_KEY"}` re-translates every stored PIN block to the new version
+  (inside the HSM in `pkcs11` mode); PINs do not change. Legacy rows (PIN under the DEK, before GAP-03) are
+  converted on the way.
+- **CVK rotation**: applies to cards issued or reissued afterwards; existing cards keep verifying under the CVK
+  recorded on their row until they are reissued.
+- **ZPK rotation**: coordinate with the card gateway / scheme (zone keys are shared with the counterparty); there is
+  no grace period for the old ZPK **[gap: SPEC_BACKLOG Cards "ZPK grace period"]**. Schedule a cut-over. In `pkcs11`
+  mode import the new ZPK under dual control as `meridian/<label>:v<n>` first; `POST /v1/card-vault/keys` then uses
+  it. Envelope modes cannot import exchanged keys yet **[gap: GAP-01 residual, key import under a ZMK]**.
+- **FINGERPRINT key**: never rotated (every stored fingerprint depends on it; `rotate-keys` answers 422); the
+  master key re-wrap covers it.
+- **Removing stored CVV2 (GAP-03, one-off on databases created before the change)**: the release migration
+  `V001_60` overwrites `cvv_encrypted`, drops the column and backfills `cvk_key_id`. Then, in a maintenance window,
+  run `VACUUM FULL card_vault.card_data_vault` (rewrites the table so the old values leave the data files), record
+  the run in the change ticket; old values remain only in backups until they age out.
+- **PKCS#11 configuration**: ConfigMap `cde.keys.pkcs11.configMap` with `pkcs11.cfg`, e.g. for CloudHSM
+  `name = CloudHSM`, `library = /opt/cloudhsm/lib/libcloudhsm_pkcs11.so`, `slot = 1`, and the key template
+  `attributes(generate, CKO_SECRET_KEY, *) = { CKA_TOKEN = true CKA_SENSITIVE = true CKA_EXTRACTABLE = false }`,
+  `attributes(*, CKO_SECRET_KEY, CKK_GENERIC_SECRET) = { CKA_SENSITIVE = true CKA_EXTRACTABLE = false }` (unwrapped
+  PIN blocks); PIN in Secret `cde.keys.pkcs11.pinSecret` (key `pin`). The vendor PKCS#11 library must be in the
+  image **[gap: no HSM image variant yet]**. SoftHSM2 works for a local trial (`library = /usr/lib/softhsm/libsofthsm2.so`).
+- Treat any suspicion of master key or HSM credential exposure as a PCI incident (section 3).
 
 ### 2.4 Fraud pseudonym key (`MERIDIAN_FRAUD_PSEUDONYM_KEY`)
 
@@ -317,7 +359,7 @@ wired]**. Escalation: primary 5 min -> secondary 10 min -> IC 15 min -> CTO 30 m
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
 | GAP-05 | No deploy pipeline / change records | TBD (Platform) | `spec/plan.yaml` PLT-GITOPS |
-| GAP-01 | Master key rotation not supported; no HSM | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
+| GAP-01 | Residual: HSM image variant and key ceremony / dual control, key import under a ZMK in envelope modes, payment-HSM adapter (PIN verification by PVV, CVV under the scheme algorithm) | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-19 | No resolve action for in-doubt returns / wallet reversals | TBD (Payments / Wallets) | [SECURITY_REVIEW SEC-06 / SEC-07](../SECURITY_REVIEW.md#remediation-status) |
 | GAP-21 | Webhook encryption key and MFA seed key cannot be rotated | TBD (Platform) | Proposed |
 | GAP-12 | Connection budget / PgBouncer | TBD (Platform) | [SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget) |

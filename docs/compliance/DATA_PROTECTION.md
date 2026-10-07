@@ -111,7 +111,7 @@ them to `meridian.privacy.services` with their retention obligations). Audit cop
 | Contact lookup hash (`customer_contact.lookup_hash`, masked value) | customer-service and search-service; events carry only masked value + hash | `MERIDIAN_CONTACT_LOOKUP_KEY`: one Secret `meridian-contact-lookup` read by both, required secret in both (GAP-14 closed) |
 | Counterparty account hash (`counterparty_account_hash`, `h1:` + last 4) | ledger-service and reconciliation-service (payment references on postings) | `meridian.refs.counterparty-key` (required secret, Helm `counterparty-key` in both services) |
 | Identifier hash (`customer_identifier.value_hash`, hidden) | customer-service duplicate detection | `MERIDIAN_CUSTOMER_SECRET_KEY` (required secret, Helm `secret-key`) |
-| Card tokens and keyed PAN fingerprint | card services | card-vault master key (GAP-01) |
+| Card tokens and keyed PAN fingerprint | card services | per-tenant fingerprint data key wrapped by the CDE KMS key (GAP-01) |
 | Masked customer lookup | agent channel (logged, rate-limited) | - |
 | Redaction of security codes | notification-service (SEC-10) | - |
 | Numeric-only model features | ML training sets | - |

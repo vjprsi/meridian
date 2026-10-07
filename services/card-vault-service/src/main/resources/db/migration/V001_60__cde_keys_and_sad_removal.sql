@@ -8,8 +8,8 @@
 --      stay "legacy derived" until the master key re-wrap job adopts them;
 --   2. every record names the card verification key its CVV2 derives from (the CVK active when it was vaulted);
 --   3. PCI DSS 3.3.1: the stored CVV2 is removed - first overwritten, then the column is dropped. The old values
---      remain in dead tuples until `VACUUM FULL card_vault.card_data_vault` (RUNBOOKS 22) and in backups until the
---      PAN DEK that encrypted them is rotated and the retired key destroyed (crypto-shredding);
+--      remain in dead tuples until `VACUUM FULL card_vault.card_data_vault` and in backups until those age out of the
+--      backup retention (35 days in prod; docs/operations/RUNBOOKS.md 2.2);
 --   4. PINs: pin_key_id names the PIN encryption key of the stored PIN block. Rows with a PIN but no pin_key_id are
 --      legacy (PIN encrypted under the DEK); the service converts them on first use or with a PIN_KEY rotation;
 --   5. card_vault_key_tenants(): tenant ids holding vault keys, for the master key re-wrap job (ids only, owner
