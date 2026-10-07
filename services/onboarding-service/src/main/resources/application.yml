@@ -45,7 +45,7 @@ meridian:
     topic: meridian.party.v1
   onboarding:
     public:                       # self-service applicant surface (/v1/onboarding/public/applications)
-      client-ip-header: ""        # e.g. X-Forwarded-For behind the gateway, which must overwrite it; empty = socket peer
+      client-ip-header: X-Forwarded-For # set (overwritten) by the edge gateway, right-most hop used; "" = socket peer
       token-ttl-minutes: 30       # applicant token lifetime; rotate with token/refresh
       starts-per-ip-per-hour: 20
       starts-per-device-per-hour: 5
@@ -53,6 +53,8 @@ meridian:
       otp-ttl-seconds: 300
       otp-max-attempts: 5
       otp-max-sends: 5            # codes per application
+      otp-sends-per-destination-per-hour: 5   # SEC-16: per phone number / e-mail across applications
+      otp-sends-per-hour: 500                 # SEC-16: per tenant ceiling (SMS pumping)
       otp-resend-seconds: 30
       otp-secret: ${MERIDIAN_ONBOARDING_OTP_SECRET:dev-only-otp-secret}
       max-documents: 20

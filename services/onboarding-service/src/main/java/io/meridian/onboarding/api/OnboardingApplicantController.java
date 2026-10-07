@@ -180,7 +180,9 @@ public class OnboardingApplicantController implements OnboardingApplicantApi {
         if (clientIpHeader != null && !clientIpHeader.isBlank()) {
             String v = req.getHeader(clientIpHeader);
             if (v != null && !v.isBlank()) {
-                return v.split(",")[0].trim();
+                // SEC-16: the right-most hop is the one our own gateway wrote; entries to its left are client-chosen
+                String[] hops = v.split(",");
+                return hops[hops.length - 1].trim();
             }
         }
         return req.getRemoteAddr();

@@ -69,7 +69,8 @@ public class ApplicantService {
     /** Public surface limits ({@code meridian.onboarding.public.*}). */
     public record Settings(int tokenTtlMinutes, int startsPerIpPerHour, int startsPerDevicePerHour,
                            boolean attestationRequired, int otpTtlSeconds, int otpMaxAttempts, int otpMaxSends,
-                           int otpResendSeconds, String otpSecret, int maxDocuments) {}
+                           int otpResendSeconds, String otpSecret, int maxDocuments,
+                           int otpSendsPerDestinationPerHour, int otpSendsPerHour) {}
 
     public ApplicantService(Rows rows, ApplicationService apps, ServiceClient client,
                             @Value("${meridian.onboarding.public.token-ttl-minutes:30}") int tokenTtlMinutes,
@@ -81,12 +82,14 @@ public class ApplicantService {
                             @Value("${meridian.onboarding.public.otp-max-sends:5}") int otpMaxSends,
                             @Value("${meridian.onboarding.public.otp-resend-seconds:30}") int otpResend,
                             @Value("${meridian.onboarding.public.otp-secret:dev-only-otp-secret}") String otpSecret,
-                            @Value("${meridian.onboarding.public.max-documents:20}") int maxDocuments) {
+                            @Value("${meridian.onboarding.public.max-documents:20}") int maxDocuments,
+                            @Value("${meridian.onboarding.public.otp-sends-per-destination-per-hour:5}") int otpPerDestination,
+                            @Value("${meridian.onboarding.public.otp-sends-per-hour:500}") int otpPerHour) {
         this.rows = rows;
         this.apps = apps;
         this.client = client;
         this.settings = new Settings(tokenTtlMinutes, startsPerIp, startsPerDevice, attestationRequired, otpTtl,
-                otpMaxAttempts, otpMaxSends, otpResend, otpSecret, maxDocuments);
+                otpMaxAttempts, otpMaxSends, otpResend, otpSecret, maxDocuments, otpPerDestination, otpPerHour);
     }
 
     // ------------------------------------------------------------------ start / tokens
@@ -324,7 +327,9 @@ public class ApplicantService {
         if (sent.size() >= settings.otpMaxSends()) {
             throw new ApiException(429, "otp_send_limit", "Too many codes were requested for this application");
         }
-        OffsetDateTime now = Clocks.now();
+        quota(dest);
+        // database clock: created_at of earlier codes comes from now() (JVM and DB clocks drift apart)
+        OffsetDateTime now = rows.jdbc().sql("select now()").query(OffsetDateTime.class).single();
         sent.stream().filter(o -> stepCode.equals(o.path("step_code").asString())).findFirst()
                 .map(o -> Events.ts(o, "created_at").plusSeconds(settings.otpResendSeconds()))
                 .filter(next -> next.isAfter(now))
@@ -365,6 +370,26 @@ public class ApplicantService {
             otp = rows.update(T_OTP, Events.uuid(otp, "id"), nv);
         }
         return otpView(otp, dest, now.plusSeconds(settings.otpResendSeconds()));
+    }
+
+    /**
+     * SEC-16: codes per destination (across applications, so new applications cannot pump one number) and per tenant
+     * per hour (SMS pumping / toll fraud ceiling). Serialised per destination so concurrent sends cannot overrun.
+     */
+    private void quota(String dest) {
+        rows.jdbc().sql("select 1 from pg_advisory_xact_lock(hashtext(?))").param("onb-otp:" + dest)
+                .query(Integer.class).single();
+        int toDestination = rows.jdbc().sql("""
+                select count(*) from onboarding_otp where destination = ? and created_at > now() - interval '1 hour'""")
+                .param(dest).query(Integer.class).single();
+        if (toDestination >= settings.otpSendsPerDestinationPerHour()) {
+            throw new ApiException(429, "otp_destination_limit", "Too many codes were sent to this destination; try again later");
+        }
+        int lastHour = rows.jdbc().sql("select count(*) from onboarding_otp where created_at > now() - interval '1 hour'")
+                .query(Integer.class).single();
+        if (lastHour >= settings.otpSendsPerHour()) {
+            throw new ApiException(429, "otp_quota_exceeded", "Verification codes are temporarily unavailable; try again later");
+        }
     }
 
     /** Outcome of a verification; failures are returned (not thrown) so the attempt counter commits. */
