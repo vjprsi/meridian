@@ -123,12 +123,15 @@ public final class ApprovalRoute {
         return out;
     }
 
-    /** Route for a request with the given amount (null = no amount: only levels without a positive threshold). */
+    /**
+     * Route for a request with the given amount. SEC-03: a request without an amount gets every level (the strictest
+     * route), so leaving the amount out can never drop the amount-gated levels.
+     */
     public static ApprovalRoute forAmount(List<Level> policyLevels, BigDecimal amount) {
         List<Level> applicable = new ArrayList<>();
         for (Level l : policyLevels) {
-            boolean applies = l.minAmount() == null || l.minAmount().signum() == 0
-                    || (amount != null && amount.compareTo(l.minAmount()) >= 0);
+            boolean applies = amount == null || l.minAmount() == null || l.minAmount().signum() == 0
+                    || amount.compareTo(l.minAmount()) >= 0;
             if (applies) {
                 applicable.add(l);
             }

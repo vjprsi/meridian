@@ -42,9 +42,10 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
     @Override
     public ResponseEntity<ApprovalRequest> approvalRequestsCreate(String idempotencyKey, ApprovalRequestCreate body) {
         var caller = callers.current();
+        var service = io.meridian.common.tenancy.TenantContext.callingService();
         return idempotency.execute(idempotencyKey, body, ApprovalRequest.class, () -> {
             ObjectNode values = crud.toColumns("approval_request", body);
-            return ResponseEntity.status(HttpStatus.CREATED).body(model(approvals.create(values, caller)));
+            return ResponseEntity.status(HttpStatus.CREATED).body(model(approvals.create(values, caller, service)));
         });
     }
 

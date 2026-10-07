@@ -472,6 +472,82 @@ class IdentityFlowIT {
         assertThat(send("GET", "/v1/users", null, null, null, null).statusCode()).isEqualTo(401);
     }
 
+    // ------------------------------------------------------------------ SEC-03 execution from the recorded change
+
+    @Test
+    @Order(13)
+    void approvedChangesAreExecutedOnlyFromTheRecordedSubmission() throws Exception {
+        String frank = post("/v1/users", """
+                {"username":"frank","email":"frank@bank.example","first_name":"F","last_name":"R","status":"ACTIVE"}""", 201)
+                .get("id").asString();
+        TenantContext.callAs(UUID.fromString(TENANT), "t", () -> jdbc.sql(
+                "update app_user set status = 'ACTIVE' where id = ?::uuid").param(frank).update());
+        String role = post("/v1/roles", "{\"code\":\"FRAUD_ADMIN\",\"name\":\"Fraud admin\",\"is_privileged\":true,"
+                + "\"max_session_minutes\":60}", 201).get("id").asString();
+
+        // a request forged in workflow-service (or anywhere) has no recorded change: nothing is granted
+        ObjectNode forged = json.createObjectNode();
+        forged.put("id", UUID.randomUUID().toString());
+        forged.put("resource_type", "user_role");
+        forged.put("resource_id", frank);
+        forged.put("action", "elevate");
+        forged.put("status", "APPROVED");
+        forged.put("maker", "frank");
+        forged.set("payload", json.readTree("{\"user_id\":\"" + frank + "\",\"role_id\":\"" + role
+                + "\",\"duration_minutes\":10000000}"));
+        assertThat(exec(forged, "checker9")).isEqualTo("unknown_change");
+        assertThat(get("/v1/user-roles?user_id=" + frank + "&role_id=" + role, TENANT).get("data")).isEmpty();
+
+        // the payload of a real request is ignored: the recorded 30 minutes apply, not the tampered duration
+        postAs("/v1/user-roles/elevate", "{\"role_id\":\"" + role
+                + "\",\"duration_minutes\":30,\"justification\":\"INC-77\"}", 200, "frank");
+        ObjectNode approval = lastApproval.get().deepCopy();
+        approval.put("status", "APPROVED");
+        ((ObjectNode) approval.get("payload")).put("duration_minutes", 10000000);
+        ((ObjectNode) approval.get("payload")).put("role_id", UUID.randomUUID().toString());
+        // a different action on the same request id is refused
+        ObjectNode otherAction = approval.deepCopy();
+        otherAction.put("resource_type", "role");
+        otherAction.put("action", "add_permissions");
+        assertThat(exec(otherAction, "checker9")).isEqualTo("approval_mismatch");
+        assertThat(exec(approval, "frank")).isEqualTo("four_eyes_violation");
+        assertThat(exec(approval, "checker9")).isEqualTo("ok");
+        JsonNode granted = get("/v1/user-roles?user_id=" + frank + "&role_id=" + role, TENANT).get("data");
+        assertThat(granted).hasSize(1);
+        assertThat(OffsetDateTime.parse(granted.get(0).get("valid_to").asString()))
+                .isBefore(OffsetDateTime.now().plusMinutes(31));
+        assertThat(changeStatus(approval.get("id").asString())).isEqualTo("APPLIED");
+        assertThat(exec(approval, "checker9")).isEqualTo("ok"); // idempotent
+
+        // the elevation policy is re-checked at execution: the role's maximum shrank below the requested duration
+        String role2 = post("/v1/roles", "{\"code\":\"RISK_ADMIN\",\"name\":\"Risk admin\",\"is_privileged\":true,"
+                + "\"max_session_minutes\":60}", 201).get("id").asString();
+        postAs("/v1/user-roles/elevate", "{\"role_id\":\"" + role2
+                + "\",\"duration_minutes\":45,\"justification\":\"INC-78\"}", 200, "frank");
+        ObjectNode second = lastApproval.get().deepCopy();
+        second.put("status", "APPROVED");
+        TenantContext.callAs(UUID.fromString(TENANT), "t", () -> jdbc.sql(
+                "update role set max_session_minutes = 15 where id = ?::uuid").param(role2).update());
+        assertThat(exec(second, "checker9")).isEqualTo("invalid_duration");
+        assertThat(changeStatus(second.get("id").asString())).isEqualTo("PENDING");
+
+        // a rejected change can never be executed later
+        TenantContext.callAs(UUID.fromString(TENANT), "checker9", () -> {
+            approvals.closeUnapproved(new io.meridian.approvals.ApprovalDecision(UUID.fromString(second.get("id").asString()),
+                    "user_role", UUID.fromString(frank), "elevate", io.meridian.approvals.ApprovalDecision.Outcome.REJECTED,
+                    "frank", "checker9", second.get("payload"), second));
+            return null;
+        });
+        assertThat(changeStatus(second.get("id").asString())).isEqualTo("REJECTED");
+        assertThat(exec(second, "checker9")).isEqualTo("change_not_pending");
+    }
+
+    private String changeStatus(String approvalId) throws Exception {
+        return TenantContext.callAs(UUID.fromString(TENANT), "t", () -> jdbc.sql(
+                "select status from privileged_change where approval_request_id = ?::uuid").param(approvalId)
+                .query(String.class).single());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private long outboxCount(String eventType, String aggregateId) throws Exception {
