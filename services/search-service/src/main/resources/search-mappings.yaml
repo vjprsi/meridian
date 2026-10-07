@@ -1,0 +1,301 @@
+# Domain event -> search document mappings for the search-service indexing feed (DomainEventIndexListener).
+#
+# Every Meridian topic (meridian.<domain>.v1) carries binary CloudEvents whose payload is the owning entity's row
+# (see generated/asyncapi/meridian.asyncapi.yaml). A mapping selects events by exact ce_type (`events`) or by
+# resource prefix (`prefix`, minus `exclude`) and turns the payload into a normalised search document:
+#
+#   {doc_kind, title, subtitle, reference, last4, keywords[], identifiers[], status, lifecycle, customer_id,
+#    attributes{...}, source_event_type}
+#
+# Only the fields named below are ever copied (allow-list). Field names that denote card secrets, credentials,
+# national/tax identifiers, dates of birth, free-text narratives (SAR / case descriptions, AI summaries) or device
+# and location data are refused when the mappings load (FeedMappings.FORBIDDEN), and SAR events can never be mapped.
+#
+# Template syntax: a plain value is a payload field path ("display_name", "metadata.x"); a value containing {...} is
+# a template ("{first_name} {last_name}") and renders blank when all of its placeholders are blank.
+#   title       : alternatives, the first non-blank wins (display title, type-ahead)
+#   subtitle    : parts joined with " · " (blank parts skipped)
+#   reference   : alternatives, the first non-blank wins (primary business reference, searchable at boost 3)
+#   keywords    : searchable names and references (boost 2), shown to every caller
+#   identifiers : searchable account / phone / registration identifiers (boost 2), masked unless the caller has PII
+#   last4       : last four digits of a card (never the PAN)
+#   attributes  : extra fields copied for filters and display, not free-text searchable
+# Lifecycle:
+#   closed_events / closed_statuses : the document stays searchable with lifecycle CLOSED
+#   delete_events / delete_statuses / delete_when_present : the document is removed from the index
+#
+# The entity_type must be one of the spec enum SearchEntityType. Kinds without their own enum value yet
+# (loan_application, fraud_alert, card_dispute, complaint) are filed under the closest entity type and are
+# distinguishable with the filter {"doc_kind": "..."}.
+
+# Index definition auto-provisioned for a tenant on the first document of an entity type (when the tenant has not
+# defined one through POST /v1/search/indexes).
+index:
+  searchable_fields: [title^3, reference^3, last4^3, identifiers^2, keywords^2, subtitle, doc_kind, status]
+  masked_fields: [identifiers]
+
+# Event types (prefixes) that must never be indexed, whatever the mappings say.
+never_index: [risk.sar_report., risk.sar_]
+
+mappings:
+  - doc_kind: customer
+    entity_type: CUSTOMER
+    topic: meridian.party.v1
+    schema: Customer
+    events: [party.customer.created, party.customer.updated, party.customer.status_changed,
+             party.customer.tier_change_requested, party.customer.merged]
+    reference: [customer_number]
+    title: [display_name, "{first_name} {last_name}", legal_name, trading_name]
+    subtitle: [customer_number, customer_type, status]
+    keywords: [first_name, middle_name, last_name, name_local_script, legal_name, trading_name, lei]
+    identifiers: [external_ref, registration_number]
+    customer: id
+    attributes: [customer_type, kyc_tier, legal_entity_id, home_branch_id, relationship_manager_id]
+    closed_events: [party.customer.merged]
+    closed_statuses: [CLOSED, DECEASED]
+    delete_when_present: [erased_at]          # right to erasure: drop the document
+
+  - doc_kind: deposit_account
+    entity_type: DEPOSIT_ACCOUNT
+    topic: meridian.accounts.v1
+    schema: DepositAccount
+    events: [accounts.deposit_account.opened, accounts.deposit_account.activated,
+             accounts.deposit_account.status_changed, accounts.deposit_account.product_changed,
+             accounts.deposit_account.closed]
+    reference: [account_number]
+    title: ["{account_type} {account_number}"]
+    subtitle: [nickname, currency, status]
+    keywords: [nickname]
+    identifiers: [iban, bban, external_ref]
+    customer: customer_id
+    attributes: [account_type, currency, product_id, branch_id, legal_entity_id, opened_at, closed_at]
+    closed_events: [accounts.deposit_account.closed]
+    closed_statuses: [CLOSED, REJECTED]
+
+  - doc_kind: payment
+    entity_type: PAYMENT
+    topic: meridian.payments.v1
+    schema: Payment
+    events: [payments.payment.initiated, payments.payment.pending_approval, payments.payment.approved,
+             payments.payment.submitted, payments.payment.accepted, payments.payment.settled,
+             payments.payment.rejected, payments.payment.failed, payments.payment.cancelled,
+             payments.payment.received, payments.payment.returned]
+    reference: [reference, end_to_end_id, instruction_id]
+    title: ["{creditor_name}", "{payment_type} {reference}"]
+    subtitle: [reference, "{amount} {currency}", payment_type, status]
+    keywords: [debtor_name, creditor_name, end_to_end_id, uetr, instruction_id, transaction_id, clearing_system_ref]
+    identifiers: [debtor_account_number, creditor_account_number]
+    customer: customer_id
+    attributes: [payment_type, direction, channel, amount, currency, value_date, requested_execution_date, rail_code,
+                 debtor_account_id, creditor_account_id, debtor_wallet_id, creditor_wallet_id, bulk_payment_id,
+                 rejection_code]
+    closed_statuses: [SETTLED, REJECTED, RETURNED, FAILED, CANCELLED]
+
+  - doc_kind: card
+    entity_type: CARD
+    topic: meridian.cards.v1
+    schema: Card
+    events: [cards.card.created, cards.card.activated, cards.card.status_changed, cards.card.renewed,
+             cards.card.expiring]
+    title: ["{cardholder_name} •••• {last4}", "Card •••• {last4}"]
+    subtitle: [form_factor, "exp {expiry_month}/{expiry_year}", status]
+    last4: last4                              # masked only: last four digits, never PAN / token / fingerprint
+    keywords: [cardholder_name, nickname]
+    customer: customer_id
+    attributes: [form_factor, card_program_id, card_product_id, linked_account_type, deposit_account_id, wallet_id,
+                 credit_line_id, expiry_month, expiry_year, business_customer_id]
+    closed_statuses: [CLOSED, EXPIRED, REPLACED]
+
+  - doc_kind: loan
+    entity_type: LOAN
+    topic: meridian.lending.v1
+    schema: Loan
+    events: [lending.loan.created, lending.loan.paid_off, lending.loan.closed, lending.loan.cancelled]
+    reference: [loan_number]
+    title: ["{loan_type} loan {loan_number}"]
+    subtitle: ["{principal_amount} {currency}", status]
+    customer: customer_id
+    attributes: [loan_type, currency, principal_amount, product_id, loan_application_id, days_past_due,
+                 delinquency_bucket, maturity_date, branch_id]
+    closed_events: [lending.loan.paid_off, lending.loan.closed, lending.loan.cancelled]
+    closed_statuses: [PAID_OFF, CLOSED, WRITTEN_OFF, CHARGED_OFF, CANCELLED]
+
+  - doc_kind: loan_application            # spec gap: no LOAN_APPLICATION in SearchEntityType yet
+    entity_type: LOAN
+    topic: meridian.lending.v1
+    schema: LoanApplication
+    events: [lending.loan_application.created, lending.loan_application.submitted,
+             lending.loan_application.status_changed, lending.loan_application.assigned,
+             lending.loan_application.withdrawn, lending.loan_application.booked, lending.loan_application.expired]
+    reference: [application_number]
+    title: ["Loan application {application_number}"]
+    subtitle: ["{requested_amount} {currency}", loan_type, status]
+    customer: customer_id
+    attributes: [loan_type, requested_amount, currency, requested_term_months, channel, product_id, loan_id,
+                 assigned_to, merchant_id, agent_id]
+    closed_events: [lending.loan_application.withdrawn, lending.loan_application.expired]
+    closed_statuses: [DECLINED, WITHDRAWN, EXPIRED, CANCELLED, BOOKED, DISBURSED]
+
+  - doc_kind: wallet
+    entity_type: WALLET
+    topic: meridian.wallets.v1
+    schema: Wallet
+    events: [wallets.wallet.created, wallets.wallet.status_changed, wallets.wallet.tier_upgraded,
+             wallets.wallet.pin_changed, wallets.wallet.pin_locked]
+    reference: [wallet_number]
+    title: [display_name, "{wallet_type} wallet {wallet_number}"]
+    subtitle: [wallet_number, wallet_type, currency, status]
+    keywords: [display_name, alias]
+    identifiers: [msisdn]
+    customer: customer_id
+    attributes: [wallet_type, currency, kyc_tier, agent_id, merchant_id, is_default]
+    closed_statuses: [CLOSED]
+
+  - doc_kind: wallet_transaction
+    entity_type: WALLET_TRANSACTION
+    topic: meridian.wallets.v1
+    schema: WalletTransaction
+    events: [wallets.wallet_transaction.initiated, wallets.wallet_transaction.completed,
+             wallets.wallet_transaction.failed, wallets.wallet_transaction.cancelled,
+             wallets.wallet_transaction.reversal_requested, wallets.wallet_transaction.reversed]
+    reference: [reference]
+    title: ["{payee_name}", "{txn_type} {reference}"]
+    subtitle: [reference, txn_type, "{amount} {currency}", status]
+    keywords: [payee_name, payee_external_ref]
+    identifiers: [payee_msisdn]
+    attributes: [txn_type, channel, amount, currency, payer_wallet_id, payee_wallet_id, agent_id, merchant_id,
+                 payment_id, loan_id, completed_at, failure_code]
+
+  - doc_kind: merchant
+    entity_type: MERCHANT
+    topic: meridian.wallets.v1
+    schema: Merchant
+    events: [wallets.merchant.onboarded, wallets.merchant.status_changed]
+    reference: [merchant_code]
+    title: [trading_name, legal_name]
+    subtitle: [merchant_code, city, status]
+    keywords: [legal_name, trading_name, contact_name, city]
+    identifiers: [contact_msisdn, contact_email, registration_number]
+    customer: customer_id
+    attributes: [merchant_type, mcc, city, country, currency, risk_rating, acquiring_agent_id]
+    closed_statuses: [TERMINATED]
+
+  - doc_kind: agent
+    entity_type: AGENT
+    topic: meridian.wallets.v1
+    schema: Agent
+    events: [wallets.agent.onboarded, wallets.agent.status_changed, wallets.agent.commission_plan_assigned]
+    reference: [agent_code]
+    title: [trading_name, legal_name]
+    subtitle: [agent_code, agent_level, status]
+    keywords: [legal_name, trading_name, contact_name]
+    identifiers: [contact_msisdn, contact_email, registration_number]
+    customer: customer_id
+    attributes: [agent_level, parent_agent_id, super_agent_id, branch_id, kyc_status, risk_rating]
+    closed_statuses: [TERMINATED]
+
+  - doc_kind: aml_case
+    entity_type: AML_CASE
+    topic: meridian.risk.v1
+    schema: AmlCase
+    events: [risk.aml_case.opened, risk.aml_case.assigned, risk.aml_case.escalated, risk.aml_case.closed,
+             risk.aml_case.reopened]
+    reference: [case_number]
+    title: [title, "AML case {case_number}"]          # never description / ai_summary (investigation narrative)
+    subtitle: [case_number, case_type, priority, status]
+    customer: customer_id
+    attributes: [case_type, priority, team, assigned_to, currency, total_amount, opened_at, due_at]
+    closed_events: [risk.aml_case.closed]
+    closed_statuses: [CLOSED]
+
+  - doc_kind: fraud_alert                 # spec gap: no FRAUD_ALERT in SearchEntityType yet
+    entity_type: AML_CASE
+    topic: meridian.risk.v1
+    schema: FraudAlert
+    events: [risk.fraud_alert.raised, risk.fraud_alert.assigned, risk.fraud_alert.customer_contacted,
+             risk.fraud_alert.escalated, risk.fraud_alert.resolved]
+    title: ["Fraud alert {typology}", "Fraud alert"]
+    subtitle: [severity, "{amount} {currency}", status]
+    keywords: [typology]
+    customer: customer_id
+    attributes: [severity, subject_type, subject_id, amount, currency, assigned_to, aml_case_id, sla_due_at]
+    closed_events: [risk.fraud_alert.resolved]
+    closed_statuses: [CLOSED, FALSE_POSITIVE]
+
+  - doc_kind: card_dispute                # spec gap: no DISPUTE in SearchEntityType yet
+    entity_type: SERVICE_CASE
+    topic: meridian.cards.v1
+    schema: CardDispute
+    events: [cards.card_dispute.opened, cards.card_dispute.stage_changed,
+             cards.card_dispute.provisional_credit_granted, cards.card_dispute.provisional_credit_reversed,
+             cards.card_dispute.deadline_approaching, cards.card_dispute.closed]
+    reference: [scheme_case_id]
+    title: ["Card dispute {reason_code} {category}", "Card dispute"]   # never customer_description / ai_summary
+    subtitle: [stage, "{disputed_amount} {currency}", status]
+    keywords: [scheme_case_id, reason_code, category]
+    customer: customer_id
+    attributes: [card_id, category, scheme, stage, disputed_amount, currency, assigned_to, regulatory_deadline,
+                 outcome]
+    closed_events: [cards.card_dispute.closed]
+    closed_statuses: [WON, LOST, WITHDRAWN, EXPIRED]
+
+  - doc_kind: service_case
+    entity_type: SERVICE_CASE
+    topic: meridian.servicing.v1
+    schema: ServiceCase
+    events: [servicing.service_case.created, servicing.service_case.status_changed,
+             servicing.service_case.reopened, servicing.service_case.assigned, servicing.service_case.escalated,
+             servicing.service_case.sla_breached, servicing.service_case.resolved, servicing.service_case.closed]
+    reference: [case_number]
+    title: [subject, "{case_type} case {case_number}"]   # never description / resolution_summary
+    subtitle: [case_number, case_type, priority, status]
+    customer: customer_id
+    attributes: [case_type, subtype, priority, channel, assigned_to, work_queue_id, related_object_type,
+                 related_object_id, complaint_id, resolution_due_at]
+    closed_events: [servicing.service_case.closed]
+    closed_statuses: [CLOSED, CANCELLED]
+
+  - doc_kind: complaint                   # spec gap: no COMPLAINT in SearchEntityType yet
+    entity_type: SERVICE_CASE
+    topic: meridian.servicing.v1
+    schema: Complaint
+    events: [servicing.complaint.received, servicing.complaint.acknowledged, servicing.complaint.assigned,
+             servicing.complaint.resolution_proposed, servicing.complaint.withdrawn, servicing.complaint.closed,
+             servicing.complaint.deadline_breached, servicing.complaint.deadline_at_risk,
+             servicing.complaint.resolved, servicing.complaint.escalated]
+    reference: [complaint_number]
+    title: ["Complaint {complaint_number}"]      # never summary / details (customer narrative)
+    subtitle: [category, status]
+    keywords: [category, ombudsman_reference]
+    customer: customer_id
+    attributes: [category, channel, country, product_id, service_case_id, assigned_to, final_response_due_at]
+    closed_events: [servicing.complaint.withdrawn, servicing.complaint.closed]
+    closed_statuses: [CLOSED, REJECTED]
+
+  - doc_kind: document
+    entity_type: DOCUMENT
+    topic: meridian.platform.v1
+    schema: Document
+    events: [platform.document.uploaded, platform.document.quarantined, platform.document.expiring,
+             platform.document.archived, platform.document.legal_hold_placed, platform.document.legal_hold_lifted,
+             platform.document.deleted]
+    title: ["{document_type} {file_name}"]       # never document_number (passport / ID numbers)
+    subtitle: [document_type, classification, status]
+    keywords: [file_name, document_type]
+    attributes: [owner_type, owner_id, document_type, content_type, classification, expires_on, legal_hold]
+    closed_statuses: [ARCHIVED]
+    delete_events: [platform.document.deleted]
+    delete_statuses: [DELETED]
+
+  - doc_kind: ledger_account
+    entity_type: LEDGER_ACCOUNT
+    topic: meridian.ledger.v1
+    schema: LedgerAccount
+    events: [ledger.ledger_account.created, ledger.ledger_account.status_changed,
+             ledger.ledger_account.overdraft_limit_changed]
+    reference: [code]
+    title: [name, code]
+    subtitle: [code, account_type, currency, status]
+    keywords: [name]
+    attributes: [account_type, currency, ledger_id, owner_type, owner_id, normal_balance]
+    closed_statuses: [CLOSED]

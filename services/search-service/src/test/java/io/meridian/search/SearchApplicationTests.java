@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 /** Boots the service against real PostgreSQL 18 and Kafka; Flyway applies the generated schema. */
-@SpringBootTest(properties = "meridian.events.relay-enabled=false")
+@SpringBootTest(properties = {"meridian.events.relay-enabled=false", "meridian.search.indexer.enabled=false"})
 @Import(MeridianTestContainers.class)
 class SearchApplicationTests {
 

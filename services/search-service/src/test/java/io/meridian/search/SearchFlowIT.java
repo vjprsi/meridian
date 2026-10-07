@@ -30,7 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
  * zero-downtime reindex with alias swap, catch-up, health and tenant isolation.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev", "meridian.search.batch-size=2"})
+        properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev", "meridian.search.batch-size=2",
+                "meridian.search.indexer.enabled=false"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
