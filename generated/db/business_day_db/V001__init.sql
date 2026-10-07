@@ -351,6 +351,7 @@ CREATE TABLE eod_job_run (
   duration_ms                  bigint,
   records_processed            bigint,
   records_failed               bigint,
+  result                       jsonb,
   checkpoint                   jsonb,
   error_code                   varchar(64),
   error                        text,
@@ -380,6 +381,7 @@ COMMENT ON COLUMN eod_job_run.finished_at IS 'End time';
 COMMENT ON COLUMN eod_job_run.duration_ms IS 'Duration';
 COMMENT ON COLUMN eod_job_run.records_processed IS 'Records processed';
 COMMENT ON COLUMN eod_job_run.records_failed IS 'Records failed';
+COMMENT ON COLUMN eod_job_run.result IS 'Summary returned by the job target (truncated), e.g. counts accrued/posted/expired';
 COMMENT ON COLUMN eod_job_run.checkpoint IS 'Last checkpoint for restart';
 COMMENT ON COLUMN eod_job_run.error_code IS 'Error code';
 COMMENT ON COLUMN eod_job_run.error IS 'Error details';

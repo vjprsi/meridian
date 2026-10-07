@@ -260,11 +260,11 @@ public class EodOrchestrator {
                 rows.update("""
                         update eod_job_run set status = 'SUCCEEDED', finished_at = now(), duration_ms = ?,
                                records_processed = ?, records_failed = ?, checkpoint = coalesce(?::jsonb, checkpoint),
-                               error_code = null, error = null
+                               result = ?::jsonb, error_code = null, error = null
                         where id = ?""",
-                        elapsedMs(start), longOrNull(res, "records_processed"), longOrNull(res, "records_failed"),
+                        elapsedMs(start), JobResults.processed(res), JobResults.failed(res),
                         res != null && res.hasNonNull("checkpoint") ? json.writeValueAsString(res.get("checkpoint")) : null,
-                        p.id());
+                        JobResults.summary(res, json), p.id());
                 return;
             } catch (ApiException e) {
                 errorCode = e.code();

@@ -6389,6 +6389,7 @@ API: /v1/operations/eod-job-runs · Requirements: OPS-01
 | duration_ms | bigint | yes |  | duration_ms (read-only) | Duration |
 | records_processed | bigint | yes |  | records_processed (read-only) | Records processed |
 | records_failed | bigint | yes |  | records_failed (read-only) | Records failed |
+| result | jsonb | yes |  | result (read-only) | Summary returned by the job target (truncated), e.g. counts accrued/posted/expired |
 | checkpoint | jsonb | yes |  | checkpoint (read-only) | Last checkpoint for restart |
 | error_code | varchar(64) | yes |  | error_code (read-only) | Error code |
 | error | text | yes |  | error (read-only) | Error details |
