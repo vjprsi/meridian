@@ -93,7 +93,26 @@ export function loadSession(): Session | null {
   }
 }
 
+const CACHE_OWNER_KEY = "meridian.agentapp.cacheOwner";
+
+/**
+ * SEC-33: the service worker's reference-data cache belongs to one tenant + agent. When a different identity signs
+ * in on this device (shared outlet tablets), the cache of the previous one is dropped before anything is shown.
+ */
+function claimReferenceCache(s: Session) {
+  const owner = `${s.tenantId}:${s.agentId ?? s.userId}`;
+  try {
+    if (window.localStorage.getItem(CACHE_OWNER_KEY) !== owner) {
+      navigator.serviceWorker?.controller?.postMessage({ type: "clear-ref" });
+      window.localStorage.setItem(CACHE_OWNER_KEY, owner);
+    }
+  } catch {
+    navigator.serviceWorker?.controller?.postMessage({ type: "clear-ref" });
+  }
+}
+
 export function saveSession(s: Session | null) {
+  if (s) claimReferenceCache(s);
   try {
     if (s) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
     else window.sessionStorage.removeItem(SESSION_KEY);

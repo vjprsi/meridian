@@ -64,12 +64,15 @@ function KeyValues({ rows, onChange, keyLabel }: { rows: Row[]; onChange: (r: Ro
 
 function TryIt() {
   const params = useSearchParams();
-  const [method, setMethod] = useState<string>(params.get("method")?.toUpperCase() ?? "GET");
+  // SEC-22: a link may pre-fill a read, never a write (a crafted URL must not stage a state-changing call with the
+  // developer's token); write bodies are never taken from the URL.
+  const [method, setMethod] = useState<string>(
+    ["GET", "HEAD"].includes(params.get("method")?.toUpperCase() ?? "") ? params.get("method")!.toUpperCase() : "GET");
   const [path, setPath] = useState(params.get("path") ?? "/v1/customers");
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
   const [query, setQuery] = useState<Row[]>(params.get("path") ? [] : [{ key: "limit", value: "10" }]);
   const [headers, setHeaders] = useState<Row[]>([]);
-  const [body, setBody] = useState(params.get("body") ?? "");
+  const [body, setBody] = useState("");
   const [idemOn, setIdemOn] = useState(true);
   const [idemKey, setIdemKey] = useState("");
   const [ifMatch, setIfMatch] = useState("");
