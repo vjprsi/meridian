@@ -3,9 +3,6 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths as MePaths } from "./gen/customer-channel";
 import type { paths as CustomerPaths } from "./gen/customer";
-import type { paths as OnboardingPaths } from "./gen/onboarding";
-import type { paths as KycPaths } from "./gen/kyc";
-import type { paths as DocumentPaths } from "./gen/document";
 import { authHeaders } from "@/lib/auth";
 
 /** RFC 9457 problem returned by every Meridian service. */
@@ -20,7 +17,8 @@ export interface Problem {
 }
 
 export class ApiError extends Error {
-  constructor(public problem: Problem) {
+  /** Seconds to wait before retrying (429: Retry-After header or a server hint), when known. */
+  constructor(public problem: Problem, public retryAfterS?: number) {
     super(problem.detail ?? problem.title ?? "Request failed");
   }
 }
@@ -50,13 +48,10 @@ function client<P extends object>() {
  * `me` is the customer channel (/v1/me/*, customer-channel-service): every signed-in screen uses only this client.
  * The server takes the customer from the token (dev: X-Customer-Id), checks that every referenced object is theirs,
  * builds the request bodies itself and requires a recent sign-in for money movement (401 step_up_required).
- * The other clients serve sign-up (before a customer exists) and the dev-mode customer picker only.
+ * `customers` serves the dev-mode customer picker only. Sign-up has its own unauthenticated client (src/api/applicant.ts).
  */
 export const me = client<MePaths>();
 export const customers = client<CustomerPaths>();
-export const onboarding = client<OnboardingPaths>();
-export const kyc = client<KycPaths>();
-export const documents = client<DocumentPaths>();
 
 /** Idempotency-Key header for a write; pass a key held for the whole confirmation to make resubmits safe. */
 export function idem(key?: string): { "Idempotency-Key": string } {
@@ -104,7 +99,7 @@ export async function download(path: string, filename: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function sha256Hex(buf: ArrayBuffer): Promise<string> {
+export async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", buf);
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -128,33 +123,6 @@ export async function uploadMyDocument(file: File, documentType: MyDocumentType)
   if (!put.ok) throw new ApiError({ status: put.status, title: "Upload failed", detail: put.statusText });
   unwrap(await me.POST("/v1/me/documents/{document_id}/complete-upload", {
     params: { path: { document_id: doc.id! }, header: idem() }, body: { size_bytes: bytes.byteLength, checksum: await sha256Hex(bytes) },
-  }));
-  return doc.id!;
-}
-
-type DocumentType = NonNullable<DocumentPaths["/v1/documents"]["post"]["requestBody"]>["content"]["application/json"]["document_type"];
-
-/**
- * Sign-up only (no customer yet): stores a file in document-service: create the document record, PUT the bytes to the pre-signed URL, then confirm
- * with size and SHA-256 (which starts virus scanning). Returns the document id.
- */
-export async function uploadDocument(file: File, ownerType: string, ownerId: string, documentType: DocumentType,
-  headers?: Record<string, string>):
-  Promise<string> {
-  const doc = unwrap(await documents.POST("/v1/documents", {
-    params: { header: idem() }, headers,
-    body: { owner_type: ownerType, owner_id: ownerId, document_type: documentType, file_name: file.name,
-      content_type: file.type || "application/octet-stream", classification: "CONFIDENTIAL", uploaded_via: "WEB" },
-  }));
-  const target = unwrap(await documents.POST("/v1/documents/{id}/upload-url", {
-    params: { path: { id: doc.id! }, header: idem() }, headers })) as
-    { method?: string; url?: string; headers?: Record<string, string> };
-  if (!target.url) throw new ApiError({ detail: "Upload URL missing from document-service response" });
-  const bytes = await file.arrayBuffer();
-  const put = await fetch(target.url, { method: target.method ?? "PUT", headers: target.headers ?? {}, body: bytes });
-  if (!put.ok) throw new ApiError({ status: put.status, title: "Upload failed", detail: put.statusText });
-  unwrap(await documents.POST("/v1/documents/{id}/complete-upload", {
-    params: { path: { id: doc.id! }, header: idem() }, headers, body: { size_bytes: bytes.byteLength, checksum: await sha256Hex(bytes) },
   }));
   return doc.id!;
 }

@@ -1,5 +1,5 @@
 import type { components as Me } from "./gen/customer-channel";
-import type { components as On } from "./gen/onboarding";
+import type { components as On } from "./gen/onboarding-public";
 
 type S = Me["schemas"];
 
@@ -44,10 +44,38 @@ export type MyPayment = S["MyPaymentsCreateRequest"];
 export type MyPayee = S["MyPayeesCreateRequest"];
 export type MyStandingOrder = S["MyStandingOrdersCreateRequest"];
 
-/** Sign-up (no customer yet). */
-export type OnboardingJourney = On["schemas"]["OnboardingJourney"];
+/** Sign-up (no customer yet): models of the public applicant surface of onboarding-service. */
 export type OnboardingApplication = On["schemas"]["OnboardingApplication"];
 export type OnboardingStep = On["schemas"]["OnboardingStep"];
+export type OnboardingOtp = On["schemas"]["OnboardingOtp"];
+export type OnboardingApplicantToken = On["schemas"]["OnboardingApplicantToken"];
+
+/**
+ * A typed field of a journey step as next-step returns it (the contract types `fields` as untyped items; shape from
+ * onboarding-service StepField.toJson: null members are omitted).
+ */
+export interface StepFieldDef {
+  name: string;
+  type: "STRING" | "TEXT" | "INTEGER" | "DECIMAL" | "BOOLEAN" | "DATE" | "EMAIL" | "PHONE" | "COUNTRY" | "ENUM" | "DOCUMENT";
+  label_key: string;
+  required: boolean;
+  pattern?: string;
+  enum?: string[];
+  min_length?: number;
+  max_length?: number;
+  min?: number | string;
+  max?: number | string;
+}
+
+/** Response of the public documents action: the registered document and its pre-signed upload. */
+export interface ApplicantUpload {
+  document_id: string;
+  step_code?: string;
+  method?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  expires_at?: string;
+}
 
 /** Response of GET /v1/me/insights/spending (untyped in the contract; shape from insights-service). */
 export interface SpendingByCategory {
