@@ -14,7 +14,7 @@ class HeaderPolicyTest {
         HeaderPolicy dev = new HeaderPolicy("dev", List.of());
         for (String h : List.of("X-Tenant-Id", "x-user", "X-Roles", "X-MFA-Verified", "X-Customer-Id",
                 "X-On-Behalf-Of-Customer", "X-Meridian-Service", "X-Auth-Time", "X-Acr", "X-Permissions",
-                "X-Caller-Service", "X-Agent-Id")) {
+                "X-Caller-Service", "X-Agent-Id", "X-Business-Customer-Id", "X-Business-User-Id")) {
             assertThat(jwt.forward(h)).as(h).isFalse();
             assertThat(dev.forward(h)).as(h).isTrue();
         }

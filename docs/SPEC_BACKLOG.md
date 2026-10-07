@@ -152,6 +152,29 @@ server-verifiable PIN-unlock proof, a reference filter on agent transactions, mi
 super-agents over their sub-agents (today read-only), Ed25519 in the app once WebCrypto support is universal, and
 gateway stripping of dev headers (X-Agent-Id, X-Auth-Time) in front of JWT-mode services.
 
+## Business channel (S19 business banking portal)
+
+Done (2026-10-07): `business-channel-service` (/v1/business, scope channels:business, business_customer_id +
+business_user_id claims, Keycloak client meridian-business-portal), business-user model in the channel (roles,
+entitlements, approval matrix, daily limits), multi-level approvals with release only after the final approval
+(idempotent), bulk / payroll CSV validation, FX binding, object-level authorization with denial audit/events,
+web/business-portal on /v1/business only. Remaining:
+- First admin is bootstrapped on first sign-in (trust in the IdP's admin-only attributes); a bank-side
+  "provision business admin" operation (staff scope) would remove that reliance.
+- API clients created for a business get only `meridian.business.api-client-scopes` (default channels:business, which
+  must exist in identity-service's scope catalogue); machine-to-machine business access (client-credentials tokens
+  bound to a business) needs a business-scoped API surface first.
+- Webhook subscriptions are filtered on the payload's `customer_id`; events without it (collections, virtual account
+  credits) are never delivered to business endpoints.
+- Loan repayments, credit-line draws, mandates, collections, virtual accounts and payment links act immediately (role +
+  entitlement + step-up) instead of going through the approval matrix.
+- The daily limit counts submissions per UTC day (not the business date) in the limit currency only.
+- PAYROLL batches are sent as CSV, so payment-service does not get category purpose SALA; per-line execution status is
+  only available through the report.
+- Payment-service approval levels the business's approvers cannot satisfy remain with the bank's staff; the portal
+  shows `downstream_status`.
+- KYB onboarding screens still use the staff/public onboarding APIs (not the channel).
+
 ## Resume point (paused 2026-10-07)
 
 - Full build after the e2e fixes: only billing-service BillingFlowIT fails (issueAndPayInvoice,

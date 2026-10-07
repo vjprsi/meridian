@@ -3,6 +3,7 @@ package io.meridian.web.client;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.security.AgentContext;
+import io.meridian.web.security.BusinessContext;
 import io.meridian.web.security.CustomerContext;
 import java.io.IOException;
 import java.io.InputStream;
@@ -150,9 +151,10 @@ public class ServiceClient {
                 throw new ApiException(503, "service_identity_not_configured",
                         "Calling " + service + " as this service needs meridian.service-auth.* (client credentials)");
             }
-        } else if (customer || AgentContext.current().isPresent()) {
+        } else if (customer || AgentContext.current().isPresent() || BusinessContext.current().isPresent()) {
             // the customer the service acts for; receivers honour it only with an internal (service) token.
-            // An agent's token is never forwarded either (agent channel): service identity, X-User agent:<id>.
+            // An agent's or a business user's token is never forwarded either (agent / business channel): service
+            // identity, X-User agent:<id> / business-user:<id>.
             if (customer) {
                 b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
             }
@@ -163,7 +165,8 @@ public class ServiceClient {
                 b.header("Authorization", "Bearer " + serviceTokens.token());
             } else if (auth != null) {
                 throw new ApiException(503, "service_identity_not_configured",
-                        "Customer and agent requests need meridian.service-auth.* (client credentials) to call " + service);
+                        "Customer, agent and business requests need meridian.service-auth.* (client credentials) to call "
+                                + service);
             }
         } else {
             // dev-mode caller attributes (roles, step-up MFA): receivers only honour them in dev mode; with JWTs the

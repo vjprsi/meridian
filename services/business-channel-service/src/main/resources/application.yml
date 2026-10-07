@@ -1,0 +1,75 @@
+# business-channel-service (Customer, Agent and Business Channels): business banking portal BFF (/v1/business).
+# Defaults target the local stack in infra/local; override with env vars in other environments (e.g. SPRING_DATASOURCE_URL). Security mode is jwt unless MERIDIAN_SECURITY_MODE=dev.
+server:
+  port: 9166
+  shutdown: graceful
+
+spring:
+  application:
+    name: business-channel-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:15432/business_channel_db?currentSchema=business_channel
+    username: meridian_app
+    password: meridian_app
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    user: meridian
+    password: meridian
+    schemas: business_channel
+    default-schema: business_channel
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:15180/realms/meridian
+
+meridian:
+  security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
+                              # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
+  events:
+    topic: meridian.channels.v1
+  business:
+    step-up-max-age: PT5M     # approvals, money movement and administration need an authentication at most this old
+    step-up-acr: []           # e.g. [gold] to also require a strong acr from the identity provider
+    bootstrap-first-admin: true   # the first portal user of a business without users becomes its ADMIN
+    default-required-approvals: 1 # when no rule of the business's approval matrix matches (never below 1)
+    max-batch-lines: 5000
+    max-batch-bytes: 2000000
+    api-client-scopes: [channels:business]
+    webhook-event-types: [payments.payment.*, payments.bulk_payment.*, payments.payment_mandate.*]
+  # JWT mode: the channel never forwards a business user's token; it calls the domain services with this service
+  # identity for the business's tenant (required, else business requests fail with 503 service_identity_not_configured).
+  # service-auth:
+  #   token-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/token
+  #   client-id: meridian-service
+  #   client-secret: meridian-service-secret
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: business-channel-service
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:14318/v1/metrics
+  tracing:
+    sampling:
+      probability: 1.0

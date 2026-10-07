@@ -125,6 +125,14 @@ ServiceClient never forwards it either (service token, `X-User: agent:<id>`). `c
 wildcard or admin shortcut); never add it to a domain operation. A service in a channel domain can declare its own
 `scope:` in the spec (generate.py), which overrides the domain scope for its operations.
 
+Business requests (`business-channel-service`, `/v1/business/*`): a business portal token (scope `channels:business`,
+claims `business_customer_id` and `business_user_id`) is bound as `io.meridian.web.security.BusinessContext`
+(`BusinessContext.businessCustomerId()`, `businessUserId()`, `require().authTime()`; dev mode: `X-Business-Customer-Id`
+/ `X-Business-User-Id` / `X-Auth-Time`; never for internal, customer or agent tokens). ServiceClient never forwards it
+(service token, `X-User: business-user:<id>`). The channel acts as another portal user of the same business (the maker
+of a payment it releases, its approvers) with `TenantContext.callAs`, so downstream four-eyes compares real people.
+`channels:business` is exact like the other channel scopes; never add it to a domain operation.
+
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
 people) and `TenantContext.via()` names the relaying service client. Without `X-User` the principal is
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed
@@ -327,6 +335,7 @@ limits, sanctions and product-catalog services.
   service set it too (a test can still pick `jwt` in `@SpringBootTest(properties=...)`). Dev mode refuses to start in a
   Kubernetes pod unless `meridian.security.allow-dev-mode-in-cluster=true`. In jwt mode the edge gateway strips the
   internal identity headers (`X-Tenant-Id`, `X-User`, `X-Roles`, `X-MFA-Verified`, `X-Customer-Id`, `X-Agent-Id`,
+  `X-Business-Customer-Id`, `X-Business-User-Id`,
   `X-Auth-Time`, `X-Acr`, `X-On-Behalf-Of-Customer`, `X-Meridian-Service`, ...) and owns `X-Forwarded-For`.
 - **Tokens.** Every access token must carry the audience `meridian-api` (or the service name):
   `meridian.security.audiences`; restrict clients per service with `meridian.security.allowed-clients`.

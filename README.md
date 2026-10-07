@@ -183,6 +183,56 @@ npm run test:e2e       # Playwright smoke against the build with the API mocked 
   live verification is refused offline. Limits (`NEXT_PUBLIC_OFFLINE_MAX_AMOUNT` / `_MAX_TOTAL` / `_MAX_COUNT` /
   `_MAX_HOURS`, defaults 5000 / 20000 / 10 / 12 h) and the last known float bound what can be queued.
 
+## Business banking portal
+
+`web/business-portal` is the business banking portal for SME owners and finance teams (Next.js / React Query /
+openapi-fetch / oidc-client-ts, staff-style security headers per SEC-22) on http://localhost:13500:
+
+```bash
+cd web/business-portal
+npm install
+npm run dev            # or: npm run build && npm start
+npm run gen:api        # typed client for the business channel (/v1/business, business-channel-service) only
+npm run test:e2e       # Playwright smoke with the API mocked (two-approver flow with step-up, entitlement denial)
+```
+
+- Sign in with Keycloak (realm `meridian`, public PKCE client `meridian-business-portal`, no password grant) or dev
+  mode (`X-Tenant-Id` / `X-Business-Customer-Id` / `X-Business-User-Id` / `X-Auth-Time`). Demo users
+  `demo.business.admin` / `Meridian#Business2026` and `demo.business.approver` / `Meridian#Approver2026`: set their
+  admin-only `business_customer_id` attribute to a COMPANY customer of the demo tenant. The first user who signs in for
+  a business without portal users becomes its ADMIN; the admin adds the approver (Users, role APPROVER) and an IdP
+  administrator sets the returned id as the approver's `business_user_id` attribute.
+- Screens: cash position, accounts (transactions, statements, CSV / camt.053 export), payments (draft, submit, approval
+  queue, approve / reject with step-up, release retry), bulk and payroll CSV upload, payees, direct-debit mandates and
+  collections, FX quotes and international payments, virtual accounts and payment links, expense cards, loans and
+  credit lines, users / roles / entitlements / approval matrix, API clients, keys and webhooks, security log.
+
+## Business channel (/v1/business)
+
+Business users never call the domain services. `business-channel-service` (domain `channels`, service scope
+`channels:business`) is the experience API behind `/v1/business/*`, built like the customer and agent channels.
+
+- Identity: a business token carries scope `channels:business` and the claims `business_customer_id` (the business, a
+  non-individual customer) and `business_user_id` (Keycloak client `meridian-business-portal`: admin-only user
+  attributes, plus `auth_time` / `acr`). `libs/meridian-web` binds it as `BusinessContext` (dev mode:
+  `X-Business-Customer-Id`, `X-Business-User-Id`, `X-Auth-Time`; never for internal, customer or agent tokens; the edge
+  gateway drops these headers in jwt mode). The channel's own `business_user` record is authoritative: the user must
+  exist for that business and be ACTIVE (403 otherwise); roles and entitlements never come from the token.
+- Business-user model (owned by the channel, not customer-service, which only has signatories and relationships):
+  roles ADMIN / MAKER / APPROVER / VIEWER, per-user account entitlements (view, initiate, approve, per-payment cap),
+  per-user daily limits, and the approval matrix (amount bands per currency for single and/or bulk payments, number of
+  approvers, any-order or sequential named approvers; bands may not overlap; self-approval is never possible).
+- Payments, bulk payments and payroll: drafted (body rebuilt server-side, content checksum) and submitted by an
+  entitled MAKER / ADMIN (cap and daily limit checked under a lock), approved by entitled APPROVER / ADMIN users with
+  step-up, released to payment-service only after the final approval, as the maker (`X-User: business-user:<id>`) with
+  the key `bzp-release:<id>` (a retry never creates a second payment); business approvals are relayed to
+  payment-service's own approval levels as the approvers. FX quotes are priced for the business and bound to one
+  payment (SEC-04).
+- Object-level authorization on every reference (accounts, payees, payments, mandates, collections, virtual accounts,
+  payment links, cards, loans, credit lines, FX quotes, statements; API clients and webhook endpoints through the
+  channel's ownership table): another business's object answers 404, audited (`business_action`) and published
+  (`channels.business_action.denied`). Webhook subscriptions always carry `customer_id == "<business>"`.
+
 ## Agent channel (/v1/agent)
 
 Agents never call the domain services. `agent-channel-service` (domain `channels`, service scope `channels:agent`) is

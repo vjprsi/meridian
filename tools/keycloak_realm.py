@@ -20,6 +20,10 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
   meridian-agent-app         public, authorization code + PKCE (agent outlet app); only channels:agent plus
                              openid/profile; tokens carry agent_id and tenant_id from admin-only user attributes and
                              auth_time / acr (money movement needs a recent login or a device proof)
+  meridian-business-portal   public, authorization code + PKCE (business banking portal); only channels:business plus
+                             openid/profile; tokens carry business_customer_id, business_user_id and tenant_id from
+                             admin-only user attributes and auth_time / acr (approvals and administration need a recent
+                             authentication); no password grant
   meridian-service           confidential, client credentials, every staff scope + meridian:internal + platform:operator
                              (service-to-service)
   meridian-readonly          confidential, client credentials, read scopes only (authorisation tests)
@@ -33,6 +37,12 @@ Users:
   demo.customer      customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant
   demo.agent         agent demo user (agent-app, Meridian#Agent2026); set its agent_id attribute to an ACTIVE agent of
                      the demo tenant
+  demo.business.admin     business portal admin (Meridian#Business2026); business_customer_id = a business customer
+                          (customer_type not INDIVIDUAL) of the demo tenant. The first user who signs in for a business
+                          with no portal users becomes its ADMIN (meridian.business.bootstrap-first-admin).
+  demo.business.approver  business portal approver (Meridian#Approver2026), same business. The admin adds the user in
+                          the portal (Users, role APPROVER) and an IdP administrator sets the returned id as this
+                          user's business_user_id attribute (the preset value is a placeholder until then).
 Staff web-app tokens take tenant_id from the user's admin-managed tenant_id attribute; service-account tokens carry the
 demo tenant (internal tokens name their tenant in X-Tenant-Id). Run after tools/generate.py.
 """
@@ -54,8 +64,15 @@ CUSTOMER_WEB_ORIGINS = ["http://localhost:13300"]
 # (Users -> demo.agent -> Attributes; admin-only) to an ACTIVE agent of the demo tenant.
 DEMO_AGENT = "0199a000-0000-7000-8000-0000000a0001"
 AGENT_APP_ORIGINS = ["http://localhost:13400"]
+# Demo business (a COMPANY customer of the demo tenant) and its two portal users (business-channel-service
+# business_user ids). Change the attributes (Users -> demo.business.* -> Attributes; admin-only) to real values.
+DEMO_BUSINESS = "0199a000-0000-7000-8000-0000000b0001"
+DEMO_BUSINESS_ADMIN = "0199a000-0000-7000-8000-0000000b0a01"
+DEMO_BUSINESS_APPROVER = "0199a000-0000-7000-8000-0000000b0a02"
+BUSINESS_PORTAL_ORIGINS = ["http://localhost:13500"]
 CUSTOMER_SCOPE = "channels:customer"
 AGENT_SCOPE = "channels:agent"
+BUSINESS_SCOPE = "channels:business"
 
 
 def attribute_mapper(name: str, attribute: str) -> dict:
@@ -90,6 +107,8 @@ def user_profile() -> dict:
              "required": {"roles": ["user"]}, "validations": person},
             admin_only_attribute("customer_id", "Customer id"),
             admin_only_attribute("agent_id", "Agent id"),
+            admin_only_attribute("business_customer_id", "Business customer id"),
+            admin_only_attribute("business_user_id", "Business portal user id"),
             admin_only_attribute("tenant_id", "Tenant id"),
         ],
         "groups": [{"name": "user-metadata", "displayHeader": "User metadata",
@@ -122,7 +141,8 @@ def main():
     # Each channel client gets exactly its own channel scope: customers channels:customer, agents channels:agent.
     customer_scopes = [s for s in channel_scopes if s == CUSTOMER_SCOPE]
     agent_scopes = [s for s in channel_scopes if s == AGENT_SCOPE]
-    unknown = [s for s in channel_scopes if s not in (CUSTOMER_SCOPE, AGENT_SCOPE)]
+    business_scopes = [s for s in channel_scopes if s == BUSINESS_SCOPE]
+    unknown = [s for s in channel_scopes if s not in (CUSTOMER_SCOPE, AGENT_SCOPE, BUSINESS_SCOPE)]
     if unknown:
         raise SystemExit(f"channel scope(s) {unknown} have no client; add one in tools/keycloak_realm.py")
     customer_domains = {s["domain"] for s in manifest if s.get("scope")}
@@ -159,6 +179,11 @@ def main():
     # auth_time / acr / sub / preferred_username like customer tokens (no customer_id mapper).
     agent_mappers = [attribute_mapper("agent_id", "agent_id")] + [m for m in customer_mappers
                                                                   if m["name"] != "customer_id"]
+    # Business portal tokens: the business and the portal user from admin-managed attributes (never editable by the
+    # user), the tenant, and auth_time / acr / sub / preferred_username for step-up and audit.
+    business_mappers = [attribute_mapper("business_customer_id", "business_customer_id"),
+                        attribute_mapper("business_user_id", "business_user_id")] + [
+        m for m in customer_mappers if m["name"] != "customer_id"]
     read_scopes = [n for n in scope_names if n.endswith(":read")]
     console_scopes = scope_names
     portal_scopes = ["platform:read", "platform:write"]
@@ -211,6 +236,14 @@ def main():
              "protocolMappers": agent_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + agent_scopes,
              "optionalClientScopes": []},
+            {"clientId": "meridian-business-portal", "name": "Meridian business banking portal", "publicClient": True,
+             "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
+             "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "redirectUris": [o + "/*" for o in BUSINESS_PORTAL_ORIGINS], "webOrigins": BUSINESS_PORTAL_ORIGINS,
+             "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
+             "protocolMappers": business_mappers + [audience_mapper()],
+             "defaultClientScopes": ["profile", "email", "web-origins"] + business_scopes,
+             "optionalClientScopes": []},
         ],
         "users": [
             {"username": "ops.admin", "enabled": True, "email": "ops.admin@meridian.local", "emailVerified": True,
@@ -231,6 +264,16 @@ def main():
              "emailVerified": True, "firstName": "Demo", "lastName": "Agent",
              "attributes": {"agent_id": [DEMO_AGENT], "tenant_id": [DEMO_TENANT]},
              "credentials": [{"type": "password", "value": "Meridian#Agent2026", "temporary": False}]},
+            {"username": "demo.business.admin", "enabled": True, "email": "demo.business.admin@meridian.local",
+             "emailVerified": True, "firstName": "Demo", "lastName": "Business Admin",
+             "attributes": {"business_customer_id": [DEMO_BUSINESS], "business_user_id": [DEMO_BUSINESS_ADMIN],
+                            "tenant_id": [DEMO_TENANT]},
+             "credentials": [{"type": "password", "value": "Meridian#Business2026", "temporary": False}]},
+            {"username": "demo.business.approver", "enabled": True, "email": "demo.business.approver@meridian.local",
+             "emailVerified": True, "firstName": "Demo", "lastName": "Business Approver",
+             "attributes": {"business_customer_id": [DEMO_BUSINESS], "business_user_id": [DEMO_BUSINESS_APPROVER],
+                            "tenant_id": [DEMO_TENANT]},
+             "credentials": [{"type": "password", "value": "Meridian#Approver2026", "temporary": False}]},
         ],
     }
     out = ROOT / "infra" / "local" / "keycloak" / "meridian-realm.json"

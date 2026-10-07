@@ -122,38 +122,56 @@ apps:
   # ======================================================================= business portal
   - id: business-portal
     name: Business Banking Portal
-    platform: Web, mobile companion
+    platform: Web (React + Next.js), port 13500
     users: SME owners, finance teams
     phase: 3
     screens:
       - name: Business onboarding (KYB, directors, UBOs)
         priority: P0
         apis: [onboardingApplicationsCreate, customerRelationshipsCreate, customersOwnershipTree, kycDocumentsCreate, onboardingApplicationsSubmit]
+      # signed-in screens use the business channel (/v1/business, business-channel-service) only
       - name: Cash position dashboard
         priority: P0
-        apis: [depositAccountsList, depositAccountsBalance, virtualAccountsList, paymentsList]
+        apis: [businessMeGet, businessCashPositionGet, businessAccountsList, businessAccountsBalance, businessApprovalQueueList]
+      - name: Accounts, transactions and accounting export
+        priority: P0
+        apis: [businessAccountsGet, businessAccountsTransactions, businessAccountsExport]
       - name: Team users, roles and approval matrix
         priority: P0
-        apis: [accountHoldersList, accountHoldersCreate, accountMandatesList, accountMandatesCreate, accountMandatesEvaluate]
+        apis: [businessUsersList, businessUsersCreate, businessUsersUpdate, businessUsersSuspend, businessUsersReactivate,
+               businessUsersRemove, businessUsersEntitlements, businessUsersReplaceEntitlements,
+               businessUsersRemoveEntitlements, businessApprovalRulesList, businessApprovalRulesCreate,
+               businessApprovalRulesReplace, businessApprovalRulesDelete]
       - name: Payments with multi-level approvals
         priority: P0
-        apis: [paymentsCreate, paymentApprovalsList, paymentApprovalsApprove, paymentApprovalsReject]
+        apis: [businessPayeesList, businessPayeesCreate, businessPayeesDelete, businessPaymentsList, businessPaymentsCreate,
+               businessPaymentsSubmit, businessApprovalQueueList, businessPaymentsApprove, businessPaymentsReject,
+               businessPaymentsCancel, businessPaymentsRelease, businessPaymentsApprovals, businessPaymentsDownstream]
       - name: Bulk payments and payroll upload
-        apis: [bulkPaymentsCreate, bulkPaymentsUpload, bulkPaymentsValidate, bulkPaymentsSubmit, bulkPaymentsApprove, bulkPaymentsReport]
+        apis: [businessBulkPaymentsCreate, businessPaymentsSubmit, businessPaymentsApprove, businessBulkPaymentsReport]
       - name: Collections - virtual accounts and payment links
-        apis: [virtualAccountsCreate, virtualAccountsBulk, virtualAccountsTransactions, paymentLinksCreate, paymentLinksPayments]
+        apis: [businessVirtualAccountsList, businessVirtualAccountsCreate, businessVirtualAccountsTransactions,
+               businessVirtualAccountsClose, businessPaymentLinksList, businessPaymentLinksCreate,
+               businessPaymentLinksDisable, businessPaymentLinksPayments]
       - name: Direct debit mandates and collections
-        apis: [paymentMandatesCreate, paymentMandatesList, directDebitCollectionsCreate, directDebitCollectionsList]
+        apis: [businessMandatesList, businessMandatesCreate, businessMandatesCancel, businessMandatesCollections,
+               businessMandatesAddCollections]
       - name: FX and international payments
-        apis: [fxQuotesCreate, fxQuotesAccept, fxDealsList, paymentsCreate]
+        apis: [businessFxQuotesCreate, businessFxQuotesList, businessFxDealsList, businessPaymentsCreate]
       - name: Expense cards for employees
-        apis: [cardsCreate, cardsList, cardControlsCreate, cardSpendLimitsCreate, cardAuthorizationsList]
+        apis: [businessCardProductsList, businessCardsList, businessCardsCreate, businessCardsFreeze, businessCardsUnfreeze,
+               businessCardsClose, businessCardsChannels, businessCardsReplaceLimits, businessCardsAuthorizations]
       - name: Business loans and credit lines
-        apis: [loanApplicationsCreate, loanApplicationDocumentsCreate, loansList, creditLinesDraw]
+        apis: [businessLoansList, businessLoansSchedule, businessLoansRepay, businessCreditLinesList,
+               businessCreditLinesDrawdowns, businessCreditLinesDraw, businessCreditLinesRepay]
       - name: Statements and accounting export
-        apis: [statementsCreate, statementsDownload, statementSchedulesCreate]
+        apis: [businessAccountsStatements, businessAccountsAddStatements, businessAccountsStatementsDownload,
+               businessAccountsExport]
       - name: API keys and webhooks for the business
-        apis: [apiClientsCreate, apiKeysCreate, webhookEndpointsCreate, webhookDeliveriesList]
+        apis: [businessApiClientsList, businessApiClientsCreate, businessApiClientsAddKeys, businessApiClientsKeysRevoke,
+               businessWebhooksCreate, businessWebhooksAddSubscriptions, businessWebhooksDeliveries]
+      - name: Security log
+        apis: [businessActivityList]
 
   # ======================================================================= agent app
   - id: agent-app
