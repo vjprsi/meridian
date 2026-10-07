@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege by default; jobs that upload code-scanning results, publish or sign images widen it (GAP-04).
+permissions:
+  contents: read
+
 jobs:
   spec:
     name: Spec, contracts and DDL
@@ -41,6 +45,11 @@ jobs:
               pglast.parse_sql(f.read_text())
           print("DDL OK")
           EOF
+      - name: Observability pack (dashboards, alert rules) up to date and valid
+        run: |
+          python tools/observability.py --check
+          docker run --rm -v "$PWD/infra/observability/prometheus/rules:/rules:ro" --entrypoint /bin/sh \
+            prom/prometheus:latest -c 'promtool check rules /rules/*.yml'
 
   ddl-postgres:
     name: Apply DDL on PostgreSQL 18 + smoke test
@@ -96,9 +105,236 @@ jobs:
           helm template ci infra/helm/meridian > rendered.yaml
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
           ./kubeconform -strict -summary -kubernetes-version 1.33.0 rendered.yaml
+      - name: Render with monitoring enabled (ServiceMonitor, PrometheusRule, dashboards; CRDs from the catalog)
+        run: |
+          helm template ci infra/helm/meridian --set global.serviceMonitor.enabled=true \
+            --set observability.prometheusRule.enabled=true --set observability.dashboards.enabled=true > rendered-obs.yaml
+          ./kubeconform -strict -summary -kubernetes-version 1.33.0 -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            rendered-obs.yaml
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "25" }
       - name: Build one service image (Dockerfile smoke test)
         run: |
           ./gradlew :services:ledger-service:bootJar --console=plain -q
           docker build -f infra/docker/Dockerfile             --build-arg JAR=$(ls services/ledger-service/build/libs/*.jar | grep -v plain) -t meridian/ledger-service:ci .
+      - name: Container image scan (Trivy; fails on fixable CRITICAL vulnerabilities)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: meridian/ledger-service:ci
+          vuln-type: os,library
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ------------------------------------------------------------------ security and supply chain (GAP-04)
+
+  sast:
+    name: SAST (Semgrep - OWASP Top 10, Java, secrets)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Semgrep scan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # pull requests: only findings the change introduces (baseline = target branch); main: full scan, reported
+          BASELINE=""
+          if [ -n "$BASE_SHA" ]; then BASELINE="--baseline-commit $BASE_SHA"; fi
+          semgrep scan --config p/owasp-top-ten --config p/java --config p/secrets --metrics off \
+            --exclude generated --exclude 'web/*/src/api/schema.d.ts' --exclude build --exclude node_modules \
+            $BASELINE --sarif --output semgrep.sarif
+      - name: Fail on ERROR-severity findings (pull requests)
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          results = [r for run in json.load(open("semgrep.sarif"))["runs"] for r in run["results"]]
+          errors = [r for r in results if r.get("level") == "error"]
+          for r in errors:
+              loc = r["locations"][0]["physicalLocation"]
+              print(f'::error file={loc["artifactLocation"]["uri"]},line={loc["region"]["startLine"]}::{r["ruleId"]}')
+          print(f"semgrep: {len(results)} new findings, {len(errors)} at ERROR severity")
+          sys.exit(1 if errors else 0)
+          EOF
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with: { sarif_file: semgrep.sarif, category: semgrep }
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: gitleaks (pull requests - their commits; main - the full history)
+        env:
+          LOG_OPTS: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || '--all' }}
+        run: |
+          # .gitleaks.toml: default rules + development-fixture allowlist; .gitleaksignore: accepted historical findings
+          docker run --rm -v "$PWD:/repo" -e LOG_OPTS --entrypoint /bin/sh ghcr.io/gitleaks/gitleaks:v8.30.1 -c \
+            'git config --global --add safe.directory /repo && gitleaks git /repo --config /repo/.gitleaks.toml \
+             --gitleaks-ignore-path /repo/.gitleaksignore --redact --no-banner --log-opts="$LOG_OPTS" \
+             --report-format sarif --report-path /repo/gitleaks.sarif'
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('gitleaks.sarif') != ''
+        with: { sarif_file: gitleaks.sarif, category: gitleaks }
+
+  sbom:
+    name: SBOM (CycloneDX) and dependency scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "25" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Gradle SBOM (aggregate of every module's runtime classpath, build-logic meridian.sbom)
+        run: ./gradlew cyclonedxBom --console=plain -Porg.gradle.java.installations.paths="$JAVA_HOME"
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: npm SBOMs (one per web app, from package-lock.json, production dependencies)
+        run: |
+          mkdir -p build/reports/cyclonedx-npm
+          for lock in web/*/package-lock.json; do
+            app=$(basename "$(dirname "$lock")")
+            (cd "web/$app" && npx --yes @cyclonedx/cyclonedx-npm@6 --package-lock-only --omit dev \
+              --output-format JSON --output-file "$GITHUB_WORKSPACE/build/reports/cyclonedx-npm/$app.cdx.json")
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            build/reports/cyclonedx/bom.json
+            build/reports/cyclonedx/bom.xml
+            build/reports/cyclonedx-npm/
+      - name: Java dependencies (fails on fixable CRITICAL vulnerabilities)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: build/reports/cyclonedx/bom.json
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: npm dependencies (fails on fixable CRITICAL vulnerabilities)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: web
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: HIGH and CRITICAL report for code scanning
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: build/reports/cyclonedx/bom.json
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-dependencies.sarif
+          exit-code: "0"
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-dependencies.sarif') != ''
+        with: { sarif_file: trivy-dependencies.sarif, category: trivy-dependencies }
+
+  # ------------------------------------------------------------------ release (main only): publish, sign, attest
+
+  image-matrix:
+    name: Components to publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      components: ${{ steps.list.outputs.components }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          names = [s["name"] for s in json.load(open("generated/services.json"))]
+          rows = [{"name": n, "module": f":services:{n}", "dir": f"services/{n}"} for n in names]
+          rows += [{"name": n, "module": f":platform:{n}", "dir": f"platform/{n}"} for n in ("edge-gateway", "cell-router")]
+          print("components=" + json.dumps(rows))
+          EOF
+
+  release-images:
+    name: Publish, sign and attest ${{ matrix.component.name }}
+    needs: [image-matrix, build, deploy-artifacts, sast, secrets, sbom]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write    # push to GHCR
+      id-token: write    # keyless signing: Fulcio certificate from the GitHub OIDC token, logged in Rekor
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        component: ${{ fromJSON(needs.image-matrix.outputs.components) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "25" }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew ${{ matrix.component.module }}:bootJar --console=plain -Porg.gradle.java.installations.paths="$JAVA_HOME"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        id: image
+        env:
+          NAME: ${{ matrix.component.name }}
+          DIR: ${{ matrix.component.dir }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$NAME"
+          JAR=$(ls "$DIR"/build/libs/*.jar | grep -v plain)
+          docker build -f infra/docker/Dockerfile --build-arg JAR="$JAR" \
+            --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:main" .
+          docker push --all-tags "$IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:$GITHUB_SHA" | cut -d@ -f2)
+          echo "ref=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Image scan (fails on fixable CRITICAL vulnerabilities)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Image SBOM (CycloneDX, OS packages and jars)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          format: cyclonedx
+          output: image.cdx.json
+      - uses: sigstore/cosign-installer@v4.1.2
+      - name: Sign the image and attest its SBOM (keyless)
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          cosign sign --yes "$REF"
+          cosign attest --yes --type cyclonedx --predicate image.cdx.json "$REF"
+          # evidence that the signature verifies against this workflow's identity
+          cosign verify --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/ci.yml@$GITHUB_REF" "$REF" > /dev/null
+          cosign verify-attestation --type cyclonedx --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/ci.yml@$GITHUB_REF" "$REF" > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-sbom-${{ matrix.component.name }}
+          path: image.cdx.json

@@ -1,0 +1,26 @@
+# gitleaks configuration (CI job "Secret scan", GAP-04). Default rule set plus allowlists for development fixtures
+# that are committed on purpose: they only work in security-mode=dev and services refuse them elsewhere
+# (libs/meridian-web RequiredSecrets, SEC-01/02). Anything else that matches is a finding: rotate it, then remove it.
+title = "meridian"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local stack and test fixtures"
+paths = [
+  '''^infra/local/''',
+  '''(^|/)src/test/''',
+  '''^tools/e2e/''',
+  '''(^|/)package-lock\.json$''',
+]
+
+[[allowlists]]
+description = "Committed development defaults (dev-*, local-*, *-change-me) and documentation placeholders"
+regexTarget = "match"
+regexes = [
+  '''(?i)\b(dev|local|test|example)[-_][a-z0-9_-]*(secret|key|password|token)[a-z0-9_-]*''',
+  '''(?i)change[-_]?me''',
+  '''(?i)idempotency[-_]key\W+[0-9a-z-]+''',
+  '''\$\{[A-Z0-9_]+(:[^}]*)?\}''',
+]

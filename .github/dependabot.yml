@@ -1,0 +1,23 @@
+# GAP-04: dependency update PRs (SCA findings are fixed by upgrading). Grouped to keep the PR count reviewable.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directories: ["/", "/build-logic"]
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 10
+    groups:
+      spring: {patterns: ["org.springframework*", "io.micrometer*"]}
+      gradle-dependencies: {patterns: ["*"]}
+  - package-ecosystem: npm
+    directories: ["/web/customer-web", "/web/agent-app", "/web/business-portal", "/web/merchant-app",
+                  "/web/meridian-console", "/web/developer-portal"]
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 10
+    groups:
+      npm-dependencies: {patterns: ["*"], update-types: [minor, patch]}
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: {interval: weekly, day: monday}
+  - package-ecosystem: docker
+    directory: "/infra/docker"
+    schedule: {interval: weekly, day: monday}
