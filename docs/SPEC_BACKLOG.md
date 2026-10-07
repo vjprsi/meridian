@@ -128,8 +128,17 @@ fields, server-generated application_number). Remaining gaps:
 
 ## Observed in live e2e (2026-10-07)
 
-- Deposit accounts of a KE tenant get GB IBANs (`GB..MERI..`, BIC MERIGB2LXXX): account numbering country/bank code
-  should come from the legal entity / country pack, not a platform default.
+- Done (2026-10-07): deposit accounts of a KE tenant got GB IBANs (`GB..MERI..`, BIC MERIGB2LXXX). Account
+  identifiers now follow the booking legal entity (country / BIC from tenant-service, per-entity settings in
+  config-service namespace `account_numbering`, IBAN lengths from reference-data): IBAN with mod 97 where the
+  country uses IBAN, else the national format (KE bank + branch + serial with Luhn, NG NUBAN, generic configurable
+  pattern); `deposit_account.bic`; no GB defaults; unique under concurrency (advisory lock per candidate). Starter
+  packs seed the entry (KE: NATIONAL). See the guide's "Account numbering". Remaining: payment-service
+  (`meridian.payment.bank-bic` MERIGB2LXXX) and treasury-deal-service (`our-bic`) still use deployment BICs instead of
+  the legal entity's; national check digits inside some IBAN BBANs (FR, ES, IT, BE, PT) are not generated.
+- Done (2026-10-07): nothing seeded the public sign-up journey customer-web expects (`RETAIL_ONLINE`). The GENERIC and
+  KE starter packs create it with typed step fields (phone OTP, personal details, address, ID document, terms /
+  consent); a checker publishes it in onboarding-service.
 
 ## Agent channel (follow-up of customer channel)
 

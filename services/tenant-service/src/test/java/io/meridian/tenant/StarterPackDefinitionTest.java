@@ -133,6 +133,69 @@ class StarterPackDefinitionTest {
     }
 
     @Test
+    void accountNumberingFollowsTheLegalEntityAndKenyaUsesItsNationalFormat() {
+        for (String code : List.of("GENERIC", "KE")) {
+            StarterPack pack = pack(code);
+            Map<String, JsonNode> params = StarterPackService.resolveParameters(pack, null, null);
+            Item numbering = item(pack, "numbering_main");
+            assertThat(numbering).as(code + " numbering item").isNotNull();
+            assertThat(numbering.actions()).singleElement().satisfies(a -> assertThat(a.approval()).isEqualTo("config_entry"));
+            JsonNode body = PackTemplates.render(numbering.body(), new PackTemplates.Context(params, k -> "id:" + k, null,
+                    "2026-10-07", "t", code, "v"));
+            assertThat(body.get("namespace").asString()).isEqualTo("account_numbering");
+            // keyed by the legal entity the pack creates, so deposit-service finds it from the account's legal entity
+            assertThat(body.get("config_key").asString()).isEqualTo(params.get("legal_entity_code").asString());
+            if ("KE".equals(code)) {
+                assertThat(body.at("/value/scheme").asString()).isEqualTo("NATIONAL");
+                assertThat(body.at("/value/bank_code").asString()).matches("[0-9]{2}");
+                assertThat(body.at("/value/branch_code").asString()).matches("[0-9]{3}");
+                assertThat(params.get("country").asString()).isEqualTo("KE");
+            } else {
+                assertThat(body.at("/value/scheme").asString()).isEqualTo("AUTO");
+            }
+            // ordered after the legal entity and the config approval policy, so its submission is routed by it
+            List<String> keys = pack.items().stream().map(Item::key).toList();
+            assertThat(keys.indexOf("numbering_main")).isGreaterThan(keys.indexOf("legal_entity"))
+                    .isGreaterThan(keys.indexOf("config_entry_activate"));
+        }
+    }
+
+    @Test
+    void packsSeedThePublicSignUpJourneyWithTypedFields() {
+        for (String code : List.of("GENERIC", "KE")) {
+            StarterPack pack = pack(code);
+            Item journey = item(pack, "journey_retail_online");
+            assertThat(journey).as(code + " sign-up journey").isNotNull();
+            assertThat(journey.service()).isEqualTo("onboarding-service");
+            JsonNode body = journey.body();
+            // web/customer-web NEXT_PUBLIC_SIGNUP_JOURNEY default
+            assertThat(body.get("code").asString()).isEqualTo("RETAIL_ONLINE");
+            assertThat(body.get("channels").toString()).contains("\"WEB\"").contains("\"MOBILE_APP\"");
+            assertThat(body.get("legal_entity_id").asString()).isEqualTo("${ref.legal_entity}");
+            List<String> types = new ArrayList<>();
+            body.at("/definition/steps").forEach(s -> {
+                types.add(s.path("type").asString());
+                assertThat(s.path("fields")).as(s.path("code").asString()).isNotEmpty()
+                        .allSatisfy(f -> assertThat(f.isObject() && f.hasNonNull("type")).as("typed field " + f).isTrue());
+            });
+            assertThat(types).containsExactly("PHONE_VERIFICATION", "PERSONAL_DETAILS", "ADDRESS", "DOCUMENT_CAPTURE",
+                    "TERMS_ACCEPTANCE");
+            assertThat(body.at("/definition/steps/3/fields").toString()).contains("\"DOCUMENT\"");
+            assertThat(body.at("/definition/steps/4/fields/0/name").asString()).isEqualTo("terms_accepted");
+            // published by a checker in onboarding-service, never by the pack itself
+            assertThat(journey.actions()).singleElement().satisfies(a -> {
+                assertThat(a.name()).isEqualTo("publish");
+                assertThat(a.manual()).isTrue();
+            });
+            assertThat(journey.readyStatus()).contains("PUBLISHED");
+            List<String> keys = pack.items().stream().map(Item::key).toList();
+            assertThat(keys.indexOf("journey_retail_online")).isGreaterThan(keys.indexOf("current"))
+                    .isGreaterThan(keys.indexOf("savings"));
+        }
+        assertThat(item(pack("KE"), "journey_retail_online").body().toString()).contains("national_id_number").contains("+254");
+    }
+
+    @Test
     void everyItemCallsExistingRoutesWithValidBodies() {
         List<String> problems = new ArrayList<>();
         packs.forEach(p -> problems.addAll(contractProblems(p)));
@@ -588,6 +651,54 @@ class StarterPackDefinitionTest {
         });
     }
 
+    /** onboarding-service JourneyDefinition / StepField rules (the definition is an untyped json column). */
+    static void journeyChecks(JsonNode body, String where, List<String> problems) {
+        Set<String> fieldTypes = Set.of("STRING", "TEXT", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "EMAIL", "PHONE",
+                "COUNTRY", "ENUM", "DOCUMENT");
+        body.path("channels").forEach(c -> {
+            if (!domainEnums.get("OnboardingChannel").contains(c.asString())) {
+                problems.add(where + ": channel " + c.asString() + " is not an OnboardingChannel");
+            }
+        });
+        JsonNode steps = body.at("/definition/steps");
+        if (!steps.isArray() || steps.isEmpty()) {
+            problems.add(where + ": definition.steps must be a non-empty array");
+            return;
+        }
+        Set<String> codes = new HashSet<>();
+        for (JsonNode s : steps) {
+            String code = s.path("code").asString("");
+            String p = where + " step " + code;
+            if (!code.matches("[A-Za-z0-9_\\-]{1,64}") || !codes.add(code)) {
+                problems.add(p + ": step code must be unique and match [A-Za-z0-9_-]{1,64}");
+            }
+            if (!domainEnums.get("OnboardingStepType").contains(s.path("type").asString(""))) {
+                problems.add(p + ": type " + s.path("type").asString("") + " is not an OnboardingStepType");
+            }
+            Set<String> names = new HashSet<>();
+            for (JsonNode f : s.path("fields")) {
+                String name = f.path("name").asString("");
+                if (!name.matches("[a-z][a-z0-9_]{0,63}") || !names.add(name)) {
+                    problems.add(p + ": field name " + name + " must be unique and match [a-z][a-z0-9_]{0,63}");
+                }
+                String type = f.path("type").asString("");
+                if (!fieldTypes.contains(type)) {
+                    problems.add(p + "." + name + ": field type " + type + " is not one of " + fieldTypes);
+                }
+                if ("ENUM".equals(type) && (!f.path("enum").isArray() || f.path("enum").isEmpty())) {
+                    problems.add(p + "." + name + ": an ENUM field needs a non-empty enum list");
+                }
+                if (f.hasNonNull("pattern")) {
+                    try {
+                        Pattern.compile(f.get("pattern").asString());
+                    } catch (java.util.regex.PatternSyntaxException e) {
+                        problems.add(p + "." + name + ": pattern is not a valid regular expression");
+                    }
+                }
+            }
+        }
+    }
+
     /** Checks the services' own rules the contract cannot express. */
     static void domainChecks(Item item, JsonNode body, String where, List<String> problems) {
         if (item.path().equals("/v1/notification-rules")) {
@@ -598,6 +709,33 @@ class StarterPackDefinitionTest {
             if (!body.path("recipient_expression").asString().matches("(CUSTOMER|STAFF|AGENT|MERCHANT|EXTERNAL):[A-Za-z_][A-Za-z0-9_.]*")) {
                 problems.add(where + ": recipient_expression must be TYPE:payload.path");
             }
+        }
+        if (item.path().equals("/v1/config/entries") && "account_numbering".equals(body.path("namespace").asString())) {
+            // deposit-service AccountNumbering: one entry per legal entity code (or default), known fields only
+            Set<String> known = Set.of("scheme", "bank_code", "branch_code", "bic", "pattern", "serial_length", "check_digit",
+                    "account_number_length", "iban_length");
+            body.path("value").properties().forEach(e -> {
+                if (!known.contains(e.getKey())) {
+                    problems.add(where + ": unknown account numbering setting " + e.getKey());
+                }
+            });
+            String scheme = body.at("/value/scheme").asString("");
+            if (!Set.of("", "AUTO", "IBAN", "NATIONAL").contains(scheme)) {
+                problems.add(where + ": account numbering scheme " + scheme + " is not AUTO, IBAN or NATIONAL");
+            }
+            String bic = body.at("/value/bic").asString("");
+            if (!bic.isEmpty() && !bic.matches("[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?")) {
+                problems.add(where + ": bic " + bic + " is not a BIC");
+            }
+            for (String code : List.of("bank_code", "branch_code")) {
+                if (!body.at("/value/" + code).asString("").matches("[A-Z0-9]*")) {
+                    problems.add(where + ": " + code + " must be letters and digits");
+                }
+            }
+            return;
+        }
+        if (item.path().equals("/v1/onboarding/journeys")) {
+            journeyChecks(body, where, problems);
         }
         if (item.path().equals("/v1/config/entries")) {
             String key = body.path("config_key").asString();
