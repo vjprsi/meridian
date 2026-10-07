@@ -22,7 +22,8 @@ import java.util.function.Function;
  *       {@code :name}</li>
  *   <li>arithmetic {@code + - * / %}, comparison {@code = == != <> < <= > >=}, {@code IN (...)}, {@code NOT IN},
  *       {@code IS [NOT] NULL}, boolean {@code AND OR NOT} (also {@code && || !})</li>
- *   <li>functions ABS, ROUND, FLOOR, CEIL, MIN, MAX, COALESCE, IF, UPPER, LOWER, CONCAT, LEN, YEAR, MONTH,
+ *   <li>functions ABS, ROUND, FLOOR, CEIL, MIN, MAX, COALESCE, IF, UPPER, LOWER, CONCAT, LEN, YEAR, MONTH, DIV (NULL
+ *       instead of a division by zero),
  *       DAYS_BETWEEN, STARTS_WITH, CONTAINS</li>
  * </ul>
  * Arithmetic is exact ({@link BigDecimal}, DECIMAL128); NULL propagates through arithmetic and comparisons
@@ -357,14 +358,14 @@ public final class Expr {
 
     private static final class Functions {
         static final Set<String> NAMES = Set.of("ABS", "ROUND", "FLOOR", "CEIL", "MIN", "MAX", "COALESCE", "IF", "UPPER",
-                "LOWER", "CONCAT", "LEN", "YEAR", "MONTH", "DAYS_BETWEEN", "STARTS_WITH", "CONTAINS");
+                "LOWER", "CONCAT", "LEN", "YEAR", "MONTH", "DAYS_BETWEEN", "STARTS_WITH", "CONTAINS", "DIV");
 
         static void checkArity(String fn, int n) {
             boolean ok = switch (fn) {
                 case "ABS", "FLOOR", "CEIL", "UPPER", "LOWER", "LEN", "YEAR", "MONTH" -> n == 1;
                 case "ROUND" -> n == 1 || n == 2;
                 case "IF" -> n == 3;
-                case "DAYS_BETWEEN", "STARTS_WITH", "CONTAINS" -> n == 2;
+                case "DAYS_BETWEEN", "STARTS_WITH", "CONTAINS", "DIV" -> n == 2;
                 default -> n >= 1;
             };
             if (!ok) {
@@ -432,6 +433,11 @@ public final class Expr {
                 }
                 case "CONTAINS" -> {
                     return a.get(0) != null && a.get(1) != null && String.valueOf(a.get(0)).contains(String.valueOf(a.get(1)));
+                }
+                case "DIV" -> {
+                    BigDecimal x = num(fn, a.get(0));
+                    BigDecimal y = num(fn, a.get(1));
+                    return x == null || y == null || y.signum() == 0 ? null : x.divide(y, MC);
                 }
                 default -> throw new ExprException("unknown function " + fn);
             }

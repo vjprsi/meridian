@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,8 +13,10 @@ import java.util.regex.Pattern;
  * Reporting periods and filing deadlines. Periods are calendar aligned (weeks end on Sunday, quarters in
  * March/June/September/December, half-years in June/December). The due date is the period end plus the deadline
  * rule ({@code PERIOD_END+15D} calendar days, {@code PERIOD_END+10BD} business days; {@code MONTH_END} and {@code T}
- * are synonyms of {@code PERIOD_END}), rolled forward to a business day, plus the jurisdiction's extension in
- * calendar days (again rolled to a business day). Business days are Monday to Friday.
+ * are synonyms of {@code PERIOD_END}), moved to a business day, plus the jurisdiction's extension in calendar days
+ * (again moved to a business day). Business days are Monday to Friday minus the regulator's holidays
+ * ({@link Conventions}); a date on a non-business day moves by the definition's business-day convention (FOLLOWING
+ * by default, MODIFIED_FOLLOWING, PRECEDING or NONE).
  */
 public final class FilingCalendar {
     private static final Pattern RULE = Pattern.compile("(PERIOD_END|MONTH_END|T)\\+(\\d{1,3})(BD|D)");
@@ -46,37 +49,94 @@ public final class FilingCalendar {
         };
     }
 
+    public static final Set<String> CONVENTIONS = Set.of("FOLLOWING", "MODIFIED_FOLLOWING", "PRECEDING", "NONE");
+
+    /**
+     * The regulator's business-day rules: the convention applied to a date that falls on a weekend or holiday, and
+     * the holidays besides Saturdays and Sundays.
+     */
+    public record Conventions(String convention, Set<LocalDate> holidays) {
+        public static final Conventions DEFAULT = new Conventions("FOLLOWING", Set.of());
+
+        public Conventions {
+            convention = convention == null || convention.isBlank() ? "FOLLOWING" : convention.toUpperCase(java.util.Locale.ROOT);
+            if (!CONVENTIONS.contains(convention)) {
+                throw new IllegalArgumentException("business_day_convention must be one of " + new java.util.TreeSet<>(CONVENTIONS));
+            }
+            holidays = holidays == null ? Set.of() : Set.copyOf(holidays);
+        }
+
+        public boolean isBusinessDay(LocalDate d) {
+            return FilingCalendar.isBusinessDay(d) && !holidays.contains(d);
+        }
+
+        /** Moves a date that is not a business day according to the convention. */
+        public LocalDate adjust(LocalDate d) {
+            if (isBusinessDay(d) || "NONE".equals(convention)) {
+                return d;
+            }
+            return switch (convention) {
+                case "PRECEDING" -> previous(d);
+                case "MODIFIED_FOLLOWING" -> {
+                    LocalDate next = next(d);
+                    yield next.getMonth() == d.getMonth() ? next : previous(d);
+                }
+                default -> next(d);
+            };
+        }
+
+        LocalDate next(LocalDate d) {
+            LocalDate x = d;
+            for (int i = 0; i < 370 && !isBusinessDay(x); i++) {
+                x = x.plusDays(1);
+            }
+            return x;
+        }
+
+        LocalDate previous(LocalDate d) {
+            LocalDate x = d;
+            for (int i = 0; i < 370 && !isBusinessDay(x); i++) {
+                x = x.minusDays(1);
+            }
+            return x;
+        }
+
+        /** {@code n} business days after {@code d} (the result is a business day by construction). */
+        LocalDate addBusinessDays(LocalDate d, int n) {
+            LocalDate x = d;
+            int left = n;
+            for (int i = 0; left > 0 && i < 5000; i++) {
+                x = x.plusDays(1);
+                if (isBusinessDay(x)) {
+                    left--;
+                }
+            }
+            return x;
+        }
+    }
+
     public static LocalDate dueDate(String rule, String frequency, LocalDate periodEnd, int jurisdictionOffsetDays) {
+        return dueDate(rule, frequency, periodEnd, jurisdictionOffsetDays, Conventions.DEFAULT);
+    }
+
+    /**
+     * Due date of the period ending {@code periodEnd}: business-day rules count business days of the regulator's
+     * calendar (weekends and its holidays excluded); calendar-day rules and the jurisdiction's extension move by the
+     * business-day convention when they land on a non-business day.
+     */
+    public static LocalDate dueDate(String rule, String frequency, LocalDate periodEnd, int jurisdictionOffsetDays,
+                                    Conventions conventions) {
         Rule r = parse(rule, frequency);
-        LocalDate due = r.businessDays() ? addBusinessDays(periodEnd, r.amount()) : rollForward(periodEnd.plusDays(r.amount()));
+        Conventions c = conventions == null ? Conventions.DEFAULT : conventions;
+        LocalDate due = r.businessDays() ? c.addBusinessDays(periodEnd, r.amount()) : c.adjust(periodEnd.plusDays(r.amount()));
         if (jurisdictionOffsetDays > 0) {
-            due = rollForward(due.plusDays(jurisdictionOffsetDays));
+            due = c.adjust(due.plusDays(jurisdictionOffsetDays));
         }
         return due;
     }
 
     public static boolean isBusinessDay(LocalDate d) {
         return d.getDayOfWeek() != DayOfWeek.SATURDAY && d.getDayOfWeek() != DayOfWeek.SUNDAY;
-    }
-
-    static LocalDate rollForward(LocalDate d) {
-        LocalDate x = d;
-        while (!isBusinessDay(x)) {
-            x = x.plusDays(1);
-        }
-        return x;
-    }
-
-    static LocalDate addBusinessDays(LocalDate d, int n) {
-        LocalDate x = d;
-        int left = n;
-        while (left > 0) {
-            x = x.plusDays(1);
-            if (isBusinessDay(x)) {
-                left--;
-            }
-        }
-        return rollForward(x);
     }
 
     /** True when {@code d} is the last day of a reporting period of the frequency. */

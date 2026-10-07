@@ -15,8 +15,12 @@ import java.util.regex.Pattern;
 public final class PathTemplate {
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z_][a-z0-9_.]*)}");
     private static final Pattern SAFE = Pattern.compile("/v1/[A-Za-z0-9_\\-./{}?&=,:%]*");
-    private static final Set<String> BUILT_INS = Set.of("as_of_date", "period_start", "period_end", "legal_entity_id",
-            "reporting_year");
+    /**
+     * Built-in placeholders; {@code period_start_ts} is the period start at 00:00 UTC and {@code period_end_ts} the day
+     * after the period end at 00:00 UTC (exclusive bound for {@code created_before}-style filters).
+     */
+    public static final Set<String> BUILT_INS = Set.of("as_of_date", "period_start", "period_end", "legal_entity_id",
+            "reporting_year", "period_start_ts", "period_end_ts");
 
     private PathTemplate() {}
 
@@ -42,6 +46,15 @@ public final class PathTemplate {
 
     /** Substitutes placeholders with URL-encoded values; a missing value is an error. */
     public static String expand(String path, Map<String, Object> builtIns, Map<String, Object> params) {
+        return substitute(path, builtIns, params, true);
+    }
+
+    /** Substitutes placeholders in a plain value template (no URL encoding); a missing value is an error. */
+    public static String text(String template, Map<String, Object> builtIns, Map<String, Object> params) {
+        return substitute(template, builtIns, params, false);
+    }
+
+    private static String substitute(String path, Map<String, Object> builtIns, Map<String, Object> params, boolean encode) {
         check(path);
         Matcher m = PLACEHOLDER.matcher(path);
         StringBuilder sb = new StringBuilder();
@@ -51,7 +64,8 @@ public final class PathTemplate {
             if (v == null) {
                 throw new IllegalArgumentException("no value for placeholder {" + name + "}");
             }
-            m.appendReplacement(sb, Matcher.quoteReplacement(URLEncoder.encode(String.valueOf(v), StandardCharsets.UTF_8)));
+            String s = encode ? URLEncoder.encode(String.valueOf(v), StandardCharsets.UTF_8) : String.valueOf(v);
+            m.appendReplacement(sb, Matcher.quoteReplacement(s));
         }
         m.appendTail(sb);
         return sb.toString();

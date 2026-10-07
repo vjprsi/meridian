@@ -16,7 +16,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class Store {
     private static final Set<String> TABLES = Set.of("report_definition", "report_definition_version", "report_schedule",
             "report_run", "report_cell", "report_output", "report_validation_result", "report_adjustment",
-            "report_submission", "crs_fatca_record", "report_job_run");
+            "report_submission", "crs_fatca_record", "report_job_run", "regulatory_pack_installation");
 
     private final JdbcClient jdbc;
     private final JsonMapper json;

@@ -137,7 +137,12 @@ public class RunService {
         try {
             compiled = definitions.compile(version);
             collected = collector.collect(version.get("data_sources"), builtIns(run), params);
-            cells = ReportEngine.compute(compiled.mappings(), collected.sources(), params);
+            // expressions see the run parameters, the looked-up ones and the run's built-ins (param_legal_entity_id,
+            // param_as_of_date, param_period_start, param_period_end); explicit parameters win
+            Map<String, Object> effective = new LinkedHashMap<>(params);
+            collected.resolvedParams().forEach(effective::putIfAbsent);
+            builtIns(run).forEach(effective::putIfAbsent);
+            cells = ReportEngine.compute(compiled.mappings(), collected.sources(), effective);
         } catch (ApiException | Expr.ExprException | DefinitionException e) {
             String msg = e instanceof ApiException a ? a.code() + ": " + a.getMessage() : e.getMessage();
             log.info("report run {} failed: {}", runId, msg);
@@ -354,6 +359,14 @@ public class RunService {
         b.put("period_end", Fields.text(run, "period_end"));
         b.put("legal_entity_id", run.get("legal_entity_id").asString());
         b.put("reporting_year", LocalDate.parse(run.get("as_of_date").asString()).getYear());
+        String ps = Fields.text(run, "period_start");
+        String pe = Fields.text(run, "period_end");
+        if (ps != null) {
+            b.put("period_start_ts", ps + "T00:00:00Z");
+        }
+        if (pe != null) {
+            b.put("period_end_ts", LocalDate.parse(pe).plusDays(1) + "T00:00:00Z");
+        }
         return b;
     }
 

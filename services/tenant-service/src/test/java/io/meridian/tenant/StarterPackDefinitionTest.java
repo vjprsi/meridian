@@ -110,6 +110,15 @@ class StarterPackDefinitionTest {
         assertThat(p2p.body().get("basis").asString()).isEqualTo("TIERED");
         assertThat(item(generic, "fee_p2p").body().get("basis").asString()).isEqualTo("PERCENTAGE");
         assertThat(item(ke, "tpl_payment_received_sms_sw")).isNotNull();
+        // KE installs the Kenyan regulatory reporting pack (optional: install_regulatory_pack=false skips it)
+        Item regulatory = item(ke, "regulatory_pack");
+        assertThat(regulatory).isNotNull();
+        assertThat(regulatory.kind()).isEqualTo(StarterPack.Kind.CALL);
+        assertThat(regulatory.service()).isEqualTo("regulatory-reporting-service");
+        assertThat(regulatory.body().get("pack_code").asString()).isEqualTo("KE_CBK");
+        assertThat(regulatory.body().get("enabled").asString()).isEqualTo("${param.install_regulatory_pack}");
+        assertThat(ke.parameters().get("install_regulatory_pack").defaultValue().asBoolean()).isTrue();
+        assertThat(item(generic, "regulatory_pack")).isNull();
         // the pack covers what a working tenant needs (tools/e2e setup S and the guide's ledger routing table)
         Set<String> paths = new HashSet<>();
         generic.items().forEach(i -> paths.add(i.service() + " " + i.path()));

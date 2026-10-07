@@ -1,0 +1,509 @@
+# Meridian regulatory pack GB_PRA: United Kingdom (PRA / Bank of England prudential returns, FCA conduct and
+# financial-crime returns).
+#
+# ILLUSTRATIVE TEMPLATES. Cell codes follow the row/column numbering style of COREP / FINREP-like templates
+# (R0010_C0010) but the layouts, the XBRL-like instance and the taxonomy reference are Meridian samples, NOT the PRA's
+# or the Bank of England's taxonomy and not the FCA's forms. Validate every report against the regulator's current
+# taxonomy (entry points, data point model, validation rules) and remittance dates before using it for a filing.
+# The UK has no cash transaction reporting regime comparable to CTRs; the financial-crime return reports SAR counts.
+#
+# Structure: see ke-cbk.yaml and docs/SERVICE_IMPLEMENTATION_GUIDE.md "Regulatory packs".
+pack_code: GB_PRA
+version: 2026.10.0
+country: GB
+regulator: Prudential Regulation Authority
+currency: GBP
+title: United Kingdom prudential (COREP / FINREP-like), conduct and financial-crime returns (illustrative)
+notice: >
+  ILLUSTRATIVE COREP / FINREP-like layouts and an XBRL-like instance with a placeholder taxonomy reference, not the
+  PRA / Bank of England taxonomy. Validate against the regulator's current taxonomy, validation rules and remittance
+  dates before use; review the GL mapping table against the bank's chart of accounts.
+
+calendar:
+  business_day_convention: FOLLOWING
+  # England and Wales bank holidays 2026-2027 (illustrative; verify against the published list every year)
+  holidays: ["2026-01-01", "2026-04-03", "2026-04-06", "2026-05-04", "2026-05-25", "2026-08-31", "2026-12-25", "2026-12-28",
+             "2027-01-01", "2027-03-26", "2027-03-29", "2027-05-03", "2027-05-31", "2027-08-30", "2027-12-27", "2027-12-28"]
+
+gl_mapping_tables:
+  GB_PRA_GL:
+    description: Meridian reference chart -> FINREP-like balance sheet / P&L lines, CET1 / AT1 / Tier 2 own funds and simplified standardised-approach exposure classes and risk weights (illustrative)
+    account_field: gl_account_code
+    rules:
+      - {line: F01_A010, from: "1000", to: "1019", attributes: {exposure_class: CENTRAL_GOVERNMENTS, risk_weight: "0"}}
+      - {line: F01_A020, from: "1020", to: "1099", attributes: {exposure_class: INSTITUTIONS, risk_weight: "0.20"}}
+      - {line: F01_A060, from: "1100", to: "1399", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: F01_A030, from: "1400", to: "1499", attributes: {exposure_class: CENTRAL_GOVERNMENTS, risk_weight: "0"}}
+      - {line: F01_A040, from: "1500", to: "1509", attributes: {exposure_class: RETAIL, risk_weight: "0.75"}}
+      - {line: F01_A040, from: "1510", to: "1529", attributes: {exposure_class: CORPORATES, risk_weight: "1.00"}}
+      - {line: F01_A040, from: "1530", to: "1539", attributes: {exposure_class: SECURED_RE, risk_weight: "0.35"}}
+      - {line: F01_A040, from: "1540", to: "1589", attributes: {exposure_class: CORPORATES, risk_weight: "1.00"}}
+      - {line: F01_A045, from: "1590", to: "1599", attributes: {exposure_class: PROVISIONS, risk_weight: "1.00"}}
+      - {line: F01_A050, from: "1600", to: "1699", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: F01_A055, from: "1700", to: "1799", attributes: {exposure_class: DEDUCTED, risk_weight: "0", capital: DEDUCT_CET1}}
+      - {line: F01_A057, from: "1800", to: "1899", attributes: {exposure_class: DEDUCTED, risk_weight: "0", capital: DEDUCT_CET1}}
+      - {line: F01_A060, from: "1900", to: "1999", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: F01_L010, from: "2000", to: "2099"}
+      - {line: F01_L020, from: "2100", to: "2199"}
+      - {line: F01_L030, from: "2200", to: "2299"}
+      - {line: F01_L050, from: "2300", to: "2699"}
+      - {line: F01_L040, from: "2700", to: "2799", attributes: {capital: T2}}
+      - {line: F01_L050, from: "2800", to: "2999"}
+      - {line: F01_E010, from: "3000", to: "3009", attributes: {capital: CET1}}
+      - {line: F01_E020, from: "3010", to: "3049", attributes: {capital: CET1}}
+      - {line: F01_E025, from: "3050", to: "3099", attributes: {capital: AT1}}
+      - {line: F01_E030, from: "3100", to: "3199", attributes: {capital: CET1}}
+      - {line: F01_E040, from: "3200", to: "3899", attributes: {capital: CET1}}
+      - {line: F01_E050, from: "3900", to: "3999"}
+      - {line: F02_I010, from: "4000", to: "4099", attributes: {gross_income: "Y"}}
+      - {line: F02_I020, from: "4100", to: "4199", attributes: {gross_income: "Y"}}
+      - {line: F02_I020, from: "4400", to: "4599", attributes: {gross_income: "Y"}}
+      - {line: F02_I030, from: "4200", to: "4399", attributes: {gross_income: "Y"}}
+      - {line: F02_I030, from: "4600", to: "4999", attributes: {gross_income: "Y"}}
+      - {line: F02_X010, from: "5000", to: "5099", attributes: {gross_income: "Y"}}
+      - {line: F02_X020, from: "5100", to: "5199"}
+      - {line: F02_X030, from: "5200", to: "5899"}
+      - {line: F02_X040, from: "5900", to: "5999"}
+
+source_templates:
+  trial_balance:
+    service: gl-service
+    path: /v1/gl/periods/{param.gl_period_id}/trial-balance
+    rows_pointer: /lines
+    id_field: id
+    resolve:
+      gl_period_id: {service: gl-service, path: "/v1/gl/periods?legal_entity_id={legal_entity_id}&period_type=MONTH&limit=200",
+                     match: {end_date: "{period_end}"}, field: id}
+    gl_mapping: GB_PRA_GL
+  quarter_trial_balance:
+    service: gl-service
+    path: /v1/gl/periods/{param.gl_period_id}/trial-balance
+    rows_pointer: /lines
+    id_field: id
+    resolve:
+      gl_period_id: {service: gl-service, path: "/v1/gl/periods?legal_entity_id={legal_entity_id}&period_type=QUARTER&limit=200",
+                     match: {end_date: "{period_end}"}, field: id}
+    gl_mapping: GB_PRA_GL
+  lcr: {service: liquidity-service, path: "/v1/treasury/liquidity/lcr?legal_entity_id={legal_entity_id}&as_of_date={as_of_date}"}
+  nsfr: {service: liquidity-service, path: "/v1/treasury/liquidity/nsfr?legal_entity_id={legal_entity_id}&as_of_date={as_of_date}"}
+  loans: {service: loan-service, path: "/v1/loans?limit=200"}
+  collateral: {service: collateral-service, path: "/v1/collaterals?status=PLEDGED&limit=200"}
+  mm_deals: {service: treasury-deal-service, path: "/v1/treasury/money-market-deals?legal_entity_id={legal_entity_id}&limit=200"}
+  counterparties: {service: treasury-deal-service, path: "/v1/treasury/counterparties?legal_entity_id={legal_entity_id}&limit=200"}
+  regulatory_reports: {service: case-management-service, path: "/v1/risk/sar-reports?created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+  complaints: {service: crm-service, path: "/v1/servicing/complaints?created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+
+reports:
+  # ------------------------------------------------------------------------------------------ own funds and ratios
+  - code: GB-PRA-OF1
+    name: Own funds, risk exposure amounts and capital ratios (illustrative COREP-like)
+    report_family: CAPITAL
+    frequency: QUARTERLY
+    format: XBRL
+    deadline_rule: PERIOD_END+42D
+    owner: FINANCE
+    description: >
+      CET1, AT1 and Tier 2 from the trial balance (GB_PRA_GL), credit risk exposure amounts by simplified
+      standardised exposure class, operational risk (basic-indicator style on annualised gross income), market risk
+      (run parameter market_risk_rwa), Pillar 1 ratios and a simplified leverage ratio. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:pra:own-funds:2026-10 (placeholder - not the PRA taxonomy)"
+      data_sources:
+        - {name: tb, use: trial_balance}
+      field_mappings:
+        - {cell_ref: OF1_R0010_C0010, label: "Capital instruments (paid up)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_E010'"}
+        - {cell_ref: OF1_R0020_C0010, label: "Share premium", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_E020'"}
+        - {cell_ref: OF1_R0030_C0010, label: "Retained earnings", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_E030'"}
+        - {cell_ref: OF1_R0040_C0010, label: "Accumulated OCI and other reserves", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_E040'"}
+        - {cell_ref: OF1_R0050_C0010, label: "(-) Intangible assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A055'"}
+        - {cell_ref: OF1_R0060_C0010, label: "(-) Deferred tax assets relying on future profitability", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A057'"}
+        - {cell_ref: OF1_R0100_C0010, label: "Common Equity Tier 1 capital", expression: "OF1_R0010_C0010 + OF1_R0020_C0010 + OF1_R0030_C0010 + OF1_R0040_C0010 - OF1_R0050_C0010 - OF1_R0060_C0010"}
+        - {cell_ref: OF1_R0200_C0010, label: "Additional Tier 1 capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.capital = 'AT1'"}
+        - {cell_ref: OF1_R0300_C0010, label: "Tier 1 capital", expression: "OF1_R0100_C0010 + OF1_R0200_C0010"}
+        - {cell_ref: OF1_R0400_C0010, label: "Tier 2 capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.capital = 'T2'"}
+        - {cell_ref: OF1_R0500_C0010, label: "Total own funds", expression: "OF1_R0300_C0010 + OF1_R0400_C0010"}
+        - {cell_ref: OF1_R1010_C0010, label: "Central governments and central banks - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'CENTRAL_GOVERNMENTS'"}
+        - {cell_ref: OF1_R1010_C0020, label: "Central governments and central banks - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'CENTRAL_GOVERNMENTS'"}
+        - {cell_ref: OF1_R1020_C0010, label: "Institutions - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'INSTITUTIONS'"}
+        - {cell_ref: OF1_R1020_C0020, label: "Institutions - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'INSTITUTIONS'"}
+        - {cell_ref: OF1_R1030_C0010, label: "Corporates - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'CORPORATES'"}
+        - {cell_ref: OF1_R1030_C0020, label: "Corporates - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'CORPORATES'"}
+        - {cell_ref: OF1_R1040_C0010, label: "Retail - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'RETAIL'"}
+        - {cell_ref: OF1_R1040_C0020, label: "Retail - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'RETAIL'"}
+        - {cell_ref: OF1_R1050_C0010, label: "Secured by mortgages on immovable property - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'SECURED_RE'"}
+        - {cell_ref: OF1_R1050_C0020, label: "Secured by mortgages on immovable property - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'SECURED_RE'"}
+        - {cell_ref: OF1_R1060_C0010, label: "Other items - exposure value", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class IN ('OTHER', 'PROVISIONS')"}
+        - {cell_ref: OF1_R1060_C0020, label: "Other items (net of specific credit risk adjustments) - risk exposure amount", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class IN ('OTHER', 'PROVISIONS')"}
+        - {cell_ref: OF1_R1100_C0020, label: "Credit risk exposure amount", expression: "OF1_R1010_C0020 + OF1_R1020_C0020 + OF1_R1030_C0020 + OF1_R1040_C0020 + OF1_R1050_C0020 + OF1_R1060_C0020"}
+        - {cell_ref: OF1_R1200_C0010, label: "Relevant indicator of the period (gross income)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * IF(gl_map.line = 'F02_X010', -1, 1)", filter: "gl_map.gross_income = 'Y'"}
+        - {cell_ref: OF1_R1200_C0020, label: "Operational risk exposure amount", expression: "ROUND(12.5 * 0.15 * OF1_R1200_C0010 * COALESCE(param_annualisation_factor, 4), 2)"}
+        - {cell_ref: OF1_R1300_C0020, label: "Market risk exposure amount (run parameter market_risk_rwa)", expression: "COALESCE(param_market_risk_rwa, 0)"}
+        - {cell_ref: OF1_R1900_C0020, label: "Total risk exposure amount", expression: "OF1_R1100_C0020 + OF1_R1200_C0020 + OF1_R1300_C0020"}
+        - {cell_ref: OF1_R2010_C0010, label: "CET1 capital ratio (%)", expression: "ROUND(DIV(OF1_R0100_C0010, OF1_R1900_C0020) * 100, 2)"}
+        - {cell_ref: OF1_R2020_C0010, label: "Tier 1 capital ratio (%)", expression: "ROUND(DIV(OF1_R0300_C0010, OF1_R1900_C0020) * 100, 2)"}
+        - {cell_ref: OF1_R2030_C0010, label: "Total capital ratio (%)", expression: "ROUND(DIV(OF1_R0500_C0010, OF1_R1900_C0020) * 100, 2)"}
+        - {cell_ref: OF1_R3010_C0010, label: "Leverage exposure measure (simplified: total on-balance-sheet assets)", source: tb, aggregate: SUM, value: "base_closing_balance", filter: "account_class = 'ASSET'"}
+        - {cell_ref: OF1_R3020_C0010, label: "Leverage ratio (%)", expression: "ROUND(DIV(OF1_R0300_C0010, OF1_R3010_C0010) * 100, 2)"}
+        - {cell_ref: OF1_R9000_C0010, label: "Trial balance lines without a mapping (should be 0)", source: tb, aggregate: COUNT, filter: "gl_map.line IS NULL AND base_closing_balance != 0"}
+      validation_rules:
+        - {code: OF1_REQUIRED, type: REQUIRED, cells: [OF1_R0100_C0010, OF1_R0300_C0010, OF1_R0500_C0010, OF1_R1900_C0020, OF1_R2010_C0010]}
+        - {code: OF1_CET1, type: EQUALS, left: "OF1_R0100_C0010", right: "OF1_R0010_C0010 + OF1_R0020_C0010 + OF1_R0030_C0010 + OF1_R0040_C0010 - OF1_R0050_C0010 - OF1_R0060_C0010", tolerance: 0.01, message: "CET1 must equal its items less deductions"}
+        - {code: OF1_T1, type: EQUALS, left: "OF1_R0300_C0010", right: "OF1_R0100_C0010 + OF1_R0200_C0010", tolerance: 0.01, message: "Tier 1 = CET1 + AT1"}
+        - {code: OF1_OWN_FUNDS, type: EQUALS, left: "OF1_R0500_C0010", right: "OF1_R0300_C0010 + OF1_R0400_C0010", tolerance: 0.01, message: "Own funds = Tier 1 + Tier 2"}
+        - {code: OF1_TREA, type: EQUALS, left: "OF1_R1900_C0020", right: "OF1_R1100_C0020 + OF1_R1200_C0020 + OF1_R1300_C0020", tolerance: 0.01, message: "Total risk exposure amount = credit + operational + market"}
+        - {code: OF1_CET1_RATIO, type: EQUALS, left: "OF1_R2010_C0010", right: "ROUND(DIV(OF1_R0100_C0010, OF1_R1900_C0020) * 100, 2)", tolerance: 0.01, message: "CET1 ratio must recompute"}
+        - {code: OF1_T1_RATIO, type: EQUALS, left: "OF1_R2020_C0010", right: "ROUND(DIV(OF1_R0300_C0010, OF1_R1900_C0020) * 100, 2)", tolerance: 0.01, message: "Tier 1 ratio must recompute"}
+        - {code: OF1_TOTAL_RATIO, type: EQUALS, left: "OF1_R2030_C0010", right: "ROUND(DIV(OF1_R0500_C0010, OF1_R1900_C0020) * 100, 2)", tolerance: 0.01, message: "Total capital ratio must recompute"}
+        - {code: OF1_RATIO_ORDER, type: EXPRESSION, expression: "OF1_R2010_C0010 <= OF1_R2020_C0010 AND OF1_R2020_C0010 <= OF1_R2030_C0010", message: "CET1 ratio <= Tier 1 ratio <= total capital ratio"}
+        - {code: OF1_TREA_NON_NEGATIVE, type: RANGE, cell: OF1_R1900_C0020, min: 0}
+        - {code: OF1_DEDUCTIONS_NON_NEGATIVE, type: EXPRESSION, expression: "OF1_R0050_C0010 >= 0 AND OF1_R0060_C0010 >= 0", message: "Deductions are reported as positive amounts"}
+        - {code: OF1_MIN_CET1, type: RANGE, cell: OF1_R2010_C0010, min: 4.5, severity: WARNING, message: "CET1 ratio below the 4.5% Pillar 1 minimum (buffers not included)"}
+        - {code: OF1_MIN_T1, type: RANGE, cell: OF1_R2020_C0010, min: 6, severity: WARNING, message: "Tier 1 ratio below the 6% Pillar 1 minimum"}
+        - {code: OF1_MIN_TOTAL, type: RANGE, cell: OF1_R2030_C0010, min: 8, severity: WARNING, message: "Total capital ratio below the 8% Pillar 1 minimum"}
+        - {code: OF1_MIN_LEVERAGE, type: RANGE, cell: OF1_R3020_C0010, min: 3.25, severity: WARNING, message: "Leverage ratio below the illustrative 3.25% minimum"}
+        - {code: OF1_UNMAPPED, type: RANGE, cell: OF1_R9000_C0010, max: 0, severity: WARNING, message: "Some trial balance accounts are not mapped (GB_PRA_GL)"}
+    sample:
+      expect:
+        cells: {OF1_R0100_C0010: "310000000.00", OF1_R0300_C0010: "310000000.00", OF1_R0400_C0010: "50000000.00",
+                OF1_R0500_C0010: "360000000.00", OF1_R1050_C0020: "35000000.00", OF1_R1100_C0020: "845000000.00",
+                OF1_R1200_C0020: "262500000.00", OF1_R1900_C0020: "1107500000.00", OF1_R2010_C0010: "27.99",
+                OF1_R2030_C0010: "32.51", OF1_R3010_C0010: "1610000000.00", OF1_R3020_C0010: "19.25"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ LCR
+  - code: GB-PRA-LCR1
+    name: Liquidity coverage ratio (illustrative LCR-template-like)
+    report_family: LIQUIDITY
+    frequency: MONTHLY
+    format: XBRL
+    deadline_rule: PERIOD_END+15D
+    owner: TREASURY
+    description: LCR components and ratio as approved in liquidity-service (GBP, reporting date). ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:pra:lcr:2026-10 (placeholder - not the PRA taxonomy)"
+      data_sources:
+        - {name: lcr, use: lcr}
+      field_mappings:
+        - {cell_ref: LCR1_R0010_C0010, label: "Level 1 assets", source: lcr, aggregate: SUM, value: hqla_level1, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0020_C0010, label: "Level 2A assets", source: lcr, aggregate: SUM, value: hqla_level2a, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0030_C0010, label: "Level 2B assets", source: lcr, aggregate: SUM, value: hqla_level2b, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0100_C0010, label: "Liquidity buffer", source: lcr, aggregate: SUM, value: total_hqla, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0200_C0010, label: "Total outflows", source: lcr, aggregate: SUM, value: outflows_30d, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0300_C0010, label: "Total inflows (after cap)", source: lcr, aggregate: SUM, value: inflows_30d, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0400_C0010, label: "Net liquidity outflow", source: lcr, aggregate: SUM, value: net_outflows, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0500_C0010, label: "Liquidity coverage ratio (%) as calculated", source: lcr, aggregate: MAX, value: "lcr_ratio * 100", filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LCR1_R0510_C0010, label: "Liquidity coverage ratio (%) recomputed", expression: "ROUND(DIV(LCR1_R0100_C0010, LCR1_R0400_C0010) * 100, 2)"}
+      validation_rules:
+        - {code: LCR1_REQUIRED, type: REQUIRED, cells: [LCR1_R0100_C0010, LCR1_R0400_C0010, LCR1_R0500_C0010], message: "No approved LCR calculation for the reporting date"}
+        - {code: LCR1_BUFFER, type: EXPRESSION, expression: "LCR1_R0100_C0010 <= LCR1_R0010_C0010 + LCR1_R0020_C0010 + LCR1_R0030_C0010", message: "Liquidity buffer cannot exceed the sum of its levels"}
+        - {code: LCR1_INFLOW_CAP, type: EXPRESSION, expression: "LCR1_R0300_C0010 <= 0.75 * LCR1_R0200_C0010", message: "Inflows are capped at 75% of outflows"}
+        - {code: LCR1_NET_OUTFLOW, type: EQUALS, left: "LCR1_R0400_C0010", right: "LCR1_R0200_C0010 - LCR1_R0300_C0010", tolerance: 0.01, message: "Net outflow = outflows - capped inflows"}
+        - {code: LCR1_RECOMPUTE, type: EQUALS, left: "LCR1_R0500_C0010", right: "LCR1_R0510_C0010", tolerance: 0.05, message: "Reported LCR does not recompute"}
+        - {code: LCR1_NON_NEGATIVE, type: EXPRESSION, expression: "LCR1_R0010_C0010 >= 0 AND LCR1_R0200_C0010 >= 0 AND LCR1_R0300_C0010 >= 0"}
+        - {code: LCR1_MIN, type: RANGE, cell: LCR1_R0510_C0010, min: 100, severity: WARNING, message: "LCR below 100%"}
+    sample:
+      expect:
+        cells: {LCR1_R0100_C0010: "560000000.00", LCR1_R0400_C0010: "300000000.00", LCR1_R0500_C0010: "186.67", LCR1_R0510_C0010: "186.67"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ NSFR
+  - code: GB-PRA-NSFR1
+    name: Net stable funding ratio (illustrative NSFR-template-like)
+    report_family: LIQUIDITY
+    frequency: QUARTERLY
+    format: XBRL
+    deadline_rule: PERIOD_END+42D
+    owner: TREASURY
+    description: Available and required stable funding and the NSFR as approved in liquidity-service. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:pra:nsfr:2026-10 (placeholder - not the PRA taxonomy)"
+      data_sources:
+        - {name: nsfr, use: nsfr}
+      field_mappings:
+        - {cell_ref: NSF1_R0010_C0010, label: "Available stable funding", source: nsfr, aggregate: SUM, value: available_stable_funding, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: NSF1_R0020_C0010, label: "Required stable funding", source: nsfr, aggregate: SUM, value: required_stable_funding, filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: NSF1_R0030_C0010, label: "NSFR (%) as calculated", source: nsfr, aggregate: MAX, value: "nsfr_ratio * 100", filter: "currency = COALESCE(param_currency, 'GBP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: NSF1_R0040_C0010, label: "NSFR (%) recomputed", expression: "ROUND(DIV(NSF1_R0010_C0010, NSF1_R0020_C0010) * 100, 2)"}
+      validation_rules:
+        - {code: NSF1_REQUIRED, type: REQUIRED, cells: [NSF1_R0010_C0010, NSF1_R0020_C0010, NSF1_R0030_C0010], message: "No approved NSFR calculation for the reporting date"}
+        - {code: NSF1_RECOMPUTE, type: EQUALS, left: "NSF1_R0030_C0010", right: "NSF1_R0040_C0010", tolerance: 0.05, message: "Reported NSFR does not recompute"}
+        - {code: NSF1_NON_NEGATIVE, type: EXPRESSION, expression: "NSF1_R0010_C0010 >= 0 AND NSF1_R0020_C0010 >= 0"}
+        - {code: NSF1_MIN, type: RANGE, cell: NSF1_R0040_C0010, min: 100, severity: WARNING, message: "NSFR below 100%"}
+    sample:
+      expect:
+        cells: {NSF1_R0030_C0010: "133.33", NSF1_R0040_C0010: "133.33"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ large exposures
+  - code: GB-PRA-LE1
+    name: Large exposures (illustrative LE-template-like)
+    report_family: LARGE_EXPOSURE
+    frequency: QUARTERLY
+    format: XBRL
+    deadline_rule: PERIOD_END+42D
+    owner: CREDIT_RISK
+    description: >
+      Exposures per counterparty (loans by customer, pledged collateral, money-market placements by treasury
+      counterparty), the five largest after credit risk mitigation against Tier 1 capital, exposures of 10% of Tier 1
+      or more and the 25% limit. ILLUSTRATIVE layout; connected-client grouping is not applied.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:pra:large-exposures:2026-10 (placeholder - not the PRA taxonomy)"
+      data_sources:
+        - {name: tb, use: trial_balance}
+        - {name: loans, use: loans, id_field: id}
+        - {name: collateral, use: collateral, id_field: id}
+        - {name: mm_deals, use: mm_deals, id_field: id}
+        - {name: counterparties, use: counterparties, id_field: id}
+        - name: exposures
+          type: COMBINE
+          key_field: counterparty
+          from:
+            - {source: loans, key: customer_id, filter: "legal_entity_id = param_legal_entity_id AND status IN ('ACTIVE', 'IN_ARREARS', 'RESTRUCTURED')", sum: {gross: total_outstanding}}
+            - {source: collateral, key: owner_customer_id, filter: "status = 'PLEDGED'", sum: {crm: lending_value}}
+            - {source: mm_deals, key: treasury_counterparty_id, filter: "deal_type IN ('PLACEMENT', 'CALL_PLACEMENT', 'REVERSE_REPO', 'CD_PURCHASED') AND status IN ('VERIFIED', 'CONFIRMED', 'SETTLED')", sum: {gross: principal}}
+            - {source: counterparties, key: id, first: {name: name}}
+      field_mappings:
+        - {cell_ref: LE1_R0010_C0010, label: "Tier 1 capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * IF(gl_map.capital = 'DEDUCT_CET1', -1, 1)", filter: "gl_map.capital IN ('CET1', 'AT1', 'DEDUCT_CET1')"}
+        - {cell_ref: LE1_R0020_C0010, label: "Counterparties with an exposure", source: exposures, aggregate: COUNT, filter: "gross > 0"}
+        - {cell_ref: LE1_R0030_C0010, label: "Total original exposure", source: exposures, aggregate: SUM, value: gross}
+        - {cell_ref: LE1_R0101_C0010, label: "Rank 1 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R0101_C0020, label: "Rank 1 - original exposure", source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: gross}
+        - {cell_ref: LE1_R0101_C0030, label: "Rank 1 - exposure after CRM", source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R0101_C0040, label: "Rank 1 - % of Tier 1", expression: "ROUND(DIV(LE1_R0101_C0030, LE1_R0010_C0010) * 100, 2)"}
+        - {cell_ref: LE1_R0102_C0010, label: "Rank 2 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R0102_C0020, label: "Rank 2 - original exposure", source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: gross}
+        - {cell_ref: LE1_R0102_C0030, label: "Rank 2 - exposure after CRM", source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R0102_C0040, label: "Rank 2 - % of Tier 1", expression: "ROUND(DIV(LE1_R0102_C0030, LE1_R0010_C0010) * 100, 2)"}
+        - {cell_ref: LE1_R0103_C0010, label: "Rank 3 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R0103_C0020, label: "Rank 3 - original exposure", source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: gross}
+        - {cell_ref: LE1_R0103_C0030, label: "Rank 3 - exposure after CRM", source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R0103_C0040, label: "Rank 3 - % of Tier 1", expression: "ROUND(DIV(LE1_R0103_C0030, LE1_R0010_C0010) * 100, 2)"}
+        - {cell_ref: LE1_R0104_C0010, label: "Rank 4 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R0104_C0020, label: "Rank 4 - original exposure", source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: gross}
+        - {cell_ref: LE1_R0104_C0030, label: "Rank 4 - exposure after CRM", source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R0104_C0040, label: "Rank 4 - % of Tier 1", expression: "ROUND(DIV(LE1_R0104_C0030, LE1_R0010_C0010) * 100, 2)"}
+        - {cell_ref: LE1_R0105_C0010, label: "Rank 5 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R0105_C0020, label: "Rank 5 - original exposure", source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: gross}
+        - {cell_ref: LE1_R0105_C0030, label: "Rank 5 - exposure after CRM", source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R0105_C0040, label: "Rank 5 - % of Tier 1", expression: "ROUND(DIV(LE1_R0105_C0030, LE1_R0010_C0010) * 100, 2)"}
+        - {cell_ref: LE1_R0200_C0010, label: "Large exposures (>= 10% of Tier 1, five largest)", expression: "IF(COALESCE(LE1_R0101_C0040, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R0102_C0040, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R0103_C0040, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R0104_C0040, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R0105_C0040, 0) >= 10, 1, 0)", scale: 0}
+      validation_rules:
+        - {code: LE1_TIER1, type: RANGE, cell: LE1_R0010_C0010, min: 0.01, message: "Tier 1 must be positive to measure large exposures"}
+        - {code: LE1_RANKING, type: EXPRESSION, expression: "COALESCE(LE1_R0101_C0030, 0) >= COALESCE(LE1_R0102_C0030, 0) AND COALESCE(LE1_R0102_C0030, 0) >= COALESCE(LE1_R0103_C0030, 0) AND COALESCE(LE1_R0103_C0030, 0) >= COALESCE(LE1_R0104_C0030, 0) AND COALESCE(LE1_R0104_C0030, 0) >= COALESCE(LE1_R0105_C0030, 0)", message: "Exposures must be ranked by exposure after CRM"}
+        - {code: LE1_AFTER_CRM, type: EXPRESSION, expression: "COALESCE(LE1_R0101_C0030, 0) <= COALESCE(LE1_R0101_C0020, 0)", message: "Exposure after CRM cannot exceed the original exposure"}
+        - {code: LE1_LIMIT_R01, type: RANGE, cell: LE1_R0101_C0040, max: 25, severity: WARNING, message: "Rank 1 exceeds the 25% large exposures limit"}
+        - {code: LE1_LIMIT_R02, type: EXPRESSION, expression: "COALESCE(LE1_R0102_C0040, 0) <= 25", severity: WARNING, message: "Rank 2 exceeds the 25% large exposures limit"}
+        - {code: LE1_LIMIT_R03, type: EXPRESSION, expression: "COALESCE(LE1_R0103_C0040, 0) <= 25", severity: WARNING, message: "Rank 3 exceeds the 25% large exposures limit"}
+    sample:
+      expect:
+        cells: {LE1_R0010_C0010: "310000000.00", LE1_R0020_C0010: "4", LE1_R0101_C0040: "32.26", LE1_R0102_C0040: "29.03",
+                LE1_R0103_C0040: "19.35", LE1_R0104_C0040: "6.45", LE1_R0200_C0010: "3"}
+        findings: [LE1_LIMIT_R01, LE1_LIMIT_R02]
+
+  # ------------------------------------------------------------------------------------------ FINREP-like statements
+  - code: GB-BOE-FS1
+    name: Balance sheet and statement of profit or loss (illustrative FINREP-like)
+    regulator: Bank of England
+    report_family: BALANCE_SHEET
+    frequency: QUARTERLY
+    format: XBRL
+    deadline_rule: PERIOD_END+42D
+    owner: FINANCE
+    description: >
+      Balance sheet and profit or loss of the quarter from the GL trial balance (QUARTER period) aggregated by the
+      GB_PRA_GL mapping table. ILLUSTRATIVE lines.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:boe:finrep-like:2026-10 (placeholder - not the Bank of England taxonomy)"
+      data_sources:
+        - {name: tb, use: quarter_trial_balance}
+      field_mappings:
+        - {cell_ref: F01_R0010_C0010, label: "Cash, cash balances at central banks", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A010'"}
+        - {cell_ref: F01_R0020_C0010, label: "Loans and advances to banks", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A020'"}
+        - {cell_ref: F01_R0030_C0010, label: "Debt securities (government)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A030'"}
+        - {cell_ref: F01_R0040_C0010, label: "Loans and advances to customers (gross carrying amount)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A040'"}
+        - {cell_ref: F01_R0045_C0010, label: "(-) Accumulated impairment", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A045'"}
+        - {cell_ref: F01_R0050_C0010, label: "Tangible assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A050'"}
+        - {cell_ref: F01_R0055_C0010, label: "Intangible assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A055'"}
+        - {cell_ref: F01_R0057_C0010, label: "Tax assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A057'"}
+        - {cell_ref: F01_R0060_C0010, label: "Other assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_A060'"}
+        - {cell_ref: F01_R0100_C0010, label: "Total assets", expression: "F01_R0010_C0010 + F01_R0020_C0010 + F01_R0030_C0010 + F01_R0040_C0010 + F01_R0045_C0010 + F01_R0050_C0010 + F01_R0055_C0010 + F01_R0057_C0010 + F01_R0060_C0010"}
+        - {cell_ref: F01_R0210_C0010, label: "Deposits from customers", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_L010'"}
+        - {cell_ref: F01_R0220_C0010, label: "E-money issued", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_L020'"}
+        - {cell_ref: F01_R0230_C0010, label: "Deposits from banks and borrowings", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_L030'"}
+        - {cell_ref: F01_R0240_C0010, label: "Subordinated liabilities", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_L040'"}
+        - {cell_ref: F01_R0250_C0010, label: "Other liabilities", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F01_L050'"}
+        - {cell_ref: F01_R0300_C0010, label: "Total liabilities", expression: "F01_R0210_C0010 + F01_R0220_C0010 + F01_R0230_C0010 + F01_R0240_C0010 + F01_R0250_C0010"}
+        - {cell_ref: F01_R0410_C0010, label: "Capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line IN ('F01_E010', 'F01_E020', 'F01_E025')"}
+        - {cell_ref: F01_R0420_C0010, label: "Retained earnings and other reserves", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line IN ('F01_E030', 'F01_E040', 'F01_E050')"}
+        - {cell_ref: F01_R0430_C0010, label: "Profit or loss of the period", expression: "F02_R0900_C0010"}
+        - {cell_ref: F01_R0500_C0010, label: "Total equity", expression: "F01_R0410_C0010 + F01_R0420_C0010 + F01_R0430_C0010"}
+        - {cell_ref: F01_R0600_C0010, label: "Total equity and total liabilities", expression: "F01_R0300_C0010 + F01_R0500_C0010"}
+        - {cell_ref: F02_R0010_C0010, label: "Interest income", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_I010'"}
+        - {cell_ref: F02_R0020_C0010, label: "(-) Interest expenses", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_X010'"}
+        - {cell_ref: F02_R0030_C0010, label: "Fee and commission income", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_I020'"}
+        - {cell_ref: F02_R0040_C0010, label: "Other operating income", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_I030'"}
+        - {cell_ref: F02_R0050_C0010, label: "(-) Impairment", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_X020'"}
+        - {cell_ref: F02_R0060_C0010, label: "(-) Administrative and other expenses", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_X030'"}
+        - {cell_ref: F02_R0070_C0010, label: "Profit before tax", expression: "F02_R0010_C0010 - F02_R0020_C0010 + F02_R0030_C0010 + F02_R0040_C0010 - F02_R0050_C0010 - F02_R0060_C0010"}
+        - {cell_ref: F02_R0080_C0010, label: "(-) Tax expense", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'F02_X040'"}
+        - {cell_ref: F02_R0900_C0010, label: "Profit or loss for the period", expression: "F02_R0070_C0010 - F02_R0080_C0010"}
+        - {cell_ref: F99_R0010_C0010, label: "Trial balance lines without a mapping (should be 0)", source: tb, aggregate: COUNT, filter: "gl_map.line IS NULL AND base_closing_balance != 0"}
+      validation_rules:
+        - {code: F01_BALANCES, type: EQUALS, left: "F01_R0100_C0010", right: "F01_R0600_C0010", tolerance: 1, message: "Total assets must equal total equity and liabilities"}
+        - {code: F01_LIABILITIES_TOTAL, type: EQUALS, left: "F01_R0300_C0010", right: "F01_R0210_C0010 + F01_R0220_C0010 + F01_R0230_C0010 + F01_R0240_C0010 + F01_R0250_C0010", tolerance: 0.01}
+        - {code: F02_PROFIT, type: EQUALS, left: "F02_R0900_C0010", right: "F02_R0010_C0010 - F02_R0020_C0010 + F02_R0030_C0010 + F02_R0040_C0010 - F02_R0050_C0010 - F02_R0060_C0010 - F02_R0080_C0010", tolerance: 0.01}
+        - {code: F01_IMPAIRMENT_SIGN, type: RANGE, cell: F01_R0045_C0010, max: 0, message: "Accumulated impairment is reported as a negative amount"}
+        - {code: F01_NON_NEGATIVE, type: EXPRESSION, expression: "F01_R0010_C0010 >= 0 AND F01_R0040_C0010 >= 0 AND F01_R0210_C0010 >= 0"}
+        - {code: F99_UNMAPPED, type: RANGE, cell: F99_R0010_C0010, max: 0, severity: WARNING, message: "Some trial balance accounts are not mapped (GB_PRA_GL)"}
+    sample:
+      expect:
+        cells: {F01_R0100_C0010: "1610000000.00", F01_R0300_C0010: "1260000000.00", F01_R0410_C0010: "250000000.00",
+                F01_R0420_C0010: "80000000.00", F01_R0500_C0010: "350000000.00", F01_R0600_C0010: "1610000000.00",
+                F02_R0900_C0010: "20000000.00"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ complaints
+  - code: GB-FCA-CMP1
+    name: Complaints return (illustrative DISP-like)
+    regulator: Financial Conduct Authority
+    report_family: COMPLAINTS
+    frequency: SEMI_ANNUAL
+    format: XBRL
+    deadline_rule: PERIOD_END+30D
+    owner: CUSTOMER_EXPERIENCE
+    description: Complaints opened in the half-year by product / cause, closed, upheld, closed late, redress (GBP), from crm-service. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:fca:complaints:2026-10 (placeholder - not the FCA form)"
+      data_sources:
+        - {name: complaints, use: complaints, id_field: complaint_number}
+      field_mappings:
+        - {cell_ref: CMP_R0010_C0010, label: "Complaints opened", source: complaints, aggregate: COUNT}
+        - {cell_ref: CMP_R0020_C0010, label: "Banking and payments", source: complaints, aggregate: COUNT, filter: "category IN ('PAYMENTS', 'DIGITAL_CHANNELS', 'ACCOUNT_OPENING', 'ACCOUNT_CLOSURE', 'CARDS')"}
+        - {cell_ref: CMP_R0030_C0010, label: "Lending and collections", source: complaints, aggregate: COUNT, filter: "category IN ('LENDING', 'COLLECTIONS_CONDUCT')"}
+        - {cell_ref: CMP_R0040_C0010, label: "Charges", source: complaints, aggregate: COUNT, filter: "category = 'FEES_AND_CHARGES'"}
+        - {cell_ref: CMP_R0050_C0010, label: "Fraud and scams", source: complaints, aggregate: COUNT, filter: "category = 'FRAUD_AND_SCAMS'"}
+        - {cell_ref: CMP_R0060_C0010, label: "Other", source: complaints, aggregate: COUNT, filter: "category NOT IN ('PAYMENTS', 'DIGITAL_CHANNELS', 'ACCOUNT_OPENING', 'ACCOUNT_CLOSURE', 'CARDS', 'LENDING', 'COLLECTIONS_CONDUCT', 'FEES_AND_CHARGES', 'FRAUD_AND_SCAMS')"}
+        - {cell_ref: CMP_R0100_C0010, label: "Complaints closed", source: complaints, aggregate: COUNT, filter: "status IN ('RESOLVED', 'CLOSED', 'REJECTED')"}
+        - {cell_ref: CMP_R0110_C0010, label: "Complaints upheld", source: complaints, aggregate: COUNT, filter: "outcome IN ('UPHELD', 'PARTIALLY_UPHELD')"}
+        - {cell_ref: CMP_R0120_C0010, label: "Closed after the final response deadline", source: complaints, aggregate: COUNT, filter: "deadline_breached_at IS NOT NULL"}
+        - {cell_ref: CMP_R0130_C0010, label: "Referred to the Financial Ombudsman Service", source: complaints, aggregate: COUNT, filter: "status = 'ESCALATED_TO_OMBUDSMAN' OR escalated_at IS NOT NULL"}
+        - {cell_ref: CMP_R0140_C0010, label: "Redress paid (GBP)", source: complaints, aggregate: SUM, value: "COALESCE(redress_amount, 0)", filter: "COALESCE(redress_currency, 'GBP') = 'GBP'"}
+        - {cell_ref: CMP_R0150_C0010, label: "Upheld rate (%)", expression: "ROUND(DIV(CMP_R0110_C0010, CMP_R0100_C0010) * 100, 2)"}
+      validation_rules:
+        - {code: CMP_PRODUCT_TOTAL, type: EQUALS, left: "CMP_R0010_C0010", right: "CMP_R0020_C0010 + CMP_R0030_C0010 + CMP_R0040_C0010 + CMP_R0050_C0010 + CMP_R0060_C0010", message: "Product groups must add up to complaints opened"}
+        - {code: CMP_CLOSED_LE_OPENED, type: EXPRESSION, expression: "CMP_R0100_C0010 <= CMP_R0010_C0010"}
+        - {code: CMP_UPHELD_RATE, type: RANGE, cell: CMP_R0150_C0010, min: 0, max: 100, severity: WARNING, message: "Upheld rate outside 0-100% (upheld complaints not yet closed)"}
+        - {code: CMP_REDRESS_NON_NEGATIVE, type: RANGE, cell: CMP_R0140_C0010, min: 0}
+        - {code: CMP_LATE, type: RANGE, cell: CMP_R0120_C0010, max: 0, severity: WARNING, message: "Complaints closed after the deadline"}
+    sample:
+      expect:
+        cells: {CMP_R0010_C0010: "5", CMP_R0020_C0010: "2", CMP_R0040_C0010: "1", CMP_R0050_C0010: "1", CMP_R0060_C0010: "1",
+                CMP_R0100_C0010: "3", CMP_R0110_C0010: "2", CMP_R0150_C0010: "66.67"}
+        findings: [CMP_LATE]
+
+  # ------------------------------------------------------------------------------------------ financial crime
+  - code: GB-FCA-CRIM1
+    name: Financial crime return - suspicious activity reporting (illustrative REP-CRIM-like)
+    regulator: Financial Conduct Authority
+    report_family: AML_SAR
+    frequency: ANNUAL
+    format: XBRL
+    deadline_rule: PERIOD_END+60BD
+    owner: COMPLIANCE
+    description: >
+      Suspicious activity reports made to the National Crime Agency in the year (counts and amounts from
+      case-management-service; no narratives). ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      xbrl_taxonomy: "urn:meridian:illustrative:gb:fca:financial-crime:2026-10 (placeholder - not the FCA form)"
+      data_sources:
+        - {name: filings, use: regulatory_reports, id_field: id}
+      field_mappings:
+        - {cell_ref: CRM_R0010_C0010, label: "SARs submitted to the NCA", source: filings, aggregate: COUNT, filter: "report_type = 'SAR' AND status IN ('SUBMITTED', 'ACKNOWLEDGED')"}
+        - {cell_ref: CRM_R0020_C0010, label: "SARs prepared, not yet submitted", source: filings, aggregate: COUNT, filter: "report_type = 'SAR' AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED')"}
+        - {cell_ref: CRM_R0030_C0010, label: "SARs returned or rejected", source: filings, aggregate: COUNT, filter: "report_type = 'SAR' AND status = 'REJECTED'"}
+        - {cell_ref: CRM_R0040_C0010, label: "Amount of suspected activity in submitted SARs (GBP)", source: filings, aggregate: SUM, value: "COALESCE(suspicious_amount, 0)", filter: "report_type = 'SAR' AND status IN ('SUBMITTED', 'ACKNOWLEDGED') AND COALESCE(currency, 'GBP') = 'GBP'"}
+        - {cell_ref: CRM_R0050_C0010, label: "SAR cases worked in the year", source: filings, aggregate: COUNT_DISTINCT, value: aml_case_id, filter: "report_type = 'SAR'"}
+      validation_rules:
+        - {code: CRM_NON_NEGATIVE, type: RANGE, cell: CRM_R0040_C0010, min: 0}
+        - {code: CRM_CASES, type: EXPRESSION, expression: "CRM_R0050_C0010 <= CRM_R0010_C0010 + CRM_R0020_C0010 + CRM_R0030_C0010", message: "More cases than SARs"}
+        - {code: CRM_BACKLOG, type: RANGE, cell: CRM_R0020_C0010, max: 0, severity: INFO, message: "SARs still pending at year end"}
+    sample:
+      expect:
+        cells: {CRM_R0010_C0010: "2", CRM_R0020_C0010: "1", CRM_R0030_C0010: "0", CRM_R0040_C0010: "750000.00", CRM_R0050_C0010: "2"}
+        findings: [CRM_BACKLOG]
+
+sample_data:
+  parameters: {legal_entity_id: le-sample}
+  tb:
+    - {id: tb1, gl_account_code: "1000", account_class: ASSET, base_closing_balance: "50000000.00"}
+    - {id: tb2, gl_account_code: "1010", account_class: ASSET, base_closing_balance: "150000000.00"}
+    - {id: tb3, gl_account_code: "1020", account_class: ASSET, base_closing_balance: "100000000.00"}
+    - {id: tb4, gl_account_code: "1100", account_class: ASSET, base_closing_balance: "20000000.00"}
+    - {id: tb5, gl_account_code: "1300", account_class: ASSET, base_closing_balance: "10000000.00"}
+    - {id: tb6, gl_account_code: "1400", account_class: ASSET, base_closing_balance: "300000000.00"}
+    - {id: tb7, gl_account_code: "1500", account_class: ASSET, base_closing_balance: "400000000.00"}
+    - {id: tb8, gl_account_code: "1510", account_class: ASSET, base_closing_balance: "200000000.00"}
+    - {id: tb9, gl_account_code: "1520", account_class: ASSET, base_closing_balance: "250000000.00"}
+    - {id: tb10, gl_account_code: "1530", account_class: ASSET, base_closing_balance: "100000000.00"}
+    - {id: tb11, gl_account_code: "1590", account_class: ASSET, base_closing_balance: "-30000000.00"}
+    - {id: tb12, gl_account_code: "1600", account_class: ASSET, base_closing_balance: "40000000.00"}
+    - {id: tb13, gl_account_code: "1700", account_class: ASSET, base_closing_balance: "15000000.00"}
+    - {id: tb14, gl_account_code: "1800", account_class: ASSET, base_closing_balance: "5000000.00"}
+    - {id: tb15, gl_account_code: "2000", account_class: LIABILITY, base_closing_balance: "-500000000.00"}
+    - {id: tb16, gl_account_code: "2010", account_class: LIABILITY, base_closing_balance: "-300000000.00"}
+    - {id: tb17, gl_account_code: "2020", account_class: LIABILITY, base_closing_balance: "-250000000.00"}
+    - {id: tb18, gl_account_code: "2100", account_class: LIABILITY, base_closing_balance: "-80000000.00"}
+    - {id: tb19, gl_account_code: "2200", account_class: LIABILITY, base_closing_balance: "-60000000.00"}
+    - {id: tb20, gl_account_code: "2500", account_class: LIABILITY, base_closing_balance: "-20000000.00"}
+    - {id: tb21, gl_account_code: "2700", account_class: LIABILITY, base_closing_balance: "-50000000.00"}
+    - {id: tb22, gl_account_code: "3000", account_class: EQUITY, base_closing_balance: "-200000000.00"}
+    - {id: tb23, gl_account_code: "3010", account_class: EQUITY, base_closing_balance: "-50000000.00"}
+    - {id: tb24, gl_account_code: "3100", account_class: EQUITY, base_closing_balance: "-60000000.00"}
+    - {id: tb25, gl_account_code: "3200", account_class: EQUITY, base_closing_balance: "-20000000.00"}
+    - {id: tb26, gl_account_code: "4000", account_class: INCOME, base_closing_balance: "-30000000.00"}
+    - {id: tb27, gl_account_code: "4100", account_class: INCOME, base_closing_balance: "-12000000.00"}
+    - {id: tb28, gl_account_code: "4200", account_class: INCOME, base_closing_balance: "-3000000.00"}
+    - {id: tb29, gl_account_code: "5000", account_class: EXPENSE, base_closing_balance: "10000000.00"}
+    - {id: tb30, gl_account_code: "5100", account_class: EXPENSE, base_closing_balance: "5000000.00"}
+    - {id: tb31, gl_account_code: "5300", account_class: EXPENSE, base_closing_balance: "8000000.00"}
+    - {id: tb32, gl_account_code: "5900", account_class: EXPENSE, base_closing_balance: "2000000.00"}
+  lcr:
+    - {id: lcr1, currency: GBP, status: APPROVED, hqla_level1: "500000000.00", hqla_level2a: "50000000.00", hqla_level2b: "10000000.00",
+       total_hqla: "560000000.00", outflows_30d: "400000000.00", inflows_30d: "100000000.00", net_outflows: "300000000.00", lcr_ratio: "1.866667"}
+  nsfr:
+    - {id: nsfr1, currency: GBP, status: APPROVED, available_stable_funding: "1200000000.00", required_stable_funding: "900000000.00", nsfr_ratio: "1.333333"}
+  loans:
+    - {id: ln1, customer_id: cust-001, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "80000000.00"}
+    - {id: ln2, customer_id: cust-001, legal_entity_id: le-sample, status: IN_ARREARS, total_outstanding: "40000000.00"}
+    - {id: ln3, customer_id: cust-002, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "60000000.00"}
+    - {id: ln4, customer_id: cust-003, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "20000000.00"}
+  collateral:
+    - {id: col1, owner_customer_id: cust-001, status: PLEDGED, lending_value: "30000000.00"}
+  mm_deals:
+    - {id: mm1, treasury_counterparty_id: cp-001, deal_type: PLACEMENT, status: SETTLED, principal: "100000000.00"}
+  counterparties:
+    - {id: cp-001, code: UKB, name: Sample Clearing Bank plc (SAMPLE)}
+  filings:
+    - {id: f1, aml_case_id: case-1, report_type: SAR, status: SUBMITTED, currency: GBP, suspicious_amount: "500000.00"}
+    - {id: f2, aml_case_id: case-2, report_type: SAR, status: ACKNOWLEDGED, currency: GBP, suspicious_amount: "250000.00"}
+    - {id: f3, aml_case_id: case-2, report_type: SAR, status: PENDING_APPROVAL, currency: GBP, suspicious_amount: "90000.00"}
+  complaints:
+    - {id: cp1, complaint_number: CMP-1, category: FEES_AND_CHARGES, status: RESOLVED, outcome: UPHELD, redress_amount: "150.00", redress_currency: GBP, is_vulnerable_customer: false}
+    - {id: cp2, complaint_number: CMP-2, category: FRAUD_AND_SCAMS, status: CLOSED, outcome: PARTIALLY_UPHELD, is_vulnerable_customer: true}
+    - {id: cp3, complaint_number: CMP-3, category: PAYMENTS, status: INVESTIGATING, is_vulnerable_customer: false, deadline_breached_at: "2026-09-20T10:00:00Z"}
+    - {id: cp4, complaint_number: CMP-4, category: DIGITAL_CHANNELS, status: RECEIVED, is_vulnerable_customer: false}
+    - {id: cp5, complaint_number: CMP-5, category: DATA_PRIVACY, status: REJECTED, outcome: NOT_UPHELD, is_vulnerable_customer: false}

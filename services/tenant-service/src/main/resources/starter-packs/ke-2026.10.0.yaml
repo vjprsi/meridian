@@ -46,6 +46,9 @@ parameters:
   account_number_scheme: {default: NATIONAL}
   bank_code: {default: "99", description: "DEFAULT placeholder: replace with the CBK-assigned 2-digit bank code"}
   branch_code: {default: "000", description: "DEFAULT head-office branch code (3 digits) used in account numbers"}
+  # Regulatory reporting (regulatory-reporting-service pack KE_CBK): illustrative CBK / FRC report templates, created as
+  # DRAFT versions that a checker publishes (four eyes); false skips the installation.
+  install_regulatory_pack: {type: boolean, default: true, description: "Install the KE_CBK regulatory reporting pack (ILLUSTRATIVE CBK / FRC templates; every report version waits for a checker's publication)"}
 
 steps:
   # KE sign-up: Kenyan mobile number, national ID number and KRA PIN, county instead of a postal code.
@@ -249,6 +252,16 @@ steps:
              approval: commission_plan}
         ready_status: [ACTIVE]
         pending_status: [PENDING_APPROVAL]
+
+  # Kenyan regulatory returns: installs the KE_CBK regulatory pack (report definitions, versions, filing calendar,
+  # GL mapping table) for the main legal entity. The pack creates DRAFT versions and opens their publication requests
+  # with the pack's acting user as maker, so a different user publishes them; re-runs are idempotent (pack-owned
+  # reports only; tenant-defined reports with the same code are left alone). install_regulatory_pack=false skips it.
+  - code: end_of_day
+    items:
+      - {key: regulatory_pack, title: "Install the KE_CBK regulatory reporting pack (ILLUSTRATIVE templates; versions await four-eyes publication)",
+         kind: CALL, service: regulatory-reporting-service, path: /v1/reporting/pack-installations/install,
+         body: {pack_code: KE_CBK, legal_entity_id: "${ref.legal_entity}", enabled: "${param.install_regulatory_pack}"}}
 
   # Swahili SMS variants next to the default-language templates.
   - code: notifications

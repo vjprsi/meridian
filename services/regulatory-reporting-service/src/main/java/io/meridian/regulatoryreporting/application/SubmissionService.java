@@ -85,7 +85,8 @@ public class SubmissionService {
         JsonNode def = store.require("report_definition", RunService.uuid(run, "report_definition_id"));
         if (!req.hasNonNull("deadline_at")) {
             LocalDate due = FilingCalendar.dueDate(Fields.text(def, "deadline_rule"), def.get("frequency").asString(),
-                    LocalDate.parse(run.get("period_end").asString()), def.path("filing_offset_days").asInt(0));
+                    LocalDate.parse(run.get("period_end").asString()), def.path("filing_offset_days").asInt(0),
+                    DefinitionService.conventions(def));
             v.put("deadline_at", due.atTime(23, 59, 59).atOffset(ZoneOffset.UTC).toString());
         }
         String inserted = crud.insert("report_submission", v);

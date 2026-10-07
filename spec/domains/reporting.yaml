@@ -18,6 +18,7 @@ enums:
   ReportValidationSeverity: [INFO, WARNING, ERROR]
   ReportAdjustmentStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
   ReportJob: [SCHEDULED_RUNS, DEADLINE_ALERTS]
+  FilingDayConvention: [FOLLOWING, MODIFIED_FOLLOWING, PRECEDING, NONE]
   ScheduledJobStatus: [RUNNING, COMPLETED, COMPLETED_WITH_ERRORS]
   CrsReportingRegime: [CRS, FATCA]
   CrsAccountHolderType: [INDIVIDUAL, ENTITY, CONTROLLING_PERSON]
@@ -59,16 +60,21 @@ services:
           - "country_pack string(16) nn idx | Country pack code, e.g. NG, KE, BR, GB"
           - "jurisdiction country nn | Jurisdiction"
           - "regulator string(64) nn | Regulator / authority"
-          - "report_family string(40) nn | BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER"
+          - "report_family string(40) nn | BALANCE_SHEET, INCOME_STATEMENT, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, AML_SAR, COMPLAINTS, PAYMENTS_STATS, MOBILE_MONEY, CRS, FATCA, DEPOSIT_INSURANCE, OTHER"
           - "frequency enum:ReportFrequency nn | Frequency"
           - "format enum:ReportFormat nn | Submission format (XBRL, XML, CSV and JSON are rendered by the service)"
           - "deadline_rule string(64) | Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency"
           - "filing_offset_days int nn default=0 | Jurisdiction-specific extension in calendar days added to the deadline"
+          - "business_day_convention enum:FilingDayConvention nn default=FOLLOWING | How a due date on a weekend or holiday moves: FOLLOWING (next business day), MODIFIED_FOLLOWING (next, unless that leaves the month, then previous), PRECEDING (previous business day), NONE (kept)"
+          - "holidays date[] | Regulator's non-business days besides Saturdays and Sundays (ISO dates), used to count business days and roll due dates"
           - "status enum:ReportDefinitionStatus nn default=DRAFT ro | Status (ACTIVE on first publication, DEPRECATED by deprecate)"
           - "active_version int ro | Version currently in force"
           - "status_reason text ro | Reason of the last status change (deprecation)"
           - "description text | Purpose and scope"
           - "owner string(64) | Accountable owner (finance / compliance)"
+          - "pack_code string(32) ro idx | Regulatory pack that installed the definition (empty = tenant-defined; pack upgrades only touch pack-owned definitions)"
+          - "pack_version string(32) ro | Version of the pack that last installed or upgraded the definition"
+          - "pack_checksum string(64) ro | Checksum of the pack's definition-level fields last applied (detects pack changes on upgrade)"
 
       - name: report_definition_version
         prefix: rdv
@@ -78,8 +84,8 @@ services:
           - "report_definition_id uuid nn fk=report_definition idx | Report definition"
           - "definition_version int nn ro | Version number (server-assigned, 1, 2, ...)"
           - "template_document_id uuid ref=document | Template file (XBRL taxonomy entry point, XLSX, XSD)"
-          - "data_sources json[] nn | Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}"
-          - "field_mappings json[] nn | Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT}"
+          - "data_sources json[] nn | Data sources {name, type SERVICE|INLINE|COMBINE, service, path with {as_of_date} {period_start} {period_end} {period_start_ts} {period_end_ts} (exclusive) {legal_entity_id} {reporting_year} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE), resolve {param: {service, path, match, field}} (looks up a missing run parameter, e.g. the GL period of period_end), gl_mapping {table, account_field, rules[{line, code|prefix|from+to, account_class, sign, attributes}]} (adds gl_map.line / gl_map.sign / gl_map.<attribute> to each row; tenant rules from config-service namespace regulatory_reporting key gl_mapping.<table> take precedence), from[{source, key, filter, sum {field: expr}, first {field: expr}}] (COMBINE: groups earlier sources by key)}"
+          - "field_mappings json[] nn | Cells {cell_ref, label, row, column, source, aggregate SUM|COUNT|COUNT_DISTINCT|AVG|MIN|MAX|FIRST|TOP, value (row expression), filter (row condition), order_by and rank (TOP: value of the rank-th largest row), expression (over other cells), scale, type NUMBER|TEXT}"
           - "validation_rules json[] | Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message}"
           - "xbrl_taxonomy string(255) | XBRL taxonomy and entry point, when XBRL"
           - "effective_from date nn | First reporting date this version applies to"
@@ -91,6 +97,8 @@ services:
           - "rejected_by string(64) ro | Checker who rejected the version"
           - "rejected_at ts ro | Rejection time"
           - "rejection_reason text ro | Why the version was rejected (the maker creates a new version)"
+          - "pack_version string(32) ro | Regulatory pack version that created the version (empty = authored by the tenant)"
+          - "pack_checksum string(64) ro | Checksum of the pack's version content (sources, mappings, rules, GL mapping table)"
         unique: [[report_definition_id, definition_version]]
 
       - name: report_schedule
@@ -252,6 +260,27 @@ services:
           - "report_run_id uuid fk=report_run | Run that reported it"
         unique: [[tenant_id, regime, reporting_year, account_ref, customer_id]]
 
+      - name: regulatory_pack_installation
+        prefix: rpi
+        description: >-
+          A versioned regulatory pack (report definitions, versions with mappings and validation rules, filing calendar,
+          GL mapping tables) installed into the tenant; one row per pack, updated by every install or upgrade
+        fr: [REG-01]
+        columns:
+          - "pack_code string(32) nn ro | Pack code, e.g. KE_CBK"
+          - "pack_version string(32) nn ro | Pack version installed last"
+          - "country country nn ro | Market of the pack"
+          - "regulator string(64) nn ro | Regulator / authority"
+          - "legal_entity_id uuid ref=legal_entity ro | Legal entity the installation was made for (filing calendar default)"
+          - "report_count int nn default=0 ro | Reports in the installed pack version"
+          - "pending_version_count int nn default=0 ro | Pack versions created by the last install still waiting for publication (four eyes)"
+          - "installed_by string(64) ro | Who installed the pack first"
+          - "installed_at ts ro | First installation"
+          - "upgraded_by string(64) ro | Who applied the last install or upgrade"
+          - "upgraded_at ts ro | Last install or upgrade"
+          - "last_result json ro | Outcome of the last install per report (created, updated, unchanged, skipped, retired)"
+        unique: [[tenant_id, pack_code]]
+
       - name: report_job_run
         prefix: rjr
         description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
@@ -351,6 +380,15 @@ services:
           - "POST /generate | Build reportable records for a year from customer tax residency and deposit balances (upsert per account) | regime enum:CrsReportingRegime nn, reporting_year int nn, legal_entity_id uuid nn, reporting_jurisdiction country nn | object"
           - "GET /oecd-xml?regime:enum:CrsReportingRegime!&reporting_year:int!&legal_entity_id:uuid!&transmitting_country:country! | OECD CRS / FATCA XML message of the records of a year | | application/xml"
 
+      - resource: regulatory-pack-installations
+        path: /v1/reporting/pack-installations
+        table: regulatory_pack_installation
+        ops: [list, get]
+        filters: [pack_code, country]
+        actions:
+          - "GET /catalog | Regulatory packs shipped with the service: code, version, market, regulator, notice, reports (code, family, frequency, format, deadline), GL mapping tables | | object"
+          - "POST /install | Install or upgrade a regulatory pack (idempotent): missing report definitions are created with a DRAFT version (published by a checker through central approvals); pack-owned definitions whose pack content changed are updated and get a new DRAFT version; tenant-defined definitions with the same code are never touched; pack-owned definitions no longer in the pack are deprecated. enabled=false returns without changes (optional starter-pack step) | pack_code string(32) nn, version string(32), legal_entity_id uuid, dry_run bool, enabled bool | object"
+
       - resource: report-job-runs
         path: /v1/reporting/job-runs
         table: report_job_run
@@ -372,6 +410,7 @@ services:
       - "reporting.report_submission.acknowledged | report_submission | The regulator acknowledged a submission"
       - "reporting.report_submission.rejected | report_submission | The regulator rejected a submission"
       - "reporting.report_submission.deadline_approaching | report_submission | A submission deadline is near"
+      - "reporting.regulatory_pack.installed | regulatory_pack_installation | A regulatory pack was installed or upgraded"
 
   # ------------------------------------------------------------------ analytics-service
   - name: analytics-service

@@ -89,6 +89,40 @@ class RegulatoryReportingWorkflowApprovalIT {
     }
 
     @Test
+    void regulatoryPackVersionsArePublishedThroughCentralApprovals() throws Exception {
+        Map<String, Map<String, Object>> requests = new ConcurrentHashMap<>();
+        when(serviceClient.post(eq("workflow-service"), eq("/v1/approval-requests"), any(), anyString())).thenAnswer(inv -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) inv.getArgument(2);
+            String id = UUID.randomUUID().toString();
+            requests.put((String) body.get("resource_id"), body);
+            return json.readTree("{\"id\":\"" + id + "\",\"status\":\"PENDING\"}");
+        });
+        JsonNode r = post("/v1/reporting/pack-installations/install", "{\"pack_code\":\"GB_PRA\"}", MAKER, 200);
+        assertThat(r.get("approval_request_ids")).hasSize(7);
+        assertThat(r.get("awaiting_publication")).allSatisfy(p -> assertThat(p.hasNonNull("approval_request_id")).isTrue());
+        assertThat(requests).hasSize(7);
+        JsonNode first = r.get("awaiting_publication").get(0);
+        String version = first.get("report_definition_version_id").asString();
+        Map<?, ?> payload = (Map<?, ?>) requests.get(version).get("payload");
+        assertThat(payload.get("pack_version")).isEqualTo("2026.10.0");
+        assertThat(requests.get(version).get("action")).isEqualTo("publish");
+
+        // the installing user cannot publish from the inbox; another approver can
+        dispatch("report_definition_version", version, payload, MAKER, Outcome.APPROVED);
+        assertThat(get("/v1/reporting/definition-versions/" + version).get("status").asString()).isEqualTo("DRAFT");
+        dispatch("report_definition_version", version, payload, CHECKER, Outcome.APPROVED);
+        JsonNode published = get("/v1/reporting/definition-versions/" + version);
+        assertThat(published.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(published.get("approved_by").asString()).isEqualTo(CHECKER);
+        // re-installing opens no new requests for versions already waiting or published
+        requests.clear();
+        JsonNode again = post("/v1/reporting/pack-installations/install", "{\"pack_code\":\"GB_PRA\"}", MAKER, 200);
+        assertThat(again.get("unchanged")).hasSize(7);
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
     void definitionVersionIsPublishedFromWorkflowUnderFourEyes() throws Exception {
         String definition = definition("WF-REG-V");
         String version = post("/v1/reporting/definitions/" + definition + "/versions", VERSION, MAKER, 201).get("id").asString();

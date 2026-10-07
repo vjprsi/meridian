@@ -74,11 +74,52 @@ public class DefinitionService {
         if (offset != null && (offset < 0 || offset > 365)) {
             throw Fields.invalid("filing_offset_days", "out_of_range", "filing_offset_days must be 0-365");
         }
+        if (req.hasNonNull("holidays")) {
+            JsonNode h = req.get("holidays");
+            if (!h.isArray() || h.size() > 1000) {
+                throw Fields.invalid("holidays", "invalid_holidays", "holidays must be a list of ISO dates (at most 1000)");
+            }
+            for (JsonNode d : h) {
+                try {
+                    LocalDate.parse(d.asString());
+                } catch (RuntimeException e) {
+                    throw Fields.invalid("holidays", "invalid_holidays", "holiday " + d + " is not an ISO date");
+                }
+            }
+        }
+    }
+
+    /** Business-day convention and holidays of a definition row (filing calendar, submission deadlines). */
+    public static FilingCalendar.Conventions conventions(JsonNode def) {
+        Set<LocalDate> holidays = new java.util.HashSet<>();
+        JsonNode h = def.get("holidays");
+        if (h != null && h.isArray()) {
+            for (JsonNode d : h) {
+                try {
+                    holidays.add(LocalDate.parse(d.asString()));
+                } catch (RuntimeException e) {
+                    // validated on write; a malformed legacy value is ignored rather than breaking the calendar
+                }
+            }
+        }
+        return new FilingCalendar.Conventions(Fields.text(def, "business_day_convention"), holidays);
     }
 
     /** Maker step: a new DRAFT version with the next version number. */
     @Transactional
     public String addVersion(UUID definitionId, JsonNode req) {
+        return addVersion(definitionId, req, null).row();
+    }
+
+    /** A new DRAFT version and the approval request opened for its publication (null in local approval mode). */
+    public record Added(String row, UUID approvalRequestId) {}
+
+    /**
+     * Maker step with pack provenance: {@code packFields} ({@code pack_version}, {@code pack_checksum}) are stored on
+     * the version when a regulatory pack creates it.
+     */
+    @Transactional
+    public Added addVersion(UUID definitionId, JsonNode req, ObjectNode packFields) {
         JsonNode def = store.requireLocked("report_definition", definitionId);
         if ("DEPRECATED".equals(def.get("status").asString())) {
             throw ApiException.conflict("definition_deprecated", "Report definition " + def.get("code").asString() + " is deprecated");
@@ -103,6 +144,9 @@ public class DefinitionService {
         v.set("data_sources", req.get("data_sources"));
         v.set("field_mappings", req.get("field_mappings"));
         v.set("validation_rules", req.hasNonNull("validation_rules") ? req.get("validation_rules") : json.createArrayNode());
+        if (packFields != null) {
+            v.setAll(packFields);
+        }
         String inserted = crud.insert("report_definition_version", v);
         // Central maker-checker: versions are immutable, so the new DRAFT is the submission; the checker publishes it
         // from the workflow inbox and DefinitionVersionApprovalHandler applies the decision.
@@ -115,10 +159,13 @@ public class DefinitionService {
         payload.put("effective_from", from.toString());
         payload.put("change_note", Fields.text(req, "change_note"));
         payload.put("row_version", row.path("row_version").asInt(1));
-        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, versionId, "publish",
+        if (packFields != null && packFields.hasNonNull("pack_version")) {
+            payload.put("pack_version", packFields.get("pack_version").asString());
+        }
+        JsonNode request = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, versionId, "publish",
                 "Report definition " + def.get("code").asString() + " v" + next, payload),
                 "publish:" + versionId + ":" + row.path("row_version").asInt(1));
-        return inserted;
+        return new Added(inserted, request == null || !request.hasNonNull("id") ? null : Approvals.idOf(request));
     }
 
     /** Publishes a version identified by id (workflow decisions); same checks as {@link #publish}. */
@@ -295,6 +342,7 @@ public class DefinitionService {
         String frequency = def.get("frequency").asString();
         String rule = Fields.text(def, "deadline_rule");
         int offset = def.path("filing_offset_days").asInt(0);
+        FilingCalendar.Conventions conventions = conventions(def);
         List<UUID> entities = new ArrayList<>();
         if (legalEntityId != null) {
             entities.add(legalEntityId);
@@ -309,13 +357,15 @@ public class DefinitionService {
         out.put("frequency", frequency);
         out.put("deadline_rule", rule);
         out.put("filing_offset_days", offset);
+        out.put("business_day_convention", conventions.convention());
+        out.put("holiday_count", conventions.holidays().size());
         out.put("from", start.toString());
         out.put("to", end.toString());
         out.put("today", today.toString());
         ArrayNode entries = out.putArray("entries");
         // Periods ending up to a year (plus the longest deadline) before the window can still fall due inside it.
         for (LocalDate periodEnd : FilingCalendar.periodEnds(frequency, start.minusDays(500), end)) {
-            LocalDate due = FilingCalendar.dueDate(rule, frequency, periodEnd, offset);
+            LocalDate due = FilingCalendar.dueDate(rule, frequency, periodEnd, offset, conventions);
             if (due.isBefore(start) || due.isAfter(end)) {
                 continue;
             }

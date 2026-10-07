@@ -279,12 +279,58 @@ creates them through the owning services' public APIs. Packs live in `services/t
   a four-eyes checker action in onboarding-service (`manual`, AWAITING_ACTIVATION). A published journey is left alone.
 - A new pack item must pass `StarterPackDefinitionTest`: the route must exist in `generated/routes.json` and the
   rendered body must match the request schema in `generated/openapi`.
+- Regulatory reporting: KE adds a `regulatory_pack` CALL item (step `end_of_day`) that installs the `KE_CBK`
+  regulatory pack in regulatory-reporting-service for the main legal entity (see "Regulatory packs" below). Its report
+  versions are DRAFTs whose publication requests have the pack's acting user as maker; `install_regulatory_pack=false`
+  makes the install a no-op (`enabled=false`).
 - Data-driven keys and repetition: object keys may hold placeholders (`"${param.currency}": ...`). An item with
   `for_each: "${param.<list>}"` becomes one item per value (key `<key>.<value lower case>`, `${each}` / `${each.lower}`
   inside, also in references such as `${ref.ledger_book/fx_position.${each.lower}}`); an object with a
   `$for_each: "${param.<list>}"` entry becomes one copy of its other entries per value, so maps keyed by currency can be
   rendered (fx-service `position_accounts.<CCY>` from `fx_currencies`). Repetition is expanded with the run's
   parameters before the run; the catalog validates packs expanded with the defaults.
+
+## Regulatory packs (regulatory-reporting-service)
+
+Versioned regulatory report packs ship as data in `services/regulatory-reporting-service/src/main/resources/regulatory-packs/`
+(one YAML per pack; the file carries its current version): `KE_CBK` (Kenya: CBK prudential, FRC CTR/STR, complaints,
+agent and mobile money), `GB_PRA` (United Kingdom: COREP / FINREP-like own funds, LCR, NSFR, large exposures and
+statements as XBRL-like instances, FCA complaints and financial-crime returns) and `NG_CBN` (Nigeria: CBN capital,
+liquidity ratio + LCR / NSFR, single obligor limit, monthly balance sheet return, NFIU CTR/STR, complaints, agent
+banking). **Every layout, cell code, threshold, risk weight, deadline and holiday list is ILLUSTRATIVE**, not a copy
+of a regulator's form or taxonomy: validate each report against the regulator's current taxonomy and instructions
+before a filing (the UK packs reference a placeholder taxonomy).
+
+- Pack file: `calendar` (business-day convention, holidays), `gl_mapping_tables`, `source_templates` (reused as
+  `{name, use: <template>}`), `reports` (definition fields + `version` with `data_sources`, `field_mappings`,
+  `validation_rules`, `sample.expect`) and `sample_data`. Templates and GL tables are expanded at install, so each
+  installed version is self-contained.
+- API: `GET /v1/reporting/pack-installations/catalog`; `POST /v1/reporting/pack-installations/install`
+  `{pack_code, version?, legal_entity_id?, dry_run?, enabled?}`. Idempotent: missing reports are created (DRAFT
+  definition + DRAFT version whose publication request goes to central approvals, so a checker publishes); pack-owned
+  definitions (`pack_code`) whose managed fields changed are updated (`filing_offset_days` and `owner` stay tenant-tuned);
+  changed version content (checksum on the version) adds a DRAFT version (older pack DRAFTs are withdrawn); a version a
+  checker rejected is not re-submitted; tenant-defined reports with the same code are never touched; pack-owned reports
+  no longer shipped are deprecated. One `regulatory_pack_installation` row per pack keeps the last result.
+- Engine features the packs use: SERVICE sources with `resolve` (look up a missing run parameter, e.g. the GL
+  accounting period whose `end_date` is the period end) and `gl_mapping` (trial-balance rows get `gl_map.line`,
+  `gl_map.sign` and the rule's attributes such as `risk_weight`, first matching code / prefix / range wins); `COMBINE`
+  sources (group earlier sources by a key: exposures per counterparty across loans, collateral and money-market deals);
+  aggregates `COUNT_DISTINCT` and `TOP` (rank-th largest by `order_by`); `DIV(a, b)` (NULL on division by zero);
+  placeholders `{period_start_ts}` / `{period_end_ts}` (exclusive) for `created_after` / `created_before` filters;
+  run built-ins available to expressions as `param_legal_entity_id`, `param_as_of_date`, `param_period_start`,
+  `param_period_end`.
+- GL mapping overrides per tenant: config-service namespace `regulatory_reporting`, key `gl_mapping.<table lower case>`
+  (e.g. `gl_mapping.ke_cbk_gl`), value `{rules: [...], replace: false}`; tenant rules match before the pack's (or replace
+  them). An invalid override or an unreachable config-service fails the run (never a silent fallback).
+- Filing calendar: definitions carry `business_day_convention` (FOLLOWING, MODIFIED_FOLLOWING, PRECEDING, NONE) and
+  `holidays`; business-day deadlines (`PERIOD_END+7BD`) skip weekends and holidays.
+- Tests: `RegulatoryPackDefinitionTest` (routes, query parameters and enum values, mapped fields against the generated
+  response schemas, compilation, calendars, sample expectations) and `RegulatoryPackFlowIT` (KE install, publication,
+  capital / liquidity / large-cash runs on stateful fakes, validation failure, drilldown, GL override, upgrades).
+- Limits: list sources read at most 50 pages of 200 rows per run (loans, agents, outlets, wallets, monitored
+  transactions); large portfolios need pre-aggregated sources. Large exposures rank the five largest counterparties
+  without connected-client grouping; market risk comes from the run parameter `market_risk_rwa`.
 
 ## Contact search (party.customer_contact.*)
 

@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
 public final class ReportEngine {
     public static final int MAX_LINEAGE = 500;
     static final Pattern CELL_REF = Pattern.compile("[A-Za-z][A-Za-z0-9_.\\-]{0,127}");
-    static final Set<String> AGGREGATES = Set.of("SUM", "COUNT", "AVG", "MIN", "MAX", "FIRST");
+    static final Set<String> AGGREGATES = Set.of("SUM", "COUNT", "COUNT_DISTINCT", "AVG", "MIN", "MAX", "FIRST", "TOP");
+    static final int MAX_RANK = 1000;
     static final Set<String> TYPES = Set.of("NUMBER", "TEXT");
     private static final MathContext MC = MathContext.DECIMAL128;
 
@@ -37,7 +38,12 @@ public final class ReportEngine {
 
     /** One compiled field mapping. */
     public record Mapping(String cellRef, String label, String type, String source, String aggregate, Expr value,
-                          Expr filter, Expr expression, int scale, Map<String, Object> raw) {
+                          Expr filter, Expr expression, int scale, Map<String, Object> raw, Expr orderBy, int rank) {
+        public Mapping(String cellRef, String label, String type, String source, String aggregate, Expr value,
+                       Expr filter, Expr expression, int scale, Map<String, Object> raw) {
+            this(cellRef, label, type, source, aggregate, value, filter, expression, scale, raw, null, 0);
+        }
+
         public boolean derived() {
             return expression != null;
         }
@@ -96,13 +102,28 @@ public final class ReportEngine {
                         if (pointer != null && !pointer.isEmpty() && !pointer.startsWith("/")) {
                             problems.add(new DefinitionException.Problem(at + ".rows_pointer", "rows_pointer must be a JSON pointer, e.g. /data"));
                         }
+                        checkResolvers(s.get("resolve"), at + ".resolve", allowedServices, problems);
                     }
                     case "INLINE" -> {
                         if (!(s.get("rows") instanceof List<?> rows) || rows.stream().anyMatch(r -> !(r instanceof Map))) {
                             problems.add(new DefinitionException.Problem(at + ".rows", "INLINE sources need rows (a list of objects)"));
                         }
                     }
-                    default -> problems.add(new DefinitionException.Problem(at + ".type", "type must be SERVICE or INLINE"));
+                    case "COMBINE" -> {
+                        Set<String> earlier = new LinkedHashSet<>(names);
+                        if (name != null) {
+                            earlier.remove(name);
+                        }
+                        SourceTransforms.combine(s, earlier, at, problems);
+                    }
+                    default -> problems.add(new DefinitionException.Problem(at + ".type", "type must be SERVICE, INLINE or COMBINE"));
+                }
+                if (s.get("gl_mapping") != null) {
+                    if ("COMBINE".equals(type)) {
+                        problems.add(new DefinitionException.Problem(at + ".gl_mapping", "gl_mapping applies to SERVICE and INLINE sources"));
+                    } else {
+                        SourceTransforms.glMapping(s.get("gl_mapping"), at + ".gl_mapping", problems);
+                    }
                 }
             }
         }
@@ -110,6 +131,59 @@ public final class ReportEngine {
             throw new DefinitionException(problems);
         }
         return names;
+    }
+
+    /**
+     * Parameter resolvers of a SERVICE source: {@code {param_name: {service, path, match {field: template}, field}}}
+     * looks up a run parameter the run did not supply (e.g. the GL accounting period whose end_date is the period
+     * end) from the first matching row of a GET.
+     */
+    static void checkResolvers(Object raw, String at, Set<String> allowedServices, List<DefinitionException.Problem> problems) {
+        if (raw == null) {
+            return;
+        }
+        if (!(raw instanceof Map<?, ?> m) || m.isEmpty()) {
+            problems.add(new DefinitionException.Problem(at, "resolve must be an object {parameter: {service, path, match, field}}"));
+            return;
+        }
+        m.forEach((k, v) -> {
+            String ra = at + "." + k;
+            if (!String.valueOf(k).matches("[a-z][a-z0-9_]{0,63}")) {
+                problems.add(new DefinitionException.Problem(ra, "parameter names are snake_case"));
+            }
+            if (!(v instanceof Map<?, ?> r)) {
+                problems.add(new DefinitionException.Problem(ra, "must be an object {service, path, match, field}"));
+                return;
+            }
+            String service = str(r.get("service"));
+            if (service == null || !allowedServices.contains(service)) {
+                problems.add(new DefinitionException.Problem(ra + ".service", "service must be one of " + new java.util.TreeSet<>(allowedServices)));
+            }
+            String path = str(r.get("path"));
+            if (path == null || !PathTemplate.isSafe(path)) {
+                problems.add(new DefinitionException.Problem(ra + ".path", "path must be a relative API path starting with /v1/"));
+            } else {
+                try {
+                    PathTemplate.check(path);
+                } catch (IllegalArgumentException e) {
+                    problems.add(new DefinitionException.Problem(ra + ".path", e.getMessage()));
+                }
+            }
+            if (!(r.get("match") instanceof Map<?, ?> match) || match.isEmpty()) {
+                problems.add(new DefinitionException.Problem(ra + ".match", "match must be a non-empty object {field: value template}"));
+            } else {
+                match.values().forEach(t -> {
+                    try {
+                        PathTemplate.check(String.valueOf(t));
+                    } catch (IllegalArgumentException e) {
+                        problems.add(new DefinitionException.Problem(ra + ".match", e.getMessage()));
+                    }
+                });
+            }
+            if (str(r.get("field")) == null) {
+                problems.add(new DefinitionException.Problem(ra + ".field", "field (the value taken from the matching row) is required"));
+            }
+        });
     }
 
     /** Compiles field mappings: unique cell refs, known sources, valid expressions, acyclic derived cells. */
@@ -163,7 +237,23 @@ public final class ReportEngine {
             } else if (source != null || value != null || filter != null) {
                 problems.add(new DefinitionException.Problem(at, "a derived cell (expression) cannot also declare source, value or filter"));
             }
-            out.add(new Mapping(ref, str(m.get("label")), type, source, aggregate, value, filter, expression, scale, m));
+            Expr orderBy = expr(m.get("order_by"), at + ".order_by", problems);
+            int rank = 0;
+            if ("TOP".equals(aggregate)) {
+                BigDecimal r = Expr.toDecimal(m.get("rank"));
+                if (r == null || r.scale() > 0 || r.intValue() < 1 || r.intValue() > MAX_RANK) {
+                    problems.add(new DefinitionException.Problem(at + ".rank", "TOP needs rank, an integer 1-" + MAX_RANK));
+                } else {
+                    rank = r.intValue();
+                }
+                if (orderBy == null && m.get("order_by") == null) {
+                    problems.add(new DefinitionException.Problem(at + ".order_by", "TOP needs order_by (the row expression ranked, largest first)"));
+                }
+            } else if (m.get("order_by") != null || m.get("rank") != null) {
+                problems.add(new DefinitionException.Problem(at, "order_by and rank apply to aggregate TOP only"));
+            }
+            out.add(new Mapping(ref, str(m.get("label")), type, source, aggregate, value, filter, expression, scale, m,
+                    orderBy, rank));
         }
         if (problems.isEmpty()) {
             order(out, problems);
@@ -286,8 +376,57 @@ public final class ReportEngine {
         return new Cell(m.cellRef(), m.label(), m.type(), format(m, v), null, 0, List.of());
     }
 
-    private static Cell aggregate(Mapping m, Source src, Map<String, Object> params) {
+    /**
+     * TOP: the value of the {@code rank}-th row when the selected rows are ordered by {@code order_by} (largest first,
+     * ties in source order); null when fewer rows qualify. Lineage is the chosen row.
+     */
+    private static Cell top(Mapping m, Source src, Map<String, Object> params) {
         List<Map<String, Object>> rows = src == null ? List.of() : src.rows();
+        record Ranked(int index, BigDecimal key) {}
+        List<Ranked> ranked = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Map<String, Object> row = rows.get(i);
+            if (m.filter() != null && !m.filter().test(id -> rowValue(row, id, params), params::get)) {
+                continue;
+            }
+            Object k = m.orderBy().eval(id -> rowValue(row, id, params), params::get);
+            BigDecimal key = Expr.toDecimal(k);
+            if (key == null) {
+                if (k != null) {
+                    throw new Expr.ExprException("TOP order_by is not numeric: '" + k + "' (row " + i + ")");
+                }
+                continue;
+            }
+            ranked.add(new Ranked(i, key));
+        }
+        ranked.sort((a, b) -> b.key().compareTo(a.key()) != 0 ? b.key().compareTo(a.key()) : Integer.compare(a.index(), b.index()));
+        if (ranked.size() < m.rank()) {
+            return new Cell(m.cellRef(), m.label(), m.type(), null, src == null ? null : src.name(), 0, List.of());
+        }
+        int i = ranked.get(m.rank() - 1).index();
+        Map<String, Object> row = rows.get(i);
+        Object v = m.value().eval(id -> rowValue(row, id, params), params::get);
+        Map<String, Object> rec = new LinkedHashMap<>();
+        rec.put("source", src.name());
+        rec.put("row", i);
+        Object id = src.idField() != null ? lookup(row, src.idField()) : row.get("id");
+        if (id != null) {
+            rec.put("id", id);
+        }
+        rec.put("rank", m.rank());
+        rec.put("value", v instanceof BigDecimal b ? b.toPlainString() : v);
+        if (row.size() <= 20) {
+            rec.put("record", row);
+        }
+        return new Cell(m.cellRef(), m.label(), m.type(), format(m, v), src.name(), 1, List.of(rec));
+    }
+
+    private static Cell aggregate(Mapping m, Source src, Map<String, Object> params) {
+        if ("TOP".equals(m.aggregate())) {
+            return top(m, src, params);
+        }
+        List<Map<String, Object>> rows = src == null ? List.of() : src.rows();
+        Set<String> distinct = new HashSet<>();
         BigDecimal sum = BigDecimal.ZERO;
         BigDecimal best = null;
         Object first = null;
@@ -306,6 +445,9 @@ public final class ReportEngine {
             count++;
             if (first == null) {
                 first = v;
+            }
+            if ("COUNT_DISTINCT".equals(m.aggregate())) {
+                distinct.add(v instanceof BigDecimal b ? b.stripTrailingZeros().toPlainString() : String.valueOf(v));
             }
             BigDecimal d = Expr.toDecimal(v);
             if (d != null) {
@@ -334,6 +476,7 @@ public final class ReportEngine {
         }
         Object result = switch (m.aggregate()) {
             case "COUNT" -> new BigDecimal(count);
+            case "COUNT_DISTINCT" -> new BigDecimal(distinct.size());
             case "SUM" -> sum;
             case "AVG" -> numeric == 0 ? null : sum.divide(new BigDecimal(numeric), MC);
             case "MIN", "MAX" -> best;
@@ -379,7 +522,7 @@ public final class ReportEngine {
             if (d == null) {
                 throw new Expr.ExprException("value '" + v + "' is not a number");
             }
-            int scale = "COUNT".equals(m.aggregate()) ? 0 : m.scale();
+            int scale = ("COUNT".equals(m.aggregate()) || "COUNT_DISTINCT".equals(m.aggregate())) ? 0 : m.scale();
             return d.setScale(scale, RoundingMode.HALF_EVEN).toPlainString();
         }
         String s = v instanceof BigDecimal b ? b.toPlainString() : String.valueOf(v);
