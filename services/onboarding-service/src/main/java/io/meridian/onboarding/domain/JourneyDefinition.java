@@ -17,7 +17,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * A journey version's step graph. Definition shape:
- * <pre>{"steps": [{"code": "phone", "type": "PHONE_VERIFICATION", "required": true, "fields": ["phone"],
+ * <pre>{"steps": [{"code": "phone", "type": "PHONE_VERIFICATION", "required": true,
+ *   "fields": ["phone" | {"name": "phone", "type": "PHONE", "label_key": "...", "required": true, ...}],
  *   "next": "details" | {"rules": [{"when": {cond}, "goto": "code"}], "default": "code"},
  *   "kyc_check": {"check_type": "...", "kyc_provider_id": "..."}, "max_attempts": 3}]}</pre>
  * The first step is the start; a step without {@code next} continues with the following step in the list;
@@ -31,7 +32,7 @@ public final class JourneyDefinition {
             "CREDENTIAL_SETUP", "MANUAL_REVIEW", "CUSTOM");
     private static final Pattern CODE = Pattern.compile("[A-Za-z0-9_\\-]{1,64}");
 
-    public record StepDef(String code, String type, boolean required, List<String> fields, JsonNode next,
+    public record StepDef(String code, String type, boolean required, List<StepField> fields, JsonNode next,
                           JsonNode kycCheck, int maxAttempts, int index) {
         public boolean hasKycCheck() {
             return kycCheck != null && kycCheck.isObject();
@@ -63,8 +64,8 @@ public final class JourneyDefinition {
         List<StepDef> list = new ArrayList<>();
         int i = 0;
         for (JsonNode s : def.path("steps")) {
-            List<String> fields = new ArrayList<>();
-            s.path("fields").forEach(f -> fields.add(f.asString()));
+            List<StepField> fields = new ArrayList<>();
+            s.path("fields").forEach(f -> fields.add(StepField.parse(f)));
             list.add(new StepDef(s.path("code").asString(), s.path("type").asString(),
                     !s.has("required") || s.get("required").asBoolean(true), fields, s.get("next"),
                     s.get("kyc_check"), s.path("max_attempts").asInt(3), i++));
@@ -92,7 +93,12 @@ public final class JourneyDefinition {
                 errors.add(new FieldError(p + ".type", "invalid_type", "type must be an OnboardingStepType"));
             }
             if (s.has("fields") && !s.get("fields").isArray()) {
-                errors.add(new FieldError(p + ".fields", "invalid_fields", "fields must be an array of names"));
+                errors.add(new FieldError(p + ".fields", "invalid_fields", "fields must be an array of names or field definitions"));
+            } else if (s.has("fields")) {
+                int fi = 0;
+                for (JsonNode f : s.get("fields")) {
+                    StepField.validateDefinition(f, p + ".fields[" + fi++ + "]", errors);
+                }
             }
             if (s.has("max_attempts") && (s.get("max_attempts").asInt(0) < 1 || s.get("max_attempts").asInt(0) > 10)) {
                 errors.add(new FieldError(p + ".max_attempts", "out_of_range", "max_attempts must be 1..10"));

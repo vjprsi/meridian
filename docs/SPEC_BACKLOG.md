@@ -93,9 +93,28 @@ Found while building web/customer-web: no customer identity and no customer-scop
 customer_id from filters/bodies and do no ownership checks, so customer scoping was browser-only. Fix in progress:
 `channels` domain with customer-channel-service (`/v1/me/*` BFF, object-level authorization, server-built bodies,
 step-up for money movement), Keycloak customer client + customer_id claim, customer tokens rejected by operator
-APIs. Follow-ups: inbox trusts sender_type/opened_by/reader_type and include_internal from the body; onboarding has
-no public applicant surface (applicant token, OTP for phone step, typed step fields, server-generated
-application_number); customer sessions; customer MFA/passkeys.
+APIs. Follow-ups: customer sessions; customer MFA/passkeys.
+
+Done: inbox derives the caller (`X-On-Behalf-Of-Customer` honoured only for internal tokens; sender/reader/opened_by
+server-set; include_internal staff-only; customers confined to their own threads, deny-by-default). Onboarding public
+applicant surface (`/v1/onboarding/public/applications`: rate-limited start, hashed applicant tokens bound to the
+application with refresh/rotation, OTP contact verification with lockout, documents via document-service, typed step
+fields, server-generated application_number). Remaining gaps:
+
+- customer-channel-service must send `X-On-Behalf-Of-Customer` with its internal token for inbox calls; thread
+  create still requires `customer_id` in the body (must equal the relayed customer).
+- Inbox: any bank-side caller may declare `SYSTEM` / `BOT` as sender (no separate bot identity).
+- `[public]` operations get the generator's "provider callback" description (tools/generate.py); the applicant
+  `documents` actions answer untyped `object`.
+- Applicant start rate limits are per tenant (RLS) and per instance clock window; no global edge limit, and the
+  attestation verdict check is a placeholder (presence only, when required).
+- No applicant re-authentication after the token expires or after submit (e.g. OTP to the verified phone to resume
+  or to follow the decision); staff `resume` links are not wired to the public surface.
+- Self-service KYC: `kyc_profile_id` is bank-managed, so journeys whose steps run a `kyc_check` cannot be completed
+  by applicants until kyc-service can create a prospect profile from the application.
+- Document fields check ownership, not the virus-scan status (`AVAILABLE`) of the referenced document.
+- AUTO_APPROVE without a legal entity (neither on the application nor the journey) is downgraded to REFER
+  (`LEGAL_ENTITY_REQUIRED`).
 
 ## Agent channel (follow-up of customer channel)
 
