@@ -85,7 +85,7 @@ public class ForecastService {
             throw new ApiException(502, "upstream_error", "deposit-service returned no balance for " + account);
         }
         OffsetDateTime now = rows.now();
-        LocalDate asOf = now.toLocalDate();
+        LocalDate asOf = rows.today();
         List<CashFlowForecaster.Series> series = new ArrayList<>();
         List<String> names = new ArrayList<>();
         for (ObjectNode rp : rows.query("""

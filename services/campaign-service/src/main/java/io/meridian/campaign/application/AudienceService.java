@@ -112,7 +112,7 @@ public class AudienceService {
             }
             String reason;
             try {
-                reason = Eligibility.segments(external.activeSegments(customer, now.toLocalDate()), targets, exclusions);
+                reason = Eligibility.segments(external.activeSegments(customer, rows.today()), targets, exclusions);
             } catch (RuntimeException e) {
                 reason = "segment_check_failed";
             }

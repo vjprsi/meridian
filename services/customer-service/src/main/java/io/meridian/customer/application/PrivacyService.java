@@ -60,10 +60,12 @@ public class PrivacyService {
     private final ConsentService consents;
     private final ExternalServices external;
     private final JsonMapper json;
+    private final ContactService contacts;
 
     public PrivacyService(Rows rows, CrudEngine crud, Guards guards, Events events, ConsentService consents,
-                          ExternalServices external, JsonMapper json) {
+                          ExternalServices external, JsonMapper json, ContactService contacts) {
         this.rows = rows;
+        this.contacts = contacts;
         this.crud = crud;
         this.guards = guards;
         this.events = events;
@@ -238,12 +240,14 @@ public class PrivacyService {
                         "AML/CFT record keeping: identification data is retained for " + AML_RETENTION_YEARS
                                 + " years after the relationship ends", retainUntil.toLocalDate().toString()));
                 // Contact points are not part of the AML record and can go.
+                contacts.removeAllFromSearch(id);
                 rows.execute("delete from contact_verification where customer_id = ?", id);
                 rows.execute("delete from customer_contact where customer_id = ?", id);
                 return blockers;
             }
         }
         // Full anonymisation.
+        contacts.removeAllFromSearch(id);
         rows.execute("delete from contact_verification where customer_id = ?", id);
         rows.execute("delete from customer_contact where customer_id = ?", id);
         rows.execute("delete from customer_address where customer_id = ?", id);

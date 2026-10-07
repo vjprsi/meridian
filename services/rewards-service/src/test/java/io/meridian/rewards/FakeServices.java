@@ -46,6 +46,9 @@ public class FakeServices {
     }
 
     public synchronized JsonNode get(String service, String path) {
+        if ("business-day-service".equals(service)) {
+            return null; // no business day opened: the database date applies
+        }
         calls.add(new Call(service, "GET", path, null, null));
         if ("deposit-service".equals(service) && path.startsWith("/v1/deposit-accounts/")) {
             UUID id = UUID.fromString(path.substring("/v1/deposit-accounts/".length()));

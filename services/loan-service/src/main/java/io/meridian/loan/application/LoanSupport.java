@@ -50,10 +50,12 @@ public class LoanSupport {
     private final LoanProperties props;
     private final BusinessCalendar calendar;
     private final LedgerPort ledger;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
     public LoanSupport(Rows rows, Clock clock, Events events, LoanProperties props, BusinessCalendar calendar,
-                       LedgerPort ledger) {
+                       LedgerPort ledger, io.meridian.web.time.BusinessDates businessDates) {
         this.rows = rows;
+        this.businessDates = businessDates;
         this.clock = clock;
         this.events = events;
         this.props = props;
@@ -93,8 +95,18 @@ public class LoanSupport {
         return rows.get(LOAN, id);
     }
 
+    /**
+     * The tenant's business date (business-day-service), else this service's clock date. Prefer {@link #today(JsonNode)}
+     * when a loan is at hand: its legal entity may be on another business day.
+     */
     public LocalDate today() {
-        return LocalDate.now(clock);
+        return businessDates.today(() -> LocalDate.now(clock));
+    }
+
+    /** The business date of the loan's (or loan request's) legal entity, else the tenant's, else the clock date. */
+    public LocalDate today(JsonNode loan) {
+        UUID legalEntity = loan == null ? null : uuid(loan, "legal_entity_id");
+        return legalEntity == null ? today() : businessDates.today(legalEntity, () -> LocalDate.now(clock));
     }
 
     public OffsetDateTime now() {
@@ -273,7 +285,7 @@ public class LoanSupport {
         sch.put("interest_rate", rate.toPlainString());
         sch.put("reason", reason);
         ObjectNode schedule = rows.insert("repayment_schedule", sch);
-        LocalDate today = today();
+        LocalDate today = today(loan);
         for (ScheduleGenerator.Line l : s.lines()) {
             ObjectNode i = rows.object();
             i.put("repayment_schedule_id", str(schedule, "id"));
@@ -386,7 +398,7 @@ public class LoanSupport {
     /** Recomputes the derived balances of a loan (total outstanding, overdue amount, next due date) and stores them. */
     public ObjectNode refresh(ObjectNode loan) {
         UUID loanId = uuid(loan, "id");
-        LocalDate today = today();
+        LocalDate today = today(loan);
         BigDecimal overdue = BigDecimal.ZERO;
         LocalDate nextDue = null;
         for (ObjectNode i : openInstallments(loanId)) {
@@ -426,7 +438,10 @@ public class LoanSupport {
 
     // ------------------------------------------------------------------ status and delinquency
 
-    /** Changes the loan status (validated) and records the transition in the status history. */
+    /**
+     * Changes the loan status (validated), records the transition in the status history and publishes
+     * {@code lending.loan.status_changed} (payload: the loan after the change).
+     */
     public ObjectNode transition(ObjectNode loan, String to, String reason, LocalDate businessDate) {
         String from = str(loan, "status");
         if (from.equals(to)) {
@@ -441,6 +456,7 @@ public class LoanSupport {
         upd.put("status", to);
         loan.setAll(rows.update(LOAN, uuid(loan, "id"), upd));
         history(loan, from, reason, businessDate, str(loan, "delinquency_bucket"));
+        events.publish("lending.loan.status_changed", LOAN, loan);
         return loan;
     }
 
@@ -461,7 +477,7 @@ public class LoanSupport {
         h.put("total_outstanding", decOr0(loan, "total_outstanding").toPlainString());
         h.put("customer_id", str(loan, "customer_id"));
         h.put("currency", str(loan, "currency"));
-        h.put("business_date", (businessDate == null ? today() : businessDate).toString());
+        h.put("business_date", (businessDate == null ? today(loan) : businessDate).toString());
         if (reason != null) {
             h.put("reason", reason.length() > 255 ? reason.substring(0, 255) : reason);
         }
@@ -515,6 +531,9 @@ public class LoanSupport {
         if (changed) {
             ObjectNode h = history(loan, fromStatus, reason, asOf, fromBucket);
             events.publish("lending.loan.delinquency_changed", "loan_status_history", h);
+        }
+        if (!status.equals(fromStatus)) {
+            events.publish("lending.loan.status_changed", LOAN, loan);
         }
         return changed;
     }

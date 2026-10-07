@@ -38,7 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
                 "meridian.search.indexer.enabled=true", "meridian.search.indexer.group-id=search-indexer-it",
-                "meridian.search.indexer.metadata-max-age-ms=500"})
+                "meridian.search.indexer.metadata-max-age-ms=500",
+                "meridian.contact-lookup.key=test-contact-lookup-key-0123456789"})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -211,6 +212,46 @@ class SearchIndexerIT {
         assertThat(count("unmapped", "none")).isGreaterThan(unmapped);
         assertThat(count("rejected", "card") - rejected).isEqualTo(3);
         assertThat(ids(query(TENANT_A, "{\"query_text\":\"2222\"}"))).isEmpty();
+    }
+
+    @Test
+    @Order(5)
+    void customersAreFoundByExactEmailOrPhoneWithoutIndexingThem() throws Exception {
+        String customer = "0199a000-0000-7000-8000-00000000c003";
+        String email = "0199a000-0000-7000-8000-00000000e001";
+        String phone = "0199a000-0000-7000-8000-00000000e002";
+        // payloads as customer-service publishes them: masked value and keyed lookup hash, never the contact itself
+        publish("meridian.party.v1", "party.customer_contact.verified", TENANT_A, email, """
+                {"id":"%s","customer_id":"%s","contact_type":"EMAIL","masked_value":"a***o@example.com",
+                 "lookup_hash":"%s","is_primary":true,"is_verified":true,
+                 "updated_at":"2026-10-05T09:00:00Z","row_version":2}""".formatted(email, customer, "0770f7b9dfe6a8fb4683deac301825418e615d486de412fbb85a3729de785c8f"));
+        publish("meridian.party.v1", "party.customer_contact.verified", TENANT_A, phone, """
+                {"id":"%s","customer_id":"%s","contact_type":"MOBILE","masked_value":"+25*******678",
+                 "lookup_hash":"%s","is_primary":true,"is_verified":true,
+                 "updated_at":"2026-10-05T09:00:00Z","row_version":2}""".formatted(phone, customer, "6376a913caa0cb1e19483ec430b1a474dc67a65a5556a556e1eeff7d0a93af07"));
+
+        JsonNode byEmail = await(TENANT_A, "{\"query_text\":\"Amina.Odhiambo@Example.com\"}", r -> ids(r).contains(email));
+        assertThat(ids(byEmail)).containsExactly(email);
+        JsonNode hit = byEmail.get("data").get(0);
+        assertThat(hit.get("entity_type").asString()).isEqualTo("CUSTOMER_CONTACT");
+        assertThat(hit.get("title").asString()).isEqualTo("a***o@example.com");
+        assertThat(hit.get("document").get("customer_id").asString()).isEqualTo(customer);
+        assertThat(hit.toString()).doesNotContain("amina.odhiambo", "Amina.Odhiambo");
+        // phone in any common international notation
+        await(TENANT_A, "{\"query_text\":\"+254 712 345 678\"}", r -> ids(r).contains(phone));
+        assertThat(ids(query(TENANT_A, "{\"query_text\":\"00254712345678\"}"))).containsExactly(phone);
+        // only an exact contact matches; other tenants see nothing
+        assertThat(ids(query(TENANT_A, "{\"query_text\":\"amina.odhiambo@example.org\"}"))).isEmpty();
+        assertThat(ids(query(TENANT_A, "{\"query_text\":\"+254 712 345 679\"}"))).isEmpty();
+        assertThat(ids(query(TENANT_B, "{\"query_text\":\"Amina.Odhiambo@Example.com\"}"))).isEmpty();
+
+        // a removed contact (deleted, changed or erased) leaves the index
+        publish("meridian.party.v1", "party.customer_contact.removed", TENANT_A, email, """
+                {"id":"%s","customer_id":"%s","contact_type":"EMAIL","masked_value":"a***o@example.com",
+                 "lookup_hash":"%s","is_verified":true,"updated_at":"2026-10-05T09:00:00Z","row_version":2}"""
+                .formatted(email, customer, "0770f7b9dfe6a8fb4683deac301825418e615d486de412fbb85a3729de785c8f"));
+        await(TENANT_A, "{\"query_text\":\"Amina.Odhiambo@Example.com\"}", r -> ids(r).isEmpty());
+        assertThat(ids(query(TENANT_A, "{\"query_text\":\"+254712345678\"}"))).containsExactly(phone);
     }
 
     // ------------------------------------------------------------------ helpers

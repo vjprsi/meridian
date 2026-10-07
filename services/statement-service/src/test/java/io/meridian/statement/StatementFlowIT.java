@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -99,6 +100,11 @@ class StatementFlowIT {
     final List<String> keys = new CopyOnWriteArrayList<>();
     volatile BigDecimal closingOverride;
     volatile boolean ledgerDown;
+    /** Business date reported by the stubbed business-day-service (null: none, the service clock applies). */
+    volatile LocalDate businessDate;
+
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
     String statementId;
 
     @BeforeEach
@@ -114,7 +120,11 @@ class StatementFlowIT {
 
     // ------------------------------------------------------------------ downstream stubs
 
-    private JsonNode route(String service, String path) {
+    private JsonNode route(String service, String path) throws Exception {
+        if (service.equals("business-day-service")) {
+            return businessDate == null ? null
+                    : json.readTree("{\"data\":[{\"business_date\":\"" + businessDate + "\",\"is_current\":true}]}");
+        }
         calls.add(service + " " + path);
         if (service.equals("deposit-service")) {
             if (path.equals("/v1/deposit-accounts/" + ACCOUNT)) {
@@ -436,6 +446,20 @@ class StatementFlowIT {
         assertThat(send("GET", "/v1/statements/" + statementId + "/lines", null, null, OTHER_TENANT).statusCode())
                 .isEqualTo(404);
         assertThat(get("/v1/statements", OTHER_TENANT).get("data")).isEmpty();
+    }
+
+    @Test
+    @Order(9)
+    void periodsCloseOnTheBusinessDateNotTheCalendarDate() throws Exception {
+        try {
+            businessDate = LocalDate.parse("2026-10-05"); // clock says 10-06, but the bank has not rolled yet
+            businessDates.invalidate();
+            assertThat(post("/v1/statements", body("MT940").replace("2026-09-30", "2026-10-05"), 422).get("code").asString())
+                    .isEqualTo("period_not_closed");
+        } finally {
+            businessDate = null;
+            businessDates.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------ helpers

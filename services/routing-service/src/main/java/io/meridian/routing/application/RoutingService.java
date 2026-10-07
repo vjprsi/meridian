@@ -187,7 +187,7 @@ public class RoutingService {
         if (amount == null || amount.signum() <= 0) {
             throw ApiException.unprocessable("invalid_amount", "payment.amount must be positive");
         }
-        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+        LocalDate today = rows.today(() -> LocalDate.now(clock.withZone(ZoneOffset.UTC)));
         LocalDate onDate = date(payment, "requested_execution_date");
         RoutingEngine.Facts facts = new RoutingEngine.Facts(str(payment, "payment_type"), str(payment, "direction"),
                 amount, currency, str(payment, "creditor_country"), str(payment, "priority"),

@@ -15,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -162,8 +163,8 @@ class StarterPackFlowIT {
             assertThat(le.get("legal_name").asString()).isEqualTo("SP Bank plc");
         });
         String ledger = fake.all(bank, "/v1/ledgers").getFirst().get("id").asString();
-        assertThat(fake.all(bank, "/v1/ledger-accounts")).hasSize(31).allSatisfy(a -> assertThat(a.get("ledger_id").asString()).isEqualTo(ledger));
-        assertThat(fake.all(bank, "/v1/config/entries")).hasSize(14).allSatisfy(e -> {
+        assertThat(fake.all(bank, "/v1/ledger-accounts")).hasSize(37).allSatisfy(a -> assertThat(a.get("ledger_id").asString()).isEqualTo(ledger));
+        assertThat(fake.all(bank, "/v1/config/entries")).hasSize(15).allSatisfy(e -> {
             assertThat(e.get("namespace").asString()).isEqualTo("ledger");
             assertThat(e.get("status").asString()).isEqualTo("PENDING_APPROVAL");
         });
@@ -171,18 +172,37 @@ class StarterPackFlowIT {
                 .filter(e -> e.get("config_key").asString().equals("payment-service")).findFirst().orElseThrow();
         Set<String> accountIds = fake.all(bank, "/v1/ledger-accounts").stream().map(a -> a.get("id").asString()).collect(Collectors.toSet());
         assertThat(accountIds).contains(payment.at("/value/gl/clearing").asString(), payment.at("/value/gl/fee_income").asString());
+        // fx-service routing: currency codes as map keys, one position and one clearing account per fx currency
+        JsonNode fx = fake.all(bank, "/v1/config/entries").stream()
+                .filter(e -> e.get("config_key").asString().equals("fx-service")).findFirst().orElseThrow();
+        Map<String, JsonNode> accountsById = fake.all(bank, "/v1/ledger-accounts").stream()
+                .collect(Collectors.toMap(a -> a.get("id").asString(), a -> a));
+        assertThat(fx.at("/value/position_accounts").propertyNames()).containsExactly("USD", "EUR", "GBP");
+        assertThat(fx.at("/value/clearing_accounts").propertyNames()).containsExactly("USD", "EUR", "GBP");
+        for (String ccy : List.of("USD", "EUR", "GBP")) {
+            JsonNode position = accountsById.get(fx.at("/value/position_accounts/" + ccy).asString());
+            JsonNode clearing = accountsById.get(fx.at("/value/clearing_accounts/" + ccy).asString());
+            assertThat(position.get("code").asString()).isEqualTo("1400-" + ccy);
+            assertThat(position.get("currency").asString()).isEqualTo(ccy);
+            assertThat(clearing.get("code").asString()).isEqualTo("1410-" + ccy);
+            assertThat(clearing.get("currency").asString()).isEqualTo(ccy);
+        }
+        assertThat(item(run, "ledger", "ledger_book/fx_position.eur").get("status").asString()).isEqualTo("DONE");
         assertThat(fake.all(bank, "/v1/wallet-fee-rules")).hasSize(6);
         assertThat(fake.all(bank, "/v1/wallet-tier-limits")).hasSize(4);
         assertThat(fake.all(bank, "/v1/approval-policies")).hasSize(12).allSatisfy(p -> assertThat(p.get("allow_self_approval").asBoolean()).isFalse());
         assertThat(fake.all(bank, "/v1/notification-rules")).allSatisfy(r -> assertThat(r.get("channels").toString()).isEqualTo("[\"EMAIL\",\"IN_APP\"]"));
-        assertThat(fake.all(bank, "/v1/operations/eod-jobs")).singleElement()
-                .satisfies(j -> assertThat(j.at("/parameters/ledger_id").asString()).isEqualTo(ledger));
+        // LEDGER_EOD closes every book of the tenant (no ledger_id pinned) and is active
+        assertThat(fake.all(bank, "/v1/operations/eod-jobs")).singleElement().satisfies(j -> {
+            assertThat(j.get("parameters").isEmpty()).isTrue();
+            assertThat(j.get("is_active").asBoolean()).isTrue();
+        });
         assertThat(fake.all(bank, "/v1/operations/eod-trigger-policies")).singleElement()
                 .satisfies(p -> assertThat(p.get("time_zone").asString()).isEqualTo("Europe/Dublin"));
 
         // maker-checker: submitted, never approved; requests listed in the run; the operator is the maker
         List<String> pendingApprovals = fake.all(bank, FakePlatform.APPROVALS).stream().map(r -> r.get("id").asString()).toList();
-        assertThat(pendingApprovals).hasSize(14 + 3 + 1 + 12); // config entries (incl. wallet routing), product versions, plan, templates
+        assertThat(pendingApprovals).hasSize(15 + 3 + 1 + 12); // config entries (incl. wallet and fx routing), product versions, plan, templates
         assertThat(fake.all(bank, FakePlatform.APPROVALS)).allSatisfy(r -> {
             assertThat(r.get("status").asString()).isEqualTo("PENDING");
             assertThat(r.get("maker").asString()).isEqualTo(OPERATOR);
@@ -234,7 +254,7 @@ class StarterPackFlowIT {
     @Test
     @Order(4)
     void afterTheCheckerApprovesResumePublishesAndActivates() throws Exception {
-        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(30);
+        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(31);
         JsonNode run = call("POST", "/v1/starter-pack-runs/" + bankRun + "/resume", null, bank.toString(), "tenant-admin", 200);
         assertThat(run.get("trigger").asString()).isEqualTo("RESUME");
         assertThat(run.get("resumed_from_id").asString()).isEqualTo(bankRun);
@@ -287,7 +307,7 @@ class StarterPackFlowIT {
         assertThat(fake.all(t, "/v1/wallet-fee-rules")).hasSize(6)
                 .extracting(r -> r.get("code").asString()).doesNotHaveDuplicates();
         assertThat(fake.all(t, "/v1/legal-entities")).hasSize(1);
-        assertThat(fake.all(t, "/v1/ledger-accounts")).hasSize(31);
+        assertThat(fake.all(t, "/v1/ledger-accounts")).hasSize(37);
     }
 
     @Test

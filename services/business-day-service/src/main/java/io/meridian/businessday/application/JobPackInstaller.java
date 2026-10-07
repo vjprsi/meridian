@@ -25,7 +25,9 @@ import tools.jackson.databind.node.ObjectNode;
  *   <li>a definition installed from the pack whose managed fields differ is upgraded (tenant-tuned fields such as
  *       is_active, parallelism, timeouts, retries and parameters are kept);</li>
  *   <li>a tenant-defined job with the same code is never touched (reported as skipped);</li>
- *   <li>a job installed from the pack but no longer in it is deactivated (retired).</li>
+ *   <li>a job installed from the pack but no longer in it is deactivated (retired);</li>
+ *   <li>an inactive definition that only waited for path parameters the new pack version no longer needs is
+ *       activated (reported as {@code activated}).</li>
  * </ul>
  * The resulting graph is validated as a whole; any problem rolls the installation back. {@code dry_run} reports the
  * changes without keeping them.
@@ -83,6 +85,7 @@ public class JobPackInstaller {
         ArrayNode retired = out.putArray("retired");
         ArrayNode skipped = out.putArray("skipped");
         ArrayNode inactive = out.putArray("needs_parameters");
+        ArrayNode activated = out.putArray("activated");
 
         for (StandardJobPack.Job job : pack.jobs()) {
             JsonNode current = existing.get(job.code());
@@ -110,6 +113,10 @@ public class JobPackInstaller {
                     changes.set(f, v == null ? json.nullNode() : v.deepCopy());
                 }
                 changes.put("pack_version", pack.version());
+                if (waitedOnlyForParameters(job, current)) {
+                    changes.put("is_active", true);
+                    activated.add(job.code());
+                }
                 merged.setAll(changes);
                 definitions.validateFields(merged);
                 String row = crud.updateRow(TABLE, Map.of("id", UUID.fromString(current.get("id").asString())), changes,
@@ -136,6 +143,20 @@ public class JobPackInstaller {
                 d.critical())).toList()).requireValid();
         out.put("job_count", pack.jobs().size());
         return out;
+    }
+
+    /**
+     * True when the stored definition is inactive only because its (older) path needed tenant parameters that were
+     * never set, and the pack's job ships active without needing any (e.g. LEDGER_EOD moved from one book to the
+     * tenant-wide endpoint): the upgrade activates it. A job the tenant deactivated with its parameters set stays off.
+     */
+    public static boolean waitedOnlyForParameters(StandardJobPack.Job job, JsonNode current) {
+        if (current.path("is_active").asBoolean(false) || !job.active() || !job.requiredParameters().isEmpty()) {
+            return false;
+        }
+        List<String> needed = JobTemplates.pathParameters(current.path("http_path").asString(null));
+        JsonNode params = current.get("parameters");
+        return !needed.isEmpty() && needed.stream().anyMatch(p -> params == null || !params.hasNonNull(p));
     }
 
     /** True when any pack-managed field of the stored definition differs from the pack. */

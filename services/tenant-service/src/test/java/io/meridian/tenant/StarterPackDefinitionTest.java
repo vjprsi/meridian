@@ -318,6 +318,83 @@ class StarterPackDefinitionTest {
     }
 
     @Test
+    void fxRoutingUsesCurrencyKeysForEveryFxCurrency() {
+        for (String code : List.of("GENERIC", "KE")) {
+            StarterPack declared = pack(code);
+            Map<String, JsonNode> params = StarterPackService.resolveParameters(declared, null, null);
+            List<String> ccys = new ArrayList<>();
+            params.get("fx_currencies").forEach(c -> ccys.add(c.asString()));
+            assertThat(ccys).contains(params.get("currency").asString());
+            StarterPack pack = declared.expand(params);
+            for (String ccy : ccys) {
+                Item position = item(pack, "ledger_book/fx_position." + ccy.toLowerCase());
+                assertThat(position.body().get("currency").asString()).isEqualTo(ccy);
+                assertThat(position.body().get("code").asString()).isEqualTo("1400-" + ccy);
+                assertThat(item(pack, "ledger_book/fx_clearing." + ccy.toLowerCase()).body().get("code").asString()).isEqualTo("1410-" + ccy);
+            }
+            Item fx = item(pack, "routing_fx_service");
+            JsonNode body = PackTemplates.render(fx.body(), new PackTemplates.Context(params, k -> "id:" + k, null, "2026-10-06",
+                    "t", code, "v"));
+            assertThat(body.at("/value/position_accounts").propertyNames()).containsExactlyElementsOf(ccys);
+            for (String ccy : ccys) {
+                assertThat(body.at("/value/position_accounts/" + ccy).asString()).isEqualTo("id:ledger_book/fx_position." + ccy.toLowerCase());
+                assertThat(body.at("/value/clearing_accounts/" + ccy).asString()).isEqualTo("id:ledger_book/fx_clearing." + ccy.toLowerCase());
+            }
+        }
+        assertThat(pack("KE").parameters().get("fx_currencies").defaultValue().toString()).isEqualTo("[\"KES\",\"USD\",\"EUR\",\"GBP\"]");
+        // the run's parameters decide the repetition: a tenant dealing in two currencies gets two accounts each
+        StarterPack generic = pack("GENERIC");
+        Map<String, JsonNode> two = StarterPackService.resolveParameters(generic, null, JSON.readTree("{\"fx_currencies\":[\"EUR\",\"CHF\"]}"));
+        StarterPack expanded = generic.expand(two);
+        assertThat(expanded.items().stream().map(Item::key).filter(k -> k.startsWith("ledger_book/fx_")))
+                .containsExactly("ledger_book/fx_position.eur", "ledger_book/fx_position.chf", "ledger_book/fx_clearing.eur",
+                        "ledger_book/fx_clearing.chf");
+        assertThat(contractProblems(expanded)).isEmpty();
+        assertThatThrownBy(() -> generic.expand(StarterPackService.resolveParameters(generic, null,
+                JSON.readTree("{\"fx_currencies\":[\"EUR\",\"eu r\"]}"))))
+                .isInstanceOf(StarterPack.InvalidPack.class).hasMessageContaining("must be a code");
+    }
+
+    @Test
+    void repetitionAndPlaceholderKeysRender() {
+        JsonNode doc = JSON.readTree("""
+                {"code":"REP","version":"2026.1.0",
+                 "parameters":{"ccys":{"type":"array","default":["USD","EUR"]},"base":{"type":"string","default":"USD"},
+                               "word":{"type":"string","default":"x"}},
+                 "steps":[{"code":"s1","items":[
+                   {"key":"acc","for_each":"${param.ccys}","service":"ledger-service","path":"/v1/ledger-accounts",
+                    "body":{"code":"A-${each}","currency":"${each}","name":"n ${each.lower}"}},
+                   {"key":"route","service":"config-service","path":"/v1/config/entries",
+                    "body":{"m":{"$for_each":"${param.ccys}","${each}":"${ref.acc.${each.lower}}"},"k":{"${param.base}":"${ref.acc.usd}"}}}]}]}""");
+        StarterPack p = StarterPack.parse(doc);
+        assertThat(p.items().stream().map(Item::key)).containsExactly("acc.usd", "acc.eur", "route");
+        assertThat(item(p, "acc.eur").body().toString()).isEqualTo("{\"code\":\"A-EUR\",\"currency\":\"EUR\",\"name\":\"n eur\"}");
+        Map<String, JsonNode> params = StarterPackService.resolveParameters(p, null, null);
+        JsonNode body = PackTemplates.render(item(p, "route").body(), new PackTemplates.Context(params, k -> "id-" + k, null, "d", "t", "P", "1"));
+        assertThat(body.toString()).isEqualTo("{\"m\":{\"USD\":\"id-acc.usd\",\"EUR\":\"id-acc.eur\"},\"k\":{\"USD\":\"id-acc.usd\"}}");
+        // placeholder keys count for the checksum like values
+        Map<String, JsonNode> gbp = new HashMap<>(params);
+        gbp.put("base", JSON.getNodeFactory().stringNode("GBP"));
+        assertThat(PackTemplates.checksum(item(p, "route"), gbp)).isNotEqualTo(PackTemplates.checksum(item(p, "route"), params));
+        // a run with other values expands differently; the definition stays declarative
+        assertThat(p.expand(Map.of("ccys", JSON.readTree("[\"KES\",\"USD\"]"))).items().stream().map(Item::key))
+                .containsExactly("acc.kes", "acc.usd", "route");
+        // for_each needs a declared list parameter; ${each} outside a repetition is unknown
+        assertThatThrownBy(() -> StarterPack.parse(JSON.readTree("""
+                {"code":"REP","version":"2026.1.0","parameters":{"word":{"type":"string","default":"x"}},
+                 "steps":[{"code":"s1","items":[
+                   {"key":"a","for_each":"${param.word}","service":"s","path":"/v1/a","body":{}},
+                   {"key":"b","for_each":"EUR","service":"s","path":"/v1/b","body":{}}]}]}""")))
+                .satisfies(e -> assertThat(((StarterPack.InvalidPack) e).problems())
+                        .anySatisfy(m -> assertThat(m).contains("a: for_each parameter word must be a declared list"))
+                        .anySatisfy(m -> assertThat(m).contains("b: for_each must be")));
+        assertThatThrownBy(() -> StarterPack.parse(JSON.readTree("""
+                {"code":"REP","version":"2026.1.0","parameters":{},
+                 "steps":[{"code":"s1","items":[{"key":"c","service":"s","path":"/v1/c","body":{"x":"${each}"}}]}]}""")))
+                .hasMessageContaining("unknown placeholder ${each}");
+    }
+
+    @Test
     void extendsMergesParametersAndItemsByKey() {
         JsonNode base = JSON.readTree("""
                 {"code":"BASE","version":"2026.1.0","parameters":{"a":{"type":"string","default":"x","description":"d"}},

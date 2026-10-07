@@ -153,7 +153,7 @@ class AutoEodFlowIT {
         assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
         JsonNode installed = json.readTree(first.body());
         assertThat(installed.get("created")).hasSize(jobs);
-        assertThat(installed.get("needs_parameters").toString()).contains("LEDGER_EOD");
+        assertThat(installed.get("needs_parameters")).isEmpty();
         assertThat(get("/v1/operations/eod-jobs?limit=200", A).get("data")).hasSize(jobs);
         HttpResponse<String> replay = send("POST", "/v1/operations/eod-jobs/install-standard-pack",
                 "{\"version\":\"" + version + "\"}", key, A);
@@ -180,15 +180,24 @@ class AutoEodFlowIT {
         assertThat(upgraded.get("max_retries").asInt()).isEqualTo(5);
         assertThat(upgraded.get("pack_version").asString()).isEqualTo(version);
 
-        // a job needing tenant parameters cannot be activated without them
+        // LEDGER_EOD runs every book of the tenant out of the box (no parameters)
         JsonNode ledger = job(A, "LEDGER_EOD");
-        assertThat(ledger.get("is_active").asBoolean()).isFalse();
-        HttpResponse<String> noParams = send("PATCH", "/v1/operations/eod-jobs/" + ledger.get("id").asString(),
-                "{\"is_active\":true}", null, A, ledger.get("row_version").asString());
-        assertThat(noParams.statusCode()).as(noParams.body()).isEqualTo(422);
-        assertThat(json.readTree(noParams.body()).get("code").asString()).isEqualTo("missing_parameter");
+        assertThat(ledger.get("is_active").asBoolean()).isTrue();
+        assertThat(ledger.get("http_path").asString()).isEqualTo("/v1/ledgers/end-of-day");
+        // a definition from the per-book pack that waited for parameters.ledger_id is upgraded and activated
+        TenantContext.callAs(UUID.fromString(A), "test", () -> jdbc.sql("""
+                update eod_job_definition set http_path = '/v1/ledgers/{parameters.ledger_id}/eod', is_active = false,
+                       parameters = '{"ledger_id":null}'::jsonb, pack_version = '2026.10.1'
+                where code = 'LEDGER_EOD'""").update());
+        JsonNode legacy = post("/v1/operations/eod-jobs/install-standard-pack", "{}", A, 200);
+        assertThat(legacy.get("updated").toString()).contains("LEDGER_EOD");
+        assertThat(legacy.get("activated").toString()).isEqualTo("[\"LEDGER_EOD\"]");
+        ledger = job(A, "LEDGER_EOD");
+        assertThat(ledger.get("is_active").asBoolean()).isTrue();
+        assertThat(ledger.get("http_path").asString()).isEqualTo("/v1/ledgers/end-of-day");
+        // a tenant may still pin one book (backward compatible with the per-book job)
         HttpResponse<String> activated = send("PATCH", "/v1/operations/eod-jobs/" + ledger.get("id").asString(),
-                "{\"is_active\":true,\"parameters\":{\"ledger_id\":\"" + LEDGER + "\"}}", null, A,
+                "{\"parameters\":{\"ledger_id\":\"" + LEDGER + "\"}}", null, A,
                 ledger.get("row_version").asString());
         assertThat(activated.statusCode()).as(activated.body()).isEqualTo(200);
         assertThat(post("/v1/operations/eod-jobs/validate", null, A, 200).get("valid").asBoolean()).isTrue();
@@ -305,15 +314,21 @@ class AutoEodFlowIT {
         assertThat(index(aPaths, "/v1/loans/eod/auto-debit")).isLessThan(index(aPaths, "/v1/deposit-accounts/eod/accrue"));
         assertThat(index(aPaths, "/v1/payments/execute-due")).isLessThan(index(aPaths, "/v1/deposit-accounts/eod/standing-orders"));
         assertThat(index(aPaths, "/v1/loans/eod/delinquency")).isLessThan(index(aPaths, "/v1/collections/cases/eod/strategy-run"));
-        assertThat(index(aPaths, "/v1/ledgers/" + LEDGER + "/eod")).isGreaterThan(index(aPaths, "/v1/deposit-accounts/eod/accrue"));
-        assertThat(index(aPaths, "/v1/statements/cycle")).isGreaterThan(index(aPaths, "/v1/ledgers/" + LEDGER + "/eod"));
+        assertThat(index(aPaths, "/v1/ledgers/end-of-day")).isGreaterThan(index(aPaths, "/v1/deposit-accounts/eod/accrue"));
+        assertThat(index(aPaths, "/v1/statements/cycle")).isGreaterThan(index(aPaths, "/v1/ledgers/end-of-day"));
         assertThat(aPaths).noneMatch(p -> p.startsWith("/v1/gl/ecl-provisions")); // EOM only
         Dispatch ledgerEod = a.stream().filter(d -> d.path().startsWith("/v1/ledgers/")).findFirst().orElseThrow();
         assertThat(ledgerEod.body().get("business_date").asString()).isEqualTo("2026-01-06");
+        assertThat(ledgerEod.body().get("ledger_id").asString()).isEqualTo(LEDGER);
+        assertThat(ledgerEod.body().get("legal_entity_id").asString()).isEqualTo(EA);
         assertThat(aPaths).contains("/v1/deposit-accounts/eod/accrue?business_date=2026-01-06");
-        // B never activated LEDGER_EOD: nothing is sent to the ledger, the rest still runs in order
-        List<String> bPaths = dispatches.stream().filter(d -> B.equals(d.tenant())).map(Dispatch::path).toList();
-        assertThat(bPaths).noneMatch(p -> p.startsWith("/v1/ledgers/"));
+        // B left LEDGER_EOD as shipped: every book of its legal entity is closed, after the accruals
+        List<Dispatch> b = dispatches.stream().filter(d -> B.equals(d.tenant())).toList();
+        List<String> bPaths = b.stream().map(Dispatch::path).toList();
+        Dispatch bLedger = b.stream().filter(d -> d.path().equals("/v1/ledgers/end-of-day")).findFirst().orElseThrow();
+        assertThat(bLedger.body().get("ledger_id").isNull()).isTrue();
+        assertThat(bLedger.body().get("legal_entity_id").asString()).isEqualTo(EB);
+        assertThat(index(bPaths, "/v1/deposit-accounts/eod/accrue")).isLessThan(index(bPaths, "/v1/ledgers/end-of-day"));
         assertThat(index(bPaths, "/v1/deposit-accounts/eod/accrue")).isLessThan(index(bPaths, "/v1/statements/cycle"));
         assertThat(dispatches).noneMatch(d -> d.tenant() == null || D.equals(d.tenant()) || E.equals(d.tenant()));
 

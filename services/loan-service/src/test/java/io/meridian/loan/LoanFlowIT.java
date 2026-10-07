@@ -136,6 +136,12 @@ class LoanFlowIT {
     @MockitoBean
     ServiceClient serviceClient;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
+    /** Business date business-day-service reports for LEGAL_ENTITY; null = none (the clock applies). */
+    volatile String businessDate;
+
     final HttpClient http = HttpClient.newHttpClient();
     FakeLedger ledger;
     /** deposit account id -> ledger account id. */
@@ -162,6 +168,9 @@ class LoanFlowIT {
             return switch (service) {
                 case "product-catalog-service" -> catalog(path);
                 case "deposit-service" -> deposit(path);
+                case "business-day-service" -> businessDate != null
+                        && path.equals("/v1/operations/business-days/current?legal_entity_id=" + LEGAL_ENTITY)
+                        ? json.readTree("{\"business_date\":\"" + businessDate + "\"}") : null;
                 default -> ledger.get(service, path);
             };
         });
@@ -293,6 +302,9 @@ class LoanFlowIT {
         assertThat(get("/v1/loan-fee-charges?loan_id=" + loan).get("data").get(0).get("status").asString()).isEqualTo("PAID");
         assertThat(get("/v1/loans/" + loan + "/schedules").get("data")).hasSize(2);
         assertThat(events("lending.loan.disbursed", null)).isGreaterThanOrEqualTo(1);
+        // PENDING_DISBURSEMENT -> ACTIVE
+        assertThat(events("lending.loan.status_changed", loan)).isEqualTo(1);
+        assertThat(lastPayload("lending.loan.status_changed", loan).get("status").asString()).isEqualTo("ACTIVE");
     }
 
     // ------------------------------------------------------------------ 3. accrual and replays
@@ -484,6 +496,9 @@ class LoanFlowIT {
         assertThat(history.get(0).get("customer_id").asString()).isEqualTo(CUSTOMER);
         assertThat(events("lending.loan.delinquency_changed", null)).isGreaterThanOrEqualTo(1);
         assertThat(events("lending.loan.installment_overdue", second.get("id").asString())).isEqualTo(1);
+        // ACTIVE -> IN_ARREARS also publishes the status change (search and other consumers track loan status)
+        assertThat(events("lending.loan.status_changed", loan)).isEqualTo(2);
+        assertThat(lastPayload("lending.loan.status_changed", loan).get("status").asString()).isEqualTo("IN_ARREARS");
     }
 
     @Test
@@ -504,6 +519,8 @@ class LoanFlowIT {
         assertThat(cured.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(cured.get("days_past_due").asInt()).isZero();
         assertThat(dec(cured, "overdue_amount")).isEqualByComparingTo("0");
+        assertThat(events("lending.loan.status_changed", loan)).isEqualTo(3);
+        assertThat(lastPayload("lending.loan.status_changed", loan).get("status").asString()).isEqualTo("ACTIVE");
 
         // validation and a waterfall rule check
         assertThat(post("/v1/loans/" + loan + "/repay", "{\"amount\":\"-5\",\"source\":\"MANUAL\"}", "ops", 422).get("code").asString())
@@ -643,6 +660,7 @@ class LoanFlowIT {
         assertThat(closed.get("status").asString()).isEqualTo("CLOSED");
         assertThat(ledger.statusOf(UUID.fromString(paidOff.get("ledger_account_id").asString()))).isEqualTo("CLOSED");
         assertThat(events("lending.loan.paid_off", loan)).isEqualTo(1);
+        assertThat(lastPayload("lending.loan.status_changed", loan).get("status").asString()).isEqualTo("CLOSED");
     }
 
     // ------------------------------------------------------------------ 9. write-off, recovery, cancellation
@@ -666,6 +684,8 @@ class LoanFlowIT {
         JsonNode l = get("/v1/loans/" + loan2);
         assertThat(l.get("status").asString()).isEqualTo("WRITTEN_OFF");
         assertThat(l.get("ecl_stage").asString()).isEqualTo("STAGE_3");
+        assertThat(events("lending.loan.status_changed", loan2)).isEqualTo(2); // ACTIVE, WRITTEN_OFF
+        assertThat(lastPayload("lending.loan.status_changed", loan2).get("status").asString()).isEqualTo("WRITTEN_OFF");
         assertThat(ledger.rawBalance(UUID.fromString(l.get("ledger_account_id").asString()))).isEqualByComparingTo("0");
         assertThat(post("/v1/loans/" + loan2 + "/repay", "{\"amount\":\"10\",\"source\":\"MANUAL\"}", "ops", 409).get("code").asString())
                 .isEqualTo("loan_written_off");
@@ -716,7 +736,44 @@ class LoanFlowIT {
         assertThat(run.get("counts").get("loans").asInt()).isZero();
     }
 
+    // ------------------------------------------------------------------ 11. business date
+
+    @Test
+    @Order(16)
+    void theLegalEntitysBusinessDateDrivesStartAndValueDates() throws Exception {
+        // the clock says 10 December; the lending entity is still on 8 December (EOD not rolled yet)
+        CLOCK.set("2026-12-10");
+        businessDate = "2026-12-08";
+        businessDates.invalidate();
+        try {
+            String l5 = post("/v1/loans", loanBody("1000", 6, "ANNUITY"), "ops", 201).get("id").asString();
+            JsonNode d = post("/v1/loans/" + l5 + "/disburse", "{\"method\":\"DEPOSIT_ACCOUNT\"}", "ops", 200);
+            assertThat(d.get("status").asString()).isEqualTo("COMPLETED");
+            JsonNode l = get("/v1/loans/" + l5);
+            assertThat(l.get("start_date").asString()).isEqualTo("2026-12-08");
+            assertThat(l.get("cooling_off_until").asString()).isEqualTo("2026-12-22");
+            JsonNode rep = post("/v1/loans/" + l5 + "/repay", """
+                    {"amount":"10","source":"MANUAL","source_account_id":"%s"}""".formatted(accountA), "ops", 200);
+            assertThat(rep.get("value_date").asString()).isEqualTo("2026-12-08");
+            // 9 December is after the entity's business date, although before the clock date
+            assertThat(post("/v1/loans/" + l5 + "/repay", """
+                    {"amount":"10","source":"MANUAL","source_account_id":"%s","value_date":"2026-12-09"}""".formatted(accountA), "ops", 422)
+                    .get("code").asString()).isEqualTo("invalid_value_date");
+        } finally {
+            businessDate = null;
+            businessDates.invalidate();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private JsonNode lastPayload(String type, String aggregateId) throws Exception {
+        String payload = TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql("""
+                select payload::text from outbox where tenant_id = ?::uuid and event_type = ? and aggregate_id = ?::uuid
+                order by created_at desc, id desc limit 1""")
+                .params(TENANT, type, aggregateId).query(String.class).single());
+        return json.readTree(payload);
+    }
 
     private String loanBody(String principal, int term, String scheduleType) {
         return """

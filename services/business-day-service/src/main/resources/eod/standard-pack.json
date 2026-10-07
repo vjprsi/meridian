@@ -1,6 +1,6 @@
 {
   "pack_code": "MERIDIAN_STANDARD_EOD",
-  "version": "2026.10.1",
+  "version": "2026.10.2",
   "description": "Standard end-of-day job pack: every domain's per-tenant EOD, scan and expiry endpoint in banking order (cut-off and expiries -> postings -> accruals -> delinquency -> collections -> fees/dormancy -> ledger snapshot / GL -> treasury and liquidity -> reporting, statements, notifications). Derived from spec/domains/*.yaml; verified against generated/routes.json by StandardJobPackTest.",
   "stages": [
     "CUT_OFF",
@@ -616,9 +616,11 @@
       ],
       "owning_service": "ledger-service",
       "http_method": "POST",
-      "http_path": "/v1/ledgers/{parameters.ledger_id}/eod",
+      "http_path": "/v1/ledgers/end-of-day",
       "body_template": {
-        "business_date": "{business_date}"
+        "business_date": "{business_date}",
+        "legal_entity_id": "{legal_entity_id}",
+        "ledger_id": "{parameters.ledger_id}"
       },
       "depends_on": [
         "DEP_INTEREST_ACCRUAL",
@@ -637,10 +639,7 @@
       "failure_policy": "RETRY_THEN_STOP",
       "timeout_minutes": 60,
       "max_retries": 3,
-      "is_active": false,
-      "required_parameters": [
-        "ledger_id"
-      ],
+      "is_active": true,
       "sequence": 70
     },
     {

@@ -74,7 +74,7 @@ public class FxDealService {
         Support.required(type, "deal_type");
         LocalDate trade = Rows.date(v, "trade_date");
         Support.required(trade, "trade_date");
-        if (trade.isAfter(rows.today())) {
+        if (trade.isAfter(rows.today(Rows.uuid(v, "legal_entity_id")))) {
             throw ApiException.unprocessable("invalid_dates", "trade_date cannot be in the future");
         }
         if ("NDF".equals(type)) {
@@ -299,7 +299,7 @@ public class FxDealService {
             throw ApiException.conflict("near_leg_pending", "Settle the NEAR leg first");
         }
         LocalDate valueDate = Rows.date(leg, "value_date");
-        if (valueDate.isAfter(rows.today())) {
+        if (valueDate.isAfter(rows.today(Rows.uuid(deal, "legal_entity_id")))) {
             throw ApiException.unprocessable("value_date_not_reached", "The leg settles on " + valueDate);
         }
         UUID legId = Rows.uuid(leg, "id");
@@ -370,7 +370,7 @@ public class FxDealService {
             throw ApiException.conflict("invalid_transition", "The deal must be VERIFIED or CONFIRMED to be fixed");
         }
         LocalDate fixingDate = Rows.date(deal, "fixing_date");
-        if (fixingDate != null && fixingDate.isAfter(rows.today())) {
+        if (fixingDate != null && fixingDate.isAfter(rows.today(Rows.uuid(deal, "legal_entity_id")))) {
             throw ApiException.unprocessable("fixing_date_not_reached", "The deal fixes on " + fixingDate);
         }
         ObjectNode near = legs(id).getFirst();

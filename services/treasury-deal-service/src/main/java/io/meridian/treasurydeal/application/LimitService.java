@@ -170,10 +170,10 @@ public class LimitService {
     /** Pre-deal check of one prospective exposure (no reservation). */
     @Transactional(readOnly = true)
     public ObjectNode check(UUID counterpartyId, String limitType, BigDecimal amount, String currency, Integer tenorDays) {
-        rows.get(CounterpartyService.TABLE, counterpartyId);
+        ObjectNode cp = rows.get(CounterpartyService.TABLE, counterpartyId);
         Support.currency(currency, "currency");
         Support.positive(amount, "amount");
-        LocalDate today = rows.today();
+        LocalDate today = rows.today(Rows.uuid(cp, "legal_entity_id"));
         List<Impact> impacts = impacts(counterpartyId,
                 List.of(new Exposure(limitType, amount, currency, tenorDays == null ? 0 : tenorDays, false)), today);
         ObjectNode out = rows.object();

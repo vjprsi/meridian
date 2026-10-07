@@ -226,7 +226,7 @@ public class BnplService {
         BigDecimal reduce = left;
         List<ObjectNode> open = new ArrayList<>(loans.openInstallments(loanId));
         java.util.Collections.reverse(open);
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         for (ObjectNode i : open) {
             if (left.signum() <= 0) {
                 break;
@@ -305,7 +305,7 @@ public class BnplService {
         }
         lu.put("closed_at", loans.now().toString());
         loan.setAll(rows.update(LoanSupport.LOAN, loanId, lu));
-        loans.transition(loan, "CANCELLED", "BNPL cancelled: " + reason, loans.today());
+        loans.transition(loan, "CANCELLED", "BNPL cancelled: " + reason, loans.today(loan));
         loans.events().publish("lending.loan.cancelled", LoanSupport.LOAN, loan);
         ObjectNode upd = rows.object();
         upd.put("status", "CANCELLED");

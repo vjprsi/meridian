@@ -106,7 +106,7 @@ public class StarterPackService implements DisposableBean {
      */
     public void applyAfterProvisioning(UUID tenantId, ObjectNode tenantRow, String packCode, JsonNode parameters) {
         StarterPack pack = catalog.require(packCode, null);
-        resolveParameters(pack, tenantRow, parameters);
+        expand(pack, resolveParameters(pack, tenantRow, parameters));
         String principal = TenantContext.principal();
         Runnable start = () -> {
             try {
@@ -137,9 +137,10 @@ public class StarterPackService implements DisposableBean {
 
     ObjectNode apply(UUID tenantId, String packCode, String version, JsonNode requested, boolean dryRun, String trigger,
                      UUID resumedFrom, boolean wait) {
-        StarterPack pack = catalog.require(packCode, version);
+        StarterPack declared = catalog.require(packCode, version);
         ObjectNode tenantRow = tenants.find("tenant", tenantId).orElse(null);
-        Map<String, JsonNode> params = resolveParameters(pack, tenantRow, requested);
+        Map<String, JsonNode> params = resolveParameters(declared, tenantRow, requested);
+        StarterPack pack = expand(declared, params);
         String principal = TenantContext.principal();
         String today = today(params);
         ObjectNode run = call(tenantId, principal, () -> tx.execute(s -> {
@@ -212,6 +213,15 @@ public class StarterPackService implements DisposableBean {
             }
         }
         return out;
+    }
+
+    /** The pack with its for_each repetitions expanded for the run's parameters (422 when a list parameter is invalid). */
+    static StarterPack expand(StarterPack pack, Map<String, JsonNode> params) {
+        try {
+            return pack.expand(params);
+        } catch (StarterPack.InvalidPack e) {
+            throw ApiException.unprocessable("invalid_parameter", String.join("; ", e.problems()));
+        }
     }
 
     /** Business "today" for validity dates, in the pack's timezone parameter (UTC when absent or invalid). */

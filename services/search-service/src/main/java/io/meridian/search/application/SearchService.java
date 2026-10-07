@@ -2,6 +2,7 @@ package io.meridian.search.application;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.search.domain.ContactLookup;
 import io.meridian.search.domain.IndexRules;
 import io.meridian.search.domain.SearchText;
 import io.meridian.search.infrastructure.DocumentStore;
@@ -17,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -26,7 +28,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Federated search across entity indexes (PostgreSQL full text): synonym expansion, weighted ranking, JSONB
  * filters, offset cursors, type-ahead suggestions, saved searches, and masking of PII fields for callers
- * without the PII permission.
+ * without the PII permission. A query that is an e-mail address or phone number also matches verified contacts by
+ * their keyed lookup hash ({@link ContactLookup}), so customers are found by exact contact without indexing it.
  */
 @Service
 public class SearchService {
@@ -35,11 +38,14 @@ public class SearchService {
     private final Rows rows;
     private final DocumentStore docs;
     private final JsonMapper json;
+    private final ContactLookup contacts;
 
-    public SearchService(Rows rows, DocumentStore docs, JsonMapper json) {
+    public SearchService(Rows rows, DocumentStore docs, JsonMapper json,
+                         @Value("${meridian.contact-lookup.key:}") String contactLookupKey) {
         this.rows = rows;
         this.docs = docs;
         this.json = json;
+        this.contacts = new ContactLookup(contactLookupKey);
     }
 
     public record Query(String text, List<String> entityTypes, JsonNode filters, Integer limit, String cursor) {}
@@ -53,6 +59,7 @@ public class SearchService {
         int offset = decodeCursor(q.cursor());
         Map<String, JsonNode> byPhysical = indexes(q.entityTypes());
         String tsquery = q.text() == null || q.text().isBlank() ? null : SearchText.tsquery(q.text(), synonyms(byPhysical.values()));
+        tsquery = contacts.extend(tsquery, q.text());
         if (tsquery == null && (q.filters() == null || q.filters().isEmpty())) {
             throw ApiException.badRequest("query_required", "Provide query_text or filters");
         }

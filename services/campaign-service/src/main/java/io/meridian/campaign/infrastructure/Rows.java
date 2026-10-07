@@ -24,8 +24,10 @@ public class Rows {
     private final JdbcClient jdbc;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;
@@ -76,6 +78,11 @@ public class Rows {
 
     public int execute(String sql, Object... args) {
         return jdbc.sql(sql).params(java.util.Arrays.asList(args)).update();
+    }
+
+    /** The tenant's business date (business-day-service), else the database clock's UTC date. */
+    public java.time.LocalDate today() {
+        return businessDates.today(() -> now().toLocalDate());
     }
 
     /** The database clock (transaction start time): the single clock for every SLA and deadline comparison. */

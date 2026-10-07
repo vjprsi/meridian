@@ -137,7 +137,7 @@ public class WriteOffService {
         BigDecimal total = p.add(i).add(fees).add(pen);
         UUID je = loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-write-off", id, null), "ADJUSTMENT",
                 "Write-off " + str(loan, "loan_number") + ": " + str(w, "reason"), str(loan, "currency"), "LOAN_WRITE_OFF", id,
-                loans.today(), new LedgerPort.Legs().debit(loans.gl().writeOffExpense(), total, "Credit loss")
+                loans.today(loan), new LedgerPort.Legs().debit(loans.gl().writeOffExpense(), total, "Credit loss")
                 .credit(loans.receivable(loan), p, "Principal written off")
                 .credit(loans.gl().interestReceivable(), i, "Interest written off")
                 .credit(loans.gl().feeReceivable(), fees, "Fees written off")
@@ -157,12 +157,12 @@ public class WriteOffService {
             }
             upd.put("ecl_stage", "STAGE_3");
             loan.setAll(rows.update(LoanSupport.LOAN, loanId, upd));
-            loans.transition(loan, "WRITTEN_OFF", "written off: " + str(w, "reason"), loans.today());
+            loans.transition(loan, "WRITTEN_OFF", "written off: " + str(w, "reason"), loans.today(loan));
         } else {
             Map<String, BigDecimal> deltas = new LinkedHashMap<>();
             deltas.put("outstanding_principal", p.negate());
             loans.adjust(loan, deltas);
-            loans.regenerateFuture(loan, "PARTIAL_WRITE_OFF", loans.today(), decOr0(loan, "interest_rate"), null, null);
+            loans.regenerateFuture(loan, "PARTIAL_WRITE_OFF", loans.today(loan), decOr0(loan, "interest_rate"), null, null);
         }
         ObjectNode upd = rows.object();
         upd.setAll(amounts);
@@ -241,7 +241,7 @@ public class WriteOffService {
         UUID id = io.meridian.common.id.Ids.newId();
         UUID je = loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-recovery", id, null), "PAYMENT",
                 "Recovery " + str(loan, "loan_number") + " (" + str(req, "source") + ")", str(loan, "currency"), "LOAN_RECOVERY", id,
-                loans.today(), new LedgerPort.Legs().debit(loans.gl().clearing(), amount.subtract(commission), "Recovery received")
+                loans.today(loan), new LedgerPort.Legs().debit(loans.gl().clearing(), amount.subtract(commission), "Recovery received")
                 .debit(loans.gl().agencyCommission() != null ? loans.gl().agencyCommission() : loans.gl().writeOffExpense(), commission, "Agency commission")
                 .credit(loans.gl().recoveryIncome(), amount, "Recovery of written-off debt").list()));
         ObjectNode r = rows.object();

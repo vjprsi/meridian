@@ -148,7 +148,7 @@ public class EarnService {
         if (!"ACTIVE".equals(text(program, "status"))) {
             return "The program is " + text(program, "status");
         }
-        LocalDate today = rows.now().toLocalDate();
+        LocalDate today = rows.today();
         LocalDate start = Json.date(program, "starts_on");
         LocalDate end = Json.date(program, "ends_on");
         if (start != null && today.isBefore(start) || end != null && today.isAfter(end)) {
@@ -225,7 +225,7 @@ public class EarnService {
             if (a.points() > 0) {
                 PointsLedger.Move m = new PointsLedger.Move("EARN", a.points(), "earn:" + txId + ":" + a.ruleId())
                         .rule(a.ruleId()).transaction(txId, in.amount(), in.currency()).source(in.sourceType(), in.sourceId())
-                        .expires(PointsLedger.expiry(program, now.toLocalDate())).event("engagement.points.earned");
+                        .expires(PointsLedger.expiry(program, rows.today())).event("engagement.points.earned");
                 if (pending) {
                     m.pending(confirmAfter);
                 }

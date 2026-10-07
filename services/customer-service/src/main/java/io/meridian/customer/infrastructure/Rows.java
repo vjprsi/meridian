@@ -110,6 +110,11 @@ public class Rows {
         return page;
     }
 
+    /** A model (or any value) as a JSON object tree. */
+    public ObjectNode toTree(Object value) {
+        return json.valueToTree(value);
+    }
+
     public <T> T read(JsonNode node, Class<T> type) {
         return json.treeToValue(node, type);
     }

@@ -119,7 +119,7 @@ public class LoanService {
         if (Rows.bool(values, "auto_debit_enabled") || !values.has("auto_debit_enabled")) {
             values.put("auto_debit_enabled", values.hasNonNull("repayment_account_id"));
         }
-        LocalDate start = Rows.date(values, "start_date") != null ? Rows.date(values, "start_date") : loans.today();
+        LocalDate start = Rows.date(values, "start_date") != null ? Rows.date(values, "start_date") : loans.today(values);
         values.put("start_date", start.toString());
         Frequency freq = Frequency.parse(str(values, "repayment_frequency"));
         if (!values.hasNonNull("first_repayment_date")) {
@@ -180,7 +180,7 @@ public class LoanService {
         String status = str(loan, "status");
         if ("ACTIVE".equals(status)) {
             LocalDate until = Rows.date(loan, "cooling_off_until");
-            if (until == null || loans.today().isAfter(until)) {
+            if (until == null || loans.today(loan).isAfter(until)) {
                 throw ApiException.conflict("cooling_off_expired", "The cooling-off period ended on " + until);
             }
             boolean repaid = rows.scalar("select exists(select 1 from loan_repayment where loan_id = ?)", Boolean.class, id)
@@ -240,7 +240,7 @@ public class LoanService {
             UUID customerLedger = external.depositLedgerAccount(target, str(loan, "currency"), "repayment_account_id");
             loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-credit-refund", id, null), "PAYMENT",
                     "Refund of loan credit balance " + str(loan, "loan_number"), str(loan, "currency"), "LOAN", id,
-                    loans.today(), new LedgerPort.Legs().debit(loans.gl().overpaymentOrClearing(), credit, "Loan overpayment")
+                    loans.today(loan), new LedgerPort.Legs().debit(loans.gl().overpaymentOrClearing(), credit, "Loan overpayment")
                     .credit(customerLedger, credit, "Loan credit refund").list()));
             ObjectNode u = rows.object();
             u.put("credit_balance", "0");

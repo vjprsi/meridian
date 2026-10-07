@@ -206,7 +206,7 @@ public class SecuritiesService {
         LocalDate settle = Rows.date(v, "settlement_date");
         Support.required(trade, "trade_date");
         Support.required(settle, "settlement_date");
-        if (trade.isAfter(rows.today())) {
+        if (trade.isAfter(rows.today(Rows.uuid(v, "legal_entity_id")))) {
             throw ApiException.unprocessable("invalid_dates", "trade_date cannot be in the future");
         }
         Support.ordered(trade, settle, "settlement_date must not be before trade_date");
@@ -289,7 +289,7 @@ public class SecuritiesService {
         ObjectNode trade = rows.lock(TRADE, id);
         Support.transition(Lifecycle.TRADE, trade, "SETTLED", "trade");
         LocalDate settle = Rows.date(trade, "settlement_date");
-        if (settle.isAfter(rows.today())) {
+        if (settle.isAfter(rows.today(Rows.uuid(trade, "legal_entity_id")))) {
             throw ApiException.unprocessable("value_date_not_reached", "The trade settles on " + settle);
         }
         ObjectNode holding = rows.lock(HOLDING, Rows.uuid(trade, "securities_holding_id"));

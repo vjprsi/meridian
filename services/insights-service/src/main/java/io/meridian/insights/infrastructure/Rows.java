@@ -28,8 +28,10 @@ public class Rows {
     private final JdbcClient jdbc;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;
@@ -95,9 +97,9 @@ public class Rows {
         return jdbc.sql("select now()").query(OffsetDateTime.class).single().withOffsetSameInstant(ZoneOffset.UTC);
     }
 
-    /** Today's date (UTC) on the database clock. */
+    /** The tenant's business date (business-day-service), else today's date (UTC) on the database clock. */
     public LocalDate today() {
-        return now().toLocalDate();
+        return businessDates.today(() -> now().toLocalDate());
     }
 
     public ObjectNode object() {

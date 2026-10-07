@@ -77,6 +77,12 @@ class WalletFlowIT {
     @MockitoBean
     ServiceClient serviceClient;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
+    /** Business date reported by the stubbed business-day-service (null: none, the database date applies). */
+    volatile LocalDate businessDate;
+
     final HttpClient http = HttpClient.newHttpClient();
     FakeLedger ledger;
     final List<JsonNode> sms = Collections.synchronizedList(new ArrayList<>());
@@ -131,6 +137,10 @@ class WalletFlowIT {
         when(serviceClient.get(anyString(), anyString())).thenAnswer(i -> {
             String service = i.getArgument(0);
             String path = i.getArgument(1);
+            if ("business-day-service".equals(service)) {
+                return businessDate == null ? null : json.readTree(
+                        "{\"data\":[{\"business_date\":\"" + businessDate + "\",\"is_current\":true}]}");
+            }
             if ("deposit-service".equals(service)) {
                 if (path.equals("/v1/deposit-accounts/" + DEPOSIT_ACCOUNT)) {
                     return json.readTree("{\"id\":\"" + DEPOSIT_ACCOUNT + "\",\"status\":\"ACTIVE\",\"currency\":\"KES\","
@@ -569,6 +579,30 @@ class WalletFlowIT {
         String payload = asTenant(() -> jdbc.sql("select payload::text from outbox where event_type = 'wallets.wallet.created' limit 1")
                 .query(String.class).single());
         assertThat(payload).doesNotContain("pin_hash");
+    }
+
+    // ------------------------------------------------------------------ 12. business date
+
+    @Test
+    @Order(12)
+    void tariffsEffectiveOnTheBusinessDate() throws Exception {
+        post("/v1/wallet-fee-rules", """
+                {"code":"P2P-2099","txn_type":"P2P","currency":"KES","wallet_type":"CUSTOMER","basis":"FLAT",
+                 "flat_fee":"7.00","valid_from":"2099-01-01"}""", "ops", 201);
+        String quote = """
+                {"txn_type":"P2P","amount":"100","currency":"KES","payer_wallet_id":"%s","payee_msisdn":"+254700000002"}"""
+                .formatted(alice);
+        assertThat(post("/v1/wallet-transactions/quote", quote, "alice", 200).get("fee_amount").asString())
+                .isEqualTo("5.00");
+        try {
+            businessDate = LocalDate.parse("2099-03-01");
+            businessDates.invalidate();
+            assertThat(post("/v1/wallet-transactions/quote", quote, "alice", 200).get("fee_amount").asString())
+                    .isEqualTo("7.00");
+        } finally {
+            businessDate = null;
+            businessDates.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------ helpers

@@ -10,7 +10,10 @@
 #   steps[].items[]  key, service, path (collection), body (create request), optional lookup (pre-existing check),
 #                    update (NONE | PATCH | RECREATE), actions (status-driven follow-ups), ready_status,
 #                    pending_status, children (created after the parent, before the parent's actions)
-#   placeholders     ${param.x}, ${ref.<item key>} (resource id), ${parent}, ${today}, ${tenant_id}
+#   placeholders     ${param.x}, ${ref.<item key>} (resource id), ${parent}, ${today}, ${tenant_id}; also in object keys
+#   repetition       for_each: "${param.<list>}" on an item (one item per value, key <key>.<value lower case>) or
+#                    "$for_each": "${param.<list>}" inside an object (one copy of its other entries per value);
+#                    ${each} / ${each.lower} is the value
 code: GENERIC
 version: 2026.10.0
 title: Generic bank starter pack
@@ -35,6 +38,7 @@ parameters:
   license_type: {type: string, default: BANK, description: "Licence type, e.g. BANK, EMI, MFI"}
   regulator: {type: string, default: "UNSPECIFIED (DEFAULT)", description: "Primary regulator"}
   ledger_code: {type: string, default: MAIN, description: "Code of the main ledger book"}
+  fx_currencies: {type: array, default: [USD, EUR, GBP], description: "Currencies fx-service deals in, including the base currency: one FX position and one FX clearing account per currency in the main book, routed in config-service"}
   savings_rate: {type: number, default: "0.02", description: "DEFAULT annual credit interest of the standard savings product (fraction)"}
   payment_second_level_amount: {type: number, default: "100000", description: "DEFAULT amount from which payments need a second approval level"}
   high_value_approver_roles: {type: array, default: [], description: "Roles allowed to approve the second level (empty = any user other than the maker)"}
@@ -382,6 +386,13 @@ steps:
              body: {ledger_id: "${parent}", code: "5500", name: Rewards and cashback expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
           - {key: redress_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5600"}},
              body: {ledger_id: "${parent}", code: "5600", name: Customer redress expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          # one FX position and one FX clearing account per currency of fx_currencies (keys fx_position.usd, ...)
+          - {key: fx_position, for_each: "${param.fx_currencies}", service: ledger-service, path: /v1/ledger-accounts,
+             lookup: {query: {ledger_id: "${parent}"}, match: {code: "1400-${each}"}},
+             body: {ledger_id: "${parent}", code: "1400-${each}", name: "FX position ${each}", account_type: ASSET, normal_balance: DEBIT, currency: "${each}", allow_negative: true, owner_type: BANK}}
+          - {key: fx_clearing, for_each: "${param.fx_currencies}", service: ledger-service, path: /v1/ledger-accounts,
+             lookup: {query: {ledger_id: "${parent}"}, match: {code: "1410-${each}"}},
+             body: {ledger_id: "${parent}", code: "1410-${each}", name: "FX clearing ${each}", account_type: ASSET, normal_balance: DEBIT, currency: "${each}", allow_negative: true, owner_type: BANK}}
 
   # ------------------------------------------------------------------------------------------------ ledger routing
   # config-service namespace "ledger" (docs/SERVICE_IMPLEMENTATION_GUIDE.md "Per-tenant ledger settings"). Each entry is
@@ -483,6 +494,19 @@ steps:
         body: {namespace: ledger, config_key: card-dispute-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
                value: {dispute: {suspense_account: "${ref.ledger_book/dispute_suspense}", loss_expense_account: "${ref.ledger_book/dispute_loss_expense}",
                                  scheme_receivable_account: "${ref.ledger_book/chargeback_receivable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_fx_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: fx-service, status: ACTIVE}, match: {config_key: fx-service}}
+        body: {namespace: ledger, config_key: fx-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {position_accounts: {$for_each: "${param.fx_currencies}", "${each}": "${ref.ledger_book/fx_position.${each.lower}}"},
+                       clearing_accounts: {$for_each: "${param.fx_currencies}", "${each}": "${ref.ledger_book/fx_clearing.${each.lower}}"}}}
         actions:
           - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
              skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
@@ -999,9 +1023,11 @@ steps:
     items:
       - {key: standard_pack, title: Install the standard EOD job pack, kind: CALL, service: business-day-service,
          path: /v1/operations/eod-jobs/install-standard-pack, body: {}}
-      - {key: ledger_eod_job, title: Point LEDGER_EOD at the main book and activate it, kind: PATCH_EXISTING, service: business-day-service,
+      # LEDGER_EOD closes every book of the legal entity (POST /v1/ledgers/end-of-day) and ships active; this clears a
+      # ledger_id an earlier version of the pack pinned, so books added later are closed too.
+      - {key: ledger_eod_job, title: Run LEDGER_EOD for all of the tenant's books and activate it, kind: PATCH_EXISTING, service: business-day-service,
          path: /v1/operations/eod-jobs, lookup: {query: {owning_service: ledger-service}, match: {code: LEDGER_EOD}},
-         body: {parameters: {ledger_id: "${ref.ledger_book}"}, is_active: true}}
+         body: {parameters: {}, is_active: true}}
       - {key: trigger_policy, title: EOD trigger policy (manual start by default), service: business-day-service,
          path: /v1/operations/eod-trigger-policies, update: PATCH, update_exclude: [legal_entity_id],
          lookup: {query: {legal_entity_id: "${ref.legal_entity}"}, match: {legal_entity_id: "${ref.legal_entity}"}},

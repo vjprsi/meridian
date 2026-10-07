@@ -225,7 +225,7 @@ public class PointsLedger {
     /** Recomputes expiring_points (next 30 days) and next_expiry_date from the lots. */
     public void refreshExpiry(ObjectNode account) {
         UUID id = Json.uuid(account, "id");
-        LocalDate today = rows.now().toLocalDate();
+        LocalDate today = rows.today();
         PointsLots.State s = lots(id);
         ObjectNode upd = rows.object();
         upd.put("expiring_points", s.expiringBetween(today, today.plusDays(EXPIRY_HORIZON_DAYS)));

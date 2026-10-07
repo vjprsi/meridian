@@ -21,6 +21,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Placeholders in starter pack bodies. A string that is exactly one placeholder takes the placeholder's JSON value
  * (a parameter may be a number, list or object); placeholders inside longer strings are replaced by their text.
+ * Object keys may hold placeholders too ({@code "${param.currency}": ...}); a key renders to the value's text. For keys
+ * that come from a list parameter (one entry per currency), see {@code $for_each} in {@link StarterPack}.
  *
  * <ul>
  *   <li>{@code ${param.<name>}} a declared pack parameter</li>
@@ -179,6 +181,15 @@ public final class PackTemplates {
         };
     }
 
+    /** An object key with its placeholders replaced by the text of their values. */
+    private static String key(String k, Function<String, JsonNode> fn) {
+        if (!k.contains("${")) {
+            return k;
+        }
+        JsonNode r = walk(JsonNodeFactory.instance.stringNode(k), fn);
+        return r.isValueNode() ? r.asString() : r.toString();
+    }
+
     /** Copies the tree, replacing placeholders; {@code fn} returns null to leave a placeholder untouched. */
     private static JsonNode walk(JsonNode n, Function<String, JsonNode> fn) {
         if (n == null) {
@@ -186,7 +197,7 @@ public final class PackTemplates {
         }
         if (n.isObject()) {
             ObjectNode o = JsonNodeFactory.instance.objectNode();
-            n.properties().forEach(e -> o.set(e.getKey(), walk(e.getValue(), fn)));
+            n.properties().forEach(e -> o.set(key(e.getKey(), fn), walk(e.getValue(), fn)));
             return o;
         }
         if (n.isArray()) {

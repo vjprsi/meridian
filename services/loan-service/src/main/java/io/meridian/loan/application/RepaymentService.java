@@ -60,8 +60,8 @@ public class RepaymentService {
             throw ApiException.unprocessable("invalid_amount", "amount must be positive with at most "
                     + LoanSupport.scale(loan) + " decimals");
         }
-        LocalDate valueDate = Rows.date(req, "value_date") != null ? Rows.date(req, "value_date") : loans.today();
-        if (valueDate.isAfter(loans.today())) {
+        LocalDate valueDate = Rows.date(req, "value_date") != null ? Rows.date(req, "value_date") : loans.today(loan);
+        if (valueDate.isAfter(loans.today(loan))) {
             throw ApiException.unprocessable("invalid_value_date", "value_date cannot be in the future");
         }
         return apply(loan, new Collect(amount, str(req, "source"), uuid(req, "source_account_id"), valueDate,
@@ -184,7 +184,7 @@ public class RepaymentService {
         }
         creditLineInstalmentRepaid(loan, p.add(prepaid));
         settleIfPaidOff(loan, "repaid");
-        loans.delinquency(loan, loans.today(), "repayment");
+        loans.delinquency(loan, loans.today(loan), "repayment");
         loans.events().publish("lending.loan.repayment_received", TABLE, repayment);
         return repayment;
     }
@@ -357,7 +357,7 @@ public class RepaymentService {
             return false;
         }
         UUID loanId = uuid(loan, "id");
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         for (ObjectNode i : loans.openInstallments(loanId)) {
             boolean due = !Rows.date(i, "due_date").isAfter(today);
             BigDecimal left = LoanSupport.remaining(i, "FEE").add(LoanSupport.remaining(i, "PENALTY"))
@@ -413,7 +413,7 @@ public class RepaymentService {
             legs.debit(loans.gl().penaltyReceivableOrInterest(), penalties.negate(), "Penalty receivable").credit(loans.gl().penaltyIncomeOrInterest(), penalties.negate(), "Penalty true-up");
         }
         loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("loan-trueup", loanId, why + ":" + interest.toPlainString()), "ADJUSTMENT",
-                "Accrual true-up " + str(loan, "loan_number"), str(loan, "currency"), "LOAN", loanId, loans.today(), legs.list()));
+                "Accrual true-up " + str(loan, "loan_number"), str(loan, "currency"), "LOAN", loanId, loans.today(loan), legs.list()));
         ObjectNode upd = rows.object();
         upd.put("outstanding_interest", "0");
         upd.put("outstanding_penalties", "0");
@@ -459,7 +459,7 @@ public class RepaymentService {
         UUID loanId = uuid(loan, "id");
         BigDecimal credit = BigDecimal.ZERO;
         BigDecimal prepaid = BigDecimal.ZERO;
-        LocalDate today = loans.today();
+        LocalDate today = loans.today(loan);
         for (JsonNode a : original.path("allocation_detail")) {
             BigDecimal amt = new BigDecimal(a.path("amount").asString("0"));
             switch (a.path("type").asString("")) {
@@ -552,7 +552,7 @@ public class RepaymentService {
         BigDecimal interestReceivable = i.min(decOr0(loan, "outstanding_interest").max(BigDecimal.ZERO));
         loans.ledger().post(new LedgerPort.Posting(LedgerPort.key("installment-waiver", installmentId, String.join(",", comps)),
                 "ADJUSTMENT", "Waiver instalment " + inst.path("installment_no").asInt() + " " + str(loan, "loan_number") + ": " + reason,
-                str(loan, "currency"), "LOAN_WAIVER", installmentId, loans.today(), new LedgerPort.Legs()
+                str(loan, "currency"), "LOAN_WAIVER", installmentId, loans.today(loan), new LedgerPort.Legs()
                 .debit(loans.gl().waiverOrWriteOff(), p, "Principal waived")
                 .debit(loans.gl().interestIncome(), interestReceivable, "Interest waived")
                 .debit(loans.gl().feeIncome(), f, "Fees waived")
@@ -569,7 +569,7 @@ public class RepaymentService {
         upd.put("total_due", decOr0(inst, "total_due").subtract(p).subtract(i).subtract(f).toPlainString());
         upd.put("waived_amount", decOr0(inst, "waived_amount").add(total).toPlainString());
         inst.setAll(upd);
-        upd.put("status", LoanSupport.remainingTotal(inst).signum() <= 0 ? "WAIVED" : LoanSupport.installmentStatus(inst, loans.today()));
+        upd.put("status", LoanSupport.remainingTotal(inst).signum() <= 0 ? "WAIVED" : LoanSupport.installmentStatus(inst, loans.today(loan)));
         ObjectNode waived = rows.update(LoanSupport.INSTALLMENT, installmentId, upd);
         if (f.signum() > 0) {
             rows.execute("update loan_fee_charge set status = 'WAIVED', waived_by = ?, waiver_reason = ? where schedule_installment_id = ? and status in ('CHARGED','PARTIALLY_PAID')",
@@ -587,7 +587,7 @@ public class RepaymentService {
                     + "where loan_id = ? and due_date > ? and status in " + LoanSupport.OPEN_SQL, p, uuid(loan, "id"), Rows.date(inst, "due_date"));
         }
         settleIfPaidOff(loan, "waived");
-        loans.delinquency(loan, loans.today(), "instalment waived");
+        loans.delinquency(loan, loans.today(loan), "instalment waived");
         loans.events().publish("lending.loan.installment_waived", LoanSupport.INSTALLMENT, waived);
         return waived;
     }

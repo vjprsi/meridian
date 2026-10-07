@@ -26,11 +26,19 @@ public class InvoicesController implements InvoicesApi {
     private final InvoiceService invoices;
     private final CrudEngine crud;
     private final Idempotency idempotency;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public InvoicesController(InvoiceService invoices, CrudEngine crud, Idempotency idempotency) {
+    public InvoicesController(InvoiceService invoices, CrudEngine crud, Idempotency idempotency,
+                              io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.invoices = invoices;
         this.crud = crud;
         this.idempotency = idempotency;
+    }
+
+    /** The tenant's business date (business-day-service), else the UTC calendar date. */
+    private LocalDate today() {
+        return businessDates.today(() -> LocalDate.now(ZoneOffset.UTC));
     }
 
     /** Returns {"data":[draft invoices],"skipped_subscription_ids":[...]}. */
@@ -47,7 +55,7 @@ public class InvoicesController implements InvoicesApi {
     public ResponseEntity<TenantInvoice> invoicesIssue(UUID id, String idempotencyKey) {
         TenantContext.require();
         return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "issue", "id", id.toString()), TenantInvoice.class,
-                () -> ResponseEntity.ok(crud.read(invoices.issue(id, LocalDate.now(ZoneOffset.UTC)), TenantInvoice.class)));
+                () -> ResponseEntity.ok(crud.read(invoices.issue(id, today()), TenantInvoice.class)));
     }
 
     @Override

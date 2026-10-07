@@ -20,8 +20,11 @@ public class UsageController implements UsageApi {
     private final UsageService usage;
     private final CrudEngine crud;
     private final Idempotency idempotency;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public UsageController(UsageService usage, CrudEngine crud, Idempotency idempotency) {
+    public UsageController(UsageService usage, CrudEngine crud, Idempotency idempotency,
+                           io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.usage = usage;
         this.crud = crud;
         this.idempotency = idempotency;
@@ -31,7 +34,8 @@ public class UsageController implements UsageApi {
     public ResponseEntity<UsageRecord> usageCreate(String idempotencyKey, UsageRecordCreate body) {
         TenantContext.require();
         return idempotency.execute(idempotencyKey, body, UsageRecord.class, () -> {
-            UsageService.Recorded r = usage.record(body, idempotencyKey, LocalDate.now(ZoneOffset.UTC));
+            UsageService.Recorded r = usage.record(body, idempotencyKey,
+                    businessDates.today(() -> LocalDate.now(ZoneOffset.UTC)));
             UsageRecord rec = crud.read(r.row(), UsageRecord.class);
             return r.replayed()
                     ? ResponseEntity.ok().header("Idempotent-Replayed", "true").body(rec)

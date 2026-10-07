@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Loads fee rules and tier limits effective today (database clock) and measures limit usage. */
+/** Loads fee rules and tier limits effective on the business date (database date as fallback) and measures limit usage. */
 @Component
 public class Tariffs {
     /** Debits that count towards limits: completed or still reserved. */
@@ -27,11 +27,12 @@ public class Tariffs {
         if (payer == null) {
             return FeeCalculator.Fee.NONE;
         }
+        java.time.LocalDate today = rows.today();
         List<ObjectNode> found = rows.query("""
                 select row_to_json(r)::text from wallet_fee_rule r
                 where r.is_active and r.txn_type = ? and r.currency = ?
-                  and r.valid_from <= current_date and (r.valid_to is null or r.valid_to >= current_date)""",
-                txnType, currency);
+                  and r.valid_from <= ? and (r.valid_to is null or r.valid_to >= ?)""",
+                txnType, currency, today, today);
         List<FeeCalculator.Rule> rules = found.stream().map(Tariffs::rule).toList();
         return FeeCalculator.quote(rules, new FeeCalculator.Context(txnType, channel, Rows.str(payer, "wallet_type"),
                 Rows.integer(payer, "kyc_tier"), amount));
@@ -56,14 +57,15 @@ public class Tariffs {
 
     /** Tier limit rows for the wallet (its tier, type and currency) effective today, for a txn type or all (null). */
     public List<LimitEvaluator.Limit> limits(JsonNode wallet, String txnType) {
+        java.time.LocalDate today = rows.today();
         List<ObjectNode> found = rows.query("""
                 select row_to_json(l)::text from wallet_tier_limit l
                 where l.kyc_tier = ? and l.wallet_type = ? and l.currency = ?
-                  and l.valid_from <= current_date and (l.valid_to is null or l.valid_to >= current_date)
+                  and l.valid_from <= ? and (l.valid_to is null or l.valid_to >= ?)
                   and (l.txn_type is null or ?::text is null or l.txn_type = ?)
                 order by l.txn_type nulls first, l.valid_from desc""",
                 Rows.integer(wallet, "kyc_tier"), Rows.str(wallet, "wallet_type"), Rows.str(wallet, "currency"),
-                txnType, txnType);
+                today, today, txnType, txnType);
         // keep the newest version per txn_type
         List<LimitEvaluator.Limit> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
