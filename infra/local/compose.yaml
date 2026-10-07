@@ -143,9 +143,11 @@ services:
     <<: *restart
     image: chrislusf/seaweedfs:latest
     container_name: meridian-object-store
-    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-master.port=9333", "-volume.port=8080"]
+    # S3 identity used by the services' SigV4 presigned URLs (meridian / meridian-secret; see seaweedfs/s3.json)
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json",
+              "-master.port=9333", "-volume.port=8080"]
     ports: ["19000:8333", "19333:9333"]
-    volumes: [objectdata:/data]
+    volumes: [objectdata:/data, ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro]
 
 volumes:
   pgdata:
