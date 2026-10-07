@@ -88,6 +88,9 @@ class DepositWorkflowApprovalIT {
         when(serviceClient.get(anyString(), anyString())).thenAnswer(i -> {
             String service = i.getArgument(0);
             String path = i.getArgument(1);
+            if ("tenant-service".equals(service) && path.startsWith("/v1/legal-entities/")) {
+                return json.readTree("{\"id\":\"" + path.substring(19) + "\",\"code\":\"MAIN\",\"country\":\"GB\"}");
+            }
             return "product-catalog-service".equals(service) ? catalog(path) : ledger.get(service, path);
         });
         when(serviceClient.post(eq("workflow-service"), eq("/v1/approval-requests"), any(), anyString())).thenAnswer(inv -> {

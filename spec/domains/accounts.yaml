@@ -63,10 +63,11 @@ services:
         description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
         fr: [DEP-01, DEP-04, PRD-01, CIF-02]
         columns:
-          - "account_number string(34) nn uq ro | Bank account number (server-generated, check digit per country)"
+          - "account_number string(34) nn uq ro | Bank account number (server-generated in the booking legal entity's national format or IBAN account part, check digit per country)"
           - "iban string(34) uq | IBAN where applicable"
           - "bban string(34) | Basic bank account number"
-          - "routing_code string(20) | Sort code / routing number / IFSC / CLABE prefix"
+          - "routing_code string(20) | Sort code / routing number / IFSC / CLABE prefix (default: from the legal entity's numbering, e.g. KE bank + branch code)"
+          - "bic string(11) ro | BIC of the booking legal entity (numbering settings or the legal entity's swift_bic)"
           - "account_type enum:DepositAccountType nn | Account type"
           - "nickname string(80) | Customer-chosen name"
           - "customer_id uuid nn ref=customer idx | Primary customer"

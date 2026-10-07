@@ -210,6 +210,47 @@ the accessor of the service's `@ConfigurationProperties` record, e.g.
 | `agent-network-service.treasury_wallet_id` | agent-network-service | Treasury wallet funding bank-funded float top-ups |
 | `channel-service.airtime_biller_id` | channel-service | Biller used by the USSD AIRTIME action when the menu gives none |
 
+## Account numbering (deposit-service, config-service namespace `account_numbering`)
+
+Account identifiers follow the account's booking legal entity, never a platform default. deposit-service
+(`AccountNumbering`, `domain/NumberingRule`) resolves them per account opening (deposit and virtual accounts):
+
+- Country and BIC: the legal entity in tenant-service (`GET /v1/legal-entities/{id}`: `country`, `swift_bic`). An
+  unknown legal entity is 422 `legal_entity_not_found`. A BIC must be of the entity's country (else 422
+  `account_numbering_invalid`); 8-character BICs get `XXX`. The BIC is stored on `deposit_account.bic`.
+- Settings: config-service namespace `account_numbering` (approval-gated, cached 30 s like the ledger settings). One
+  entry per legal entity keyed by its code (or id), plus an optional `default`; per field id beats code beats
+  `default`; empty strings mean "not set". Fields: `scheme` (`AUTO` = IBAN where the country has an IBAN length, else
+  national; `IBAN`; `NATIONAL`), `bank_code`, `branch_code`, `bic` (overrides the entity's), `pattern`,
+  `serial_length`, `check_digit` (`LUHN`, `MOD97`, `NUBAN`, `NONE`), `account_number_length`, `iban_length`.
+  A home branch (`branch_id`) whose `routing_code` has the scheme's branch-code length replaces `branch_code`.
+- IBAN length: `iban_length` setting, else reference-data-service `country.iban_length`, else the built-in SWIFT
+  registry table (`AccountNumbers.IBAN_LENGTHS`). Client-supplied IBANs are checked for structure, country length and
+  mod 97.
+- IBAN scheme: account number = account part of the BBAN (digits, last one Luhn); BBAN = bank + branch + account in
+  the country's layout (`AccountNumbers.IBAN_COUNTRIES`: GB, IE, DE, NL, AT, CH, BE, LU), or bank + branch + account
+  filling the registered length elsewhere; IBAN = country + ISO 7064 mod 97-10 digits + BBAN. Where the layout's bank
+  code is alphabetic (GB, IE, NL) and no `bank_code` is set, the BIC's first four letters are used. National check
+  digits inside some BBANs (FR RIB key, ES, IT CIN, BE, PT) are not generated: configure such countries as `NATIONAL`
+  or set the full rule before go-live. `routing_code` = branch (sort) code, else bank code.
+- National scheme: number = `pattern` with `{bank}`, `{branch}`, `{serial}` (random digits, first not 0) and
+  `{check}`; the check digit(s) are computed over bank code + branch code + serial. Known formats:
+  - KE (no IBAN): CBK bank code 2 digits, branch code 3 digits, number = branch + 9-digit serial + Luhn digit over
+    bank + branch + serial (13 digits); BBAN = bank + number; `routing_code` = bank + branch (the 5-digit bank-branch
+    code used by KEPSS / PesaLink). Kenyan banks have no single national check-digit standard; this is Meridian's.
+  - NG: NUBAN, bank code 3 digits, serial 9 + NUBAN check digit (weights 3, 7, 3 over bank + serial).
+  - Elsewhere: generic `{serial}{check}` with Luhn, `account_number_length` (default 10) digits, configurable.
+- Unconfigured: a country whose format needs a bank / branch code that is not set is 422
+  `account_numbering_not_configured` (no fallback to another country's values). The deployment properties
+  `meridian.deposit.country`, `bank-code`, `branch-code`, `account-number-length` (unset by default) apply only to
+  legal entities of that country, for single-tenant installs and tests.
+- Uniqueness: numbers and IBANs are unique per tenant across deposit and virtual accounts. Each candidate is locked
+  with `pg_advisory_xact_lock` before the existence check, so concurrent openings drawing the same number serialise;
+  up to 50 candidates are tried (409 `account_number_exhausted`).
+- Starter packs create the main entity's entry (`numbering_main`, key = `legal_entity_code`, parameters
+  `account_number_scheme`, `bank_code`, `branch_code`, `bic`); KE defaults to `NATIONAL` with placeholder codes.
+- wallet-service wallet numbers (12 digits, Luhn) carry no country and are not affected.
+
 ## Tenant starter packs (tenant-service)
 
 A fresh tenant has no legal entity, book, routing, products, tariffs, limits, templates or EOD jobs. A starter pack
@@ -231,6 +272,11 @@ creates them through the owning services' public APIs. Packs live in `services/t
   open approval requests, and the run lists their ids. Checker-only steps (`manual`, e.g. limit rule activation) are
   reported as AWAITING_ACTIVATION. A later run publishes or activates what was approved. The first failure stops the
   run; `POST /v1/starter-pack-runs/{id}/resume` continues it.
+- Public sign-up journey: both packs create the onboarding journey `RETAIL_ONLINE` (customer-web's
+  `NEXT_PUBLIC_SIGNUP_JOURNEY` default; channels WEB and MOBILE_APP; typed fields per step: phone OTP, personal
+  details, address, identity document upload, terms and marketing consent; KE adds national ID, KRA PIN, +254 numbers
+  and county) for the main legal entity and the current and savings products. It is created as DRAFT; publication is
+  a four-eyes checker action in onboarding-service (`manual`, AWAITING_ACTIVATION). A published journey is left alone.
 - A new pack item must pass `StarterPackDefinitionTest`: the route must exist in `generated/routes.json` and the
   rendered body must match the request schema in `generated/openapi`.
 - Data-driven keys and repetition: object keys may hold placeholders (`"${param.currency}": ...`). An item with

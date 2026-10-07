@@ -12,7 +12,8 @@ title: Kenya retail and mobile money starter pack
 market: KE
 description: >
   GENERIC pack localised for Kenya: KES amounts, Africa/Nairobi business dates, tiered (banded) wallet tariffs,
-  KYC tier wallet limits, KES payment limits, tiered agent cash-in commissions and Swahili SMS alerts.
+  KYC tier wallet limits, KES payment limits, tiered agent cash-in commissions, Swahili SMS alerts, KE national
+  account numbers (CBK bank + branch code) and a Kenyan sign-up journey (national ID, KRA PIN, +254 mobile).
 notice: >
   DEFAULT VALUES for Kenya (KES). Illustrative, not regulatory or provider tariffs: review every tariff, limit and
   policy before go-live. Excise duty on fees is configured through the KE country pack (config-service tax rules).
@@ -40,8 +41,71 @@ parameters:
   wallet_tier1_max_balance: {default: "300000"}
   wallet_tier2_max_balance: {default: "500000"}
   commission_cash_in_cap: {default: "200.00"}
+  # KE national account numbers (no IBAN in Kenya): CBK bank code (2 digits) + branch code (3 digits); the number is
+  # branch + 9-digit serial + Luhn digit over bank + branch + serial (docs/SERVICE_IMPLEMENTATION_GUIDE.md "Account numbering").
+  account_number_scheme: {default: NATIONAL}
+  bank_code: {default: "99", description: "DEFAULT placeholder: replace with the CBK-assigned 2-digit bank code"}
+  branch_code: {default: "000", description: "DEFAULT head-office branch code (3 digits) used in account numbers"}
 
 steps:
+  # KE sign-up: Kenyan mobile number, national ID number and KRA PIN, county instead of a postal code.
+  - code: onboarding
+    items:
+      - key: journey_retail_online
+        title: Retail online sign-up journey, Kenya (web and mobile)
+        service: onboarding-service
+        path: /v1/onboarding/journeys
+        lookup: {query: {code: RETAIL_ONLINE}, match: {code: RETAIL_ONLINE}}
+        body:
+          code: RETAIL_ONLINE
+          name: Retail online sign-up Kenya (DEFAULT)
+          customer_type: INDIVIDUAL
+          country: KE
+          channels: [WEB, MOBILE_APP]
+          product_ids: ["${ref.current}", "${ref.savings}"]
+          target_tier: TIER_1
+          legal_entity_id: "${ref.legal_entity}"
+          expiry_days: 30
+          definition:
+            steps:
+              - code: PHONE
+                type: PHONE_VERIFICATION
+                max_attempts: 5
+                fields:
+                  - {name: phone_number, type: PHONE, label_key: onboarding.field.phone_number, required: true, pattern: "\\+254[17][0-9]{8}"}
+              - code: PERSONAL
+                type: PERSONAL_DETAILS
+                fields:
+                  - {name: first_name, type: STRING, label_key: onboarding.field.first_name, required: true, min_length: 2, max_length: 40}
+                  - {name: middle_name, type: STRING, label_key: onboarding.field.middle_name, required: false, max_length: 40}
+                  - {name: last_name, type: STRING, label_key: onboarding.field.last_name, required: true, min_length: 2, max_length: 40}
+                  - {name: date_of_birth, type: DATE, label_key: onboarding.field.date_of_birth, required: true}
+                  - {name: nationality, type: COUNTRY, label_key: onboarding.field.nationality, required: true}
+                  - {name: national_id_number, type: STRING, label_key: onboarding.field.national_id_number, required: true, pattern: "[0-9]{7,9}"}
+                  - {name: kra_pin, type: STRING, label_key: onboarding.field.kra_pin, required: false, pattern: "[AP][0-9]{9}[A-Z]"}
+                  - {name: email, type: EMAIL, label_key: onboarding.field.email, required: false, max_length: 254}
+              - code: ADDRESS
+                type: ADDRESS
+                fields:
+                  - {name: address_line1, type: STRING, label_key: onboarding.field.address_line1, required: true, min_length: 2, max_length: 255}
+                  - {name: city, type: STRING, label_key: onboarding.field.city, required: true, min_length: 2, max_length: 120}
+                  - {name: county, type: STRING, label_key: onboarding.field.county, required: true, min_length: 3, max_length: 60}
+                  - {name: postal_code, type: STRING, label_key: onboarding.field.postal_code, required: false, pattern: "[0-9]{5}"}
+                  - {name: country, type: COUNTRY, label_key: onboarding.field.country, required: true}
+              - code: ID_DOC
+                type: DOCUMENT_CAPTURE
+                fields:
+                  - {name: id_document_id, type: DOCUMENT, label_key: onboarding.field.id_document_id, required: true}
+              - code: TERMS
+                type: TERMS_ACCEPTANCE
+                fields:
+                  - {name: terms_accepted, type: BOOLEAN, label_key: onboarding.field.terms_accepted, required: true}
+                  - {name: marketing_consent, type: BOOLEAN, label_key: onboarding.field.marketing_consent, required: false}
+        actions:
+          - {name: publish, path: "/{id}/publish", manual: true, skip_status: [PUBLISHED, RETIRED],
+             description: "checker publication in onboarding-service (four-eyes: not the pack's acting user)"}
+        ready_status: [PUBLISHED, RETIRED]
+
   # Banded tariffs (fee per amount band) replace the GENERIC percentage fees with the same keys.
   - code: wallet_pricing
     items:

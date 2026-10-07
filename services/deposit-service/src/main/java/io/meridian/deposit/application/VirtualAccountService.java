@@ -6,16 +6,14 @@ import static io.meridian.deposit.infrastructure.Rows.uuid;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
-import io.meridian.deposit.config.DepositProperties;
 import io.meridian.deposit.domain.AccountNumbers;
+import io.meridian.deposit.domain.NumberingRule;
 import io.meridian.deposit.domain.Lifecycle;
 import io.meridian.deposit.infrastructure.Rows;
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -38,16 +36,15 @@ public class VirtualAccountService {
     private final AccountSupport accounts;
     private final LedgerPort ledger;
     private final Events events;
-    private final DepositProperties props;
-    private final SecureRandom random = new SecureRandom();
+    private final AccountNumbering numbering;
 
     public VirtualAccountService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events,
-                                 DepositProperties props) {
+                                 AccountNumbering numbering) {
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
         this.events = events;
-        this.props = props;
+        this.numbering = numbering;
     }
 
     @Transactional
@@ -67,17 +64,24 @@ public class VirtualAccountService {
         if (expected != null && expected.signum() <= 0) {
             throw ApiException.unprocessable("invalid_expected_amount", "expected_amount must be positive");
         }
-        String number = uniqueNumber();
+        // Same numbering as the master account's legal entity (virtual IBANs in IBAN countries).
+        NumberingRule rule = numbering.rule(uuid(master, "legal_entity_id"), uuid(master, "branch_id"));
+        NumberingRule.Numbers numbers = numbering.allocate(rule);
+        String number = numbers.accountNumber();
         v.put("virtual_account_number", number);
         String iban = str(v, "iban");
         if (iban != null && AUTO.contains(iban.trim().toUpperCase(Locale.ROOT))) {
-            Optional<String> built = number.chars().allMatch(Character::isDigit)
-                    ? AccountNumbers.iban(props.country(), props.bankCode(), props.branchCode(),
-                    number.substring(Math.max(0, number.length() - AccountNumbers.accountLength(props.country(), number.length()))))
-                    : Optional.empty();
-            built.ifPresentOrElse(b -> v.put("iban", b), () -> v.remove("iban"));
-        } else if (iban != null && !AccountNumbers.isValidIban(iban)) {
-            throw ApiException.unprocessable("invalid_iban", "iban fails the mod-97 check");
+            if (numbers.iban() != null) {
+                v.put("iban", numbers.iban());
+            } else {
+                v.remove("iban");
+            }
+        } else if (iban != null) {
+            String normalised = iban.replace(" ", "").toUpperCase(Locale.ROOT);
+            if (!AccountNumbers.isValidIban(normalised, normalised.startsWith(rule.country()) ? rule.ibanLength() : null)) {
+                throw ApiException.unprocessable("invalid_iban", "iban fails the ISO 13616 structure or mod-97 check");
+            }
+            v.put("iban", normalised);
         }
         UUID id = Ids.newId();
         v.put("id", id.toString());
@@ -88,18 +92,6 @@ public class VirtualAccountService {
         ObjectNode row = rows.insert(TABLE, v);
         events.publish("accounts.virtual_account.created", TABLE, row);
         return row;
-    }
-
-    private String uniqueNumber() {
-        int length = AccountNumbers.accountLength(props.country(), props.accountNumberLength());
-        for (int i = 0; i < 20; i++) {
-            String n = AccountNumbers.generate(length, random);
-            if (rows.scalar("select 1 from virtual_account where virtual_account_number = ?", Integer.class, n).isEmpty()
-                    && rows.scalar("select 1 from deposit_account where account_number = ?", Integer.class, n).isEmpty()) {
-                return n;
-            }
-        }
-        throw ApiException.conflict("account_number_exhausted", "Could not allocate a unique virtual account number");
     }
 
     /** Bulk creation, all-or-nothing: {@code items} is an array of VirtualAccountCreate objects. */

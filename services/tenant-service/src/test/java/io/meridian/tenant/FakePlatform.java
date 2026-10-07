@@ -30,7 +30,7 @@ final class FakePlatform {
     static final Pattern UUID_RE = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     static final Map<String, String> INITIAL_STATUS = Map.of("/v1/config/entries", "DRAFT", "/v1/product-versions", "DRAFT",
             "/v1/products", "DRAFT", "/v1/commission-plans", "DRAFT", "/v1/notification-templates", "DRAFT",
-            "/v1/risk/limits/rules", "DRAFT", "/v1/wallets", "PENDING");
+            "/v1/risk/limits/rules", "DRAFT", "/v1/wallets", "PENDING", "/v1/onboarding/journeys", "DRAFT");
     static final Map<String, String> APPROVAL_TYPE = Map.of("/v1/config/entries", "config_entry",
             "/v1/product-versions", "product_version", "/v1/commission-plans", "commission_plan",
             "/v1/notification-templates", "notification_template");
@@ -96,6 +96,23 @@ final class FakePlatform {
         for (ObjectNode r : rows(tenant, "/v1/risk/limits/rules").values()) {
             if (!"ACTIVE".equals(r.get("status").asString())) {
                 r.put("status", "ACTIVE");
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** A checker publishes the DRAFT onboarding journeys (onboarding-service four-eyes publication). */
+    synchronized int publishJourneys(UUID tenant, String checker) {
+        int n = 0;
+        for (ObjectNode j : rows(tenant, "/v1/onboarding/journeys").values()) {
+            if ("DRAFT".equals(j.get("status").asString())) {
+                if (checker.equals(j.path("created_by").asString())) {
+                    throw new IllegalStateException("four-eyes: " + checker + " created journey " + j.get("id").asString());
+                }
+                j.put("status", "PUBLISHED");
+                j.put("published_by", checker);
+                bump(j);
                 n++;
             }
         }

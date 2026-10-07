@@ -104,7 +104,7 @@ class StarterPackFlowIT {
         assertThat(mini.get("versions").toString()).isEqualTo("[\"2026.1.0\",\"2026.2.0\"]");
         JsonNode full = call("GET", "/v1/starter-pack-runs/catalog?pack_code=generic", null, OPERATOR_TENANT, OPERATOR, 200);
         assertThat(full.get("code").asString()).isEqualTo("GENERIC");
-        assertThat(full.get("steps").size()).isEqualTo(11);
+        assertThat(full.get("steps").size()).isEqualTo(13);
 
         JsonNode unknown = call("POST", "/v1/starter-pack-runs/apply", "{\"pack_code\":\"NOPE\"}", OPERATOR_TENANT, OPERATOR, 422);
         assertThat(unknown.get("code").asString()).isEqualTo("unknown_starter_pack");
@@ -132,7 +132,7 @@ class StarterPackFlowIT {
         assertThat(run.get("trigger").asString()).isEqualTo("OPERATOR");
         assertThat(run.get("pack_version").asString()).isEqualTo("2026.10.0");
         assertThat(run.get("failed_count").asInt()).isZero();
-        assertThat(run.get("results").size()).isEqualTo(11);
+        assertThat(run.get("results").size()).isEqualTo(13);
         // tenant facts fill the parameters (the bank's currency, country and name); the request adds the rest
         assertThat(run.at("/parameters/currency").asString()).isEqualTo("EUR");
         assertThat(run.at("/parameters/timezone").asString()).isEqualTo("Europe/Dublin");
@@ -164,10 +164,32 @@ class StarterPackFlowIT {
         });
         String ledger = fake.all(bank, "/v1/ledgers").getFirst().get("id").asString();
         assertThat(fake.all(bank, "/v1/ledger-accounts")).hasSize(37).allSatisfy(a -> assertThat(a.get("ledger_id").asString()).isEqualTo(ledger));
-        assertThat(fake.all(bank, "/v1/config/entries")).hasSize(15).allSatisfy(e -> {
-            assertThat(e.get("namespace").asString()).isEqualTo("ledger");
+        assertThat(fake.all(bank, "/v1/config/entries")).hasSize(16).allSatisfy(e -> {
+            assertThat(e.get("namespace").asString()).isIn("ledger", "account_numbering");
             assertThat(e.get("status").asString()).isEqualTo("PENDING_APPROVAL");
         });
+        // account numbering of the main legal entity (deposit-service): keyed by its code, scheme from its country
+        assertThat(fake.all(bank, "/v1/config/entries").stream().filter(e -> e.get("namespace").asString().equals("account_numbering")))
+                .singleElement().satisfies(e -> {
+                    assertThat(e.get("config_key").asString()).isEqualTo("MAIN");
+                    assertThat(e.at("/value/scheme").asString()).isEqualTo("AUTO");
+                });
+        // the public sign-up journey: a DRAFT with typed fields for the bank's entity and products, published by a checker
+        String entityId = fake.all(bank, "/v1/legal-entities").getFirst().get("id").asString();
+        Set<String> productIds = fake.all(bank, "/v1/products").stream().map(p -> p.get("id").asString()).collect(Collectors.toSet());
+        assertThat(fake.all(bank, "/v1/onboarding/journeys")).singleElement().satisfies(j -> {
+            assertThat(j.get("code").asString()).isEqualTo("RETAIL_ONLINE");
+            assertThat(j.get("status").asString()).isEqualTo("DRAFT");
+            assertThat(j.get("country").asString()).isEqualTo("IE");
+            assertThat(j.get("legal_entity_id").asString()).isEqualTo(entityId);
+            assertThat(ids(j.get("product_ids"))).hasSize(2).allSatisfy(id -> assertThat(productIds).contains(id));
+            assertThat(j.at("/definition/steps/0/type").asString()).isEqualTo("PHONE_VERIFICATION");
+            assertThat(j.at("/definition/steps/0/fields/0/type").asString()).isEqualTo("PHONE");
+        });
+        JsonNode journey = item(run, "onboarding", "journey_retail_online");
+        assertThat(journey.get("outcome").asString()).isEqualTo("CREATED");
+        assertThat(journey.get("status").asString()).isEqualTo("AWAITING_ACTIVATION");
+        assertThat(journey.get("pending_action").asString()).contains("/publish by a user other than " + OPERATOR);
         JsonNode payment = fake.all(bank, "/v1/config/entries").stream()
                 .filter(e -> e.get("config_key").asString().equals("payment-service")).findFirst().orElseThrow();
         Set<String> accountIds = fake.all(bank, "/v1/ledger-accounts").stream().map(a -> a.get("id").asString()).collect(Collectors.toSet());
@@ -202,14 +224,15 @@ class StarterPackFlowIT {
 
         // maker-checker: submitted, never approved; requests listed in the run; the operator is the maker
         List<String> pendingApprovals = fake.all(bank, FakePlatform.APPROVALS).stream().map(r -> r.get("id").asString()).toList();
-        assertThat(pendingApprovals).hasSize(15 + 3 + 1 + 12); // config entries (incl. wallet and fx routing), product versions, plan, templates
+        assertThat(pendingApprovals).hasSize(16 + 3 + 1 + 12); // config entries (ledger routing incl. wallet and fx, account numbering), product versions, plan, templates
         assertThat(fake.all(bank, FakePlatform.APPROVALS)).allSatisfy(r -> {
             assertThat(r.get("status").asString()).isEqualTo("PENDING");
             assertThat(r.get("maker").asString()).isEqualTo(OPERATOR);
         });
         assertThat(ids(run.get("approval_request_ids"))).containsExactlyInAnyOrderElementsOf(pendingApprovals);
         assertThat(writes).noneMatch(w -> w.contains("/approve") || w.contains("/v1/risk/limits/rules/{id}/activate")
-                || w.contains("/v1/product-versions/{id}/publish") || w.contains("/v1/wallets/{id}/activate"));
+                || w.contains("/v1/product-versions/{id}/publish") || w.contains("/v1/wallets/{id}/activate")
+                || w.contains("/v1/onboarding/journeys/{id}/publish"));
         JsonNode limits = step(run, "limits");
         assertThat(limits.get("status").asString()).isEqualTo("AWAITING_APPROVAL");
         assertThat(limits.get("items")).hasSize(5).allSatisfy(i -> {
@@ -254,7 +277,7 @@ class StarterPackFlowIT {
     @Test
     @Order(4)
     void afterTheCheckerApprovesResumePublishesAndActivates() throws Exception {
-        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(31);
+        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(32);
         JsonNode run = call("POST", "/v1/starter-pack-runs/" + bankRun + "/resume", null, bank.toString(), "tenant-admin", 200);
         assertThat(run.get("trigger").asString()).isEqualTo("RESUME");
         assertThat(run.get("resumed_from_id").asString()).isEqualTo(bankRun);
@@ -262,10 +285,11 @@ class StarterPackFlowIT {
         assertThat(fake.writes(bank).stream().filter(c -> c.path().endsWith("/publish") && c.path().startsWith("/v1/product-versions"))).hasSize(3);
         assertThat(fake.all(bank, "/v1/wallets")).hasSize(2).allSatisfy(w -> assertThat(w.get("status").asString()).isEqualTo("ACTIVE"));
         assertThat(run.get("status").asString()).isEqualTo("AWAITING_APPROVAL");
-        assertThat(run.get("awaiting_approval_count").asInt()).isEqualTo(5);
+        assertThat(run.get("awaiting_approval_count").asInt()).isEqualTo(6); // 5 limit rules + the sign-up journey
         assertThat(run.get("approval_request_ids")).isEmpty();
 
         assertThat(fake.activateLimitRules(bank)).isEqualTo(5);
+        assertThat(fake.publishJourneys(bank, CHECKER)).isEqualTo(1);
         JsonNode done = call("POST", "/v1/starter-pack-runs/" + run.get("id").asString() + "/resume", null, bank.toString(), "tenant-admin", 200);
         assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         assertThat(done.get("awaiting_approval_count").asInt()).isZero();
@@ -399,6 +423,18 @@ class StarterPackFlowIT {
         assertThat(fake.all(t, "/v1/wallet-fee-rules")).anySatisfy(r -> {
             assertThat(r.get("code").asString()).isEqualTo("SP-P2P");
             assertThat(r.get("basis").asString()).isEqualTo("TIERED");
+        });
+        // KE national account numbering (CBK bank + branch code), never the GENERIC / platform defaults
+        assertThat(fake.all(t, "/v1/config/entries").stream().filter(e -> e.get("namespace").asString().equals("account_numbering")))
+                .singleElement().satisfies(e -> {
+                    assertThat(e.at("/value/scheme").asString()).isEqualTo("NATIONAL");
+                    assertThat(e.at("/value/bank_code").asString()).matches("[0-9]{2}");
+                    assertThat(e.at("/value/branch_code").asString()).matches("[0-9]{3}");
+                });
+        assertThat(fake.all(t, "/v1/onboarding/journeys")).singleElement().satisfies(j -> {
+            assertThat(j.get("code").asString()).isEqualTo("RETAIL_ONLINE");
+            assertThat(j.get("country").asString()).isEqualTo("KE");
+            assertThat(j.get("definition").toString()).contains("national_id_number");
         });
         assertThat(fake.calls(t)).allSatisfy(c -> assertThat(c.principal()).isEqualTo(OPERATOR));
         String runId = run.get("id").asString();

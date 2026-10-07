@@ -19,14 +19,15 @@ version: 2026.10.0
 title: Generic bank starter pack
 market: GENERIC
 description: >
-  Market-neutral defaults: one legal entity and ledger book with a standard chart of internal accounts, per-tenant
-  ledger routing for every posting service, treasury and commission-pool wallets, savings/current/wallet products,
-  wallet tariffs and KYC tier limits, payment limits, an agent commission plan, notification providers, templates
-  and payment alert rules, the standard EOD job pack with a trigger policy, and maker-checker approval policies.
+  Market-neutral defaults: one legal entity with its account numbering and a ledger book with a standard chart of
+  internal accounts, per-tenant ledger routing for every posting service, treasury and commission-pool wallets,
+  savings/current/wallet products, the public sign-up journey RETAIL_ONLINE, wallet tariffs and KYC tier limits,
+  payment limits, an agent commission plan, notification providers, templates and payment alert rules, the standard
+  EOD job pack with a trigger policy, and maker-checker approval policies.
 notice: >
   DEFAULT VALUES. Review every rate, tariff, limit, threshold, role and policy before go-live. Items that need a
-  checker (ledger routing, products, commission plan, templates, limit activation) are submitted, never approved,
-  by the pack.
+  checker (ledger routing, account numbering, products, commission plan, templates, limit activation, sign-up journey
+  publication) are submitted or left for the checker, never approved, by the pack.
 
 parameters:
   currency: {type: string, default: USD, tenant_fact: default_currency, description: "Base currency (ISO 4217)"}
@@ -35,6 +36,10 @@ parameters:
   timezone: {type: string, default: UTC, description: "IANA time zone for business dates and EOD cut-off"}
   language: {type: string, default: en, description: "Locale of the notification templates"}
   legal_entity_code: {type: string, default: MAIN, description: "Code of the main legal entity"}
+  account_number_scheme: {type: string, default: AUTO, description: "Account numbering of the main legal entity: AUTO (IBAN where its country uses IBAN, else the national format), IBAN or NATIONAL"}
+  bank_code: {type: string, default: "", description: "DEFAULT empty: national bank code in account numbers / IBANs (GB/IE/NL fall back to the BIC's bank code; KE and NG need one)"}
+  branch_code: {type: string, default: "", description: "DEFAULT empty: branch / sort code in account numbers where the country's format has one (e.g. GB sort code, KE branch code)"}
+  bic: {type: string, default: "", description: "DEFAULT empty: BIC (ISO 9362) of the main legal entity used on its accounts; must be of the entity's country"}
   license_type: {type: string, default: BANK, description: "Licence type, e.g. BANK, EMI, MFI"}
   regulator: {type: string, default: "UNSPECIFIED (DEFAULT)", description: "Primary regulator"}
   ledger_code: {type: string, default: MAIN, description: "Code of the main ledger book"}
@@ -394,6 +399,27 @@ steps:
              lookup: {query: {ledger_id: "${parent}"}, match: {code: "1410-${each}"}},
              body: {ledger_id: "${parent}", code: "1410-${each}", name: "FX clearing ${each}", account_type: ASSET, normal_balance: DEBIT, currency: "${each}", allow_negative: true, owner_type: BANK}}
 
+  # ------------------------------------------------------------------------------------------------ account numbering
+  # config-service namespace "account_numbering" (docs/SERVICE_IMPLEMENTATION_GUIDE.md "Account numbering"): how
+  # deposit-service numbers the accounts of the main legal entity (key = legal entity code). Country and BIC default to
+  # the legal entity; empty values mean "not set". Maker-checker like the ledger routing below.
+  - code: account_numbering
+    title: Account numbering of the main legal entity (config-service, maker-checker)
+    items:
+      - key: numbering_main
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: account_numbering, config_key: "${param.legal_entity_code}", status: ACTIVE}, match: {config_key: "${param.legal_entity_code}"}}
+        body: {namespace: account_numbering, config_key: "${param.legal_entity_code}", change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {scheme: "${param.account_number_scheme}", bank_code: "${param.bank_code}", branch_code: "${param.branch_code}",
+                       bic: "${param.bic}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+
   # ------------------------------------------------------------------------------------------------ ledger routing
   # config-service namespace "ledger" (docs/SERVICE_IMPLEMENTATION_GUIDE.md "Per-tenant ledger settings"). Each entry is
   # a DRAFT submitted for approval; it becomes ACTIVE when a checker approves it. A newer pack version creates a new
@@ -737,6 +763,69 @@ steps:
               - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PUBLISHED, SUPERSEDED, RETIRED], requires_status: [APPROVED]}
             ready_status: [PUBLISHED, SUPERSEDED]
             pending_status: [PENDING_APPROVAL]
+
+  # ------------------------------------------------------------------------------------------------ onboarding
+  # The public sign-up journey of web/customer-web and the mobile app (NEXT_PUBLIC_SIGNUP_JOURNEY, default RETAIL_ONLINE):
+  # typed step fields (the client renders and pre-validates them, onboarding-service validates them again), a phone OTP
+  # contact step, an identity document upload and the terms. The pack creates a DRAFT; publication is a checker action
+  # in onboarding-service (four-eyes: anyone but the pack's acting user), reported as AWAITING_ACTIVATION. A published
+  # journey is never changed by the pack: change it through POST /v1/onboarding/journeys/{id}/new-version.
+  - code: onboarding
+    title: Public sign-up journey RETAIL_ONLINE (onboarding-service, checker publication)
+    items:
+      - key: journey_retail_online
+        title: Retail online sign-up journey (web and mobile)
+        service: onboarding-service
+        path: /v1/onboarding/journeys
+        lookup: {query: {code: RETAIL_ONLINE}, match: {code: RETAIL_ONLINE}}
+        body:
+          code: RETAIL_ONLINE
+          name: Retail online sign-up (DEFAULT)
+          customer_type: INDIVIDUAL
+          country: "${param.country}"
+          channels: [WEB, MOBILE_APP]
+          product_ids: ["${ref.current}", "${ref.savings}"]
+          target_tier: TIER_1
+          legal_entity_id: "${ref.legal_entity}"
+          expiry_days: 30
+          definition:
+            steps:
+              - code: PHONE
+                type: PHONE_VERIFICATION
+                max_attempts: 5
+                fields:
+                  - {name: phone_number, type: PHONE, label_key: onboarding.field.phone_number, required: true}
+              - code: PERSONAL
+                type: PERSONAL_DETAILS
+                fields:
+                  - {name: first_name, type: STRING, label_key: onboarding.field.first_name, required: true, min_length: 1, max_length: 80}
+                  - {name: middle_name, type: STRING, label_key: onboarding.field.middle_name, required: false, max_length: 80}
+                  - {name: last_name, type: STRING, label_key: onboarding.field.last_name, required: true, min_length: 1, max_length: 80}
+                  - {name: date_of_birth, type: DATE, label_key: onboarding.field.date_of_birth, required: true}
+                  - {name: nationality, type: COUNTRY, label_key: onboarding.field.nationality, required: true}
+                  - {name: email, type: EMAIL, label_key: onboarding.field.email, required: false, max_length: 254}
+              - code: ADDRESS
+                type: ADDRESS
+                fields:
+                  - {name: address_line1, type: STRING, label_key: onboarding.field.address_line1, required: true, min_length: 2, max_length: 255}
+                  - {name: address_line2, type: STRING, label_key: onboarding.field.address_line2, required: false, max_length: 255}
+                  - {name: city, type: STRING, label_key: onboarding.field.city, required: true, min_length: 2, max_length: 120}
+                  - {name: postal_code, type: STRING, label_key: onboarding.field.postal_code, required: false, max_length: 20}
+                  - {name: country, type: COUNTRY, label_key: onboarding.field.country, required: true}
+              - code: ID_DOC
+                type: DOCUMENT_CAPTURE
+                fields:
+                  - {name: id_number, type: STRING, label_key: onboarding.field.id_number, required: true, min_length: 4, max_length: 32}
+                  - {name: id_document_id, type: DOCUMENT, label_key: onboarding.field.id_document_id, required: true}
+              - code: TERMS
+                type: TERMS_ACCEPTANCE
+                fields:
+                  - {name: terms_accepted, type: BOOLEAN, label_key: onboarding.field.terms_accepted, required: true}
+                  - {name: marketing_consent, type: BOOLEAN, label_key: onboarding.field.marketing_consent, required: false}
+        actions:
+          - {name: publish, path: "/{id}/publish", manual: true, skip_status: [PUBLISHED, RETIRED],
+             description: "checker publication in onboarding-service (four-eyes: not the pack's acting user)"}
+        ready_status: [PUBLISHED, RETIRED]
 
   # ------------------------------------------------------------------------------------------------ wallet pricing
   - code: wallet_pricing
