@@ -91,8 +91,10 @@ Spec gaps (flows still local or with no place to record a rejection):
 
 63 services x pool 20 exceed a single PostgreSQL's connections. Local launcher uses pool 6 (`MERIDIAN_DB_POOL`);
 clusters need PgBouncer (transaction mode) or per-domain Aurora clusters, and pool sizes per service in Helm values
-(`dbPool`). Note RLS uses `set_config('app.tenant_id', ..., true)` per transaction, which is compatible with
-transaction pooling.
+(`dbPool`). Caution: `TenantAwareDataSource` sets `app.tenant_id` at session level (`set_config(..., false)` on
+checkout), which is NOT safe behind PgBouncer transaction pooling (the setting could leak to another client's
+transactions). Use PgBouncer session mode, or first switch to a per-transaction `set_config(..., true)` issued at
+transaction start (and verify RLS tests still pass) before enabling transaction pooling.
 
 ## Developer portal gaps (from portal v1)
 
