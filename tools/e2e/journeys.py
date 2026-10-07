@@ -657,7 +657,7 @@ def journey_b(j: Journey):
     j.step("search-service: payment indexed (Kafka)", lambda: wait_for("payment in search", lambda:
            (lambda r: f"{len(r)} hits" if r else None)(api.post("/v1/search/query", {
                "query_text": pay.get("end_to_end_id") or "Rent October", "entity_types": ["PAYMENT"], "limit": 5}).get("data", [])),
-           timeout=30), optional=True)
+           timeout=5), optional=True)  # known gap: nothing feeds search-service yet (no CDC/event consumer)
     j.step("crm-service: customer timeline shows the payment (Kafka)", lambda: wait_for("timeline entry", lambda:
            (lambda d: f"{len(d)} timeline entries" if d else None)(
                api.get(f"/v1/servicing/customers/{a['customer_id']}/timeline?limit=50").get("data", [])), timeout=30),
