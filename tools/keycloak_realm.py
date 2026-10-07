@@ -13,6 +13,7 @@ Clients:
   meridian-customer-web   public, authorization code + PKCE (customer web banking); only the customer scope plus
                           openid/profile; tokens carry customer_id and tenant_id from user attributes (admin-managed,
                           not editable by the user) and auth_time / acr for step-up; password grant for local testing
+                          (password-grant tokens carry no auth_time, so step-up operations refuse them)
 Users:
   ops.admin       staff demo user (console)
   demo.customer   customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant
