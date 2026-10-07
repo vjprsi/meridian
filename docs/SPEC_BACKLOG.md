@@ -87,6 +87,17 @@ Spec gaps (flows still local or with no place to record a rejection):
   re-open a request after an approved decision fails a business check (e.g. insufficient funding).
 - Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
 
+## Resume point (paused 2026-10-07)
+
+- Full build after the e2e fixes: only billing-service BillingFlowIT fails (issueAndPayInvoice,
+  overdueInvoiceMakesSubscriptionPastDueUntilPaid). Investigate first (likely the ProblemHandler/TenantSettings or
+  contact-directory changes from the e2e pass, or load flakiness: rerun alone first).
+- Next: search indexing feed (no producer feeds search-service); TenantSettings for fx, routing, treasury-deal,
+  card-dispute, crm, rewards (+ remove fake ledger ids in card-clearing/card-dispute application.yml); forward
+  X-Roles in ServiceClient (dev mode); business date from business-day-service instead of UTC today; record EOD job
+  results; tenant bootstrap / country pack seeding fees, limits, commission plans.
+- E2E: `python tools/e2e/journeys.py` (all 8 journeys passed on a fresh tenant with the full stack up).
+
 ## Connection budget
 
 63 services x pool 20 exceed a single PostgreSQL's connections. Local launcher uses pool 6 (`MERIDIAN_DB_POOL`);
