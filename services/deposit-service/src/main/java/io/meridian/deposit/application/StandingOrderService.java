@@ -188,10 +188,12 @@ public class StandingOrderService {
                 creditTo = props.gl().clearing();
             }
             String ref = str(so, "reference") == null ? "Standing order" : str(so, "reference");
+            // the payment reference is what the beneficiary bank / clearing statement shows (RECON-REAL-REFS)
             ledger.post(new LedgerPort.Posting(LedgerPort.key("standing-order", id, due + ":" + attempt), "PAYMENT",
                     ref, ccy, "STANDING_ORDER", id, due, List.of(
                             LedgerPort.Leg.debit(accounts.requireLedger(acc), amount, ref),
-                            LedgerPort.Leg.credit(creditTo, amount, ref))));
+                            LedgerPort.Leg.credit(creditTo, amount, ref)))
+                    .withRefs(str(so, "reference"), null));
             exec = rows.insert("scheduled_payment_execution", execution(so, due, attempt, "SUCCEEDED", null, null));
             int done = so.path("executions_done").asInt(0) + 1;
             ObjectNode v = rows.object();

@@ -45,6 +45,20 @@ public class LedgerClient implements LedgerPort {
         if (p.valueDate() != null) {
             body.put("value_date", p.valueDate().toString());
         }
+        if (p.reference() != null && !p.reference().isBlank()) {
+            body.put("reference", p.reference().length() > 128 ? p.reference().substring(0, 128) : p.reference());
+        }
+        if (p.refs() != null) {
+            ObjectNode refs = json.createObjectNode();
+            p.refs().forEach((k, v) -> {
+                if (v != null && !v.isBlank()) {
+                    refs.put(k, v.strip());
+                }
+            });
+            if (!refs.isEmpty()) {
+                body.set("external_refs", refs);
+            }
+        }
         ArrayNode entries = body.putArray("entries");
         for (Leg leg : p.legs()) {
             if (leg.amount().signum() == 0) {

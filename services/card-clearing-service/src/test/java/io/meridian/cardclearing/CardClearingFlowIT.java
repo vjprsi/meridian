@@ -276,8 +276,14 @@ class CardClearingFlowIT {
         JsonNode hold6 = net.holds.get(UUID.fromString(a6.get("hold_id").asString()));
         assertThat(new BigDecimal(hold6.get("captured_amount").asString())).isEqualByComparingTo("60");
         assertThat(hold6.get("released_remainder").asBoolean()).isTrue();
-        assertThat(net.calls("POST", "/v1/holds/" + a6.get("hold_id").asString() + "/capture").getFirst().body()
-                .get("counter_account_id").asString()).isEqualTo(SETTLE.toString());
+        JsonNode capture6 = net.calls("POST", "/v1/holds/" + a6.get("hold_id").asString() + "/capture").getFirst().body();
+        assertThat(capture6.get("counter_account_id").asString()).isEqualTo(SETTLE.toString());
+        // RECON-REAL-REFS: clearing postings carry the scheme reference and the clearing file as batch id
+        assertThat(capture6.get("reference").asString()).isEqualTo("NT6");
+        assertThat(capture6.get("external_refs").get("scheme_reference").asString()).isEqualTo("NT6");
+        assertThat(capture6.get("external_refs").get("batch_id").asString()).isEqualTo(r6.get("clearing_file_id").asString());
+        assertThat(net.calls("POST", "/v1/journal-entries").stream().filter(c -> c.key().startsWith("clearing-adjust:"))
+                .findFirst().orElseThrow().body().get("external_refs").get("scheme_reference").asString()).isEqualTo("NT5");
 
         // expired authorisation -> force post without a hold
         JsonNode r7 = byNtid(recs, "NT7");
@@ -468,6 +474,11 @@ class CardClearingFlowIT {
         assertThat(c.hasNonNull("journal_entry_id")).isTrue();
         assertThat(net.balance(NOSTRO)).isEqualByComparingTo(netAmount);
         assertThat(net.balance(SETTLE)).isEqualByComparingTo(settleBefore.subtract(netAmount));
+        JsonNode confirmRefs = net.calls("POST", "/v1/journal-entries").stream()
+                .filter(x -> x.key().equals("settlement-confirm:" + settlementId)).findFirst().orElseThrow().body()
+                .get("external_refs");
+        assertThat(confirmRefs.get("bank_reference").asString()).isEqualTo("STMT-2026-10-02-001");
+        assertThat(confirmRefs.get("batch_id").asString()).isEqualTo(settlementId);
         assertThat(events("cards.card_settlement.confirmed")).hasSize(1);
         HttpResponse<String> again = send("POST", "/v1/card-clearing/settlements/" + settlementId + "/confirm", req,
                 UUID.randomUUID().toString(), "treasury", TENANT);

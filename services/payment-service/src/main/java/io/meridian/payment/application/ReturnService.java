@@ -104,7 +104,7 @@ public class ReturnService {
         try {
             // deterministic per payment: at most one return of a payment can ever post
             je = ledger.post("prt-post:" + paymentId, "TRANSFER", "Return of " + str(p, "end_to_end_id") + " (" + reasonCode + ")",
-                    str(p, "currency"), "PAYMENT_RETURN", returnId, List.of(
+                    str(p, "currency"), "PAYMENT_RETURN", returnId, str(p, "end_to_end_id"), returnRefs(p, ret, false), List.of(
                             LedgerClient.Leg.debit(uuid(account, "ledger_account_id"), returned, "Return " + reasonCode),
                             LedgerClient.Leg.credit(settlement, returned, "Return to " + str(p, "debtor_name"))));
         } catch (ApiException e) {
@@ -200,7 +200,7 @@ public class ReturnService {
         try {
             // deterministic per payment: the debtor is credited back at most once
             je = ledger.post("prt-credit:" + paymentId, "TRANSFER", "Returned payment " + str(p, "end_to_end_id"),
-                    str(p, "currency"), "PAYMENT_RETURN", returnId, List.of(
+                    str(p, "currency"), "PAYMENT_RETURN", returnId, str(p, "end_to_end_id"), returnRefs(p, ret, true), List.of(
                             LedgerClient.Leg.debit(settlement, amount, "Return from " + str(p, "creditor_name")),
                             LedgerClient.Leg.credit(uuid(p, "debtor_ledger_account_id"), amount, "Returned " + reasonCode)));
         } catch (ApiException e) {
@@ -359,6 +359,17 @@ public class ReturnService {
             events.publish("payments.payment_recall.resolved", "payment_recall", r);
             return r;
         });
+    }
+
+    /**
+     * Payment references of a return posting: the original payment's ids (statements report a return under the
+     * original UETR / end-to-end id), the return identification on the rail as scheme reference, and the counterparty
+     * (the payer when we return an inbound payment, the creditor when our outbound payment comes back).
+     */
+    private JsonNode returnRefs(ObjectNode p, ObjectNode ret, boolean counterpartyIsCreditor) {
+        ObjectNode refs = ledger.refs(p, counterpartyIsCreditor);
+        LedgerClient.putRef(refs, "scheme_reference", ret, "return_id", 64);
+        return refs;
     }
 
     private ObjectNode requireInboundOpen(UUID recallId) {

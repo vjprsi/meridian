@@ -54,12 +54,21 @@ public class LedgerClient {
     /** Posts a balanced journal entry (zero lines dropped) and returns its id. */
     public UUID post(String key, String entryType, String description, String currency, String reference,
                      String sourceType, UUID sourceId, List<Line> lines) {
+        return post(key, entryType, description, currency, reference, null, sourceType, sourceId, lines);
+    }
+
+    /** Posts a balanced journal entry carrying payment references ({@code external_refs}, may be null). */
+    public UUID post(String key, String entryType, String description, String currency, String reference,
+                     JsonNode externalRefs, String sourceType, UUID sourceId, List<Line> lines) {
         ObjectNode body = json.createObjectNode();
         body.put("ledger_id", ledgerId().toString());
         body.put("entry_type", entryType);
         body.put("description", trim(description, 500));
         if (reference != null) {
             body.put("reference", reference);
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
         }
         body.put("source_type", sourceType);
         body.put("source_id", sourceId.toString());
@@ -99,11 +108,23 @@ public class LedgerClient {
 
     public void capture(String key, UUID holdId, BigDecimal amount, UUID counterAccount, String description,
                         boolean releaseRemainder) {
+        capture(key, holdId, amount, counterAccount, description, releaseRemainder, null, null);
+    }
+
+    /** Capture whose journal entry carries a reference and payment references ({@code external_refs}, may be null). */
+    public void capture(String key, UUID holdId, BigDecimal amount, UUID counterAccount, String description,
+                        boolean releaseRemainder, String reference, JsonNode externalRefs) {
         ObjectNode body = json.createObjectNode();
         body.put("amount", amount.toPlainString());
         body.put("counter_account_id", counterAccount.toString());
         body.put("description", trim(description, 500));
         body.put("release_remainder", releaseRemainder);
+        if (reference != null) {
+            body.put("reference", reference);
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
+        }
         client.post(LEDGER, "/v1/holds/" + holdId + "/capture", body, key);
     }
 

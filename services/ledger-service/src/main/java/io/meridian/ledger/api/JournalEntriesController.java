@@ -9,6 +9,7 @@ import io.meridian.ledger.api.generated.model.JournalEntry;
 import io.meridian.ledger.api.generated.model.JournalEntryCreate;
 import io.meridian.ledger.api.generated.model.LedgerEntryPage;
 import io.meridian.ledger.application.PostingService;
+import io.meridian.ledger.domain.PaymentRefs;
 import io.meridian.ledger.domain.PostingLine;
 import io.meridian.ledger.infrastructure.LedgerStore;
 import io.meridian.web.crud.Crud;
@@ -137,7 +138,8 @@ public class JournalEntriesController implements JournalEntriesApi {
                 req.hasNonNull("value_date") ? LocalDate.parse(req.get("value_date").asString()) : null,
                 TenantContext.principal(), text(req, "source_type"),
                 req.hasNonNull("source_id") ? UUID.fromString(req.get("source_id").asString()) : null,
-                text(req, "correlation_id"), text(req, "reference"), null, req.get("metadata"), custom, lines);
+                text(req, "correlation_id"), text(req, "reference"), null, req.get("metadata"), custom,
+                PaymentRefs.parse(req.get("external_refs")), lines);
     }
 
     private static String sha256(String s) {

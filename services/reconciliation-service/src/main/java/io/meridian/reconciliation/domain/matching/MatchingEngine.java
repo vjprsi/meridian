@@ -157,6 +157,8 @@ public final class MatchingEngine {
             indexKey("instruction_id", i.instructionId(), i);
             indexKey("instruction_id", i.reference(), i);
             indexKey("bank_ref", i.reference(), i);
+            indexKey("bank_ref", i.bankRef(), i);
+            indexKey("bank_ref", i.schemeRef(), i);
             amountIndex.computeIfAbsent(i.currency() + "|" + i.direction(), k -> new TreeMap<>())
                     .computeIfAbsent(minor(i.amount()), k -> new ArrayList<>()).add(i);
             String batch = Keys.norm(i.batchRef());
@@ -198,7 +200,7 @@ public final class MatchingEngine {
             Map<String, List<InternalItem>> idx = new HashMap<>();
             for (InternalItem i : ints) {
                 Set<String> toks = new LinkedHashSet<>();
-                for (String v : new String[] {i.reference(), i.endToEndId(), i.instructionId()}) {
+                for (String v : new String[] {i.reference(), i.endToEndId(), i.instructionId(), i.bankRef(), i.schemeRef()}) {
                     String n = Keys.norm(v);
                     if (Keys.usable(n)) {
                         toks.add(n);
@@ -334,7 +336,7 @@ public final class MatchingEngine {
     }
 
     private List<Cand> fuzzy(MatchRule rule, ExternalLine e) {
-        if (e.counterpartyName() == null) {
+        if (e.counterpartyName() == null && e.counterpartyAccount() == null) {
             return List.of();
         }
         List<Cand> out = new ArrayList<>();
@@ -346,14 +348,17 @@ public final class MatchingEngine {
         }
         Set<String> extToks = null;
         for (InternalItem i : pool) {
-            if (usedInt.contains(i.id()) || i.counterpartyName() == null) {
+            // the same counterparty account (both sides pseudonymised with the same tenant key) is as strong as an
+            // exact name: it identifies the counterparty even when the statement abbreviates or omits the name
+            boolean sameAccount = e.counterpartyAccount() != null && e.counterpartyAccount().equals(i.counterpartyAccount());
+            if (usedInt.contains(i.id()) || (i.counterpartyName() == null && !sameAccount)) {
                 continue;
             }
             long days = days(e.valueDate(), i.valueDate());
             if (days > rule.dateWindowDays()) {
                 continue;
             }
-            Double name = NameSimilarity.score(e.counterpartyName(), i.counterpartyName());
+            Double name = sameAccount ? Double.valueOf(1.0) : NameSimilarity.score(e.counterpartyName(), i.counterpartyName());
             if (name == null || name < rule.nameThreshold()) {
                 continue;
             }
@@ -379,6 +384,9 @@ public final class MatchingEngine {
             double score = Math.min(1.0, 0.5 * name + 0.3 * fit.score() + 0.2 * date + refBonus);
             Map<String, Object> comp = components(null, fit, date, name, refBonus == 0 ? null : refBonus);
             comp.put("weights", "name 0.5, amount 0.3, date 0.2");
+            if (sameAccount) {
+                comp.put("counterparty_account", "EQUAL");
+            }
             out.add(cand(rule, List.of(e), List.of(i), score, fit.diff(), comp, Map.of(), days));
         }
         return out;

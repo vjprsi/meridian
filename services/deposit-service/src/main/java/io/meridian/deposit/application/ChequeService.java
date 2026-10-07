@@ -202,11 +202,16 @@ public class ChequeService {
             returnReason = "ACCOUNT_RESTRICTED";
         } else {
             try {
+                java.util.Map<String, String> chequeRefs = new java.util.HashMap<>();
+                chequeRefs.put("scheme_reference", str(c, "cheque_no"));
+                chequeRefs.put("counterparty_name", payeeName == null || payeeName.length() <= 140 ? payeeName
+                        : payeeName.substring(0, 140));
                 UUID je = ledger.post(new LedgerPort.Posting(LedgerPort.key("cheque-clear", chequeId, clientKey), "PAYMENT",
                         "Cheque " + str(c, "cheque_no") + (payeeName == null ? "" : " to " + payeeName), currency, "CHEQUE",
                         chequeId, null, List.of(
                                 LedgerPort.Leg.debit(accounts.requireLedger(acc), amount, "Cheque " + str(c, "cheque_no")),
-                                LedgerPort.Leg.credit(props.gl().clearing(), amount, "Cheque clearing"))));
+                                LedgerPort.Leg.credit(props.gl().clearing(), amount, "Cheque clearing")))
+                        .withRefs(str(c, "cheque_no"), chequeRefs));
                 v.put("status", "CLEARED");
                 v.put("journal_entry_id", je.toString());
             } catch (ApiException e) {

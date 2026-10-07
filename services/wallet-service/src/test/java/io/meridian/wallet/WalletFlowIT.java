@@ -489,6 +489,13 @@ class WalletFlowIT {
         assertThat(out.get("counterparty_ledger_account_id").asString()).isEqualTo(DEPOSIT_LEDGER.toString());
         assertThat(ledger.glNet(DEPOSIT_LEDGER)).isEqualByComparingTo("500");
         assertThat(before.subtract(ledger.balanceOf(aliceLedger))).isEqualByComparingTo("500");
+        // RECON-REAL-REFS: the bank leg carries the linked account as counterparty and the wallet reference
+        JsonNode outRefs = ledger.calls("POST", "/v1/journal-entries").stream()
+                .filter(c -> ("wtx-" + out.get("id").asString() + "-post").equals(c.key())).findFirst().orElseThrow()
+                .body().get("external_refs");
+        assertThat(outRefs.get("counterparty_account").asString()).isEqualTo("0012345678");
+        assertThat(outRefs.get("counterparty_name").asString()).isEqualTo("Alice Wanjiru");
+        assertThat(outRefs.get("instruction_id").asString()).isEqualTo(out.get("reference").asString());
         JsonNode in = post("/v1/wallet-transactions/bank-to-wallet", """
                 {"payee_wallet_id":"%s","wallet_bank_link_id":"%s","amount":"200","currency":"KES"}""".formatted(alice, link),
                 "alice", 200);

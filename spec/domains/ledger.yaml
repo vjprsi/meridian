@@ -101,6 +101,18 @@ services:
           - "hash string(64) ro | SHA-256 over this entry and the previous hash (tamper evidence)"
           - "prev_hash string(64) ro | Hash of the previous journal entry in the ledger"
           - "metadata json | Client-defined key/value metadata"
+          - "uetr string(36) ro | Payment refs (from external_refs): SWIFT gpi / ISO 20022 UETR, lower-case UUID; copied to every ledger entry"
+          - "end_to_end_id string(35) ro | Payment refs: ISO 20022 end-to-end id; copied to every ledger entry"
+          - "instruction_id string(35) ro | Payment refs: ISO 20022 instruction id; copied to every ledger entry"
+          - "bank_reference string(64) ro | Payment refs: bank / clearing-system reference (account servicer reference on the statement); copied to every ledger entry"
+          - "scheme_reference string(64) ro | Payment refs: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id); copied to every ledger entry"
+          - "batch_id string(64) ro | Payment refs: batch / bulk payment / settlement file id grouping the postings of one batch booking; copied to every ledger entry"
+          - "counterparty_name string(140) pii ro | Payment refs: counterparty (creditor of an outbound, debtor of an inbound payment) name; copied to every ledger entry"
+          - "counterparty_account_hash string(80) ro | Payment refs: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored; copied to every ledger entry"
+          - "counterparty_account_last4 string(4) ro | Payment refs: last four characters of the counterparty account (display only); copied to every ledger entry"
+          - "purpose_code string(35) ro | Payment refs: ISO 20022 purpose / category purpose code; copied to every ledger entry"
+        request_only:
+          - "external_refs json | Structured payment references, validated and stored in the typed columns above (immutable once posted): {uetr, end_to_end_id, instruction_id, bank_reference, scheme_reference, batch_id, counterparty_name, counterparty_account, purpose_code}. counterparty_account (IBAN / account number / wallet id) is stored only as counterparty_account_hash + counterparty_account_last4. Unknown keys are refused"
         unique: [[tenant_id, ledger_id, idempotency_key]]
         indexes: [[ledger_id, effective_at], [source_type, source_id]]
         nested:
@@ -123,6 +135,17 @@ services:
           - "effective_at ts nn ro | Copied from the journal entry for range queries"
           - "value_date date nn ro | Copied from the journal entry (reconciliation matches on value date)"
           - "reference string(128) ro | Copied from the journal entry (reconciliation matches on reference)"
+          - "entry_type enum:JournalEntryType ro | Copied from the journal entry (reconciliation pairs reversals)"
+          - "uetr string(36) ro | Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID"
+          - "end_to_end_id string(35) ro | Copied from the journal entry: ISO 20022 end-to-end id"
+          - "instruction_id string(35) ro | Copied from the journal entry: ISO 20022 instruction id"
+          - "bank_reference string(64) ro | Copied from the journal entry: bank / clearing-system reference (account servicer reference on the statement)"
+          - "scheme_reference string(64) ro | Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id)"
+          - "batch_id string(64) ro | Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of one batch booking"
+          - "counterparty_name string(140) pii ro | Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment) name"
+          - "counterparty_account_hash string(80) ro | Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored"
+          - "counterparty_account_last4 string(4) ro | Copied from the journal entry: last four characters of the counterparty account (display only)"
+          - "purpose_code string(35) ro | Copied from the journal entry: ISO 20022 purpose / category purpose code"
           - "account_version bigint nn ro | Account balance version after this entry (gapless per account)"
           - "balance_after amount nn ro | Posted balance of the account after this entry"
           - "description string(500) | Line narrative"
@@ -259,7 +282,7 @@ services:
         table: journal_entry
         description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
         ops: [list, get, create]
-        filters: [ledger_id, entry_type, source_type, source_id, correlation_id, reference]
+        filters: [ledger_id, entry_type, source_type, source_id, correlation_id, reference, uetr, end_to_end_id, instruction_id, bank_reference, scheme_reference, batch_id, counterparty_account_hash]
         actions:
           - "POST /{id}/reverse | Reverse a journal entry with a compensating entry | reason string(255) nn, effective_at ts"
           - "GET /{id}/entries | Lines of a journal entry | | ledger_entry[]"
@@ -278,7 +301,7 @@ services:
         filters: [ledger_account_id, hold_type, status, source_type, source_id]
         actions:
           - "POST /{id}/increment | Increase a hold (e.g. incremental card authorisation) | amount amount nn, reason string(255)"
-          - "POST /{id}/capture | Capture all or part of a hold: debit the held account, credit the counter account | amount amount nn, counter_account_id uuid nn, description string(500), release_remainder bool"
+          - "POST /{id}/capture | Capture all or part of a hold: debit the held account, credit the counter account (reference and external_refs as on POST /v1/journal-entries) | amount amount nn, counter_account_id uuid nn, description string(500), release_remainder bool, reference string(128), external_refs json"
           - "POST /{id}/release | Release the remaining held amount | reason string(255)"
           - "GET /{id}/events | History of the hold | | hold_event[]"
 

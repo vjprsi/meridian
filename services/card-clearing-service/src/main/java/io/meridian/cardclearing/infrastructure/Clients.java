@@ -97,11 +97,23 @@ public class Clients {
     /** Captures a hold into postings against the counter account; returns the capture journal entry id. */
     public UUID capture(UUID holdId, BigDecimal amount, UUID counterAccount, String description,
                         boolean releaseRemainder, String key) {
+        return capture(holdId, amount, counterAccount, description, releaseRemainder, key, null, null);
+    }
+
+    /** Capture whose journal entry carries a reference and payment references ({@code external_refs}). */
+    public UUID capture(UUID holdId, BigDecimal amount, UUID counterAccount, String description,
+                        boolean releaseRemainder, String key, String reference, JsonNode externalRefs) {
         ObjectNode body = json.createObjectNode();
         body.put("amount", amount.toPlainString());
         body.put("counter_account_id", counterAccount.toString());
         body.put("description", description);
         body.put("release_remainder", releaseRemainder);
+        if (reference != null) {
+            body.put("reference", trim(reference, 128));
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
+        }
         JsonNode hold = client.post(LEDGER, "/v1/holds/" + holdId + "/capture", body, key);
         UUID journal = uuid(hold, "journal_entry_id");
         if (journal != null) {
@@ -120,6 +132,31 @@ public class Clients {
 
     public UUID post(UUID ledgerId, String entryType, String description, String currency, String sourceType,
                      UUID sourceId, String reference, List<Leg> legs, String key) {
+        return post(ledgerId, entryType, description, currency, sourceType, sourceId, reference, null, legs, key);
+    }
+
+    /**
+     * Payment references of a clearing posting (RECON-REAL-REFS): the scheme reference (ARN, else network transaction
+     * id, else RRN), the clearing file / settlement batch, and the merchant as counterparty, so the scheme settlement
+     * and nostro sources reconcile on the scheme reference and batch.
+     */
+    public ObjectNode refs(String schemeReference, String batchId, String counterpartyName) {
+        ObjectNode r = json.createObjectNode();
+        if (schemeReference != null && !schemeReference.isBlank()) {
+            r.put("scheme_reference", trim(schemeReference.strip(), 64));
+        }
+        if (batchId != null && !batchId.isBlank()) {
+            r.put("batch_id", trim(batchId.strip(), 64));
+        }
+        if (counterpartyName != null && !counterpartyName.isBlank()) {
+            r.put("counterparty_name", trim(counterpartyName.strip(), 140));
+        }
+        return r;
+    }
+
+    /** Posts a balanced journal entry carrying a reference and payment references ({@code external_refs}). */
+    public UUID post(UUID ledgerId, String entryType, String description, String currency, String sourceType,
+                     UUID sourceId, String reference, JsonNode externalRefs, List<Leg> legs, String key) {
         if (ledgerId == null) {
             throw ApiException.unprocessable("ledger_not_configured", "No ledger book is configured for this tenant "
                     + "(config-service ledger/card-clearing-service.ledger_id or meridian.cards.ledger-id)");
@@ -134,6 +171,9 @@ public class Clients {
         }
         if (reference != null) {
             body.put("reference", trim(reference, 128));
+        }
+        if (externalRefs != null && !externalRefs.isEmpty()) {
+            body.set("external_refs", externalRefs);
         }
         ArrayNode entries = body.putArray("entries");
         for (Leg l : legs) {

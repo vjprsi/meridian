@@ -377,7 +377,7 @@ public class TransactionEngine {
         UUID je;
         try {
             je = ledger.post("wtx-" + id + "-post", entryType(Rows.str(row, "txn_type")),
-                    Rows.str(row, "description"), Rows.str(row, "currency"), Rows.str(row, "reference"),
+                    Rows.str(row, "description"), Rows.str(row, "currency"), Rows.str(row, "reference"), bankRefs(row),
                     "WALLET_TRANSACTION", id, lines);
         } catch (ApiException e) {
             throw fail(row, e);
@@ -397,11 +397,37 @@ public class TransactionEngine {
             } catch (ApiException e) {
                 // the bank transfer was refused: compensate the posting and fail the transaction
                 ledger.post("wtx-" + id + "-compensate", "REVERSAL", "Bank transfer refused: " + e.getMessage(),
-                        Rows.str(row, "currency"), Rows.str(row, "reference"), "WALLET_TRANSACTION", id, invert(lines));
+                        Rows.str(row, "currency"), Rows.str(row, "reference"), bankRefs(row), "WALLET_TRANSACTION", id,
+                        invert(lines));
                 throw fail(row, e);
             }
         }
         return complete(row, je, lines, paymentId);
+    }
+
+    /**
+     * Payment references of a wallet posting with a bank leg (wallet-to-bank / bank-to-wallet, RECON-REAL-REFS): the
+     * linked bank account as counterparty (ledger-service keeps only its keyed pseudonym and last 4) and the wallet
+     * transaction reference as instruction id (it travels as the payer reference of the bank payment). Null for
+     * transactions without a bank leg.
+     */
+    private ObjectNode bankRefs(ObjectNode row) {
+        if (!row.hasNonNull("wallet_bank_link_id")) {
+            return null;
+        }
+        ObjectNode link = rows.get("wallet_bank_link", Rows.uuid(row, "wallet_bank_link_id"));
+        ObjectNode refs = rows.object();
+        putRef(refs, "instruction_id", Rows.str(row, "reference"), 35);
+        putRef(refs, "counterparty_name", Rows.str(link, "account_name"), 140);
+        putRef(refs, "counterparty_account", Rows.str(link, "account_number"), 64);
+        return refs;
+    }
+
+    private static void putRef(ObjectNode refs, String key, String value, int max) {
+        if (value != null && !value.isBlank()) {
+            String v = value.strip();
+            refs.put(key, v.length() > max ? v.substring(0, max) : v);
+        }
     }
 
     /** Debit then credit lines: payer total, payee principal, fee and tax to their GL accounts. */
@@ -585,7 +611,7 @@ public class TransactionEngine {
         BigDecimal tax = dec(row, "tax_amount");
         String ref = Rows.str(row, "reference");
         ledger.capture("wtx-" + id + "-cap-principal", hold, amount, creditAccount(row), "Payee " + ref,
-                fee.signum() == 0 && tax.signum() == 0);
+                fee.signum() == 0 && tax.signum() == 0, ref, bankRefs(row));
         if (fee.signum() > 0) {
             ledger.capture("wtx-" + id + "-cap-fee", hold, fee, gl(props.gl().feeIncome(), "fee-income"), "Fee " + ref,
                     tax.signum() == 0);

@@ -710,6 +710,11 @@ class DepositFlowIT {
                 "{\"amount\":\"40.00\",\"currency\":\"EUR\",\"payee_name\":\"Plumber Ltd\"}", "clearing", 200);
         assertThat(cleared.get("status").asString()).isEqualTo("CLEARED");
         assertLeg(ledger.lastPosting(), CLEARING, "CREDIT", "40.00");
+        // RECON-REAL-REFS: the clearing posting carries the cheque number and payee for cheque clearing reconciliation
+        JsonNode chequePosting = ledger.lastPosting().body();
+        assertThat(chequePosting.get("reference").asString()).isEqualTo("000103");
+        assertThat(chequePosting.get("external_refs").get("scheme_reference").asString()).isEqualTo("000103");
+        assertThat(chequePosting.get("external_refs").get("counterparty_name").asString()).isEqualTo("Plumber Ltd");
         assertThat(ledger.balanceOf(aLedger)).isEqualByComparingTo("960.00");
         JsonNode returned = post("/v1/cheques/" + c3 + "/return", "{\"return_reason\":\"SIGNATURE_MISMATCH\"}", "clearing", 200);
         assertThat(returned.get("status").asString()).isEqualTo("RETURNED");

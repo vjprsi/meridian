@@ -208,6 +208,19 @@ class PaymentFlowIT {
         JsonNode je = bank.journal(UUID.fromString(settled.get("journal_entry_id").asString()));
         assertThat(je.get("entries").toString()).contains(FakeBank.RAIL_SETTLEMENT.toString()).contains("100.00");
         assertThat(bank.journalsWithLine(FEE_INCOME)).hasSize(1);
+        // RECON-REAL-REFS: the settlement posting carries the payment's references for nostro reconciliation
+        JsonNode capture = ledgerCall("pay-capture:" + id).body();
+        assertThat(capture.get("reference").asString()).isEqualTo(p.get("end_to_end_id").asString());
+        JsonNode refs = capture.get("external_refs");
+        assertThat(refs.get("uetr").asString()).isEqualTo(p.get("uetr").asString());
+        assertThat(refs.get("end_to_end_id").asString()).isEqualTo(p.get("end_to_end_id").asString());
+        assertThat(refs.get("instruction_id").asString()).isEqualTo(p.get("instruction_id").asString());
+        assertThat(refs.get("bank_reference").asString()).isEqualTo("FPS-REF-1");
+        assertThat(refs.get("scheme_reference").asString()).isEqualTo(p.get("transaction_id").asString());
+        assertThat(refs.get("counterparty_name").asString()).isEqualTo("Charlie Brown");
+        assertThat(refs.get("counterparty_account").asString()).isEqualTo(EXT_IBAN);
+        assertThat(ledgerCall("pay-fee:" + id).body().get("external_refs").get("end_to_end_id").asString())
+                .isEqualTo(p.get("end_to_end_id").asString());
         // a duplicate settlement report is a no-op
         JsonNode again = post("/v1/payments/" + id + "/status-report", "{\"status\":\"ACSC\"}", "rail", 200);
         assertThat(again.get("status").asString()).isEqualTo("SETTLED");
@@ -359,6 +372,12 @@ class PaymentFlowIT {
         assertThat(in.get("direction").asString()).isEqualTo("INBOUND");
         assertThat(in.get("creditor_name").asString()).isEqualTo("Bob Jones");
         assertThat(bank.balance(b)).isEqualByComparingTo("1325.00");
+        JsonNode credit = ledgerCall("pay-credit:" + in.get("id").asString()).body();
+        assertThat(credit.get("reference").asString()).isEqualTo("INB-1");
+        assertThat(credit.get("external_refs").get("end_to_end_id").asString()).isEqualTo("INB-1");
+        assertThat(credit.get("external_refs").get("counterparty_name").asString()).as("inbound: the payer")
+                .isEqualTo("Dave Payer");
+        assertThat(credit.get("external_refs").get("counterparty_account").asString()).isEqualTo(EXT_IBAN);
         JsonNode dup = post("/v1/payments/inbound", inbound("INB-1", "75.00", B_IBAN), "rail:FPS", 200);
         assertThat(dup.get("id").asString()).isEqualTo(in.get("id").asString());
         assertThat(bank.balance(b)).isEqualByComparingTo("1325.00");
@@ -372,6 +391,9 @@ class PaymentFlowIT {
         assertThat(ret.get("direction").asString()).isEqualTo("OUTBOUND");
         assertThat(bank.balance(b)).isEqualByComparingTo("1250.00");
         assertThat(get("/v1/payments/" + in.get("id").asString()).get("status").asString()).isEqualTo("RETURNED");
+        JsonNode returned = ledgerCall("prt-post:" + in.get("id").asString()).body().get("external_refs");
+        assertThat(returned.get("end_to_end_id").asString()).as("returned under the original id").isEqualTo("INB-1");
+        assertThat(returned.get("scheme_reference").asString()).isEqualTo(ret.get("return_id").asString());
         post("/v1/payments/" + in.get("id").asString() + "/return", "{\"reason_code\":\"MD06\"}", "ops", 409);
 
         JsonNode in2 = post("/v1/payments/inbound", inbound("INB-2", "60.00", B_IBAN), "rail:FPS", 200);
@@ -568,6 +590,8 @@ class PaymentFlowIT {
             assertThat(p.get("status").asString()).isEqualTo("SUBMITTED");
             assertThat(p.get("end_to_end_id").asString()).startsWith("BLK-");
             post("/v1/payments/" + p.get("id").asString() + "/status-report", "{\"status\":\"ACSC\"}", "rail", 200);
+            assertThat(ledgerCall("pay-capture:" + p.get("id").asString()).body().get("external_refs").get("batch_id")
+                    .asString()).as("bulk items carry the batch id").isEqualTo(id);
         }
         JsonNode done = get("/v1/bulk-payments/" + id);
         assertThat(done.get("status").asString()).isEqualTo("COMPLETED");
@@ -1269,6 +1293,12 @@ class PaymentFlowIT {
         post("/v1/payments/inbound", inbound("NOTPROVIDED", "7.00", B_IBAN), "rail:FPS", 200);
         post("/v1/payments/inbound", inbound("NOTPROVIDED", "7.00", B_IBAN), "rail:FPS", 200);
         assertThat(bank.balance(b).subtract(before)).isEqualByComparingTo("24.00");
+    }
+
+    /** The ledger-service call made with the given idempotency key. */
+    private FakeBank.Call ledgerCall(String key) {
+        return bank.calls("ledger-service", "/").stream().filter(c -> key.equals(c.key())).reduce((x, y) -> y)
+                .orElseThrow(() -> new AssertionError("no ledger call with key " + key));
     }
 
     private String inbound(String e2e, String amount, String creditorIban) {

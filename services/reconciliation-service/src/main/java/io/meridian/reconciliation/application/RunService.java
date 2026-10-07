@@ -63,9 +63,12 @@ public class RunService {
     private final OutboxWriter outbox;
     private final JsonMapper json;
     private final TransactionTemplate tx;
+    private final io.meridian.common.refs.CounterpartyAccounts counterpartyAccounts;
 
     public RunService(ReconStore store, CrudEngine crud, MatchService matches, RuleSetService ruleSets,
-                      LedgerGateway ledger, OutboxWriter outbox, JsonMapper json, TransactionTemplate tx) {
+                      LedgerGateway ledger, OutboxWriter outbox, JsonMapper json, TransactionTemplate tx,
+                      io.meridian.common.refs.CounterpartyAccounts counterpartyAccounts) {
+        this.counterpartyAccounts = counterpartyAccounts;
         this.store = store;
         this.crud = crud;
         this.matches = matches;
@@ -396,12 +399,23 @@ public class RunService {
                     new BigDecimal(r.get("amount").asString()), r.get("currency").asString().trim(),
                     Fields.text(r, "external_ref"), Fields.text(r, "end_to_end_id"), Fields.text(r, "instruction_id"),
                     Fields.text(r, "uetr"), Fields.text(r.path("raw"), "batch_ref"), Fields.text(r, "counterparty"),
-                    Fields.text(r, "counterparty_account"), Fields.text(r, "narrative"),
+                    statementAccount(Fields.text(r, "counterparty_account")), Fields.text(r, "narrative"),
                     r.path("is_reversal").asBoolean(false), Fields.decimal(r, "charges_amount"),
                     Fields.decimal(r, "original_amount"),
                     Fields.text(r, "original_currency") == null ? null : r.get("original_currency").asString().trim()));
         }
         return out;
+    }
+
+    /**
+     * The statement's counterparty account as the ledger stores it: the tenant-keyed pseudonym (ledger entries carry
+     * only {@code counterparty_account_hash}), so the engine can compare the two sides for equality.
+     */
+    private String statementAccount(String account) {
+        if (account == null || io.meridian.common.refs.CounterpartyAccounts.isPseudonym(account)) {
+            return account;
+        }
+        return counterpartyAccounts.pseudonym(TenantContext.require(), account);
     }
 
     private Set<UUID> closedInternal() {

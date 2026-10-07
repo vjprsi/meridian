@@ -258,7 +258,8 @@ public class ClosureService {
                 ledger.post(new LedgerPort.Posting(LedgerPort.key("closure-payout", closureId, null), "TRANSFER",
                         narrative, ccy, "ACCOUNT_CLOSURE", closureId, null, List.of(
                                 LedgerPort.Leg.debit(ledgerAccount, posted, narrative),
-                                LedgerPort.Leg.credit(destination, posted, narrative))));
+                                LedgerPort.Leg.credit(destination, posted, narrative)))
+                        .withRefs("CLOSURE-" + closureId, null));
                 paid = posted;
             }
             BigDecimal after = LedgerPort.posted(ledger.balance(ledgerAccount));

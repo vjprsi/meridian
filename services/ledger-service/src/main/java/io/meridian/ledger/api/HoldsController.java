@@ -9,6 +9,7 @@ import io.meridian.ledger.api.generated.model.HoldsCaptureRequest;
 import io.meridian.ledger.api.generated.model.HoldsIncrementRequest;
 import io.meridian.ledger.api.generated.model.HoldsReleaseRequest;
 import io.meridian.ledger.application.HoldService;
+import io.meridian.ledger.domain.PaymentRefs;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
@@ -51,7 +52,8 @@ public class HoldsController implements HoldsApi {
         JsonNode req = json.valueToTree(body);
         return ok(holds.capture(id, new BigDecimal(req.get("amount").asString()),
                 UUID.fromString(req.get("counter_account_id").asString()), text(req, "description"),
-                req.hasNonNull("release_remainder") && req.get("release_remainder").asBoolean(), idempotencyKey));
+                req.hasNonNull("release_remainder") && req.get("release_remainder").asBoolean(), idempotencyKey,
+                text(req, "reference"), PaymentRefs.parse(req.get("external_refs"))));
     }
 
     @Override

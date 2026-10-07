@@ -97,7 +97,10 @@ honoured like `platform:operator` only for the operator tenant or internal token
 `meridian:admin`; `ScopeInterceptorTest.routingReadIsTheRoutersNarrowScopeWithOperatorStillAccepted`,
 `RegistryClientAuthTest`), instead of the shared `meridian-service` secret carrying `meridian:internal` and
 `platform:operator`. fraud-service stores identifiers only as tenant-keyed HMAC pseudonyms under the required secret
-`meridian.fraud.pseudonym-key` (SEC-02 guard; `FraudPseudonymisationIT`). Merchant refunds above the configured
+`meridian.fraud.pseudonym-key` (SEC-02 guard; `FraudPseudonymisationIT`). Ledger payment references keep the
+counterparty account only as a tenant-keyed HMAC (`counterparty_account_hash`, `h1:`) plus its last four characters
+under the required secret `meridian.refs.counterparty-key`, shared by ledger-service and reconciliation-service
+(Helm `counterparty-key` in both services' Secrets; RECON-REAL-REFS, `LedgerPostingIT.paymentRefsAreStoredCopiedPseudonymisedAndPublished`). Merchant refunds above the configured
 threshold (or of risky merchants) and payout-account changes go to the bank's central approval inbox after the merchant's
 own four-eyes; the channel no longer approves the bank-side request itself.
 

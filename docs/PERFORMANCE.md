@@ -22,6 +22,34 @@ row locks and the jwt-default/security fixes: **1,792 postings/s**, 0 errors, p5
 28.8 / 80.2 / 117.9 / 336.8 ms, integrity check passed (201 accounts, 113,331 entries, 0 mismatches). No regression:
 the new locks are on reversal paths only, not on normal postings.
 
+### Re-run with payment references (RECON-REAL-REFS, 2026-10-07)
+
+Journal entries and ledger entries gained ten typed payment-reference columns (+ `entry_type` on ledger entries)
+and seven partial indexes on `journal_entry` (`WHERE <ref> IS NOT NULL`, so postings without references add no index
+entries); references are written by the existing journal / line inserts (no extra round trip), the counterparty
+account is pseudonymised in memory (HMAC-SHA-256). Measured A/B on the same machine and session: a fresh `ledger_db`
+per run, ledger-service started like `tools/dev.py` with `MERIDIAN_DB_POOL=64`, a 30 s warm-up run (not recorded),
+then the 60 s measured run (`--seconds 60 --concurrency 64 --accounts 200`); baseline = jar built from `81007ef`
+(before the change). The machine was shared with other agents' Testcontainers suites during part of the session
+(CPU 10-70% outside the test), which is why absolute numbers are below the 1,792/s of the earlier run.
+
+| Build | Throughput | p50 / p95 / p99 / max (ms) | Integrity check after run (entries) |
+| --- | --- | --- | --- | --- |
+| baseline `81007ef` (busy machine) | 1,320/s | 34.3 / 121.1 / 185.9 / 590.2 | passed (84,833) |
+| baseline `81007ef` | 1,426/s | 35.2 / 107.2 / 163.6 / 468.3 | passed (91,810) |
+| payment refs, postings without refs | **1,478/s** | 36.7 / 97.7 / 140.6 / 440.7 | passed (94,601) |
+| payment refs, postings without refs | **1,461/s** | 35.0 / 101.5 / 151.0 / 577.5 | passed (93,784) |
+| payment refs, **every posting with full refs** (`--with-refs true`) | 1,305/s | 35.5 / 124.6 / 191.8 / 524.8 | passed (84,529) |
+| payment refs, every posting with full refs | 1,317/s | 43.0 / 109.6 / 161.4 / 450.6 | passed (85,135) |
+
+0 errors in every run; every post-run integrity verification passed (0 balance / version / balancing / hash
+mismatches). No regression for postings without references (1,461-1,478/s vs baseline 1,320-1,426/s, within
+run-to-run noise); a posting carrying all ten references costs ~10% throughput in this setup (three wider rows and
+up to seven partial-index entries per posting), still above the G1 target. In an earlier warm-JVM pass of the same
+session (no fresh DB, second/third run of one process) the branch reached 2,733/s with refs and 2,420/s without,
+which shows the size of machine noise here. Postings with refs: `--with-refs true` (UETR, end-to-end id,
+instruction id, bank / scheme references, counterparty name + account, purpose).
+
 Changes that took throughput from 798 → 1,782/s: Hikari pool 20 → 64; batched entry inserts
 (`json_populate_recordset`), single `UPDATE … FROM unnest(...)` for balances, response assembled from
 `RETURNING` rows, batched outbox writes.
@@ -72,6 +100,17 @@ statement-only reversals 87.2% (returns without a reversal flag are only suggest
 may be a genuine refund); identical twins 0% by design (two same-name, same-amount, same-day payments without
 references are indistinguishable, so both are suggested, never auto-matched). Seeds 1, 42 and 4711 (5k lines) hold
 the same bar (`benchmarkIsDeterministic`).
+
+**With real ledger postings (RECON-REAL-REFS, 2026-10-07).** `ReconRealRefsIT` posts a week of nostro activity the
+way payment-service and card-clearing post it (240 outbound settlements, 180 inbound credits, 3 batch-booked bulk
+payments of 12 items, 8 pacs.004 returns, 2 scheme net settlements, a credit reversed in the ledger, 3 payments in
+flight), each with `reference` + `external_refs`, into a stateful ledger stand-in that stores them like
+ledger-service, builds the correspondent's camt.053 from the same payments (all refs / UETR only / clearing reference
+only / end-to-end id only / remittance only / NOTPROVIDED with payer name + account / batch booking / bank charges),
+imports it and runs the published standard rule set: **433 of 433 matchable lines auto-matched correctly (100%), 0
+false matches** (exact_uetr 259, exact_end_to_end 98, exact_bank_ref 32, remittance_ref 20, fuzzy_exact_amount 21 via
+the pseudonymised counterparty account, batch_keyed 3, reversal 1); the 5 bank charge lines and the 3 in-flight
+payments are raised as breaks, the ledger reversal pair is not.
 
 Precision guards: a candidate is auto-confirmed only at or above the threshold (0.90; 0.93 for fee-tolerant fuzzy)
 and when it leads the runner-up by the rule's margin (0.05) for every line and item it covers; subset-sum only

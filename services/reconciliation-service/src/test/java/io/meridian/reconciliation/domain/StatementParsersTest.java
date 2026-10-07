@@ -182,6 +182,48 @@ class StatementParsersTest {
     }
 
     @Test
+    void bai2CarriesBalancesReferencesValueDatesAndControlTotals() throws Exception {
+        String bai = sample("bai2-sample.txt");
+        ParsedStatement p = Bai2Parser.parse(bai);
+        assertThat(p.statementId()).isEqualTo("BAI-20260306-01");
+        assertThat(p.accountId()).isEqualTo("0123456789");
+        assertThat(p.statementDate()).isEqualTo(LocalDate.of(2026, 3, 6));
+        assertThat(p.openingBalance()).isEqualByComparingTo("10000.00");
+        assertThat(p.closingBalance()).isEqualByComparingTo("11625.00");
+        assertThat(p.lines()).as("the 890 information record is not a movement").hasSize(3);
+        p.checkTotals(p.openingBalance(), p.closingBalance());
+
+        StatementLine wire = p.lines().getFirst();
+        assertThat(wire.direction()).isEqualTo(Direction.CREDIT);
+        assertThat(wire.amount()).isEqualByComparingTo("1500.00");
+        assertThat(wire.currency()).isEqualTo("USD");
+        assertThat(wire.externalRef()).isEqualTo("FED2026030600001");
+        assertThat(wire.endToEndId()).isEqualTo("E2E-WIRE-0001");
+        assertThat(wire.narrative()).as("88 continuation").startsWith("WIRE FROM ACME TRADING LTD");
+        assertThat(wire.details().uetr()).isEqualTo("3f2504e0-4f89-41d3-9a0c-0305e82c3301");
+        assertThat(wire.details().transactionCode()).isEqualTo("195");
+        assertThat(wire.valueDate()).isEqualTo(LocalDate.of(2026, 3, 6));
+
+        StatementLine ach = p.lines().get(1);
+        assertThat(ach.valueDate()).as("funds type V carries the value date").isEqualTo(LocalDate.of(2026, 3, 5));
+        assertThat(ach.bookingDate()).isEqualTo(LocalDate.of(2026, 3, 6));
+        assertThat(ach.narrative()).as("text may contain commas").isEqualTo("ACH CREDIT BLUE RIVER, INVOICE INV-2026-00042");
+        assertThat(ach.endToEndId()).isEqualTo("INV-2026-00042");
+
+        StatementLine out = p.lines().get(2);
+        assertThat(out.direction()).isEqualTo(Direction.DEBIT);
+        assertThat(out.amount()).isEqualByComparingTo("500.00");
+        assertThat(out.externalRef()).as("after the three distributed availability amounts").isEqualTo("FED2026030600003");
+
+        assertThatThrownBy(() -> Bai2Parser.parse(bai.replace("49,2425000", "49,2425001")))
+                .isInstanceOf(ParsedStatement.ParseException.class).hasMessageContaining("control total");
+        assertThatThrownBy(() -> Bai2Parser.parse("02,X,Y,1,260306,,USD,2/"))
+                .isInstanceOf(ParsedStatement.ParseException.class).hasMessageContaining("01 file header");
+        assertThatThrownBy(() -> Bai2Parser.parse(bai.replace("16,495,50000", "16,495,5O000")))
+                .isInstanceOf(ParsedStatement.ParseException.class).hasMessageContaining("invalid amount");
+    }
+
+    @Test
     void schemeSettlementPreset() throws Exception {
         CsvStatementParser.Config d = CsvStatementParser.Config.defaults("EUR");
         CsvStatementParser.Config cfg = new CsvStatementParser.Config(',', true, Map.of(), d.dateFormat(), "EUR",
