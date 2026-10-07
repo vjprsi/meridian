@@ -178,8 +178,20 @@ public class FloatService {
     // ------------------------------------------------------------------ float requests
 
     public ObjectNode createRequest(JsonNode req) {
+        return createRequest(req, null);
+    }
+
+    /**
+     * A float request; {@code idempotencyKey} (the create request's Idempotency-Key) is stored so a client that lost
+     * the response can find the request later (list filter idempotency_key).
+     */
+    public ObjectNode createRequest(JsonNode req, String idempotencyKey) {
         return tx.execute(s -> {
             ObjectNode v = rows.columns(REQUEST, req);
+            v.remove("idempotency_key");
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                v.put("idempotency_key", idempotencyKey);
+            }
             String type = Rows.str(v, "request_type");
             BigDecimal amount = Rows.dec(v, "amount");
             if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 2) {

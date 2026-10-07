@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { offlinePolicy } from "@/lib/config";
 import { isOnline, lastOnlineAt } from "@/lib/connectivity";
 import { loadProfile } from "@/lib/agent-context";
+import { setSigningUnlocked } from "@/lib/device-key";
 import { apiExecutor } from "./executor";
 import { Outbox, type EnqueueOptions } from "./outbox";
 import { IdbOutboxStore, MemoryOutboxStore } from "./store";
@@ -56,6 +57,8 @@ export function rememberAgentPin(pin: string | undefined, minutes = 5) {
 
 export async function unlock(pin: string): Promise<boolean> {
   const ok = await outbox.unlock(pin);
+  // The device key signs (offline batches, device proofs) only while the app is unlocked with the app PIN.
+  setSigningUnlocked(ok);
   await refresh();
   if (ok) void syncNow();
   return ok;
@@ -63,11 +66,13 @@ export async function unlock(pin: string): Promise<boolean> {
 
 export async function setupPin(pin: string, binding: string) {
   await outbox.setup(pin, binding);
+  setSigningUnlocked(true);
   await refresh();
 }
 
 export function lockApp() {
   outbox.lock();
+  setSigningUnlocked(false);
   rememberAgentPin(undefined);
   void refresh();
 }
@@ -93,11 +98,12 @@ export async function syncNow(only?: string): Promise<FlushReport | null> {
  * it) and sent at once, in order behind anything older. Offline: it is checked against the offline policy and
  * left for sync. Returns the record as it stands afterwards.
  */
-export async function submit(kind: OpKind, payload: OpPayload, opts?: { pin?: string; offline?: boolean }): Promise<OutboxView> {
+export async function submit(kind: OpKind, payload: OpPayload,
+  opts?: { pin?: string; offline?: boolean; prepare?: (idempotencyKey: string) => Promise<OpPayload> }): Promise<OutboxView> {
   const offline = opts?.offline ?? !isOnline();
   const profile = loadProfile();
   const eo: EnqueueOptions = { offline, lastOnlineAt: lastOnlineAt(), floatAvailable: profile?.floatAvailable ?? null };
-  const rec = await outbox.enqueue(kind, payload, eo);
+  const rec = await outbox.enqueue(kind, payload, eo, opts?.prepare);
   if (opts?.pin) rememberAgentPin(opts.pin);
   if (!offline) await syncNow(rec.id);
   else await refresh();

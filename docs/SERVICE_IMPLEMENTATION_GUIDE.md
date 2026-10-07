@@ -118,6 +118,13 @@ A domain service that serves customer data relayed this way may honour `X-On-Beh
 token (inbox-service does, to derive sender / reader types). Customer tokens carry no domain scope, so operator endpoints
 refuse them; never add `channels:customer` to a domain operation.
 
+Agent requests (`agent-channel-service`, `/v1/agent/*`): an agent token (scope `channels:agent`, claim `agent_id`) is
+bound as `io.meridian.web.security.AgentContext` (`AgentContext.agentId()`, `require().subject()` / `authTime()` /
+`userId()`; dev mode: `X-Agent-Id` / `X-User` / `X-Auth-Time`; never bound for internal or customer tokens).
+ServiceClient never forwards it either (service token, `X-User: agent:<id>`). `channels:agent` is an exact scope (no
+wildcard or admin shortcut); never add it to a domain operation. A service in a channel domain can declare its own
+`scope:` in the spec (generate.py), which overrides the domain scope for its operations.
+
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
 people) and `TenantContext.via()` names the relaying service client. Without `X-User` the principal is
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed

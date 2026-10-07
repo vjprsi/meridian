@@ -158,14 +158,16 @@ Swahili) on http://localhost:13400:
 cd web/agent-app
 npm install
 npm run dev            # or: npm run build && npm start (the service worker registers in production builds)
-npm run gen:api        # typed clients for wallet, agent-network, commission, biller, onboarding, document services
-npm test               # outbox unit tests (ordering, idempotency keys, reconciliation, encryption, limits)
-npm run test:e2e       # Playwright smoke against the build with the API mocked (offline toggling, PWA shell)
+npm run gen:api        # typed client for the agent channel (/v1/agent, agent-channel-service) only
+npm test               # outbox unit tests (ordering, idempotency keys, reconciliation, encryption, limits) + device-key payloads
+npm run test:e2e       # Playwright smoke against the build with the API mocked (offline toggling, device proof, PWA shell)
 ```
 
-- Sign in with Keycloak (realm `meridian`, client `meridian-console` by default; `NEXT_PUBLIC_OIDC_*` to change) or dev
-  mode (`X-Tenant-Id` / `X-User` + a till-operator user id), then pick the agent profile and outlet; the device is
-  registered and a 6-digit app PIN is set.
+- Sign in with Keycloak (realm `meridian`, public PKCE client `meridian-agent-app`; demo user `demo.agent` /
+  `Meridian#Agent2026`, set its `agent_id` attribute to an ACTIVE agent of the demo tenant) or dev mode (`X-Tenant-Id` /
+  `X-User` / `X-Agent-Id`); the agent comes from the sign-in, the agent picks an outlet, the device is registered with
+  a WebCrypto signing key (non-extractable private key in IndexedDB) and a 6-digit app PIN is set. Every call goes to
+  `/v1/agent/*` only (see "Agent channel" below and `web/agent-app/README.md` for remaining gaps).
 - Screens: home (float and commission balances, today's KPIs, alerts such as low float), cash-in, cash-out (new or by
   reference/QR, customer confirms with PIN or OTP), bills, airtime, assisted onboarding (ID photo from the camera),
   float top-up / rebalance and cash delivery/pickup requests, till open/close with cash count, commission statement,
@@ -178,6 +180,35 @@ npm run test:e2e       # Playwright smoke against the build with the API mocked 
   synced (including idempotent replays), rejected (problem+json shown), or needs-review. Cash-out and anything needing
   live verification is refused offline. Limits (`NEXT_PUBLIC_OFFLINE_MAX_AMOUNT` / `_MAX_TOTAL` / `_MAX_COUNT` /
   `_MAX_HOURS`, defaults 5000 / 20000 / 10 / 12 h) and the last known float bound what can be queued.
+
+## Agent channel (/v1/agent)
+
+Agents never call the domain services. `agent-channel-service` (domain `channels`, service scope `channels:agent`) is
+the experience API behind `/v1/agent/*`, built like the customer channel.
+
+- Identity: an agent token carries scope `channels:agent` and an `agent_id` claim (Keycloak client
+  `meridian-agent-app`: admin-only user attributes `agent_id` / `tenant_id`, plus `auth_time` / `acr`). It has no domain
+  scope (operator endpoints answer 403 `insufficient_scope`), and `/v1/agent` accepts nothing else (staff, service,
+  customer tokens: 403 `agent_identity_required`). `libs/meridian-web` binds it as `AgentContext` (dev mode:
+  `X-Agent-Id`, `X-Auth-Time`; never for internal or customer tokens).
+- Calls downstream use the channel's service identity for the agent's tenant (`X-User: agent:<id>`); the agent's token
+  is never forwarded. Downstream Idempotency-Keys are derived per agent and operation from the client's key.
+- Object-level authorization on every reference: outlets and devices (`agent_id`), tills and cash requests (their
+  outlet), float requests (`requesting_agent_id`), transactions (`agent_id` or the agent's own wallets), bill payments
+  and top-ups (paid from the agent's float wallet), commissions (`beneficiary_agent_id`), onboarding applications
+  (`agent_id`, channel AGENT) and their documents, offline batches (`agent_id`). Direct sub-agents are readable (profile,
+  KPIs) when `meridian.agent-channel.hierarchy-read` is on, never writable. Not theirs = 404, audited in `agent_action`
+  and published as `channels.agent_action.denied`. Customer lookup returns masked data, is logged and rate-limited.
+- Bodies are rebuilt server-side (float wallet, currency, channel `AGENT_APP`, requesting agent, rebalance source =
+  parent agent, till operator = signed-in user, onboarding channel and agent, document owner).
+- Device binding: devices register a public key (ES256 or Ed25519, `agent_device_key`); offline onboarding batches must
+  be signed by the device's ACTIVE key over a canonical text (404 for other agents' devices, 422 `device_key_revoked` /
+  `device_signature_invalid`); the verified signature is forwarded as `payload_signature`.
+- Money movement (cash-in, cash-out and confirmation, bills, airtime, float requests) needs `auth_time` within
+  `meridian.agent-channel.step-up-max-age` (5 min) **or** an `X-Agent-Device-Proof` signed by the registered device
+  key (timestamp within 5 min), so the offline outbox can replay without a fresh login; device registration needs a
+  recent login. Float requests and offline batches store their Idempotency-Key downstream, and the channel's list
+  endpoints accept `idempotency_key` to reconcile unknown outcomes.
 
 ## Deploying to Kubernetes
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { problemOf, unwrap, wallet, type WalletTransaction } from "@/api/client";
+import { api, problemOf, unwrap, type WalletTransaction } from "@/api/client";
 import { Badge, Button, DateTime, Money, Notice, PageTitle, ProblemBox, Select } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
 import { useT } from "@/lib/i18n";
@@ -24,8 +24,8 @@ export default function HistoryPage() {
     queryKey: ["history", p?.floatWalletId, type],
     enabled: live && !!p?.floatWalletId,
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => unwrap(await wallet.GET("/v1/wallets/{id}/transactions", {
-      params: { path: { id: p!.floatWalletId! }, query: { limit: 25, cursor: pageParam, ...(type ? { txn_type: type } : {}) } } })),
+    queryFn: async ({ pageParam }) => unwrap(await api.GET("/v1/agent/transactions", {
+      params: { query: { limit: 25, cursor: pageParam, ...(type ? { txn_type: type } : {}) } } })),
     getNextPageParam: (last) => (last.has_more ? last.next_cursor ?? undefined : undefined),
   });
 

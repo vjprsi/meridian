@@ -5,7 +5,10 @@ import type { User, UserManager } from "oidc-client-ts";
 /**
  * Two sign-in modes (same as the ops console and developer portal):
  *  - "oidc": Keycloak (realm meridian, authorization code + PKCE); the tenant comes from the token's tenant_id claim.
- *  - "dev":  local services in dev security mode; the app sends X-Tenant-Id / X-User headers.
+ *  - "dev":  local services in dev security mode; the app sends X-Tenant-Id / X-User / X-Agent-Id headers and the
+ *            sign-in time as X-Auth-Time (the agent channel's step-up window).
+ * The agent comes from the token's agent_id claim (Keycloak client meridian-agent-app, admin-managed attribute), never
+ * from a choice in the app.
  * The session lives in sessionStorage (gone when the tab or installed app closes); the agent profile and the
  * encrypted outbox live on the device so work captured offline survives restarts.
  */
@@ -17,6 +20,10 @@ export interface Session {
   /** Platform user id (uuid): the till operator. OIDC: the token subject; dev mode: entered at sign-in. */
   userId: string;
   tenantId: string;
+  /** The signed-in agent (token claim agent_id; dev mode: entered at sign-in). */
+  agentId?: string;
+  /** Dev mode: time of the sign-in (epoch seconds), sent as X-Auth-Time. */
+  authTime?: number;
   accessToken?: string;
   expiresAt?: number;
 }
@@ -37,7 +44,7 @@ export async function oidc(): Promise<UserManager> {
       redirect_uri: `${origin}/auth/callback`,
       post_logout_redirect_uri: `${origin}/login`,
       response_type: "code",
-      scope: "openid profile email",
+      scope: "openid profile",
       userStore: new WebStorageStateStore({ store: window.sessionStorage }),
       automaticSilentRenew: true,
     });
@@ -70,6 +77,7 @@ export function sessionFromOidc(user: User): Session {
     user: user.profile.preferred_username ?? user.profile.sub,
     userId: user.profile.sub,
     tenantId: claim(user, "tenant_id"),
+    agentId: claim(user, "agent_id") || undefined,
     accessToken: user.access_token,
     expiresAt: user.expires_at,
   };
@@ -101,6 +109,8 @@ export function authHeaders(s: Session | null = loadSession()): Record<string, s
   else if (s) {
     headers["X-Tenant-Id"] = s.tenantId;
     headers["X-User"] = s.user;
+    if (s.agentId) headers["X-Agent-Id"] = s.agentId;
+    if (s.authTime) headers["X-Auth-Time"] = String(s.authTime);
   }
   return headers;
 }

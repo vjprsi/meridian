@@ -161,32 +161,34 @@ apps:
     platform: Android, POS terminals, USSD fallback
     users: Agents, sub-agents, super-agents
     phase: 2
+    # every screen uses the agent channel (/v1/agent, agent-channel-service) only
     screens:
-      - name: Agent login and till open
+      - name: Agent login, device binding and till open
         priority: P0
-        apis: [agentDevicesGet, agentTillsOpen, mfaFactorsVerify]
+        apis: [agentMeGet, agentMeOutlets, agentMeDevicesCreate, agentMeDevicesGet, agentMeTillsList, agentMeTillsOpen]
       - name: Agent dashboard (float, cash, commissions)
         priority: P0
-        apis: [agentsFloat, agentsPerformance, commissionEarningsList]
+        apis: [agentMeFloatBalance, agentMeFloats, agentMeCommissionBalance, agentMePerformance, agentMeCommissionsSummary]
       - name: Cash-in for customer
         priority: P0
-        apis: [walletsLookup, walletTransactionsCashIn, walletTransactionsConfirm, walletTransactionsReceipt]
+        apis: [agentMeCustomersLookup, agentMeTransactionsQuote, agentMeCashInCreate, agentMeTransactionsReceipt]
       - name: Cash-out for customer
         priority: P0
-        apis: [walletsLookup, walletTransactionsCashOut, walletTransactionsConfirm, walletTransactionsReceipt]
+        apis: [agentMeCustomersLookup, agentMeCashOutCreate, agentMeCashOutConfirm, agentMeCashOutCancel, agentMeTransactionsReceipt]
       - name: Assisted customer onboarding (offline capable)
         priority: P0
-        apis: [onboardingApplicationsCreate, kycDocumentsCreate, onboardingOfflineBatchesCreate]
+        apis: [agentMeJourneysList, agentMeApplicationsCreate, agentMeApplicationsNextStep, agentMeApplicationsAddSteps,
+               agentMeApplicationsDocuments, agentMeApplicationsSubmit, agentMeOfflineBatchesCreate]
       - name: Bill payment and airtime for walk-in customers
-        apis: [billersList, billPaymentsCreate, airtimeTopupsCreate]
+        apis: [agentMeBillersList, agentMeBillersProducts, agentMeBillPaymentsCreate, agentMeAirtimeCreate]
       - name: Float top-up and rebalancing requests
-        apis: [agentFloatRequestsCreate, agentFloatRequestsList, cashManagementRequestsCreate]
-      - name: Sub-agent management (super-agents)
-        apis: [agentsSubAgents, agentsCreate, agentOutletsList, agentsSuspend]
+        apis: [agentMeFloatRequestsCreate, agentMeFloatRequestsList, agentMeCashRequestsCreate]
+      - name: Sub-agents (super-agents, read-only)
+        apis: [agentMeSubAgents, agentMePerformance]
       - name: Till close and end-of-day report
-        apis: [agentTillsClose, walletsTransactions]
-      - name: Agent KYC documents and device
-        apis: [agentKycDocumentsCreate, agentDevicesReportLost]
+        apis: [agentMeTillsClose, agentMeTransactionsList]
+      - name: Device and security
+        apis: [agentMeDevicesList, agentMeDevicesHeartbeat, agentMeDevicesRevoke, agentMeActivity]
 
   # ======================================================================= merchant app
   - id: merchant-app

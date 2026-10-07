@@ -5,7 +5,8 @@ Next.js 16.4 (Cache Components), React 19.3, Tailwind 4, openapi-fetch + React Q
 
 ```bash
 npm install
-npm run gen:api     # typed clients (customer-channel + sign-up services) from generated/openapi/services -> src/api/gen
+npm run gen:api     # typed clients from generated/openapi/services -> src/api/gen (customer-channel, customer,
+                    # onboarding-public = only /v1/onboarding/public/* of onboarding-service)
 npm run dev         # http://localhost:13300 (/v1/* proxied to MERIDIAN_GATEWAY_URL, default http://localhost:18000)
 npm run typecheck   # next typegen && tsc
 npm run build
@@ -24,10 +25,23 @@ in dev security mode).
 API: every signed-in screen calls only the customer channel `/v1/me/*` (`customer-channel-service`, client `me` in
 `src/api/client.ts`). The server takes the customer from the token, answers 404 for anything that is not theirs, builds
 request bodies itself (customer, currency, creditor details, sender type...) and enforces step-up. The app sends no
-customer ids and does no ownership filtering of its own (`src/api/me.ts`). Sign-up (`/signup`) and the dev customer
-picker still use the onboarding / KYC / document / customer services, because there is no customer yet.
+customer ids and does no ownership filtering of its own (`src/api/me.ts`). The dev customer picker uses
+customer-service (dev headers).
 
-Routes: `/login`, `/signup` (journey-driven onboarding, document upload, status and KYC checks), `/` (accounts,
+Sign-up (`/signup`, `src/api/applicant.ts`) needs no sign-in: it uses only the public applicant surface of
+onboarding-service (`/v1/onboarding/public/applications/*`, typed client `src/api/gen/onboarding-public.d.ts`). The
+tenant is `NEXT_PUBLIC_TENANT_ID` (unset: a local-development picker on the start screen) and the journey is the
+tenant's published journey with code `NEXT_PUBLIC_SIGNUP_JOURNEY` (default `RETAIL_ONLINE`, also editable in the
+picker). `start` returns the applicant token once; it is sent as `X-Applicant-Token`, kept in memory and
+`sessionStorage` only (never `localStorage`), rotated with `token/refresh` 5 minutes before it expires (and before any
+call made later than that), and dropped on submit (the server revokes it). Steps are rendered from next-step's typed
+`fields` and validated client-side with the server's rules (`src/lib/step-fields.ts`); server `input.<field>` errors
+are shown next to their fields. Phone / email steps use `otp/send` + `otp/verify` (resend cooldown from
+`resend_after`, attempts left, lockout). Documents: `documents` (pre-signed upload) -> PUT -> `documents/{id}/complete`
+with size and SHA-256. A 401/403 (token expired or revoked) or 409 `application_expired` ends the session with a
+restart screen; a 429 disables the action for `Retry-After` seconds.
+
+Routes: `/login`, `/signup` (public applicant flow: OTP, typed step forms, document upload, submit, status), `/` (accounts,
 wallets, cards, loans, recent activity), `/accounts/[id]` (balance, transactions, statements, confirmation letter),
 `/move` (history), `/move/transfer`, `/move/pay`, `/move/payees`, `/move/receipt/[id]`, `/standing-orders`, `/cards`,
 `/cards/[id]` (freeze, channel controls, limits, report lost/stolen with replacement), `/loans`, `/loans/[id]`
@@ -51,24 +65,27 @@ and `src/messages/sw.ts` (Kiswahili; the type requires every English key).
 
 ## API gaps (customer channel)
 
-Closed by `customer-channel-service` (`/v1/me/*`) and the `meridian-customer-web` client: customer identity
-(`customer_id` claim, customer-only scope refused by every operator endpoint), the "me" surface with object-level
-authorization on every reference (BOLA/IDOR), server-built bodies (no trusted ownership or role fields), inbox roles
-(sender / opener / reader derived by inbox-service from the relayed customer; staff-only notes never returned) and
-server-side step-up (`auth_time` / `acr`). Still open:
+Closed: customer identity (`customer_id` claim, customer-only scope refused by every operator endpoint), the "me"
+surface with object-level authorization on every reference (BOLA/IDOR), server-built bodies, inbox trust (sender /
+opener / reader roles derived by inbox-service from the relayed customer; staff-only notes never returned),
+server-side step-up (`auth_time` / `acr`) and the public sign-up surface (no staff endpoints or tenant principal).
+Still open:
 
-1. **Sign-up uses staff onboarding endpoints.** onboarding-service now has a public applicant surface
-   (`/v1/onboarding/public/applications/*` with an `X-Applicant-Token`, OTP, typed step fields, documents); `/signup`
-   has not been moved to it yet and still needs a tenant principal (dev headers or an SSO session).
-2. **Customer MFA.** Step-up is "sign in again" (`auth_time`, optional `acr` list); there are no customer MFA factors,
+1. **Customer MFA.** Step-up is "sign in again" (`auth_time`, optional `acr` list); there are no customer MFA factors,
    passkeys or a Keycloak step-up flow (acr levels) configured yet, and `amr` is not checked.
-3. **No customer sessions.** `sessionsList` / `sessionsRevoke` are staff sessions; the app lists and revokes customer
+2. **No customer sessions.** `sessionsList` / `sessionsRevoke` are staff sessions; the app lists and revokes customer
    devices instead.
-4. **Untyped responses** (`type: object` in the contract): `myPaymentsValidate`, `myInsightsSpending`,
-   `myDocumentsUploadUrl` (the domain operations are untyped too).
+3. **Untyped responses** (`type: object` in the contract): `myPaymentsValidate`, `myInsightsSpending`,
+   `myDocumentsUploadUrl`, and on the applicant surface `onboardingApplicantDocuments` /
+   `onboardingApplicantDocumentsComplete` and the step `fields` items (shapes in `src/api/types.ts`). The
+   `X-Applicant-Token` header is not declared as a parameter of the public operations.
+4. **Sign-up details.** There is no public journey listing (the journey code is configuration), the attestation /
+   CAPTCHA check is a server placeholder (the app sends no `attestation_token`), the services send no `Retry-After`
+   on 429 (the app falls back to the time in `otp_resend_too_soon` or a generic "wait" message), and after submit the
+   applicant cannot read the decision (the token is revoked; the outcome is communicated by the bank).
 5. **Transactions are raw ledger entries** (`myAccountsTransactions`): no counterparty, merchant or category for a
    customer-friendly feed; enrichment (`transactionEnrichments*`) is a separate lookup per entry.
 6. **Joint-account activity.** `/v1/me/payments` lists the customer's own payments; payments a co-holder made from a
    joint account appear only as account entries.
-7. Tracker screens not built yet: passkey login and MFA (needs 2), tax certificates, open-banking consents,
+7. Tracker screens not built yet: passkey login and MFA (needs 1), tax certificates, open-banking consents,
    P2P/wallet transfers, bill payments, card PIN and PAN reveal.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { agents, unwrap, wallet } from "@/api/client";
+import { api, unwrap } from "@/api/client";
 import { updateProfile, type AgentProfile } from "@/lib/agent-context";
 import { useConnectivity } from "@/lib/connectivity";
 import { useSession } from "@/components/providers";
@@ -30,7 +30,7 @@ export function useFloatBalance(p: AgentProfile | null) {
     queryKey: ["float-balance", p?.floatWalletId],
     enabled: live && !!p?.floatWalletId,
     queryFn: async () => {
-      const b = unwrap(await wallet.GET("/v1/wallets/{id}/balance", { params: { path: { id: p!.floatWalletId! } } }));
+      const b = unwrap(await api.GET("/v1/agent/me/float-balance"));
       updateProfile({ floatAvailable: b.available_balance, floatAt: new Date().toISOString() });
       return b;
     },
@@ -43,7 +43,7 @@ export function useFloatPositions(p: AgentProfile | null) {
   return useQuery({
     queryKey: ["agent-float", p?.agentId],
     enabled: live && !!p,
-    queryFn: async () => unwrap(await agents.GET("/v1/agents/{id}/float", { params: { path: { id: p!.agentId } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me/floats")).data,
   });
 }
 
@@ -54,6 +54,6 @@ export function useFloatWallet(p: AgentProfile | null) {
     queryKey: ["float-wallet", p?.floatWalletId],
     enabled: live && !!p?.floatWalletId,
     staleTime: 5 * 60_000,
-    queryFn: async () => unwrap(await wallet.GET("/v1/wallets/{id}", { params: { path: { id: p!.floatWalletId! } } })),
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me/float-wallet")),
   });
 }

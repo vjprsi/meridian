@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { idem, problemOf, unwrap, wallet, type Quote, type Wallet } from "@/api/client";
+import { api, idem, problemOf, unwrap, type AgentCustomerLookup, type Quote } from "@/api/client";
 import { OpOutcome } from "@/components/receipt";
 import { Button, Card, Field, Input, Money, Notice, PageTitle, PinInput, ProblemBox, Row } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
@@ -27,7 +27,7 @@ export default function CashInPage() {
   const [phone, setPhone] = useState("");
   const [phone2, setPhone2] = useState("");
   const [amount, setAmount] = useState("");
-  const [payee, setPayee] = useState<Wallet | null>(null);
+  const [payee, setPayee] = useState<AgentCustomerLookup | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [pin, setPin] = useState("");
   const [stage, setStage] = useState<"form" | "review" | "done">("form");
@@ -57,11 +57,11 @@ export default function CashInPage() {
     }
     setBusy(true);
     try {
-      const w = unwrap(await wallet.GET("/v1/wallets/lookup", { params: { query: { msisdn, currency } } }));
+      const w = unwrap(await api.GET("/v1/agent/customer-wallets/lookup", { params: { query: { msisdn } } }));
       setPayee(w);
-      const q = unwrap(await wallet.POST("/v1/wallet-transactions/quote", {
+      const q = unwrap(await api.POST("/v1/agent/transactions/quote", {
         params: { header: idem() },
-        body: { txn_type: "CASH_IN", amount, currency, payer_wallet_id: p!.floatWalletId ?? undefined, payee_msisdn: msisdn, channel: "AGENT_APP" },
+        body: { txn_type: "CASH_IN", amount, payee_msisdn: msisdn },
       })) as unknown as Quote;
       setQuote(q);
       setStage("review");
@@ -78,10 +78,10 @@ export default function CashInPage() {
     setProblem(null);
     try {
       const view = await submit("CASH_IN", {
-        request: { agent_wallet_id: p!.floatWalletId, agent_outlet_id: p!.outletId ?? undefined, payee_msisdn: msisdn,
-          amount, currency, channel: "AGENT_APP" },
+        // the agent channel sets the float wallet, currency and channel server-side
+        request: { agent_outlet_id: p!.outletId ?? undefined, payee_msisdn: msisdn, amount },
         amount, currency,
-        display: { Customer: payee ? `${payee.display_name} ${msisdn}` : msisdn },
+        display: { Customer: payee ? `${payee.display_name_masked ?? ""} ${msisdn}` : msisdn },
       }, { pin: pin || undefined, offline });
       setResult(view);
       setStage("done");
@@ -120,7 +120,7 @@ export default function CashInPage() {
         <form onSubmit={confirm} className="flex flex-col gap-4">
           <Card>
             <dl>
-              <Row label={t("customer")}>{payee?.display_name ?? "—"}<br /><span className="text-sm text-muted">{msisdn}</span></Row>
+              <Row label={t("customer")}>{payee?.display_name_masked ?? "—"}<br /><span className="text-sm text-muted">{msisdn}</span></Row>
               <Row label={t("amount")}><Money amount={amount} currency={currency} /></Row>
               {quote ? (
                 <>

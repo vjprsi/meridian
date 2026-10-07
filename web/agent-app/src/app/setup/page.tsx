@@ -3,50 +3,46 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { agents, idem, problemOf, unwrap, wallet, type Agent, type AgentOutlet } from "@/api/client";
+import { api, problemOf, unwrap, type Agent, type AgentOutlet } from "@/api/client";
 import { useSession } from "@/components/providers";
-import { Badge, Button, Card, Field, Input, Notice, PinInput, ProblemBox, Spinner, cx } from "@/components/ui";
+import { Button, Card, Field, Notice, PinInput, ProblemBox, Spinner, cx } from "@/components/ui";
 import { ConnectivityPill } from "@/components/shell";
 import { bindingOf, loadProfile, saveProfile, type AgentProfile } from "@/lib/agent-context";
-import { deviceModel, deviceSerial, deviceType } from "@/lib/device";
+import { setSigningUnlocked } from "@/lib/device-key";
+import { registerDevice } from "@/lib/devices";
 import { useT } from "@/lib/i18n";
-import { config } from "@/lib/config";
 import { outbox, setupPin, unlock } from "@/lib/outbox/runtime";
 import type { Problem } from "@/lib/outbox/types";
 
 /**
- * First run on a device (or switching agent): pick the agent profile and outlet, link this device, and set the
- * app PIN that protects the offline outbox. The platform has no "agent of the signed-in user" lookup, so the agent
- * is chosen from the agent list (searchable by agent code).
+ * First run on a device (or a new agent): the agent comes from the sign-in (/v1/agent/me), the agent picks the outlet,
+ * the device is registered with its own signing key (device binding) and the app PIN that protects the offline
+ * outbox is set.
  */
 export default function SetupPage() {
   const t = useT();
   const router = useRouter();
   const { session, ready } = useSession();
-  const [code, setCode] = useState("");
-  const [search, setSearch] = useState("");
-  const [agent, setAgent] = useState<Agent | null>(null);
   const [outlet, setOutlet] = useState<AgentOutlet | null>(null);
-  const [step, setStep] = useState<"agent" | "outlet" | "pin">("agent");
+  const [step, setStep] = useState<"outlet" | "pin">("outlet");
 
   useEffect(() => {
     if (ready && !session) router.replace("/login");
   }, [ready, session, router]);
 
-  const list = useQuery({
-    queryKey: ["setup-agents", search],
+  const me = useQuery({
+    queryKey: ["setup-me", session?.agentId, session?.tenantId],
     enabled: !!session,
-    queryFn: async () => unwrap(await agents.GET("/v1/agents", { params: { query: {
-      limit: 50, status: "ACTIVE", ...(search ? { agent_code: search } : {}) } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me")),
   });
-
   const outlets = useQuery({
-    queryKey: ["setup-outlets", agent?.id],
-    enabled: !!agent,
-    queryFn: async () => unwrap(await agents.GET("/v1/agents/{id}/outlets", { params: { path: { id: agent!.id } } })).data,
+    queryKey: ["setup-outlets", me.data?.id],
+    enabled: !!me.data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me/outlets")).data,
   });
 
   if (!ready || !session) return <Spinner />;
+  const agent = me.data;
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-6">
@@ -55,41 +51,18 @@ export default function SetupPage() {
         <ConnectivityPill />
       </div>
       <ol className="flex gap-2 text-sm font-semibold" aria-label="Steps">
-        {(["agent", "outlet", "pin"] as const).map((s, i) => (
+        {(["outlet", "pin"] as const).map((s, i) => (
           <li key={s} className={cx("rounded-full px-3 py-1", s === step ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted")}>
-            {i + 1}. {s === "agent" ? t("chooseAgent").split(" ").slice(-2).join(" ") : s === "outlet" ? t("chooseOutlet") : t("appPin")}
+            {i + 1}. {s === "outlet" ? t("chooseOutlet") : t("appPin")}
           </li>
         ))}
       </ol>
-
-      {step === "agent" && (
-        <Card title={t("chooseAgent")}>
-          <form className="mb-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); setSearch(code.trim()); }}>
-            <Input aria-label={t("agentCode")} placeholder={t("agentCode")} value={code} onChange={(e) => setCode(e.target.value)} />
-            <Button type="submit" variant="secondary">{t("search")}</Button>
-          </form>
-          {list.isLoading && <Spinner />}
-          {list.error && <ProblemBox problem={problemOf(list.error)} />}
-          <ul className="flex flex-col gap-2">
-            {list.data?.map((a) => (
-              <li key={a.id}>
-                <button onClick={() => { setAgent(a); setStep("outlet"); }}
-                  className="flex min-h-14 w-full items-center justify-between gap-3 rounded-[var(--radius)] border-2 border-border bg-surface px-3 py-2 text-left hover:border-accent">
-                  <span>
-                    <span className="block font-semibold">{a.trading_name ?? a.legal_name}</span>
-                    <span className="block text-sm text-muted">{a.agent_code} · {a.agent_level.replace("_", " ")} · {a.currency}</span>
-                  </span>
-                  <Badge value={a.status} />
-                </button>
-              </li>
-            ))}
-            {list.data?.length === 0 && <p className="text-muted">{t("nothing")}</p>}
-          </ul>
-        </Card>
-      )}
+      {me.isLoading && <Spinner />}
+      {me.error && <ProblemBox problem={problemOf(me.error)} />}
 
       {step === "outlet" && agent && (
         <Card title={t("chooseOutlet")}>
+          <p className="mb-3 text-muted">{agent.trading_name ?? agent.legal_name} · {agent.agent_code} · {agent.agent_level.replace("_", " ")}</p>
           {outlets.isLoading && <Spinner />}
           {outlets.error && <ProblemBox problem={problemOf(outlets.error)} />}
           <ul className="flex flex-col gap-2">
@@ -103,15 +76,12 @@ export default function SetupPage() {
                 </button>
               </li>
             ))}
+            {outlets.data?.length === 0 && <p className="text-muted">{t("nothing")}</p>}
           </ul>
-          <div className="mt-4 flex gap-2">
-            <Button variant="secondary" onClick={() => setStep("agent")}>{t("back")}</Button>
-            <Button variant="ghost" onClick={() => { setOutlet(null); setStep("pin"); }}>{t("continue")} →</Button>
-          </div>
         </Card>
       )}
 
-      {step === "pin" && agent && (
+      {step === "pin" && agent && outlet && (
         <PinStep agent={agent} outlet={outlet} tenantId={session.tenantId} onBack={() => setStep("outlet")}
           onDone={() => router.replace("/")} />
       )}
@@ -120,7 +90,7 @@ export default function SetupPage() {
 }
 
 function PinStep({ agent, outlet, tenantId, onBack, onDone }:
-  { agent: Agent; outlet: AgentOutlet | null; tenantId: string; onBack: () => void; onDone: () => void }) {
+  { agent: Agent; outlet: AgentOutlet; tenantId: string; onBack: () => void; onDone: () => void }) {
   const t = useT();
   const [pin, setPin] = useState("");
   const [pin2, setPin2] = useState("");
@@ -131,19 +101,6 @@ function PinStep({ agent, outlet, tenantId, onBack, onDone }:
   const binding = bindingOf({ tenantId, agentId: agent.id });
 
   useEffect(() => { outbox.isInitialized(binding).then(setExisting); }, [binding]);
-
-  async function linkDevice(): Promise<string | null> {
-    // Re-use this installation's device record if it is registered, else register it (best effort).
-    const serial = deviceSerial();
-    const found = await agents.GET("/v1/agent-devices", { params: { query: { agent_id: agent.id, serial_number: serial } } });
-    const hit = found.data?.data?.[0];
-    if (hit) return hit.id;
-    const created = await agents.POST("/v1/agent-devices", { params: { header: idem() }, body: {
-      agent_id: agent.id, agent_outlet_id: outlet?.id, device_type: deviceType(), serial_number: serial,
-      model: deviceModel(), app_version: config.appVersion, assigned_at: new Date().toISOString(),
-    } });
-    return created.data?.id ?? null;
-  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -157,18 +114,16 @@ function PinStep({ agent, outlet, tenantId, onBack, onDone }:
         if (!(await unlock(pin))) { setErr(t("wrongPin")); return; }
       } else {
         await setupPin(pin, binding);
+        setSigningUnlocked(true);
       }
-      let floatAvailable: string | null = null;
-      if (agent.float_wallet_id) {
-        const b = await wallet.GET("/v1/wallets/{id}/balance", { params: { path: { id: agent.float_wallet_id } } });
-        floatAvailable = b.data?.available_balance ?? null;
-      }
-      const deviceId = await linkDevice().catch(() => null);
+      const balance = await api.GET("/v1/agent/me/float-balance");
+      const floatAvailable = balance.data?.available_balance ?? null;
+      const deviceId = await registerDevice(outlet.id);
       const profile: AgentProfile = {
         tenantId, agentId: agent.id, agentCode: agent.agent_code, agentName: agent.trading_name ?? agent.legal_name,
         agentLevel: agent.agent_level, parentAgentId: agent.parent_agent_id, superAgentId: agent.super_agent_id,
-        currency: agent.currency, floatWalletId: agent.float_wallet_id ?? outlet?.float_wallet_id,
-        commissionWalletId: agent.commission_wallet_id, outletId: outlet?.id ?? null, outletName: outlet?.name ?? null,
+        currency: agent.currency, floatWalletId: agent.float_wallet_id ?? outlet.float_wallet_id,
+        commissionWalletId: agent.commission_wallet_id, outletId: outlet.id, outletName: outlet.name,
         deviceId: deviceId ?? (prev?.agentId === agent.id ? prev.deviceId : null),
         floatAvailable, floatAt: floatAvailable ? new Date().toISOString() : null,
       };
@@ -186,7 +141,7 @@ function PinStep({ agent, outlet, tenantId, onBack, onDone }:
   return (
     <Card title={existing ? t("unlockTitle") : t("setAppPin")}>
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <p className="text-muted">{agent.trading_name ?? agent.legal_name} · {agent.agent_code}{outlet ? ` · ${outlet.name}` : ""}</p>
+        <p className="text-muted">{agent.trading_name ?? agent.legal_name} · {agent.agent_code} · {outlet.name}</p>
         {!existing && <Notice>{t("appPinHint")}</Notice>}
         <Field label={t("appPin")} error={err}>
           <PinInput value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} minLength={6} maxLength={6} required />

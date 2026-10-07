@@ -1,14 +1,11 @@
 "use client";
 
 import createClient, { type Middleware } from "openapi-fetch";
-import type { paths as WalletPaths, components as WalletComponents } from "./wallet";
-import type { paths as AgentPaths, components as AgentComponents } from "./agent-network";
-import type { paths as CommissionPaths, components as CommissionComponents } from "./commission";
-import type { paths as BillerPaths, components as BillerComponents } from "./biller";
-import type { paths as OnboardingPaths, components as OnboardingComponents } from "./onboarding";
-import type { paths as DocumentPaths, components as DocumentComponents } from "./document";
-import { authHeaders } from "@/lib/auth";
+import type { paths, components } from "./agent-channel";
+import { authHeaders, loadSession } from "@/lib/auth";
+import { loadProfile } from "@/lib/agent-context";
 import { reportReachability } from "@/lib/connectivity";
+import { deviceProof } from "@/lib/device-key";
 import type { Problem } from "@/lib/outbox/types";
 
 export type { Problem };
@@ -37,68 +34,69 @@ async function trackedFetch(input: Request): Promise<Response> {
   }
 }
 
+/** Money movement: the channel accepts a recent sign-in or a proof signed by this device's registered key. */
+const MONEY = [/^\/v1\/agent\/cash-in$/, /^\/v1\/agent\/cash-out(\/[^/]+\/confirm)?$/, /^\/v1\/agent\/bill-payments$/,
+  /^\/v1\/agent\/airtime-topups$/, /^\/v1\/agent\/float-requests$/];
+
 const auth: Middleware = {
-  onRequest({ request }) {
+  async onRequest({ request }) {
     for (const [k, v] of Object.entries(authHeaders())) request.headers.set(k, v);
     // Every write is idempotent: a retry of the same click must not double-post. Money operations pass their own
     // key (the outbox record's), so a replay after a lost response is recognised by the server.
     if (request.method === "POST" && !request.headers.has("Idempotency-Key")) {
       request.headers.set("Idempotency-Key", crypto.randomUUID());
     }
+    const path = new URL(request.url, "http://local").pathname;
+    const session = loadSession();
+    const profile = loadProfile();
+    if (request.method === "POST" && MONEY.some((re) => re.test(path)) && session && profile?.deviceId) {
+      const proof = await deviceProof({ tenant: session.tenantId, agent: profile.agentId, device: profile.deviceId,
+        method: "POST", path, idempotencyKey: request.headers.get("Idempotency-Key") ?? "" });
+      if (proof) request.headers.set("X-Agent-Device-Proof", proof);
+    }
     return request;
   },
 };
 
-function client<P extends object>() {
-  const c = createClient<P>({ baseUrl: "", fetch: trackedFetch });
-  c.use(auth);
-  return c;
-}
-
 /**
- * Typed clients generated from the owning services' contracts (npm run gen:api). Requests go to /v1/... on this
- * origin; Next proxies them to the edge gateway.
+ * Typed client generated from the agent channel contract (npm run gen:api). Every request goes to /v1/agent/... on
+ * this origin (Next proxies /v1 to the edge gateway); the app never calls a domain service directly.
  */
-export const wallet = client<WalletPaths>();
-export const agents = client<AgentPaths>();
-export const commission = client<CommissionPaths>();
-export const biller = client<BillerPaths>();
-export const onboarding = client<OnboardingPaths>();
-export const documents = client<DocumentPaths>();
+export const api = createClient<paths>({ baseUrl: "", fetch: trackedFetch });
+api.use(auth);
 
-type WS = WalletComponents["schemas"];
-type AS = AgentComponents["schemas"];
-type CS = CommissionComponents["schemas"];
-type BS = BillerComponents["schemas"];
-type OS = OnboardingComponents["schemas"];
-type DS = DocumentComponents["schemas"];
-export type Wallet = WS["Wallet"];
-export type WalletTransaction = WS["WalletTransaction"];
-export type AccountBalance = WS["AccountBalance"];
-export type Agent = AS["Agent"];
-export type AgentOutlet = AS["AgentOutlet"];
-export type AgentFloat = AS["AgentFloat"];
-export type AgentFloatRequest = AS["AgentFloatRequest"];
-export type AgentFloatRequestCreate = AS["AgentFloatRequestCreate"];
-export type AgentTill = AS["AgentTill"];
-export type AgentDevice = AS["AgentDevice"];
-export type AgentPerformanceDaily = AS["AgentPerformanceDaily"];
-export type CashManagementRequest = AS["CashManagementRequest"];
-export type CommissionEarning = CS["CommissionEarning"];
-export type Biller = BS["Biller"];
-export type BillerProduct = BS["BillerProduct"];
-export type BillInquiry = BS["BillInquiry"];
-export type BillPayment = BS["BillPayment"];
-export type BillPaymentCreate = BS["BillPaymentCreate"];
-export type AirtimeTopup = BS["AirtimeTopup"];
-export type AirtimeTopupCreate = BS["AirtimeTopupCreate"];
-export type OnboardingJourney = OS["OnboardingJourney"];
-export type OnboardingApplication = OS["OnboardingApplication"];
-export type OnboardingStep = OS["OnboardingStep"];
-export type OnboardingOfflineBatch = OS["OnboardingOfflineBatch"];
-export type Document = DS["Document"];
+type S = components["schemas"];
+export type Wallet = S["Wallet"];
+export type WalletTransaction = S["WalletTransaction"];
+export type AccountBalance = S["AccountBalance"];
+export type Agent = S["Agent"];
+export type AgentOutlet = S["AgentOutlet"];
+export type AgentFloat = S["AgentFloat"];
+export type AgentFloatRequest = S["AgentFloatRequest"];
+export type AgentTill = S["AgentTill"];
+export type AgentDevice = S["AgentDevice"];
+export type AgentDeviceKey = S["AgentDeviceKey"];
+export type AgentPerformanceDaily = S["AgentPerformanceDaily"];
+export type AgentCustomerLookup = S["AgentCustomerLookup"];
+export type CashManagementRequest = S["CashManagementRequest"];
+export type CommissionEarning = S["CommissionEarning"];
+export type Biller = S["Biller"];
+export type BillerProduct = S["BillerProduct"];
+export type BillInquiry = S["BillInquiry"];
+export type BillPayment = S["BillPayment"];
+export type AirtimeTopup = S["AirtimeTopup"];
+export type OnboardingJourney = S["OnboardingJourney"];
+export type OnboardingApplication = S["OnboardingApplication"];
+export type OnboardingStep = S["OnboardingStep"];
+export type OnboardingOfflineBatch = S["OnboardingOfflineBatch"];
+export type Document = S["Document"];
+export type FloatRequestCreate = S["AgentMeFloatRequestsCreateRequest"];
+export type CashInCreate = S["AgentMeCashInCreateRequest"];
+export type BillPaymentCreate = S["AgentMeBillPaymentsCreateRequest"];
+export type AirtimeCreate = S["AgentMeAirtimeCreateRequest"];
+export type OfflineBatchCreate = S["AgentMeOfflineBatchesCreateRequest"];
 
-/** Fee quote (computed result of walletTransactionsQuote, see the operation summary). */
+/** Fee quote (computed result of agentMeTransactionsQuote, see the operation summary). */
 export interface Quote {
   txn_type: string;
   amount: string;

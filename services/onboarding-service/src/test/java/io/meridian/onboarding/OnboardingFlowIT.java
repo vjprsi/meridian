@@ -379,6 +379,10 @@ class OnboardingFlowIT {
         assertThat(batch.get("result").get("rejected").asInt()).isEqualTo(1);
         HttpResponse<String> replay = send("POST", "/v1/onboarding/offline-batches", body, "batch-1", TENANT, "agent", null);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
+        // the Idempotency-Key is stored on the batch: a device that lost the response finds it again
+        assertThat(batch.get("idempotency_key").asString()).isEqualTo("batch-1");
+        assertThat(get("/v1/onboarding/offline-batches?idempotency_key=batch-1", TENANT).get("data").get(0)
+                .get("id").asString()).isEqualTo(batchId);
 
         JsonNode again = post("/v1/onboarding/offline-batches/" + batchId + "/reprocess", null, "agent", 200);
         assertThat(again.get("status").asString()).isEqualTo("CONFLICT");

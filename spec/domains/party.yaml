@@ -658,10 +658,12 @@ services:
           - "captured_to ts nn | Latest capture time in the batch"
           - "application_count int nn | Applications in the batch"
           - "payload_uri string(500) nn | Encrypted payload location"
-          - "payload_signature string(512) nn | Device signature of the payload"
+          - "payload_signature string(512) nn | Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified by agent-channel-service against the registered device key)"
           - "status enum:OfflineSyncStatus nn default=RECEIVED ro | Sync status"
           - "result json ro | Per-application outcome and conflicts"
           - "processed_at ts ro | Processing time"
+          - "idempotency_key string(128) ro | Idempotency-Key of the create request (lets a client reconcile an unknown outcome)"
+        unique: [[tenant_id, idempotency_key]]
 
     apis:
       - resource: onboarding-journeys
@@ -712,7 +714,7 @@ services:
         path: /v1/onboarding/offline-batches
         table: onboarding_offline_batch
         ops: [list, get, create]
-        filters: [agent_id, status]
+        filters: [agent_id, status, idempotency_key]
         actions:
           - "POST /{id}/reprocess | Reprocess a batch after resolving conflicts | | onboarding_offline_batch"
 

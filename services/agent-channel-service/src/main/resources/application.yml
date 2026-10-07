@@ -1,0 +1,72 @@
+# agent-channel-service (Customer and Agent Channels). Defaults target the local stack in infra/local; override with env vars in
+# other environments (e.g. SPRING_DATASOURCE_URL, MERIDIAN_SECURITY_MODE=jwt).
+server:
+  port: 9165
+  shutdown: graceful
+
+spring:
+  application:
+    name: agent-channel-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:15432/agent_channel_db?currentSchema=agent_channel
+    username: meridian_app
+    password: meridian_app
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    user: meridian
+    password: meridian
+    schemas: agent_channel
+    default-schema: agent_channel
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:15180/realms/meridian
+
+meridian:
+  security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
+                              # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
+  events:
+    topic: meridian.channels.v1
+  agent-channel:
+    step-up-max-age: PT5M       # money movement: a login at most this old, or a device proof (X-Agent-Device-Proof)
+    device-proof-max-age: PT5M  # accepted clock skew / age of a device proof timestamp
+    lookups-per-hour: 60        # customer wallet lookups per agent per rolling hour (429 rate_limited beyond)
+    hierarchy-read: true        # super-agents / agents may read their direct sub-agents and their KPIs
+    reconcile-window: P7D       # idempotency_key searches over transactions, bill payments and top-ups
+  # JWT mode: the channel never forwards an agent's token; it calls the domain services with this service identity
+  # for the agent's tenant (required, else agent requests fail with 503 service_identity_not_configured).
+  # service-auth:
+  #   token-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/token
+  #   client-id: meridian-service
+  #   client-secret: meridian-service-secret
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: agent-channel-service
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:14318/v1/metrics
+  tracing:
+    sampling:
+      probability: 1.0
