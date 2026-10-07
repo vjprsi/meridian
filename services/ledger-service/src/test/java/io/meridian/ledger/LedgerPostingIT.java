@@ -290,13 +290,17 @@ class LedgerPostingIT {
     void overdraftLimitAndFreezeAreIdempotent() throws Exception {
         String carol = account("2000-C", "Carol deposits", "LIABILITY", "CREDIT", false);
         postEntry("carol-fund", line(cash, "DEBIT", "100.00"), line(carol, "CREDIT", "100.00"));
-        JsonNode limited = post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50.00\",\"reason\":\"arranged\"}", 200);
+        // SEC-12: a user cannot set a credit limit; only a service identity can
+        assertThat(post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50.00\"}", 403).get("code")
+                .asString()).isEqualTo("service_identity_required");
+        JsonNode limited = postAs("deposit-service", "/v1/ledger-accounts/" + carol + "/overdraft-limit",
+                "{\"limit\":\"50.00\",\"reason\":\"arranged\"}", 200);
         assertThat(new BigDecimal(limited.get("overdraft_limit").asString())).isEqualByComparingTo("50");
         assertBalance(carol, "100", "150");
-        JsonNode same = post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50\"}", 200);
+        JsonNode same = postAs("deposit-service", "/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50\"}", 200);
         assertThat(same.get("row_version").asInt()).isEqualTo(limited.get("row_version").asInt());
-        assertThat(post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"-1\"}", 422).get("code")
-                .asString()).isEqualTo("invalid_overdraft_limit");
+        assertThat(postAs("deposit-service", "/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"-1\"}", 422)
+                .get("code").asString()).isEqualTo("invalid_overdraft_limit");
         postEntry("carol-od", line(carol, "DEBIT", "140.00"), line(cash, "CREDIT", "140.00"));
         assertBalance(carol, "-40", "10");
 
@@ -310,17 +314,119 @@ class LedgerPostingIT {
         assertThat(post("/v1/ledger-accounts/" + carol + "/unfreeze", "{\"reason\":\"ok\"}", 200).get("status").asString())
                 .isEqualTo("ACTIVE");
 
-        // PATCH of overdraft_limit keeps the stored available balance consistent.
-        JsonNode cur = get("/v1/ledger-accounts/" + carol, TENANT);
-        HttpRequest patch = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/ledger-accounts/" + carol))
+        // SEC-12: PATCH cannot change credit terms or the account's identity; descriptive fields still change.
+        for (String body : List.of("{\"overdraft_limit\":\"1000000000\"}", "{\"allow_negative\":true}",
+                "{\"currency\":\"EUR\"}", "{\"ledger_id\":\"" + UUID.randomUUID() + "\"}", "{\"min_balance\":\"-5\"}",
+                "{\"normal_balance\":\"DEBIT\"}", "{\"owner_id\":\"" + UUID.randomUUID() + "\"}")) {
+            HttpResponse<String> pr = patch(carol, body);
+            assertThat(pr.statusCode()).as(body + " " + pr.body()).isEqualTo(422);
+            assertThat(json.readTree(pr.body()).get("code").asString()).isEqualTo("field_not_updatable");
+        }
+        HttpResponse<String> renamed = patch(carol, "{\"name\":\"Carol main\",\"currency\":\"USD\",\"overdraft_limit\":\"50\"}");
+        assertThat(renamed.statusCode()).as(renamed.body()).isEqualTo(200);
+        assertThat(json.readTree(renamed.body()).get("name").asString()).isEqualTo("Carol main");
+        assertBalance(carol, "-40", "10");
+
+        // The owning service lowers the limit through the action; the stored available balance follows.
+        postAs("deposit-service", "/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"0\"}", 200);
+        assertBalance(carol, "-40", "-40");
+    }
+
+    @Test
+    @Order(17)
+    void overdraftLimitOfOwnedAccountOnlyByOwningService() throws Exception {
+        String dave = post("/v1/ledger-accounts", """
+                {"ledger_id":"%s","code":"2000-D","name":"Dave","account_type":"LIABILITY","normal_balance":"CREDIT",
+                 "currency":"USD","owner_type":"DEPOSIT_ACCOUNT","owner_id":"%s"}""".formatted(ledger, UUID.randomUUID()), 201)
+                .get("id").asString();
+        assertThat(postAs("wallet-service", "/v1/ledger-accounts/" + dave + "/overdraft-limit", "{\"limit\":\"10\"}", 403)
+                .get("code").asString()).isEqualTo("not_account_owner");
+        JsonNode set = postAs("deposit-service", "/v1/ledger-accounts/" + dave + "/overdraft-limit",
+                "{\"limit\":\"25\",\"allow_negative\":true,\"reason\":\"facility approved\"}", 200);
+        assertThat(new BigDecimal(set.get("overdraft_limit").asString())).isEqualByComparingTo("25");
+        assertThat(set.get("allow_negative").asBoolean()).isTrue();
+        assertBalance(dave, "0", "25");
+    }
+
+    @Test
+    @Order(18)
+    void concurrentReversalsOfOneEntryPostExactlyOnce() throws Exception {
+        String erin = account("2000-E", "Erin deposits", "LIABILITY", "CREDIT", false);
+        String entry = postEntry("erin-fund", line(cash, "DEBIT", "70.00"), line(erin, "CREDIT", "70.00")).get("id").asString();
+        int n = 8;
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<Integer> codes = java.util.Collections.synchronizedList(new ArrayList<>());
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> fs = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                String key = "erin-rev-" + i; // different keys: only one reversal may post
+                fs.add(pool.submit(() -> {
+                    start.await();
+                    codes.add(send("POST", "/v1/journal-entries/" + entry + "/reverse", "{\"reason\":\"race\"}", key,
+                            TENANT).statusCode());
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> f : fs) {
+                f.get();
+            }
+        }
+        assertThat(codes).filteredOn(c -> c == 201).hasSize(1);
+        assertThat(codes).filteredOn(c -> c == 409).hasSize(n - 1);
+        assertBalance(erin, "0", "0");
+        long reversals = 0;
+        for (JsonNode e : get("/v1/journal-entries?limit=200", TENANT).get("data")) {
+            if (entry.equals(e.path("reversal_of_id").asString(null))) {
+                reversals++;
+            }
+        }
+        assertThat(reversals).isEqualTo(1);
+
+        // Same key raced: one posts, the others replay the same reversal.
+        String entry2 = postEntry("erin-fund-2", line(cash, "DEBIT", "5.00"), line(erin, "CREDIT", "5.00")).get("id").asString();
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        List<String> ids = java.util.Collections.synchronizedList(new ArrayList<>());
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> fs = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                fs.add(pool.submit(() -> {
+                    go.await();
+                    HttpResponse<String> r = send("POST", "/v1/journal-entries/" + entry2 + "/reverse",
+                            "{\"reason\":\"race\"}", "erin-rev-same", TENANT);
+                    assertThat(r.statusCode()).as(r.body()).isIn(200, 201);
+                    ids.add(json.readTree(r.body()).get("id").asString());
+                    return null;
+                }));
+            }
+            go.countDown();
+            for (Future<?> f : fs) {
+                f.get();
+            }
+        }
+        assertThat(ids).hasSize(4);
+        assertThat(new java.util.HashSet<>(ids)).hasSize(1);
+        assertBalance(erin, "0", "0");
+    }
+
+    private HttpResponse<String> patch(String account, String body) throws Exception {
+        JsonNode cur = get("/v1/ledger-accounts/" + account, TENANT);
+        HttpRequest patch = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/ledger-accounts/" + account))
                 .header("X-Tenant-Id", TENANT).header("Content-Type", "application/json")
                 .header("If-Match", "\"" + cur.get("row_version").asInt() + "\"")
-                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"overdraft_limit\":\"0\"}"))
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                 .build();
-        HttpResponse<String> pr = http.send(patch, HttpResponse.BodyHandlers.ofString());
-        assertThat(pr.statusCode()).as(pr.body()).isEqualTo(200);
-        assertThat(new BigDecimal(json.readTree(pr.body()).get("overdraft_limit").asString())).isEqualByComparingTo("0");
-        assertBalance(carol, "-40", "-40");
+        return http.send(patch, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private JsonNode postAs(String service, String path, String body, int expected) throws Exception {
+        HttpRequest r = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("X-Tenant-Id", TENANT).header("Content-Type", "application/json")
+                .header("X-Meridian-Service", service).header("Idempotency-Key", UUID.randomUUID().toString())
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        HttpResponse<String> res = http.send(r, HttpResponse.BodyHandlers.ofString());
+        assertThat(res.statusCode()).as(res.body()).isEqualTo(expected);
+        return json.readTree(res.body());
     }
 
     @Test

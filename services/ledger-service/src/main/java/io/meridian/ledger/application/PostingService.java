@@ -141,6 +141,9 @@ public class PostingService {
         try {
             journalRow = crud.insert("journal_entry", entry);
         } catch (DuplicateKeyException race) {
+            if (p.reversalOfId() != null && String.valueOf(race.getMessage()).contains("reversal_of_id")) {
+                throw ApiException.conflict("already_reversed", "Journal entry " + p.reversalOfId() + " was already reversed");
+            }
             // Another request with the same idempotency key committed first: return its result.
             UUID winner = store.journalEntryByKey(p.ledgerId(), p.idempotencyKey()).orElseThrow(() -> race);
             return new Posted(store.journalEntryJson(winner).orElseThrow(), true);
@@ -173,6 +176,11 @@ public class PostingService {
         JsonNode original = json.readTree(store.journalEntryJson(journalEntryId)
                 .orElseThrow(() -> ApiException.notFound("journal entry", journalEntryId)));
         UUID ledgerId = UUID.fromString(original.get("ledger_id").asString());
+        // SEC-05: serialise reversals of the same entry. The original row is locked (journal_entry is append-only:
+        // the lock blocks no posting, only a concurrent reversal of this entry), so the checks below see a reversal
+        // committed by a racing request: same key = replay, other key = 409. The unique index on reversal_of_id is
+        // the database backstop.
+        store.lockJournalEntry(journalEntryId);
         var replay = store.journalEntryByKey(ledgerId, idempotencyKey);
         if (replay.isPresent()) {
             return new Posted(store.journalEntryJson(replay.get()).orElseThrow(), true);

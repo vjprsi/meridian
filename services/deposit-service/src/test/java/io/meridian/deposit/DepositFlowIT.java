@@ -440,6 +440,9 @@ class DepositFlowIT {
         assertThat(dec(get("/v1/deposit-accounts/" + a), "overdraft_limit")).isEqualByComparingTo("500");
         assertThat(post("/v1/overdraft-facilities/" + id + "/change-limit", "{\"limit_amount\":\"300.00\",\"reason\":\"review\"}",
                 "credit-officer", 200).get("limit_amount").asString()).startsWith("300");
+        // SEC-12: raising an approved limit is not a single-user action
+        assertThat(post("/v1/overdraft-facilities/" + id + "/change-limit", "{\"limit_amount\":\"5000.00\",\"reason\":\"more\"}",
+                "credit-officer", 422).get("code").asString()).isEqualTo("limit_increase_requires_approval");
         assertThat(post("/v1/overdraft-facilities/" + id + "/suspend", "{\"reason\":\"arrears\"}", "ops", 200)
                 .get("status").asString()).isEqualTo("SUSPENDED");
         assertThat(ledger.calls("POST", limitPath).getLast().body().get("limit").asString()).isEqualTo("0");

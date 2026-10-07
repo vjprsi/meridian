@@ -53,6 +53,35 @@ public class ServiceClient {
         }
     }
 
+    private static final ThreadLocal<Boolean> AS_SERVICE = new ThreadLocal<>();
+
+    /**
+     * Runs {@code calls} so that every call made through a ServiceClient on this thread uses this service's own identity
+     * (client-credentials token, {@code X-Meridian-Service: <spring.application.name>}) instead of forwarding the user's
+     * token; {@code X-User} still names the acting user (the maker of an approval request, for example). Receivers see
+     * it as {@link TenantContext#callingService()}. Use it for operations that only the owning service may perform
+     * (opening approval requests for its resources, applying an approved overdraft limit). Static so that a mocked
+     * ServiceClient in tests still sees the inner calls.
+     */
+    public static <T> T asService(java.util.function.Supplier<T> calls) {
+        Boolean previous = AS_SERVICE.get();
+        AS_SERVICE.set(Boolean.TRUE);
+        try {
+            return calls.get();
+        } finally {
+            if (previous == null) {
+                AS_SERVICE.remove();
+            } else {
+                AS_SERVICE.set(previous);
+            }
+        }
+    }
+
+    /** True inside {@link #asService}: calls on this thread use the service identity (fakes in tests can assert it). */
+    public static boolean asServiceActive() {
+        return Boolean.TRUE.equals(AS_SERVICE.get());
+    }
+
     public JsonNode get(String service, String path) {
         return send(service, "GET", path, null, null);
     }
@@ -108,7 +137,19 @@ public class ServiceClient {
         b.header("X-User", TenantContext.principal());
         boolean customer = CustomerContext.current().isPresent();
         String auth = currentAuthorization();
-        if (customer) {
+        if (Boolean.TRUE.equals(AS_SERVICE.get())) {
+            b.header("X-Meridian-Service", application());
+            if (customer) {
+                b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
+            }
+            if (serviceTokens.configured()) {
+                b.header("Authorization", "Bearer " + serviceTokens.token());
+            } else if (auth != null) {
+                // JWT mode without client credentials: the user's token would not prove the service identity
+                throw new ApiException(503, "service_identity_not_configured",
+                        "Calling " + service + " as this service needs meridian.service-auth.* (client credentials)");
+            }
+        } else if (customer) {
             // the customer the service acts for; receivers honour it only with an internal (service) token
             b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
             // A customer's token is never forwarded (it carries no domain scope, and the receiving service must not
@@ -180,6 +221,10 @@ public class ServiceClient {
             throw new IllegalArgumentException("unknown service " + service);
         }
         return "http://localhost:" + port;
+    }
+
+    private String application() {
+        return env.getProperty("spring.application.name", "unknown-service");
     }
 
     private static void forwardInbound(HttpRequest.Builder b, String header) {

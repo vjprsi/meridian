@@ -108,6 +108,11 @@ public class LedgerStore {
                 .optional();
     }
 
+    /** Row lock on a journal entry (reversal serialisation; entries themselves are never updated). */
+    public void lockJournalEntry(UUID journalEntryId) {
+        jdbc.sql("select id from journal_entry where id = ? for update").param(journalEntryId).query(UUID.class).optional();
+    }
+
     public Optional<UUID> reversalOf(UUID journalEntryId) {
         return jdbc.sql("select id from journal_entry where reversal_of_id = ?")
                 .param(journalEntryId).query(UUID.class).optional();

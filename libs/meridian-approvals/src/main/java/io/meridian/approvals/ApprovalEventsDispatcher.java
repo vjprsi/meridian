@@ -27,11 +27,21 @@ public class ApprovalEventsDispatcher {
 
     private final Map<String, ApprovalOutcomeHandler> handlers;
     private final JsonMapper json;
+    private final String application;
 
     public ApprovalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json) {
+        this(handlers, json, null);
+    }
+
+    /**
+     * @param application this service's name: decisions on requests whose {@code owner_service} names another service
+     *                    are ignored (SEC-03), so a request opened by one service can never drive another's handler
+     */
+    public ApprovalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json, String application) {
         this.handlers = handlers.stream()
                 .collect(Collectors.toMap(ApprovalOutcomeHandler::resourceType, Function.identity()));
         this.json = json;
+        this.application = application;
     }
 
     @KafkaListener(topics = "${meridian.approvals.topic:meridian.platform.v1}",
@@ -53,6 +63,12 @@ public class ApprovalEventsDispatcher {
     public boolean dispatch(UUID tenant, JsonNode row, ApprovalDecision.Outcome outcome) throws Exception {
         ApprovalOutcomeHandler handler = handlers.get(row.path("resource_type").asString(""));
         if (handler == null) {
+            return false;
+        }
+        String owner = row.path("owner_service").asString(null);
+        if (application != null && owner != null && !owner.isBlank() && !owner.equals(application)) {
+            log.warn("Approval {} for {} is owned by {}, not {}: ignored", row.path("id").asString(),
+                    row.path("resource_type").asString(), owner, application);
             return false;
         }
         // never fall back to the maker: a missing approver must not look like a self-approval

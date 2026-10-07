@@ -63,6 +63,11 @@ public class FakeLedger {
     public synchronized JsonNode post(String service, String path, Object body, String key) {
         JsonNode b = body == null ? json.createObjectNode() : json.valueToTree(body);
         calls.add(new Call("POST", path, b, key));
+        if (path.endsWith("/overdraft-limit") && !io.meridian.web.client.ServiceClient.asServiceActive()) {
+            // like ledger-service (SEC-12): credit limits only from the owning service's identity, never a user token
+            throw new io.meridian.common.error.ApiException(403, "service_identity_required",
+                    "overdraft limit changes need deposit-service's service identity");
+        }
         if (path.equals("/v1/ledger-accounts")) {
             return createAccount(b, key);
         }

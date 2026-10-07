@@ -15,6 +15,7 @@ public final class TenantContext {
     private static final ThreadLocal<UUID> CURRENT = new ThreadLocal<>();
     private static final ThreadLocal<String> PRINCIPAL = new ThreadLocal<>();
     private static final ThreadLocal<String> VIA = new ThreadLocal<>();
+    private static final ThreadLocal<String> SERVICE = new ThreadLocal<>();
 
     private TenantContext() {}
 
@@ -36,6 +37,24 @@ public final class TenantContext {
     /** The service that relayed the current call on behalf of the principal, if any. */
     public static Optional<String> via() {
         return Optional.ofNullable(VIA.get());
+    }
+
+    /**
+     * The Meridian service that made the current call with its own service identity (internal token plus
+     * {@code X-Meridian-Service}; dev mode: the header alone), e.g. {@code deposit-service}. Empty for calls made with
+     * a user's token, even when a service forwarded it. Use it for "only the owning service may do this" decisions.
+     */
+    public static Optional<String> callingService() {
+        return Optional.ofNullable(SERVICE.get());
+    }
+
+    /** Binds the calling service of the current request (web layer only); blank clears it. */
+    public static void setCallingService(String service) {
+        if (service == null || service.isBlank()) {
+            SERVICE.remove();
+        } else {
+            SERVICE.set(service.trim());
+        }
     }
 
     public static Optional<UUID> current() {
@@ -60,6 +79,7 @@ public final class TenantContext {
         CURRENT.remove();
         PRINCIPAL.remove();
         VIA.remove();
+        SERVICE.remove();
     }
 
     /** Runs {@code body} with the given tenant bound, restoring the previous binding afterwards. */

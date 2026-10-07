@@ -171,7 +171,10 @@ public class LedgerClient implements LedgerPort {
         if (reason != null) {
             body.put("reason", reason.length() > 255 ? reason.substring(0, 255) : reason);
         }
-        client.post(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId + "/overdraft-limit", body, key);
+        // SEC-12: ledger accepts limit changes only from the owning service's identity (never a user token), so the
+        // approved facility is applied as deposit-service; X-User still names the approving user for the audit trail.
+        ServiceClient.asService(() -> client.post(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId + "/overdraft-limit",
+                body, key));
     }
 
     private UUID ledgerId() {

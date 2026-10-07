@@ -31,13 +31,16 @@ public class AccountService {
     private final OutboxWriter outbox;
     private final JdbcClient jdbc;
     private final JsonMapper json;
+    private final org.springframework.core.env.Environment env;
 
-    public AccountService(LedgerStore store, CrudEngine crud, OutboxWriter outbox, JdbcClient jdbc, JsonMapper json) {
+    public AccountService(LedgerStore store, CrudEngine crud, OutboxWriter outbox, JdbcClient jdbc, JsonMapper json,
+                         org.springframework.core.env.Environment env) {
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
         this.jdbc = jdbc;
         this.json = json;
+        this.env = env;
     }
 
     @Transactional
@@ -108,24 +111,28 @@ public class AccountService {
      * balance row is locked like a posting would). Idempotent: the same limit returns the account unchanged.
      */
     @Transactional
-    public String setOverdraftLimit(UUID accountId, BigDecimal limit, String reason) {
+    public String setOverdraftLimit(UUID accountId, BigDecimal limit, Boolean allowNegative, String reason) {
         if (limit == null || limit.signum() < 0) {
             throw ApiException.unprocessable("invalid_overdraft_limit", "limit must be zero or positive");
         }
-        requireAccount(accountId);
+        String owner = requireAccount(accountId);
+        requireOwningService(accountId, owner);
         AccountState a = store.lockAccounts(List.of(accountId)).get(accountId);
         if ("CLOSED".equals(a.status)) {
             throw ApiException.conflict("account_closed", "Account " + accountId + " is closed");
         }
-        if (a.overdraftLimit.compareTo(limit) == 0) {
+        boolean negative = allowNegative == null ? a.allowNegative : allowNegative;
+        if (a.overdraftLimit.compareTo(limit) == 0 && a.allowNegative == negative) {
             return accountJson(accountId);
         }
-        jdbc.sql("update ledger_account set overdraft_limit = ?, updated_by = ? where id = ?")
-                .params(limit, TenantContext.principal(), accountId).update();
+        jdbc.sql("update ledger_account set overdraft_limit = ?, allow_negative = ?, updated_by = ? where id = ?")
+                .params(limit, negative, TenantContext.principal(), accountId).update();
         refreshAvailable(accountId);
         String row = accountJson(accountId);
         ObjectNode payload = (ObjectNode) json.readTree(row);
         payload.put("previous_overdraft_limit", a.overdraftLimit.toPlainString());
+        payload.put("previous_allow_negative", a.allowNegative);
+        TenantContext.callingService().ifPresent(s -> payload.put("changed_by_service", s));
         if (reason != null) {
             payload.put("reason", reason);
         }
@@ -134,29 +141,80 @@ public class AccountService {
     }
 
     /**
-     * PATCH: generic column update; an overdraft_limit change goes through the same rules as the action so the
-     * stored available balance never goes stale.
+     * SEC-12: credit limits are changed only by the service that owns the account (deposit-service once an overdraft
+     * facility is approved through maker-checker), never by a user token. Owner types are mapped to their service by
+     * {@code meridian.ledger.account-owners.<OWNER_TYPE>}; accounts of other owner types (internal / GL accounts)
+     * accept any Meridian service identity.
+     */
+    private void requireOwningService(UUID accountId, String ownerType) {
+        String caller = TenantContext.callingService().orElseThrow(() -> new ApiException(403,
+                "service_identity_required", "The overdraft limit of ledger account " + accountId
+                + " can only be changed by its owning service (approved overdraft facility), not by a user"));
+        String owning = ownerType == null ? null : env.getProperty("meridian.ledger.account-owners." + ownerType);
+        if (owning != null && !owning.equals(caller)) {
+            throw new ApiException(403, "not_account_owner",
+                    "Ledger account " + accountId + " (" + ownerType + ") is owned by " + owning + ", not " + caller);
+        }
+    }
+
+    /** Columns that never change through PATCH (SEC-12): identity of the account and its credit terms. */
+    private static final List<String> NOT_PATCHABLE = List.of("ledger_id", "currency", "account_type", "normal_balance",
+            "owner_type", "owner_id", "overdraft_limit", "allow_negative", "min_balance", "opened_at", "closed_at");
+
+    /**
+     * PATCH: descriptive fields only (name, code, parent, GL mapping, metadata). Currency, ledger, accounting class,
+     * owner and credit terms are immutable here: a value that differs from the stored one is 422
+     * {@code field_not_updatable}; the overdraft limit / allow_negative change only through the owning service's
+     * {@code POST /{id}/overdraft-limit}.
      */
     @Transactional
     public String update(UUID accountId, Integer expectedVersion, Object body) {
         ObjectNode values = crud.toColumns("ledger_account", body);
         values.remove("status");
-        BigDecimal limit = values.hasNonNull("overdraft_limit") ? new BigDecimal(values.get("overdraft_limit").asString()) : null;
-        if (limit != null && limit.signum() < 0) {
-            throw ApiException.unprocessable("invalid_overdraft_limit", "overdraft_limit must be zero or positive");
-        }
         requireAccount(accountId);
-        AccountState before = store.lockAccounts(List.of(accountId)).get(accountId);
-        String row = crud.updateRow("ledger_account", java.util.Map.of("id", accountId), values, expectedVersion)
+        ObjectNode current = (ObjectNode) json.readTree(accountJson(accountId));
+        for (String field : NOT_PATCHABLE) {
+            if (values.has(field)) {
+                if (!sameValue(current.get(field), values.get(field))) {
+                    throw new ApiException(422, "field_not_updatable", field + " cannot be changed on a ledger account"
+                            + (field.equals("overdraft_limit") || field.equals("allow_negative")
+                            ? " by PATCH; it is set by the owning service through POST /v1/ledger-accounts/{id}/overdraft-limit"
+                            : " after creation"));
+                }
+                values.remove(field);
+            }
+        }
+        return crud.updateRow("ledger_account", java.util.Map.of("id", accountId), values, expectedVersion)
                 .orElseThrow(() -> ApiException.conflict("version_conflict",
                         "If-Match " + expectedVersion + " does not match the current version; reload and retry"));
-        if (limit != null && before.overdraftLimit.compareTo(limit) != 0) {
-            refreshAvailable(accountId);
-            ObjectNode payload = (ObjectNode) json.readTree(row);
-            payload.put("previous_overdraft_limit", before.overdraftLimit.toPlainString());
-            outbox.publish("ledger.ledger_account.overdraft_limit_changed", "ledger_account", accountId, payload);
+    }
+
+    private static boolean sameValue(tools.jackson.databind.JsonNode stored, tools.jackson.databind.JsonNode given) {
+        boolean storedNull = stored == null || stored.isNull();
+        boolean givenNull = given == null || given.isNull();
+        if (storedNull || givenNull) {
+            return storedNull == givenNull;
         }
-        return row;
+        if (stored.isNumber() || given.isNumber()) {
+            try {
+                return new BigDecimal(stored.asString()).compareTo(new BigDecimal(given.asString())) == 0;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        if (stored.isBoolean() || given.isBoolean()) {
+            return stored.asString().equalsIgnoreCase(given.asString());
+        }
+        String a = stored.asString().trim();
+        String b = given.asString().trim();
+        if (a.equals(b)) {
+            return true;
+        }
+        try { // timestamps in different offsets / precision
+            return java.time.OffsetDateTime.parse(a).toInstant().equals(java.time.OffsetDateTime.parse(b).toInstant());
+        } catch (java.time.format.DateTimeParseException e) {
+            return false;
+        }
     }
 
     private void refreshAvailable(UUID accountId) {
@@ -166,9 +224,12 @@ public class AccountService {
                 .param(accountId).update();
     }
 
-    private void requireAccount(UUID accountId) {
-        jdbc.sql("select 1 from ledger_account where id = ?").param(accountId).query(Integer.class).optional()
+    /** Returns the account's owner_type (may be null); 404 when the account does not exist. */
+    private String requireAccount(UUID accountId) {
+        String owner = jdbc.sql("select coalesce(owner_type, '') from ledger_account where id = ?").param(accountId)
+                .query(String.class).optional()
                 .orElseThrow(() -> ApiException.notFound("ledger account", accountId));
+        return owner.isEmpty() ? null : owner;
     }
 
     private String accountJson(UUID accountId) {
