@@ -945,7 +945,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        RolesPermissionsRequest: {
+        RolesAddPermissionsRequest: {
             permission_ids: unknown[];
             conditions?: {
                 [key: string]: unknown;
@@ -3668,7 +3668,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RolesPermissionsRequest"];
+                "application/json": components["schemas"]["RolesAddPermissionsRequest"];
             };
         };
         responses: {

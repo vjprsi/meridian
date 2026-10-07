@@ -5,7 +5,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.productcatalog.api.generated.RateIndexesApi;
 import io.meridian.productcatalog.api.generated.model.RateIndexValue;
 import io.meridian.productcatalog.api.generated.model.RateIndexValuePage;
-import io.meridian.productcatalog.api.generated.model.RateIndexesValuesRequest;
+import io.meridian.productcatalog.api.generated.model.RateIndexesAddValuesRequest;
 import io.meridian.productcatalog.application.RateIndexService;
 import io.meridian.productcatalog.infrastructure.CatalogStore;
 import io.meridian.web.crud.CrudEngine;
@@ -37,7 +37,7 @@ public class RateIndexesController implements RateIndexesApi {
     }
 
     @Override
-    public ResponseEntity<RateIndexValue> rateIndexesAddValues(UUID id, String idempotencyKey, RateIndexesValuesRequest body) {
+    public ResponseEntity<RateIndexValue> rateIndexesAddValues(UUID id, String idempotencyKey, RateIndexesAddValuesRequest body) {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
         LocalDate date = LocalDate.parse(req.get("value_date").asString());

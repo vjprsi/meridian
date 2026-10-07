@@ -2265,7 +2265,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerGroupsMembersRequest'
+              $ref: '#/components/schemas/CustomerGroupsAddMembersRequest'
       x-requirements:
       - CIF-05
       x-service: customer-service
@@ -4358,7 +4358,7 @@ components:
       required:
       - data
       - has_more
-    CustomerGroupsMembersRequest:
+    CustomerGroupsAddMembersRequest:
       type: object
       properties:
         customer_id:
@@ -6412,6 +6412,21 @@ components:
           format: email
           maxLength: 320
           description: Email address for email-type contacts
+        masked_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search
+          readOnly: true
+        lookup_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match
+            search; key shared with search-service, never reversible
+          readOnly: true
         label:
           type:
           - string

@@ -12,7 +12,7 @@ import io.meridian.crm.api.generated.model.ServiceCaseUpdate;
 import io.meridian.crm.api.generated.model.ServiceCasesAssignRequest;
 import io.meridian.crm.api.generated.model.ServiceCasesCancelRequest;
 import io.meridian.crm.api.generated.model.ServiceCasesCloseRequest;
-import io.meridian.crm.api.generated.model.ServiceCasesCommentsRequest;
+import io.meridian.crm.api.generated.model.ServiceCasesAddCommentsRequest;
 import io.meridian.crm.api.generated.model.ServiceCasesConvertToComplaintRequest;
 import io.meridian.crm.api.generated.model.ServiceCasesCustomerRespondedRequest;
 import io.meridian.crm.api.generated.model.ServiceCasesEscalateRequest;
@@ -130,7 +130,7 @@ public class ServiceCasesController implements ServiceCasesApi {
     }
 
     @Override
-    public ResponseEntity<CaseComment> serviceCasesAddComments(UUID id, String idempotencyKey, ServiceCasesCommentsRequest body) {
+    public ResponseEntity<CaseComment> serviceCasesAddComments(UUID id, String idempotencyKey, ServiceCasesAddCommentsRequest body) {
         JsonNode req = http.tree(body);
         return http.ok(idempotencyKey, "cases.comment", id, body, CaseComment.class, () -> cases.addComment(id, req));
     }

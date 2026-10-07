@@ -8,7 +8,7 @@ import io.meridian.transactionmonitoring.api.generated.model.TmScenarioVersionPa
 import io.meridian.transactionmonitoring.api.generated.model.TmScenariosActivateRequest;
 import io.meridian.transactionmonitoring.api.generated.model.TmScenariosBacktestRequest;
 import io.meridian.transactionmonitoring.api.generated.model.TmScenariosRetireRequest;
-import io.meridian.transactionmonitoring.api.generated.model.TmScenariosVersionsRequest;
+import io.meridian.transactionmonitoring.api.generated.model.TmScenariosAddVersionsRequest;
 import io.meridian.transactionmonitoring.application.RunService;
 import io.meridian.transactionmonitoring.application.ScenarioService;
 import io.meridian.web.crud.Crud;
@@ -41,7 +41,7 @@ public class TmScenariosController implements TmScenariosApi {
     }
 
     @Override
-    public ResponseEntity<TmScenarioVersion> tmScenariosAddVersions(UUID id, String idempotencyKey, TmScenariosVersionsRequest body) {
+    public ResponseEntity<TmScenarioVersion> tmScenariosAddVersions(UUID id, String idempotencyKey, TmScenariosAddVersionsRequest body) {
         return http.once(idempotencyKey, body, TmScenarioVersion.class,
                 () -> http.ok(scenarios.addVersion(id, http.tree(body)), TmScenarioVersion.class));
     }

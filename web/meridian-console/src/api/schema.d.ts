@@ -46164,7 +46164,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        SecureMessageThreadsMessagesRequest: {
+        SecureMessageThreadsAddMessagesRequest: {
             body: string;
             /** @enum {string} */
             sender_type: "CUSTOMER" | "STAFF" | "SYSTEM" | "BOT";
@@ -67324,7 +67324,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        CustomerGroupsMembersRequest: {
+        CustomerGroupsAddMembersRequest: {
             /** Format: uuid */
             customer_id: string;
             member_role?: string;
@@ -77163,7 +77163,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        RolesPermissionsRequest: {
+        RolesAddPermissionsRequest: {
             permission_ids: unknown[];
             conditions?: {
                 [key: string]: unknown;
@@ -86602,7 +86602,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        RateIndexesValuesRequest: {
+        RateIndexesAddValuesRequest: {
             /** Format: date */
             value_date: string;
             /**
@@ -91327,7 +91327,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        ReportDefinitionsVersionsRequest: {
+        ReportDefinitionsAddVersionsRequest: {
             /** Format: uuid */
             template_document_id?: string;
             data_sources: unknown[];
@@ -91390,7 +91390,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        ReportRunsAdjustmentsRequest: {
+        ReportRunsAddAdjustmentsRequest: {
             cell_ref: string;
             adjusted_value: string;
             reason: string;
@@ -95202,7 +95202,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        FraudListsEntriesRequest: {
+        FraudListsAddEntriesRequest: {
             value: string;
             reason?: string;
             source?: string;
@@ -95233,7 +95233,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        TmScenariosVersionsRequest: {
+        TmScenariosAddVersionsRequest: {
             parameters: {
                 [key: string]: unknown;
             };
@@ -95488,7 +95488,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        AmlCasesAlertsRequest: {
+        AmlCasesAddAlertsRequest: {
             /** @enum {string} */
             source: "FRAUD_ALERT" | "TM_ALERT" | "SCREENING_RESULT" | "MANUAL_REFERRAL" | "LAW_ENFORCEMENT_REQUEST" | "WHISTLEBLOWER";
             /** Format: uuid */
@@ -95503,7 +95503,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        AmlCasesNotesRequest: {
+        AmlCasesAddNotesRequest: {
             body: string;
             visibility?: string;
             attachments?: unknown[];
@@ -100666,7 +100666,7 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        ServiceCasesCommentsRequest: {
+        ServiceCasesAddCommentsRequest: {
             body: string;
             /** @enum {string} */
             visibility: "INTERNAL" | "CUSTOMER";
@@ -134612,7 +134612,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SecureMessageThreadsMessagesRequest"];
+                "application/json": components["schemas"]["SecureMessageThreadsAddMessagesRequest"];
             };
         };
         responses: {
@@ -153899,7 +153899,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomerGroupsMembersRequest"];
+                "application/json": components["schemas"]["CustomerGroupsAddMembersRequest"];
             };
         };
         responses: {
@@ -165584,7 +165584,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RolesPermissionsRequest"];
+                "application/json": components["schemas"]["RolesAddPermissionsRequest"];
             };
         };
         responses: {
@@ -176372,7 +176372,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RateIndexesValuesRequest"];
+                "application/json": components["schemas"]["RateIndexesAddValuesRequest"];
             };
         };
         responses: {
@@ -179766,7 +179766,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReportDefinitionsVersionsRequest"];
+                "application/json": components["schemas"]["ReportDefinitionsAddVersionsRequest"];
             };
         };
         responses: {
@@ -180382,7 +180382,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReportRunsAdjustmentsRequest"];
+                "application/json": components["schemas"]["ReportRunsAddAdjustmentsRequest"];
             };
         };
         responses: {
@@ -186139,7 +186139,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FraudListsEntriesRequest"];
+                "application/json": components["schemas"]["FraudListsAddEntriesRequest"];
             };
         };
         responses: {
@@ -186563,7 +186563,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TmScenariosVersionsRequest"];
+                "application/json": components["schemas"]["TmScenariosAddVersionsRequest"];
             };
         };
         responses: {
@@ -189074,7 +189074,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AmlCasesAlertsRequest"];
+                "application/json": components["schemas"]["AmlCasesAddAlertsRequest"];
             };
         };
         responses: {
@@ -189140,7 +189140,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AmlCasesNotesRequest"];
+                "application/json": components["schemas"]["AmlCasesAddNotesRequest"];
             };
         };
         responses: {
@@ -192232,7 +192232,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ServiceCasesCommentsRequest"];
+                "application/json": components["schemas"]["ServiceCasesAddCommentsRequest"];
             };
         };
         responses: {

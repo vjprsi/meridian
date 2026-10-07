@@ -7,7 +7,7 @@ import io.meridian.identity.api.generated.model.RoleCreate;
 import io.meridian.identity.api.generated.model.RolePermissionPage;
 import io.meridian.identity.api.generated.model.RoleUpdate;
 import io.meridian.identity.api.generated.model.RolesCloneRequest;
-import io.meridian.identity.api.generated.model.RolesPermissionsRequest;
+import io.meridian.identity.api.generated.model.RolesAddPermissionsRequest;
 import io.meridian.identity.application.RoleService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
@@ -69,7 +69,7 @@ public class RolesController implements RolesApi {
 
     @Override
     public ResponseEntity<ApprovalRequest> rolesAddPermissions(UUID id, String idempotencyKey,
-                                                               RolesPermissionsRequest body) {
+                                                               RolesAddPermissionsRequest body) {
         JsonNode req = json.valueToTree(body);
         return idempotency.execute(idempotencyKey, Map.of("op", "add-permissions", "id", id, "body", req),
                 ApprovalRequest.class,

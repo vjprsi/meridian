@@ -4,7 +4,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.customer.api.generated.CustomerGroupsApi;
 import io.meridian.customer.api.generated.model.CustomerGroupMember;
 import io.meridian.customer.api.generated.model.CustomerGroupMemberPage;
-import io.meridian.customer.api.generated.model.CustomerGroupsMembersRequest;
+import io.meridian.customer.api.generated.model.CustomerGroupsAddMembersRequest;
 import io.meridian.customer.application.GroupService;
 import java.util.Map;
 import java.util.UUID;
@@ -38,7 +38,7 @@ public class CustomerGroupsController implements CustomerGroupsApi {
 
     @Override
     public ResponseEntity<CustomerGroupMember> customerGroupsAddMembers(UUID id, String idempotencyKey,
-                                                                       CustomerGroupsMembersRequest body) {
+                                                                       CustomerGroupsAddMembersRequest body) {
         return http.created(idempotencyKey, "groups.add-member", id, body, CustomerGroupMember.class,
                 () -> groups.addMember(id, http.tree(body)));
     }

@@ -7,7 +7,7 @@ import io.meridian.fraud.api.generated.model.FraudListCreate;
 import io.meridian.fraud.api.generated.model.FraudListEntry;
 import io.meridian.fraud.api.generated.model.FraudListEntryPage;
 import io.meridian.fraud.api.generated.model.FraudListUpdate;
-import io.meridian.fraud.api.generated.model.FraudListsEntriesRequest;
+import io.meridian.fraud.api.generated.model.FraudListsAddEntriesRequest;
 import io.meridian.fraud.api.generated.model.FraudListsLookupRequest;
 import io.meridian.fraud.application.FraudListService;
 import io.meridian.web.crud.Crud;
@@ -60,7 +60,7 @@ public class FraudListsController implements FraudListsApi {
     }
 
     @Override
-    public ResponseEntity<FraudListEntry> fraudListsAddEntries(UUID id, String idempotencyKey, FraudListsEntriesRequest body) {
+    public ResponseEntity<FraudListEntry> fraudListsAddEntries(UUID id, String idempotencyKey, FraudListsAddEntriesRequest body) {
         JsonNode req = http.tree(body);
         return http.once(idempotencyKey, body, FraudListEntry.class, () -> http.ok(lists.addEntry(id,
                 Http.text(req, "value"), Http.text(req, "reason"), Http.text(req, "source"), Http.text(req, "expires_at")),

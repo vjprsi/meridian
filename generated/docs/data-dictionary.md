@@ -7318,6 +7318,8 @@ API: /v1/customers/{customer_id}/contacts · Requirements: CIF-01, NOT-02
 | contact_type | varchar(40) (CustomerContactType) | no |  | contact_type | Contact type |
 | phone | varchar(20) | yes |  | phone | Phone number (E.164) for phone-type contacts PII |
 | email | varchar(320) | yes |  | email | Email address for email-type contacts PII |
+| masked_value | varchar(80) | yes |  | masked_value (read-only) | Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search |
+| lookup_hash | varchar(64) | yes |  | lookup_hash (read-only) | Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match search; key shared with search-service, never reversible |
 | label | varchar(40) | yes |  | label | Free label, e.g. Work |
 | is_primary | boolean | no |  | is_primary | Primary contact of this type |
 | is_verified | boolean | no |  | is_verified (read-only) | Verified by OTP or link |

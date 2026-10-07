@@ -403,6 +403,50 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-required-scope: ledger:write
       x-table: ledger
+  /v1/ledgers/end-of-day:
+    post:
+      operationId: ledgersEndOfDay
+      summary: Run end-of-day for every ledger of the tenant (or of one legal entity, or one ledger) for a business date;
+        ledgers already closed for the date are skipped, failures are listed
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgersEndOfDayRequest'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: ledger
   /v1/ledger-accounts:
     get:
       operationId: ledgerAccountsList
@@ -5261,6 +5305,20 @@ components:
         business_date:
           type: string
           format: date
+      required:
+      - business_date
+    LedgersEndOfDayRequest:
+      type: object
+      properties:
+        business_date:
+          type: string
+          format: date
+        legal_entity_id:
+          type: string
+          format: uuid
+        ledger_id:
+          type: string
+          format: uuid
       required:
       - business_date
     LedgerAccountPage:

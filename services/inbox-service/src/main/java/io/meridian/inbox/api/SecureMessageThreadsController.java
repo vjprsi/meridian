@@ -9,7 +9,7 @@ import io.meridian.inbox.api.generated.model.SecureMessageThreadCreate;
 import io.meridian.inbox.api.generated.model.SecureMessageThreadUpdate;
 import io.meridian.inbox.api.generated.model.SecureMessageThreadsAssignRequest;
 import io.meridian.inbox.api.generated.model.SecureMessageThreadsCloseRequest;
-import io.meridian.inbox.api.generated.model.SecureMessageThreadsMessagesRequest;
+import io.meridian.inbox.api.generated.model.SecureMessageThreadsAddMessagesRequest;
 import io.meridian.inbox.api.generated.model.SecureMessageThreadsReadRequest;
 import io.meridian.inbox.api.generated.model.SecureMessageThreadsReopenRequest;
 import io.meridian.inbox.application.Json;
@@ -53,7 +53,7 @@ public class SecureMessageThreadsController implements SecureMessageThreadsApi {
 
     @Override
     public ResponseEntity<SecureMessage> secureMessageThreadsAddMessages(UUID id, String idempotencyKey,
-                                                                        SecureMessageThreadsMessagesRequest body) {
+                                                                        SecureMessageThreadsAddMessagesRequest body) {
         JsonNode req = http.tree(body);
         return http.created(idempotencyKey, "threads.message:" + id, body, SecureMessage.class,
                 () -> threads.send(id, req, idempotencyKey));

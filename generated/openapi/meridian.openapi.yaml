@@ -26281,7 +26281,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SecureMessageThreadsMessagesRequest'
+              $ref: '#/components/schemas/SecureMessageThreadsAddMessagesRequest'
       x-requirements:
       - ENG-05
       x-service: inbox-service
@@ -27408,6 +27408,50 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LedgersEodRequest'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: ledger
+  /v1/ledgers/end-of-day:
+    post:
+      operationId: ledgersEndOfDay
+      summary: Run end-of-day for every ledger of the tenant (or of one legal entity, or one ledger) for a business date;
+        ledgers already closed for the date are skipped, failures are listed
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgersEndOfDayRequest'
       x-requirements:
       - GL-05
       - LED-01
@@ -50468,6 +50512,7 @@ paths:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
       - name: limit
         in: query
         required: false
@@ -50620,6 +50665,7 @@ paths:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
       - name: status
         in: query
         schema:
@@ -55411,7 +55457,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerGroupsMembersRequest'
+              $ref: '#/components/schemas/CustomerGroupsAddMembersRequest'
       x-requirements:
       - CIF-05
       x-service: customer-service
@@ -72948,7 +72994,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RolesPermissionsRequest'
+              $ref: '#/components/schemas/RolesAddPermissionsRequest'
       x-requirements:
       - ADM-02
       x-service: identity-service
@@ -88759,7 +88805,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RateIndexesValuesRequest'
+              $ref: '#/components/schemas/RateIndexesAddValuesRequest'
       x-requirements:
       - PRC-01
       x-service: product-catalog-service
@@ -93670,7 +93716,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReportDefinitionsVersionsRequest'
+              $ref: '#/components/schemas/ReportDefinitionsAddVersionsRequest'
       x-requirements:
       - REG-01
       x-service: regulatory-reporting-service
@@ -94565,7 +94611,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReportRunsAdjustmentsRequest'
+              $ref: '#/components/schemas/ReportRunsAddAdjustmentsRequest'
       x-requirements:
       - REG-01
       - REG-02
@@ -102829,7 +102875,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FraudListsEntriesRequest'
+              $ref: '#/components/schemas/FraudListsAddEntriesRequest'
       x-requirements:
       - FRM-01
       - FRM-05
@@ -103476,7 +103522,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TmScenariosVersionsRequest'
+              $ref: '#/components/schemas/TmScenariosAddVersionsRequest'
       x-requirements:
       - FRM-02
       x-service: transaction-monitoring-service
@@ -107248,7 +107294,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AmlCasesAlertsRequest'
+              $ref: '#/components/schemas/AmlCasesAddAlertsRequest'
       x-requirements:
       - FRM-02
       - FRM-04
@@ -107332,7 +107378,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AmlCasesNotesRequest'
+              $ref: '#/components/schemas/AmlCasesAddNotesRequest'
       x-requirements:
       - FRM-02
       - FRM-04
@@ -111825,7 +111871,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ServiceCasesCommentsRequest'
+              $ref: '#/components/schemas/ServiceCasesAddCommentsRequest'
       x-requirements:
       - CIF-02
       - SRV-01
@@ -154368,7 +154414,7 @@ components:
       required:
       - data
       - has_more
-    SecureMessageThreadsMessagesRequest:
+    SecureMessageThreadsAddMessagesRequest:
       type: object
       properties:
         body:
@@ -163178,6 +163224,20 @@ components:
         business_date:
           type: string
           format: date
+      required:
+      - business_date
+    LedgersEndOfDayRequest:
+      type: object
+      properties:
+        business_date:
+          type: string
+          format: date
+        legal_entity_id:
+          type: string
+          format: uuid
+        ledger_id:
+          type: string
+          format: uuid
       required:
       - business_date
     LedgerAccountPage:
@@ -190386,6 +190446,7 @@ components:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
           description: Entity indexed
         alias_name:
           type: string
@@ -190515,6 +190576,7 @@ components:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
           description: Entity indexed
         alias_name:
           type: string
@@ -190589,6 +190651,7 @@ components:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
           description: Entity indexed
         alias_name:
           type: string
@@ -191212,7 +191275,7 @@ components:
       required:
       - data
       - has_more
-    CustomerGroupsMembersRequest:
+    CustomerGroupsAddMembersRequest:
       type: object
       properties:
         customer_id:
@@ -193593,6 +193656,21 @@ components:
           format: email
           maxLength: 320
           description: Email address for email-type contacts
+        masked_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search
+          readOnly: true
+        lookup_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match
+            search; key shared with search-service, never reversible
+          readOnly: true
         label:
           type:
           - string
@@ -208766,7 +208844,7 @@ components:
       required:
       - data
       - has_more
-    RolesPermissionsRequest:
+    RolesAddPermissionsRequest:
       type: object
       properties:
         permission_ids:
@@ -226509,7 +226587,7 @@ components:
       required:
       - data
       - has_more
-    RateIndexesValuesRequest:
+    RateIndexesAddValuesRequest:
       type: object
       properties:
         value_date:
@@ -234568,7 +234646,7 @@ components:
       required:
       - data
       - has_more
-    ReportDefinitionsVersionsRequest:
+    ReportDefinitionsAddVersionsRequest:
       type: object
       properties:
         template_document_id:
@@ -234723,7 +234801,7 @@ components:
       required:
       - data
       - has_more
-    ReportRunsAdjustmentsRequest:
+    ReportRunsAddAdjustmentsRequest:
       type: object
       properties:
         cell_ref:
@@ -241848,7 +241926,7 @@ components:
       required:
       - data
       - has_more
-    FraudListsEntriesRequest:
+    FraudListsAddEntriesRequest:
       type: object
       properties:
         value:
@@ -241927,7 +242005,7 @@ components:
       required:
       - data
       - has_more
-    TmScenariosVersionsRequest:
+    TmScenariosAddVersionsRequest:
       type: object
       properties:
         parameters:
@@ -242545,7 +242623,7 @@ components:
       required:
       - data
       - has_more
-    AmlCasesAlertsRequest:
+    AmlCasesAddAlertsRequest:
       type: object
       properties:
         source:
@@ -242586,7 +242664,7 @@ components:
       required:
       - data
       - has_more
-    AmlCasesNotesRequest:
+    AmlCasesAddNotesRequest:
       type: object
       properties:
         body:
@@ -251809,7 +251887,7 @@ components:
       required:
       - data
       - has_more
-    ServiceCasesCommentsRequest:
+    ServiceCasesAddCommentsRequest:
       type: object
       properties:
         body:

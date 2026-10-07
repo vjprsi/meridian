@@ -10,7 +10,7 @@ import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionVersi
 import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionVersionPage;
 import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionsDeprecateRequest;
 import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionsPublishRequest;
-import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionsVersionsRequest;
+import io.meridian.regulatoryreporting.api.generated.model.ReportDefinitionsAddVersionsRequest;
 import io.meridian.regulatoryreporting.application.DefinitionService;
 import io.meridian.regulatoryreporting.application.Fields;
 import io.meridian.regulatoryreporting.infrastructure.Store;
@@ -70,7 +70,7 @@ public class ReportDefinitionsController implements ReportDefinitionsApi {
 
     @Override
     public ResponseEntity<ReportDefinitionVersion> reportDefinitionsAddVersions(UUID id, String idempotencyKey,
-                                                                               ReportDefinitionsVersionsRequest body) {
+                                                                               ReportDefinitionsAddVersionsRequest body) {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
         return idempotency.execute(idempotencyKey, responses.action("add-version", id, req), ReportDefinitionVersion.class,
