@@ -725,6 +725,93 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
       x-table: ml_model_version
+  /v1/ai/model-versions/{id}/artifact:
+    post:
+      operationId: mlModelVersionsArtifact
+      summary: Upload the inline scoring artefact (max 2 MB) while the version is editable; its SHA-256 must equal artifact_sha256;
+        write-once
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionsArtifactRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: ml_model_version
+    get:
+      operationId: mlModelVersionsGetArtifact
+      summary: Inline scoring artefact of the version with its checksum
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: ml_model_version
   /v1/ai/deployments:
     get:
       operationId: modelDeploymentsList
@@ -1344,6 +1431,16 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: name
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: feature_set
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -2770,6 +2867,17 @@ components:
       required:
       - environment
       - mode
+    MlModelVersionsArtifactRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          maxLength: 64
+        content:
+          type: string
+      required:
+      - format
+      - content
     ModelDeploymentsPromoteRequest:
       type: object
       properties:
@@ -4111,6 +4219,18 @@ components:
         contains_pii:
           type: boolean
           description: Derived from personal data
+        feature_set:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Group of features computed together, e.g. fraud-realtime-v1
+        definition:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value
         custom_field_1:
           type:
           - string
@@ -4188,6 +4308,14 @@ components:
         contains_pii:
           type: boolean
           description: Derived from personal data
+        feature_set:
+          type: string
+          maxLength: 64
+          description: Group of features computed together, e.g. fraud-realtime-v1
+        definition:
+          type: object
+          additionalProperties: true
+          description: Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value
         custom_field_1:
           type: string
           maxLength: 500
@@ -4249,6 +4377,14 @@ components:
         contains_pii:
           type: boolean
           description: Derived from personal data
+        feature_set:
+          type: string
+          maxLength: 64
+          description: Group of features computed together, e.g. fraud-realtime-v1
+        definition:
+          type: object
+          additionalProperties: true
+          description: Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value
         custom_field_1:
           type: string
           maxLength: 500

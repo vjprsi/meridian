@@ -113,6 +113,12 @@ CREATE TABLE fraud_decision_policy (
   timeout_ms                   integer NOT NULL DEFAULT 50,
   fallback_decision            varchar(40) NOT NULL DEFAULT 'ALLOW' CHECK (fallback_decision IN ('ALLOW', 'REVIEW', 'BLOCK', 'STEP_UP')),
   is_active                    boolean NOT NULL DEFAULT true,
+  combination                  varchar(40) NOT NULL DEFAULT 'ADDITIVE' CHECK (combination IN ('ADDITIVE', 'MAX', 'WEIGHTED', 'MODEL_ONLY_ABOVE_CONFIDENCE', 'RULES_ONLY')),
+  model_weight                 numeric(18,10) NOT NULL DEFAULT 0.5,
+  model_confidence             numeric(18,10) NOT NULL DEFAULT 0.8,
+  model_timeout_ms             integer NOT NULL DEFAULT 10,
+  channel_thresholds           jsonb,
+  use_model_thresholds         boolean NOT NULL DEFAULT false,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -137,6 +143,12 @@ COMMENT ON COLUMN fraud_decision_policy.shadow_model_id IS 'Challenger model eva
 COMMENT ON COLUMN fraud_decision_policy.timeout_ms IS 'Time budget; on timeout the fallback decision applies';
 COMMENT ON COLUMN fraud_decision_policy.fallback_decision IS 'Decision when scoring times out';
 COMMENT ON COLUMN fraud_decision_policy.is_active IS 'Active';
+COMMENT ON COLUMN fraud_decision_policy.combination IS 'How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged)';
+COMMENT ON COLUMN fraud_decision_policy.model_weight IS 'WEIGHTED - share of the ML score (0..1)';
+COMMENT ON COLUMN fraud_decision_policy.model_confidence IS 'MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides';
+COMMENT ON COLUMN fraud_decision_policy.model_timeout_ms IS 'In-process inference budget; a slower or failing model falls back to rules (degraded)';
+COMMENT ON COLUMN fraud_decision_policy.channel_thresholds IS 'Threshold overrides per channel {CHANNEL: {step_up, review, block}}';
+COMMENT ON COLUMN fraud_decision_policy.use_model_thresholds IS 'Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win)';
 COMMENT ON COLUMN fraud_decision_policy.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_decision_policy.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_decision_policy.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -365,6 +377,204 @@ ALTER TABLE fraud_list_entry ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON fraud_list_entry USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_fraud_list_entry_touch BEFORE UPDATE ON fraud_list_entry FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- fraud_feature_event: Domain event consumed by the real-time feature store (de-duplication by CloudEvent id); pruned after the retention
+CREATE TABLE fraud_feature_event (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  event_id                     varchar(128) NOT NULL,
+  event_type                   varchar(96) NOT NULL,
+  occurred_at                  timestamptz NOT NULL,
+  applied                      boolean NOT NULL DEFAULT false,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_fraud_feature_event_1 UNIQUE (tenant_id, event_id)
+);
+COMMENT ON TABLE fraud_feature_event IS 'Domain event consumed by the real-time feature store (de-duplication by CloudEvent id); pruned after the retention';
+COMMENT ON COLUMN fraud_feature_event.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN fraud_feature_event.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN fraud_feature_event.created_at IS 'Creation time';
+COMMENT ON COLUMN fraud_feature_event.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN fraud_feature_event.updated_at IS 'Last update time';
+COMMENT ON COLUMN fraud_feature_event.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN fraud_feature_event.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN fraud_feature_event.event_id IS 'CloudEvent id';
+COMMENT ON COLUMN fraud_feature_event.event_type IS 'CloudEvent type';
+COMMENT ON COLUMN fraud_feature_event.occurred_at IS 'Event time';
+COMMENT ON COLUMN fraud_feature_event.applied IS 'Counters were updated (false = ignored, e.g. inbound or late)';
+COMMENT ON COLUMN fraud_feature_event.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_event.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_event.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_event.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_event.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_fraud_feature_event_tenant ON fraud_feature_event (tenant_id, created_at);
+CREATE INDEX ix_fraud_feature_event_c1 ON fraud_feature_event (created_at);
+ALTER TABLE fraud_feature_event ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON fraud_feature_event USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_fraud_feature_event_touch BEFORE UPDATE ON fraud_feature_event FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- fraud_feature_counter: Time-bucketed event count and amount per entity (5-minute buckets for the 1 h window, hourly for 24 h / 7 d)
+CREATE TABLE fraud_feature_counter (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  entity_type                  varchar(24) NOT NULL,
+  entity_key                   varchar(128) NOT NULL,
+  granularity                  varchar(4) NOT NULL,
+  bucket_start                 timestamptz NOT NULL,
+  currency                     char(3) NOT NULL,
+  event_count                  integer NOT NULL DEFAULT 0,
+  amount_sum                   numeric(28,8) NOT NULL DEFAULT 0,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_fraud_feature_counter_1 UNIQUE (tenant_id, entity_type, entity_key, granularity, bucket_start, currency)
+);
+COMMENT ON TABLE fraud_feature_counter IS 'Time-bucketed event count and amount per entity (5-minute buckets for the 1 h window, hourly for 24 h / 7 d)';
+COMMENT ON COLUMN fraud_feature_counter.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN fraud_feature_counter.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN fraud_feature_counter.created_at IS 'Creation time';
+COMMENT ON COLUMN fraud_feature_counter.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN fraud_feature_counter.updated_at IS 'Last update time';
+COMMENT ON COLUMN fraud_feature_counter.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN fraud_feature_counter.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN fraud_feature_counter.entity_type IS 'CUSTOMER, CARD, ACCOUNT, DEVICE, MERCHANT, BENEFICIARY, CUSTOMER_LOGIN';
+COMMENT ON COLUMN fraud_feature_counter.entity_key IS 'Entity id or hash';
+COMMENT ON COLUMN fraud_feature_counter.granularity IS 'M5 or H1';
+COMMENT ON COLUMN fraud_feature_counter.bucket_start IS 'Bucket start (UTC)';
+COMMENT ON COLUMN fraud_feature_counter.currency IS 'Amount currency (XXX = no amount)';
+COMMENT ON COLUMN fraud_feature_counter.event_count IS 'Events in the bucket';
+COMMENT ON COLUMN fraud_feature_counter.amount_sum IS 'Sum of amounts in the bucket';
+COMMENT ON COLUMN fraud_feature_counter.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_counter.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_counter.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_counter.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_counter.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_fraud_feature_counter_tenant ON fraud_feature_counter (tenant_id, created_at);
+CREATE INDEX ix_fraud_feature_counter_c1 ON fraud_feature_counter (bucket_start);
+ALTER TABLE fraud_feature_counter ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON fraud_feature_counter USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_fraud_feature_counter_touch BEFORE UPDATE ON fraud_feature_counter FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- fraud_feature_profile: Long-run behaviour profile per entity and currency (exponentially weighted amount mean and variance, hour of day, labels)
+CREATE TABLE fraud_feature_profile (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  entity_type                  varchar(24) NOT NULL,
+  entity_key                   varchar(128) NOT NULL,
+  currency                     char(3) NOT NULL,
+  first_seen_at                timestamptz NOT NULL,
+  last_seen_at                 timestamptz NOT NULL,
+  event_count                  bigint NOT NULL DEFAULT 0,
+  amount_mean                  numeric(28,8) NOT NULL DEFAULT 0,
+  amount_var                   numeric(28,8) NOT NULL DEFAULT 0,
+  hour_sin                     numeric(18,10) NOT NULL DEFAULT 0,
+  hour_cos                     numeric(18,10) NOT NULL DEFAULT 0,
+  fraud_count                  integer NOT NULL DEFAULT 0,
+  label_count                  integer NOT NULL DEFAULT 0,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_fraud_feature_profile_1 UNIQUE (tenant_id, entity_type, entity_key, currency)
+);
+COMMENT ON TABLE fraud_feature_profile IS 'Long-run behaviour profile per entity and currency (exponentially weighted amount mean and variance, hour of day, labels)';
+COMMENT ON COLUMN fraud_feature_profile.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN fraud_feature_profile.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN fraud_feature_profile.created_at IS 'Creation time';
+COMMENT ON COLUMN fraud_feature_profile.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN fraud_feature_profile.updated_at IS 'Last update time';
+COMMENT ON COLUMN fraud_feature_profile.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN fraud_feature_profile.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN fraud_feature_profile.entity_type IS 'CUSTOMER, CARD, ACCOUNT, MERCHANT, BENEFICIARY, DEVICE';
+COMMENT ON COLUMN fraud_feature_profile.entity_key IS 'Entity id or hash';
+COMMENT ON COLUMN fraud_feature_profile.currency IS 'Currency of the amount statistics (XXX = none)';
+COMMENT ON COLUMN fraud_feature_profile.first_seen_at IS 'First event';
+COMMENT ON COLUMN fraud_feature_profile.last_seen_at IS 'Last event';
+COMMENT ON COLUMN fraud_feature_profile.event_count IS 'Events seen';
+COMMENT ON COLUMN fraud_feature_profile.amount_mean IS 'Exponentially weighted mean amount';
+COMMENT ON COLUMN fraud_feature_profile.amount_var IS 'Exponentially weighted amount variance';
+COMMENT ON COLUMN fraud_feature_profile.hour_sin IS 'Weighted mean of sin(hour of day)';
+COMMENT ON COLUMN fraud_feature_profile.hour_cos IS 'Weighted mean of cos(hour of day)';
+COMMENT ON COLUMN fraud_feature_profile.fraud_count IS 'Confirmed fraud labels';
+COMMENT ON COLUMN fraud_feature_profile.label_count IS 'Outcome labels';
+COMMENT ON COLUMN fraud_feature_profile.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_profile.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_profile.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_profile.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_profile.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_fraud_feature_profile_tenant ON fraud_feature_profile (tenant_id, created_at);
+CREATE INDEX ix_fraud_feature_profile_c1 ON fraud_feature_profile (last_seen_at);
+ALTER TABLE fraud_feature_profile ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON fraud_feature_profile USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_fraud_feature_profile_touch BEFORE UPDATE ON fraud_feature_profile FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- fraud_feature_link: First and last time two entities were seen together (customer-beneficiary, customer-device, customer-country, card-merchant)
+CREATE TABLE fraud_feature_link (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  link_type                    varchar(32) NOT NULL,
+  from_key                     varchar(128) NOT NULL,
+  to_key                       varchar(128) NOT NULL,
+  first_seen_at                timestamptz NOT NULL,
+  last_seen_at                 timestamptz NOT NULL,
+  event_count                  integer NOT NULL DEFAULT 0,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_fraud_feature_link_1 UNIQUE (tenant_id, link_type, from_key, to_key)
+);
+COMMENT ON TABLE fraud_feature_link IS 'First and last time two entities were seen together (customer-beneficiary, customer-device, customer-country, card-merchant)';
+COMMENT ON COLUMN fraud_feature_link.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN fraud_feature_link.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN fraud_feature_link.created_at IS 'Creation time';
+COMMENT ON COLUMN fraud_feature_link.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN fraud_feature_link.updated_at IS 'Last update time';
+COMMENT ON COLUMN fraud_feature_link.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN fraud_feature_link.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN fraud_feature_link.link_type IS 'CUSTOMER_BENEFICIARY, CUSTOMER_DEVICE, CUSTOMER_COUNTRY, CUSTOMER_MERCHANT, CARD_MERCHANT, CARD_COUNTRY';
+COMMENT ON COLUMN fraud_feature_link.from_key IS 'First entity';
+COMMENT ON COLUMN fraud_feature_link.to_key IS 'Second entity';
+COMMENT ON COLUMN fraud_feature_link.first_seen_at IS 'First seen together';
+COMMENT ON COLUMN fraud_feature_link.last_seen_at IS 'Last seen together';
+COMMENT ON COLUMN fraud_feature_link.event_count IS 'Events';
+COMMENT ON COLUMN fraud_feature_link.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_link.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_link.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_link.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_feature_link.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_fraud_feature_link_tenant ON fraud_feature_link (tenant_id, created_at);
+CREATE INDEX ix_fraud_feature_link_c1 ON fraud_feature_link (last_seen_at);
+ALTER TABLE fraud_feature_link ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON fraud_feature_link USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_fraud_feature_link_touch BEFORE UPDATE ON fraud_feature_link FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- fraud_score: Immutable fraud evaluation of one event (authorisation, payment, login, ...) with decision and reasons
 CREATE TABLE fraud_score (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -397,6 +607,12 @@ CREATE TABLE fraud_score (
   session_id                   varchar(128),
   fraud_alert_id               uuid,
   idempotency_key              varchar(128),
+  rules_component_score        integer,
+  combination                  varchar(40) CHECK (combination IN ('ADDITIVE', 'MAX', 'WEIGHTED', 'MODEL_ONLY_ABOVE_CONFIDENCE', 'RULES_ONLY')),
+  ml_model_version_id          uuid,
+  ml_deployment_id             uuid,
+  degraded                     boolean NOT NULL DEFAULT false,
+  degraded_reason              varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -435,6 +651,12 @@ COMMENT ON COLUMN fraud_score.correlation_id IS 'Trace / saga correlation id';
 COMMENT ON COLUMN fraud_score.session_id IS 'App session (links behavioural signals)';
 COMMENT ON COLUMN fraud_score.fraud_alert_id IS 'Alert raised for REVIEW / BLOCK decisions';
 COMMENT ON COLUMN fraud_score.idempotency_key IS 'Client key; a replay returns the original evaluation';
+COMMENT ON COLUMN fraud_score.rules_component_score IS 'Rule-based score (built-in heuristic model + rule adjustments) before it is combined with the ML score';
+COMMENT ON COLUMN fraud_score.combination IS 'How the rule-based and ML scores were combined (empty = no ML model in the policy)';
+COMMENT ON COLUMN fraud_score.ml_model_version_id IS 'ML model version (ai-platform) that decided';
+COMMENT ON COLUMN fraud_score.ml_deployment_id IS 'ai-platform deployment (champion or canary) that decided';
+COMMENT ON COLUMN fraud_score.degraded IS 'The ML model was unavailable, failed or exceeded its budget; rules decided';
+COMMENT ON COLUMN fraud_score.degraded_reason IS 'MODEL_UNAVAILABLE, NO_CHAMPION, CHECKSUM_MISMATCH, INVALID_ARTIFACT, MODEL_ERROR, MODEL_TIMEOUT, FEATURES_UNAVAILABLE';
 COMMENT ON COLUMN fraud_score.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_score.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_score.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -448,6 +670,8 @@ CREATE INDEX ix_fraud_score_card_id ON fraud_score (card_id);
 CREATE INDEX ix_fraud_score_device_fingerprint_id ON fraud_score (device_fingerprint_id);
 CREATE INDEX ix_fraud_score_model_id ON fraud_score (model_id);
 CREATE INDEX ix_fraud_score_correlation_id ON fraud_score (correlation_id);
+CREATE INDEX ix_fraud_score_ml_model_version_id ON fraud_score (ml_model_version_id);
+CREATE INDEX ix_fraud_score_ml_deployment_id ON fraud_score (ml_deployment_id);
 CREATE INDEX ix_fraud_score_c1 ON fraud_score (subject_type, subject_id);
 CREATE INDEX ix_fraud_score_c2 ON fraud_score (customer_id, created_at);
 CREATE INDEX ix_fraud_score_c3 ON fraud_score (device_fingerprint_id, created_at);
@@ -615,6 +839,71 @@ CREATE INDEX ix_fraud_feedback_fraud_score_id ON fraud_feedback (fraud_score_id)
 ALTER TABLE fraud_feedback ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON fraud_feedback USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_fraud_feedback_append_only BEFORE UPDATE OR DELETE ON fraud_feedback FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- fraud_model_score: Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only; feeds monitoring
+CREATE TABLE fraud_model_score (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  fraud_score_id               uuid NOT NULL REFERENCES fraud_score(id),
+  subject_type                 varchar(40) NOT NULL CHECK (subject_type IN ('CARD_AUTHORIZATION', 'PAYMENT', 'WALLET_TRANSACTION', 'LOGIN', 'ONBOARDING', 'BENEFICIARY_CHANGE', 'DEVICE_CHANGE', 'PROFILE_CHANGE', 'LOAN_APPLICATION')),
+  channel                      varchar(40) CHECK (channel IN ('MOBILE_APP', 'WEB', 'API', 'USSD', 'AGENT', 'BRANCH', 'POS', 'ATM', 'ECOMMERCE', 'CONTACTLESS', 'OPEN_BANKING')),
+  ml_model_id                  uuid NOT NULL,
+  ml_model_version_id          uuid NOT NULL,
+  model_deployment_id          uuid,
+  model_version                varchar(32),
+  role                         varchar(40) NOT NULL CHECK (role IN ('CHAMPION', 'CANARY', 'CHALLENGER', 'SHADOW')),
+  decided                      boolean NOT NULL DEFAULT false,
+  score                        integer,
+  probability                  numeric(18,10),
+  would_decide                 varchar(40) CHECK (would_decide IN ('ALLOW', 'REVIEW', 'BLOCK', 'STEP_UP')),
+  latency_us                   integer NOT NULL DEFAULT 0,
+  error                        varchar(255),
+  feature_vector               jsonb,
+  top_contributions            jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE fraud_model_score IS 'Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only; feeds monitoring';
+COMMENT ON COLUMN fraud_model_score.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN fraud_model_score.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN fraud_model_score.created_at IS 'Creation time';
+COMMENT ON COLUMN fraud_model_score.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN fraud_model_score.fraud_score_id IS 'Evaluation';
+COMMENT ON COLUMN fraud_model_score.subject_type IS 'Event type';
+COMMENT ON COLUMN fraud_model_score.channel IS 'Channel';
+COMMENT ON COLUMN fraud_model_score.ml_model_id IS 'ai-platform model';
+COMMENT ON COLUMN fraud_model_score.ml_model_version_id IS 'ai-platform model version';
+COMMENT ON COLUMN fraud_model_score.model_deployment_id IS 'ai-platform deployment';
+COMMENT ON COLUMN fraud_model_score.model_version IS 'Version label';
+COMMENT ON COLUMN fraud_model_score.role IS 'Role of the deployment for this evaluation';
+COMMENT ON COLUMN fraud_model_score.decided IS 'This score decided (champion or canary slice); challengers and shadows never decide';
+COMMENT ON COLUMN fraud_model_score.score IS 'Score 0-1000 (empty on error)';
+COMMENT ON COLUMN fraud_model_score.probability IS 'Fraud probability';
+COMMENT ON COLUMN fraud_model_score.would_decide IS 'Decision this score alone would have produced';
+COMMENT ON COLUMN fraud_model_score.latency_us IS 'Inference time in microseconds';
+COMMENT ON COLUMN fraud_model_score.error IS 'Why the model produced no score';
+COMMENT ON COLUMN fraud_model_score.feature_vector IS 'Model inputs (for drift monitoring and retraining)';
+COMMENT ON COLUMN fraud_model_score.top_contributions IS 'Largest feature contributions {feature, value, contribution}';
+COMMENT ON COLUMN fraud_model_score.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_model_score.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_model_score.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_model_score.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN fraud_model_score.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_fraud_model_score_tenant ON fraud_model_score (tenant_id, created_at);
+CREATE INDEX ix_fraud_model_score_fraud_score_id ON fraud_model_score (fraud_score_id);
+CREATE INDEX ix_fraud_model_score_ml_model_id ON fraud_model_score (ml_model_id);
+CREATE INDEX ix_fraud_model_score_ml_model_version_id ON fraud_model_score (ml_model_version_id);
+CREATE INDEX ix_fraud_model_score_model_deployment_id ON fraud_model_score (model_deployment_id);
+CREATE INDEX ix_fraud_model_score_c1 ON fraud_model_score (model_deployment_id, created_at);
+CREATE INDEX ix_fraud_model_score_c2 ON fraud_model_score (ml_model_id, created_at);
+ALTER TABLE fraud_model_score ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON fraud_model_score USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_fraud_model_score_append_only BEFORE UPDATE OR DELETE ON fraud_model_score FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

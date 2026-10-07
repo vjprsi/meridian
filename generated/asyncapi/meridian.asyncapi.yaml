@@ -64793,6 +64793,50 @@ components:
           maxLength: 128
           description: Client key; a replay returns the original evaluation
           readOnly: true
+        rules_component_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Rule-based score (built-in heuristic model + rule adjustments) before it is combined with the ML score
+          readOnly: true
+        combination:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ADDITIVE
+          - MAX
+          - WEIGHTED
+          - MODEL_ONLY_ABOVE_CONFIDENCE
+          - RULES_ONLY
+          description: How the rule-based and ML scores were combined (empty = no ML model in the policy)
+          readOnly: true
+        ml_model_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ML model version (ai-platform) that decided
+          readOnly: true
+        ml_deployment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ai-platform deployment (champion or canary) that decided
+          readOnly: true
+        degraded:
+          type: boolean
+          description: The ML model was unavailable, failed or exceeded its budget; rules decided
+          readOnly: true
+        degraded_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MODEL_UNAVAILABLE, NO_CHAMPION, CHECKSUM_MISMATCH, INVALID_ARTIFACT, MODEL_ERROR, MODEL_TIMEOUT, FEATURES_UNAVAILABLE
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -64832,6 +64876,7 @@ components:
       - decision
       - reason_codes
       - latency_ms
+      - degraded
     FraudRule:
       type: object
       description: Fraud rule expressed in CEL, evaluated in priority order; supports shadow mode

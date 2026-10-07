@@ -158,6 +158,44 @@ ALTER TABLE ml_model_version ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ml_model_version USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_ml_model_version_touch BEFORE UPDATE ON ml_model_version FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- ml_model_artifact: Inline scoring artefact of a model version (JSON, e.g. logistic regression or a tree ensemble) for in-process scoring by the consuming service. Write-once
+CREATE TABLE ml_model_artifact (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  ml_model_version_id          uuid NOT NULL REFERENCES ml_model_version(id),
+  format                       varchar(64) NOT NULL,
+  content                      text NOT NULL,
+  sha256                       varchar(64) NOT NULL,
+  size_bytes                   integer NOT NULL,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_ml_model_artifact_ml_model_version_id UNIQUE (tenant_id, ml_model_version_id)
+);
+COMMENT ON TABLE ml_model_artifact IS 'Inline scoring artefact of a model version (JSON, e.g. logistic regression or a tree ensemble) for in-process scoring by the consuming service. Write-once';
+COMMENT ON COLUMN ml_model_artifact.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN ml_model_artifact.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN ml_model_artifact.created_at IS 'Creation time';
+COMMENT ON COLUMN ml_model_artifact.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN ml_model_artifact.ml_model_version_id IS 'Model version';
+COMMENT ON COLUMN ml_model_artifact.format IS 'Artefact format, e.g. meridian-fraud-model/1';
+COMMENT ON COLUMN ml_model_artifact.content IS 'Artefact (UTF-8 JSON); its SHA-256 equals the version''s artifact_sha256';
+COMMENT ON COLUMN ml_model_artifact.sha256 IS 'SHA-256 of the content (64 hex)';
+COMMENT ON COLUMN ml_model_artifact.size_bytes IS 'Content size in bytes';
+COMMENT ON COLUMN ml_model_artifact.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ml_model_artifact.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ml_model_artifact.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ml_model_artifact.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ml_model_artifact.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_ml_model_artifact_tenant ON ml_model_artifact (tenant_id, created_at);
+ALTER TABLE ml_model_artifact ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON ml_model_artifact USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_ml_model_artifact_append_only BEFORE UPDATE OR DELETE ON ml_model_artifact FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
 -- model_deployment: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
 CREATE TABLE model_deployment (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -284,6 +322,8 @@ CREATE TABLE ml_feature_definition (
   freshness_sla_seconds        integer,
   owner                        varchar(64),
   contains_pii                 boolean NOT NULL DEFAULT false,
+  feature_set                  varchar(64),
+  definition                   jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -308,12 +348,15 @@ COMMENT ON COLUMN ml_feature_definition.online IS 'Served online for real-time s
 COMMENT ON COLUMN ml_feature_definition.freshness_sla_seconds IS 'Maximum staleness';
 COMMENT ON COLUMN ml_feature_definition.owner IS 'Owner';
 COMMENT ON COLUMN ml_feature_definition.contains_pii IS 'Derived from personal data';
+COMMENT ON COLUMN ml_feature_definition.feature_set IS 'Group of features computed together, e.g. fraud-realtime-v1';
+COMMENT ON COLUMN ml_feature_definition.definition IS 'Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value';
 COMMENT ON COLUMN ml_feature_definition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_feature_definition.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_feature_definition.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_feature_definition.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_feature_definition.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_ml_feature_definition_tenant ON ml_feature_definition (tenant_id, created_at);
+CREATE INDEX ix_ml_feature_definition_feature_set ON ml_feature_definition (feature_set);
 ALTER TABLE ml_feature_definition ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ml_feature_definition USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_ml_feature_definition_touch BEFORE UPDATE ON ml_feature_definition FOR EACH ROW EXECUTE FUNCTION touch_row();

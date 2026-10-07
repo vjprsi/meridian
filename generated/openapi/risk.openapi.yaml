@@ -36,6 +36,9 @@ tags:
   description: A value on a fraud list (stored hashed; masked value for display)
 - name: Fraud Feedback
   description: Confirmed outcome label for a scored event, used for model training and rule tuning
+- name: Fraud Model Scores
+  description: Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only;
+    feeds monitoring
 - name: Tm Scenarios
   description: AML monitoring scenario (structuring, rapid movement, mule, dormant reactivation, ...)
 - name: Tm Scenario Versions
@@ -2683,6 +2686,373 @@ paths:
       x-table: fraud_feedback
       x-crud: true
       x-crud-get: true
+  /v1/risk/fraud/feedback/training-set:
+    get:
+      operationId: fraudFeedbackTrainingSet
+      summary: Labelled ML feature vectors of a period for offline retraining (latest label per evaluation)
+      tags:
+      - Fraud Feedback
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: from_ts
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: to_ts
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: fraud_feedback
+  /v1/risk/fraud/model-scores:
+    get:
+      operationId: fraudModelScoresList
+      summary: List fraud model scores
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: fraud_score_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: ml_model_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: model_deployment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: role
+        in: query
+        schema:
+          type: string
+          enum:
+          - CHAMPION
+          - CANARY
+          - CHALLENGER
+          - SHADOW
+      - name: decided
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudModelScorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: fraud_model_score
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/fraud/model-scores/{id}:
+    get:
+      operationId: fraudModelScoresGet
+      summary: Retrieve fraud model score
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FraudModelScore'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: fraud_model_score
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/fraud/model-scores/runtime:
+    get:
+      operationId: fraudModelScoresRuntime
+      summary: ML runtime of the tenant - deployments loaded from ai-platform, artefact checksums, degraded reasons
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: fraud_model_score
+  /v1/risk/fraud/model-scores/reload:
+    post:
+      operationId: fraudModelScoresReload
+      summary: Reload the tenant's fraud model deployments from ai-platform-service now
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_model_score
+  /v1/risk/fraud/model-scores/register-features:
+    post:
+      operationId: fraudModelScoresRegisterFeatures
+      summary: Create or update the real-time feature definitions in ai-platform's feature catalogue
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_model_score
+  /v1/risk/fraud/model-scores/preview-features:
+    post:
+      operationId: fraudModelScoresPreviewFeatures
+      summary: Feature vector the store computes for an event (nothing is stored or scored)
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudModelScoresPreviewFeaturesRequest'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_model_score
+  /v1/risk/fraud/model-scores/publish-monitoring:
+    post:
+      operationId: fraudModelScoresPublishMonitoring
+      summary: Scheduled (per tenant) - push score and feature distributions (PSI), latency, degraded rate and label metrics
+        of a window to ai-platform monitoring
+      tags:
+      - Fraud Model Scores
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FraudModelScoresPublishMonitoringRequest'
+      x-requirements:
+      - AI-02
+      - FRM-01
+      x-service: fraud-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: fraud_model_score
   /v1/risk/monitoring/scenarios:
     get:
       operationId: tmScenariosList
@@ -10260,6 +10630,81 @@ components:
       required:
       - data
       - has_more
+    FraudModelScorePage:
+      type: object
+      description: One page of FraudModelScore results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FraudModelScore'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FraudModelScoresPreviewFeaturesRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        card_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        device_fingerprint:
+          type: string
+          maxLength: 128
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+        counterparty_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        context:
+          type: object
+          additionalProperties: true
+    FraudModelScoresPublishMonitoringRequest:
+      type: object
+      properties:
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+      required:
+      - window_start
+      - window_end
     TmScenarioPage:
       type: object
       description: One page of TmScenario results (newest first)
@@ -13573,6 +14018,41 @@ components:
         is_active:
           type: boolean
           description: Active
+        combination:
+          type: string
+          enum:
+          - ADDITIVE
+          - MAX
+          - WEIGHTED
+          - MODEL_ONLY_ABOVE_CONFIDENCE
+          - RULES_ONLY
+          description: How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE
+            (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged)
+        model_weight:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: WEIGHTED - share of the ML score (0..1)
+        model_confidence:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides
+        model_timeout_ms:
+          type: integer
+          format: int32
+          description: In-process inference budget; a slower or failing model falls back to rules (degraded)
+        channel_thresholds:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Threshold overrides per channel {CHANNEL: {step_up, review, block}}'
+        use_model_thresholds:
+          type: boolean
+          description: Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win)
         custom_field_1:
           type:
           - string
@@ -13615,6 +14095,11 @@ components:
       - timeout_ms
       - fallback_decision
       - is_active
+      - combination
+      - model_weight
+      - model_confidence
+      - model_timeout_ms
+      - use_model_thresholds
     FraudDecisionPolicyCreate:
       type: object
       properties:
@@ -13666,6 +14151,39 @@ components:
         is_active:
           type: boolean
           description: Active
+        combination:
+          type: string
+          enum:
+          - ADDITIVE
+          - MAX
+          - WEIGHTED
+          - MODEL_ONLY_ABOVE_CONFIDENCE
+          - RULES_ONLY
+          description: How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE
+            (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged)
+        model_weight:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: WEIGHTED - share of the ML score (0..1)
+        model_confidence:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides
+        model_timeout_ms:
+          type: integer
+          format: int32
+          description: In-process inference budget; a slower or failing model falls back to rules (degraded)
+        channel_thresholds:
+          type: object
+          additionalProperties: true
+          description: 'Threshold overrides per channel {CHANNEL: {step_up, review, block}}'
+        use_model_thresholds:
+          type: boolean
+          description: Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win)
         custom_field_1:
           type: string
           maxLength: 500
@@ -13742,6 +14260,39 @@ components:
         is_active:
           type: boolean
           description: Active
+        combination:
+          type: string
+          enum:
+          - ADDITIVE
+          - MAX
+          - WEIGHTED
+          - MODEL_ONLY_ABOVE_CONFIDENCE
+          - RULES_ONLY
+          description: How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE
+            (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged)
+        model_weight:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: WEIGHTED - share of the ML score (0..1)
+        model_confidence:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides
+        model_timeout_ms:
+          type: integer
+          format: int32
+          description: In-process inference budget; a slower or failing model falls back to rules (degraded)
+        channel_thresholds:
+          type: object
+          additionalProperties: true
+          description: 'Threshold overrides per channel {CHANNEL: {step_up, review, block}}'
+        use_model_thresholds:
+          type: boolean
+          description: Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win)
         custom_field_1:
           type: string
           maxLength: 500
@@ -14302,6 +14853,179 @@ components:
       - row_version
       - fraud_list_id
       - value_hash
+    FraudModelScore:
+      type: object
+      description: Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only;
+        feeds monitoring
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        fraud_score_id:
+          type: string
+          format: uuid
+          description: Evaluation
+        subject_type:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - LOGIN
+          - ONBOARDING
+          - BENEFICIARY_CHANGE
+          - DEVICE_CHANGE
+          - PROFILE_CHANGE
+          - LOAN_APPLICATION
+          description: Event type
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        ml_model_id:
+          type: string
+          format: uuid
+          description: ai-platform model
+        ml_model_version_id:
+          type: string
+          format: uuid
+          description: ai-platform model version
+        model_deployment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ai-platform deployment
+        model_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Version label
+        role:
+          type: string
+          enum:
+          - CHAMPION
+          - CANARY
+          - CHALLENGER
+          - SHADOW
+          description: Role of the deployment for this evaluation
+        decided:
+          type: boolean
+          description: This score decided (champion or canary slice); challengers and shadows never decide
+        score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Score 0-1000 (empty on error)
+        probability:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fraud probability
+        would_decide:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ALLOW
+          - REVIEW
+          - BLOCK
+          - STEP_UP
+          description: Decision this score alone would have produced
+        latency_us:
+          type: integer
+          format: int32
+          description: Inference time in microseconds
+        error:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the model produced no score
+        feature_vector:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Model inputs (for drift monitoring and retraining)
+        top_contributions:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Largest feature contributions {feature, value, contribution}
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - fraud_score_id
+      - subject_type
+      - ml_model_id
+      - ml_model_version_id
+      - role
+      - decided
+      - latency_us
     FraudRule:
       type: object
       description: Fraud rule expressed in CEL, evaluated in priority order; supports shadow mode
@@ -14987,6 +15711,50 @@ components:
           maxLength: 128
           description: Client key; a replay returns the original evaluation
           readOnly: true
+        rules_component_score:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Rule-based score (built-in heuristic model + rule adjustments) before it is combined with the ML score
+          readOnly: true
+        combination:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ADDITIVE
+          - MAX
+          - WEIGHTED
+          - MODEL_ONLY_ABOVE_CONFIDENCE
+          - RULES_ONLY
+          description: How the rule-based and ML scores were combined (empty = no ML model in the policy)
+          readOnly: true
+        ml_model_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ML model version (ai-platform) that decided
+          readOnly: true
+        ml_deployment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: ai-platform deployment (champion or canary) that decided
+          readOnly: true
+        degraded:
+          type: boolean
+          description: The ML model was unavailable, failed or exceeded its budget; rules decided
+          readOnly: true
+        degraded_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MODEL_UNAVAILABLE, NO_CHAMPION, CHECKSUM_MISMATCH, INVALID_ARTIFACT, MODEL_ERROR, MODEL_TIMEOUT, FEATURES_UNAVAILABLE
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -15026,6 +15794,7 @@ components:
       - decision
       - reason_codes
       - latency_ms
+      - degraded
     LimitCheck:
       type: object
       description: Result of a limit check; a reservation is committed or released when the transaction completes

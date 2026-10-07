@@ -13740,6 +13740,29 @@ API: /v1/ai/model-versions · Requirements: AI-02, LND-01
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `ml_model_artifact` (append-only)
+
+Inline scoring artefact of a model version (JSON, e.g. logistic regression or a tree ensemble) for in-process scoring by the consuming service. Write-once
+
+API: internal only · Requirements: AI-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| ml_model_version_id | uuid | no | FK → ml_model_version | ml_model_version_id | Model version |
+| format | varchar(64) | no |  | format | Artefact format, e.g. meridian-fraud-model/1 |
+| content | text | no |  | content | Artefact (UTF-8 JSON); its SHA-256 equals the version's artifact_sha256 |
+| sha256 | varchar(64) | no |  | sha256 | SHA-256 of the content (64 hex) |
+| size_bytes | integer | no |  | size_bytes | Content size in bytes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `model_deployment`
 
 Deployment of a model version to an environment in shadow, canary, champion or challenger mode
@@ -13825,6 +13848,8 @@ API: /v1/ai/features · Requirements: AI-02
 | freshness_sla_seconds | integer | yes |  | freshness_sla_seconds | Maximum staleness |
 | owner | varchar(64) | yes |  | owner | Owner |
 | contains_pii | boolean | no |  | contains_pii | Derived from personal data |
+| feature_set | varchar(64) | yes |  | feature_set | Group of features computed together, e.g. fraud-realtime-v1 |
+| definition | jsonb | yes |  | definition | Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14039,6 +14064,12 @@ API: /v1/risk/fraud/scores · Requirements: FRM-01, FRM-05
 | session_id | varchar(128) | yes |  | session_id | App session (links behavioural signals) |
 | fraud_alert_id | uuid | yes |  | fraud_alert_id (read-only) | Alert raised for REVIEW / BLOCK decisions |
 | idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Client key; a replay returns the original evaluation |
+| rules_component_score | integer | yes |  | rules_component_score (read-only) | Rule-based score (built-in heuristic model + rule adjustments) before it is combined with the ML score |
+| combination | varchar(40) (FraudScoreCombination) | yes |  | combination (read-only) | How the rule-based and ML scores were combined (empty = no ML model in the policy) |
+| ml_model_version_id | uuid | yes | ref → ml_model_version | ml_model_version_id (read-only) | ML model version (ai-platform) that decided |
+| ml_deployment_id | uuid | yes | ref → model_deployment | ml_deployment_id (read-only) | ai-platform deployment (champion or canary) that decided |
+| degraded | boolean | no |  | degraded (read-only) | The ML model was unavailable, failed or exceeded its budget; rules decided |
+| degraded_reason | varchar(64) | yes |  | degraded_reason (read-only) | MODEL_UNAVAILABLE, NO_CHAMPION, CHECKSUM_MISMATCH, INVALID_ARTIFACT, MODEL_ERROR, MODEL_TIMEOUT, FEATURES_UNAVAILABLE |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14136,6 +14167,12 @@ API: /v1/risk/fraud/decision-policies · Requirements: FRM-01
 | timeout_ms | integer | no |  | timeout_ms | Time budget; on timeout the fallback decision applies |
 | fallback_decision | varchar(40) (FraudDecision) | no |  | fallback_decision | Decision when scoring times out |
 | is_active | boolean | no |  | is_active | Active |
+| combination | varchar(40) (FraudScoreCombination) | no |  | combination | How an ML score (model_id = an ai-platform FRAUD model) combines with the rule-based score - ADDITIVE (ML score + rule adjustments), MAX, WEIGHTED, MODEL_ONLY_ABOVE_CONFIDENCE, RULES_ONLY (ML only logged) |
+| model_weight | numeric(18,10) | no |  | model_weight | WEIGHTED - share of the ML score (0..1) |
+| model_confidence | numeric(18,10) | no |  | model_confidence | MODEL_ONLY_ABOVE_CONFIDENCE - confidence abs(2p - 1) at or above which the ML score alone decides |
+| model_timeout_ms | integer | no |  | model_timeout_ms | In-process inference budget; a slower or failing model falls back to rules (degraded) |
+| channel_thresholds | jsonb | yes |  | channel_thresholds | Threshold overrides per channel {CHANNEL: {step_up, review, block}} |
+| use_model_thresholds | boolean | no |  | use_model_thresholds | Use the thresholds shipped in the ML artefact when the ML model decides (channel overrides still win) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14323,6 +14360,153 @@ API: /v1/risk/fraud/feedback · Requirements: FRM-01
 | currency | char(3) | yes |  | currency | Currency |
 | recovered_amount | numeric(28,8) | yes |  | recovered_amount | Amount recovered |
 | reported_at | timestamptz | no |  | reported_at | When the outcome became known |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `fraud_model_score` (append-only)
+
+Score of one ML model deployment for one evaluation (champion, canary, challenger or shadow). Append-only; feeds monitoring
+
+API: /v1/risk/fraud/model-scores · Requirements: FRM-01, AI-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| fraud_score_id | uuid | no | FK → fraud_score | fraud_score_id | Evaluation |
+| subject_type | varchar(40) (FraudSubjectType) | no |  | subject_type | Event type |
+| channel | varchar(40) (RiskChannel) | yes |  | channel | Channel |
+| ml_model_id | uuid | no | ref → ml_model | ml_model_id | ai-platform model |
+| ml_model_version_id | uuid | no | ref → ml_model_version | ml_model_version_id | ai-platform model version |
+| model_deployment_id | uuid | yes | ref → model_deployment | model_deployment_id | ai-platform deployment |
+| model_version | varchar(32) | yes |  | model_version | Version label |
+| role | varchar(40) (FraudModelRole) | no |  | role | Role of the deployment for this evaluation |
+| decided | boolean | no |  | decided | This score decided (champion or canary slice); challengers and shadows never decide |
+| score | integer | yes |  | score | Score 0-1000 (empty on error) |
+| probability | numeric(18,10) | yes |  | probability | Fraud probability |
+| would_decide | varchar(40) (FraudDecision) | yes |  | would_decide | Decision this score alone would have produced |
+| latency_us | integer | no |  | latency_us | Inference time in microseconds |
+| error | varchar(255) | yes |  | error | Why the model produced no score |
+| feature_vector | jsonb | yes |  | feature_vector | Model inputs (for drift monitoring and retraining) |
+| top_contributions | jsonb | yes |  | top_contributions | Largest feature contributions {feature, value, contribution} |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `fraud_feature_event`
+
+Domain event consumed by the real-time feature store (de-duplication by CloudEvent id); pruned after the retention
+
+API: internal only · Requirements: FRM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| event_id | varchar(128) | no |  | event_id | CloudEvent id |
+| event_type | varchar(96) | no |  | event_type | CloudEvent type |
+| occurred_at | timestamptz | no |  | occurred_at | Event time |
+| applied | boolean | no |  | applied | Counters were updated (false = ignored, e.g. inbound or late) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `fraud_feature_counter`
+
+Time-bucketed event count and amount per entity (5-minute buckets for the 1 h window, hourly for 24 h / 7 d)
+
+API: internal only · Requirements: FRM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| entity_type | varchar(24) | no |  | entity_type | CUSTOMER, CARD, ACCOUNT, DEVICE, MERCHANT, BENEFICIARY, CUSTOMER_LOGIN |
+| entity_key | varchar(128) | no |  | entity_key | Entity id or hash |
+| granularity | varchar(4) | no |  | granularity | M5 or H1 |
+| bucket_start | timestamptz | no |  | bucket_start | Bucket start (UTC) |
+| currency | char(3) | no |  | currency | Amount currency (XXX = no amount) |
+| event_count | integer | no |  | event_count | Events in the bucket |
+| amount_sum | numeric(28,8) | no |  | amount_sum | Sum of amounts in the bucket |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `fraud_feature_profile`
+
+Long-run behaviour profile per entity and currency (exponentially weighted amount mean and variance, hour of day, labels)
+
+API: internal only · Requirements: FRM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| entity_type | varchar(24) | no |  | entity_type | CUSTOMER, CARD, ACCOUNT, MERCHANT, BENEFICIARY, DEVICE |
+| entity_key | varchar(128) | no |  | entity_key | Entity id or hash |
+| currency | char(3) | no |  | currency | Currency of the amount statistics (XXX = none) |
+| first_seen_at | timestamptz | no |  | first_seen_at | First event |
+| last_seen_at | timestamptz | no |  | last_seen_at | Last event |
+| event_count | bigint | no |  | event_count | Events seen |
+| amount_mean | numeric(28,8) | no |  | amount_mean | Exponentially weighted mean amount |
+| amount_var | numeric(28,8) | no |  | amount_var | Exponentially weighted amount variance |
+| hour_sin | numeric(18,10) | no |  | hour_sin | Weighted mean of sin(hour of day) |
+| hour_cos | numeric(18,10) | no |  | hour_cos | Weighted mean of cos(hour of day) |
+| fraud_count | integer | no |  | fraud_count | Confirmed fraud labels |
+| label_count | integer | no |  | label_count | Outcome labels |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `fraud_feature_link`
+
+First and last time two entities were seen together (customer-beneficiary, customer-device, customer-country, card-merchant)
+
+API: internal only · Requirements: FRM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| link_type | varchar(32) | no |  | link_type | CUSTOMER_BENEFICIARY, CUSTOMER_DEVICE, CUSTOMER_COUNTRY, CUSTOMER_MERCHANT, CARD_MERCHANT, CARD_COUNTRY |
+| from_key | varchar(128) | no |  | from_key | First entity |
+| to_key | varchar(128) | no |  | to_key | Second entity |
+| first_seen_at | timestamptz | no |  | first_seen_at | First seen together |
+| last_seen_at | timestamptz | no |  | last_seen_at | Last seen together |
+| event_count | integer | no |  | event_count | Events |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
