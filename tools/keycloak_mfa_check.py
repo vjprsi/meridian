@@ -233,7 +233,7 @@ def staff_checks(tok):
     check("acr_values=1 is raised to the minimum: SSO answers with acr 2, no password-only token",
           t2 and jwt(t2["access_token"]).get("acr") == "2", (seen, t2 and jwt(t2["access_token"]).get("acr")))
     # 3. max_age forces password + second factor again
-    time.sleep(2)
+    time.sleep(3)                     # auth_time has whole-second resolution: stay clearly past max_age
     res, ver = br.authorize(max_age="1")
     t3, seen = finish(br, res, ver, password="Meridian#Admin2026", otp_secret=STAFF_TOTP, username="ops.admin")
     check("max_age exceeded re-asks password and second factor", seen == ["kc-form-login", "kc-otp-login-form"]
