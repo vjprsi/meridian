@@ -36,7 +36,8 @@ ingress:
   annotations: {}
   tls: []
 
-# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env.
+# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,
+# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git).
 services:
   - name: deposit-service
     domain: "accounts"
@@ -48,16 +49,25 @@ services:
     enabled: true
     database: "statement_db"
     schema: "statement"
+    secretName: "meridian-statement-service-secrets"
+    secretEnv:
+      MERIDIAN_STATEMENT_DOWNLOAD_SECRET: "download-secret"
   - name: card-service
     domain: "cards"
     enabled: true
     database: "card_db"
     schema: "card"
+    secretName: "meridian-card-service-secrets"
+    secretEnv:
+      MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"
   - name: card-vault-service
     domain: "cards"
     enabled: true
     database: "card_vault_db"
     schema: "card_vault"
+    secretName: "meridian-card-vault-service-secrets"
+    secretEnv:
+      MERIDIAN_CARDS_VAULT_MASTER_KEY: "master-key"
   - name: card-authorization-service
     domain: "cards"
     enabled: true
@@ -66,16 +76,29 @@ services:
     replicas: 3
     cpu: "1"
     memory: "1Gi"
+    secretName: "meridian-card-authorization-service-secrets"
+    secretEnv:
+      MERIDIAN_CARDS_AUTH_JIT_SECRET: "jit-secret"
   - name: card-tokenization-service
     domain: "cards"
     enabled: true
     database: "card_token_db"
     schema: "card_token"
+    secretName: "meridian-card-tokenization-service-secrets"
+    secretEnv:
+      MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"
+      MERIDIAN_CARDS_TOKENS_OTP_KEY: "otp-key"
+      MERIDIAN_CARDS_TOKENS_PAYLOAD_KEY: "payload-key"
   - name: card-threeds-service
     domain: "cards"
     enabled: true
     database: "card_3ds_db"
     schema: "card_3ds"
+    secretName: "meridian-card-threeds-service-secrets"
+    secretEnv:
+      MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"
+      MERIDIAN_CARDS_THREEDS_CAVV_KEY: "cavv-key"
+      MERIDIAN_CARDS_THREEDS_OTP_KEY: "otp-key"
   - name: card-clearing-service
     domain: "cards"
     enabled: true
@@ -129,6 +152,9 @@ services:
     enabled: true
     database: "loan_origination_db"
     schema: "loan_origination"
+    secretName: "meridian-loan-origination-service-secrets"
+    secretEnv:
+      MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET: "callback-secret"
   - name: loan-service
     domain: "lending"
     enabled: true
@@ -159,11 +185,17 @@ services:
     enabled: true
     database: "file_gateway_db"
     schema: "file_gateway"
+    secretName: "meridian-file-gateway-service-secrets"
+    secretEnv:
+      MERIDIAN_FILES_SIGNING_KEY: "signing-key"
   - name: search-service
     domain: "operations"
     enabled: true
     database: "search_db"
     schema: "search"
+    secretName: "meridian-search-service-secrets"
+    secretEnv:
+      MERIDIAN_CONTACT_LOOKUP_KEY: "contact-lookup-key"
   - name: archive-service
     domain: "operations"
     enabled: true
@@ -179,6 +211,10 @@ services:
     enabled: true
     database: "onboarding_db"
     schema: "onboarding"
+    secretName: "meridian-onboarding-service-secrets"
+    secretEnv:
+      MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET: "otp-secret"
+      MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET: "resume-token-secret"
   - name: kyc-service
     domain: "party"
     enabled: true
@@ -197,6 +233,9 @@ services:
     enabled: true
     database: "routing_db"
     schema: "routing"
+    secretName: "meridian-routing-service-secrets"
+    secretEnv:
+      MERIDIAN_ROUTING_CALLBACK_SECRET: "callback-secret"
   - name: fx-service
     domain: "payments"
     enabled: true
@@ -227,6 +266,11 @@ services:
     enabled: true
     database: "document_db"
     schema: "document"
+    secretName: "meridian-document-service-secrets"
+    secretEnv:
+      MERIDIAN_DOCUMENTS_S3_ACCESS_KEY: "s3-access-key"
+      MERIDIAN_DOCUMENTS_S3_SECRET_KEY: "s3-secret-key"
+      MERIDIAN_ESIGN_CALLBACK_SECRET: "esign-callback-secret"
   - name: workflow-service
     domain: "platform"
     enabled: true
@@ -242,11 +286,17 @@ services:
     enabled: true
     database: "webhook_db"
     schema: "webhook"
+    secretName: "meridian-webhook-service-secrets"
+    secretEnv:
+      MERIDIAN_WEBHOOKS_KEY: "encryption-key"
   - name: audit-service
     domain: "platform"
     enabled: true
     database: "audit_db"
     schema: "audit"
+    secretName: "meridian-audit-service-secrets"
+    secretEnv:
+      MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY: "download-signing-key"
   - name: billing-service
     domain: "platform"
     enabled: true

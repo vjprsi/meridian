@@ -102,6 +102,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
+            {{- range $envName, $key := $svc.secretEnv }}
+            - name: {{ $envName }}
+              valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
+            {{- end }}
             {{- range $k, $v := $svc.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}

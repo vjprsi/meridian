@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import io.meridian.web.outbound.OutboundUrlPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +32,13 @@ public class EndpointService {
     private final OutboxWriter outbox;
     private final JsonMapper json;
     private final boolean allowInsecureLocalhost;
+    private final OutboundUrlPolicy urlPolicy;
 
     public EndpointService(WebhookStore store, CrudEngine crud, SecretCipher cipher, OutboxWriter outbox, JsonMapper json,
-                           @Value("${meridian.webhooks.allow-insecure-localhost:false}") boolean allowInsecureLocalhost) {
+                           @Value("${meridian.webhooks.allow-insecure-localhost:false}") boolean allowInsecureLocalhost,
+                           OutboundUrlPolicy urlPolicy) {
+        // http://localhost receivers only in dev mode (the shared policy ignores the relaxation otherwise)
+        this.urlPolicy = urlPolicy.relaxedForDev(allowInsecureLocalhost, allowInsecureLocalhost);
         this.store = store;
         this.crud = crud;
         this.cipher = cipher;
@@ -52,6 +57,7 @@ public class EndpointService {
         ObjectNode values = crud.toColumns("webhook_endpoint", body);
         WebhookRules.validateUrl(values.path("url").asString(""), allowInsecureLocalhost);
         validateHeaders(values.get("custom_headers"));
+        checkDestination(values.path("url").asString(""));
         UUID id = Ids.newId();
         SigningSecrets secrets = SigningSecrets.fresh();
         values.put("id", id.toString());
@@ -68,6 +74,28 @@ public class EndpointService {
         WebhookRules.validateUrl(values.has("url") ? values.get("url").asString() : "https://unchanged.invalid",
                 allowInsecureLocalhost);
         validateHeaders(values.get("custom_headers"));
+        if (values.has("url")) {
+            checkDestination(values.get("url").asString());
+        }
+    }
+
+    /**
+     * SEC-09: the endpoint must be a public https destination under the shared outbound policy. Literal internal
+     * hosts and names resolving to internal addresses are refused now; a name that does not resolve yet is accepted
+     * (DNS may be set up later) because every delivery re-checks the resolved addresses at connect time.
+     */
+    void checkDestination(String url) {
+        try {
+            urlPolicy.resolveAllowed(urlPolicy.checkSyntax(url).getHost());
+        } catch (OutboundUrlPolicy.RejectedException e) {
+            switch (e.code()) {
+                case "unresolvable_host" -> { }
+                case "https_required" -> throw ApiException.unprocessable("https_required", "Webhook endpoints must use https");
+                case "destination_not_allowed" -> throw ApiException.unprocessable("url_not_allowed",
+                        "Webhook endpoints must be public https URLs; internal, private and metadata addresses are not allowed");
+                default -> throw ApiException.unprocessable("invalid_url", e.getMessage());
+            }
+        }
     }
 
     @Transactional

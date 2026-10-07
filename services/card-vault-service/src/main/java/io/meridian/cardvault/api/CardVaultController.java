@@ -13,7 +13,9 @@ import io.meridian.cardvault.api.generated.model.CardVaultVerifyRequest;
 import io.meridian.cardvault.application.AccessLog;
 import io.meridian.cardvault.application.VaultService;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.common.error.ApiException;
 import io.meridian.web.idempotency.Idempotency;
+import io.meridian.web.security.RequiredScope;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -29,6 +31,9 @@ import tools.jackson.databind.json.JsonMapper;
  * exactly-once per Idempotency-Key; their idempotency fingerprints carry keyed hashes, never PAN / CVV / PIN blocks.
  * Reveal, lookup and verify are detokenising reads: each call is audited on its own and their responses (which may
  * hold card data) are deliberately NOT stored in the idempotency table, so the key is required but not replayed.
+ * Access beyond the generated {@code cards:write} is enforced by {@link VaultAccessPolicy} (SEC-11): dedicated
+ * scopes for reveal ({@code cards:pan_reveal}) and vault administration ({@code cards:vault_admin}), recent step-up
+ * for user tokens, service-only lookup / verify / PIN set. Refused reveals are audited too.
  */
 @RestController
 public class CardVaultController implements CardVaultApi {
@@ -38,8 +43,13 @@ public class CardVaultController implements CardVaultApi {
     private final Idempotency idempotency;
     private final JsonMapper json;
     private final HttpServletRequest request;
+    private final VaultAccessPolicy access;
+    private final AccessLog accessLog;
 
-    public CardVaultController(VaultService vault, Idempotency idempotency, JsonMapper json, HttpServletRequest request) {
+    public CardVaultController(VaultService vault, Idempotency idempotency, JsonMapper json, HttpServletRequest request,
+                               VaultAccessPolicy access, AccessLog accessLog) {
+        this.access = access;
+        this.accessLog = accessLog;
         this.vault = vault;
         this.idempotency = idempotency;
         this.json = json;
@@ -61,14 +71,22 @@ public class CardVaultController implements CardVaultApi {
     }
 
     @Override
+    @RequiredScope(VaultAccessPolicy.SCOPE_REVEAL)
     public ResponseEntity<CardDataVault> cardVaultReveal(String idempotencyKey, CardVaultRevealRequest body) {
         JsonNode req = tree(body);
+        try {
+            access.require(VaultAccessPolicy.Operation.REVEAL);
+        } catch (ApiException denied) {
+            auditDenied(Http.text(req, "purpose"), req, denied);
+            throw denied;
+        }
         return ResponseEntity.ok(model(vault.reveal(Http.uuid(req, "card_id"), Http.text(req, "purpose"),
                 Http.text(req, "public_key"), caller()), CardDataVault.class));
     }
 
     @Override
     public ResponseEntity<CardDataVault> cardVaultLookup(String idempotencyKey, CardVaultLookupRequest body) {
+        access.require(VaultAccessPolicy.Operation.LOOKUP);
         JsonNode req = tree(body);
         return ResponseEntity.ok(model(vault.lookup(Http.text(req, "pan"), Http.text(req, "purpose"), caller()),
                 CardDataVault.class));
@@ -76,6 +94,7 @@ public class CardVaultController implements CardVaultApi {
 
     @Override
     public ResponseEntity<Map<String, Object>> cardVaultVerify(String idempotencyKey, CardVaultVerifyRequest body) {
+        access.require(VaultAccessPolicy.Operation.VERIFY);
         JsonNode req = tree(body);
         return ResponseEntity.ok(vault.verify(new VaultService.Verify(Http.text(req, "pan_token"), Http.text(req, "cvv"),
                 Http.integer(req, "expiry_month"), Http.integer(req, "expiry_year"),
@@ -85,6 +104,7 @@ public class CardVaultController implements CardVaultApi {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public ResponseEntity<Map<String, Object>> cardVaultPin(String idempotencyKey, CardVaultPinRequest body) {
+        access.require(VaultAccessPolicy.Operation.PIN_SET);
         JsonNode req = tree(body);
         String token = Http.text(req, "pan_token");
         String block = Http.text(req, "encrypted_pin_block");
@@ -99,8 +119,10 @@ public class CardVaultController implements CardVaultApi {
     }
 
     @Override
+    @RequiredScope(VaultAccessPolicy.SCOPE_ADMIN)
     @SuppressWarnings({"unchecked", "rawtypes"})
     public ResponseEntity<Map<String, Object>> cardVaultPinUnblock(String idempotencyKey, CardVaultPinUnblockRequest body) {
+        access.require(VaultAccessPolicy.Operation.PIN_UNBLOCK);
         JsonNode req = tree(body);
         Map<String, Object> fp = fingerprint("pin-unblock");
         fp.put("body", req);
@@ -121,14 +143,30 @@ public class CardVaultController implements CardVaultApi {
     }
 
     @Override
+    @RequiredScope(VaultAccessPolicy.SCOPE_ADMIN)
     @SuppressWarnings({"unchecked", "rawtypes"})
     public ResponseEntity<Map<String, Object>> cardVaultRotateKeys(String idempotencyKey, CardVaultRotateKeysRequest body) {
+        access.require(VaultAccessPolicy.Operation.ROTATE_KEYS);
         JsonNode req = tree(body);
         Map<String, Object> fp = fingerprint("rotate-keys");
         fp.put("body", req);
         ResponseEntity raw = idempotency.execute(idempotencyKey, fp, Map.class,
                 () -> ResponseEntity.ok(vault.rotate(Http.text(req, "key_type"), caller())));
         return (ResponseEntity<Map<String, Object>>) raw;
+    }
+
+    /** A refused reveal is recorded in the PCI access log (best effort: never masks the authorisation error). */
+    private void auditDenied(String purpose, JsonNode req, ApiException denied) {
+        if (purpose == null || purpose.isBlank()) {
+            return;
+        }
+        try {
+            String card = Http.text(req, "card_id");
+            accessLog.failure(caller(), purpose, null, card == null ? null : UUID.fromString(card),
+                    "denied: " + denied.code());
+        } catch (RuntimeException ignored) {
+            // the 401/403 is the outcome that matters
+        }
     }
 
     private AccessLog.Caller caller() {

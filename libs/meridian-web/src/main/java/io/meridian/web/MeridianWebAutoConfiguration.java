@@ -51,6 +51,25 @@ public class MeridianWebAutoConfiguration {
         };
     }
 
+    /** Fails startup outside dev mode when a declared secret is missing or a committed dev default (SEC-01/02). */
+    @Bean
+    static io.meridian.web.security.RequiredSecrets meridianRequiredSecrets() {
+        return new io.meridian.web.security.RequiredSecrets();
+    }
+
+    /** Outbound policy for tenant-supplied URLs (SEC-08/09): https, public addresses only, pinned resolution. */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.outbound.OutboundUrlPolicy outboundUrlPolicy(Environment env) {
+        return io.meridian.web.outbound.OutboundUrlPolicy.fromEnvironment(env);
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    io.meridian.web.outbound.OutboundHttp outboundHttp(io.meridian.web.outbound.OutboundUrlPolicy policy) {
+        return new io.meridian.web.outbound.OutboundHttp(policy);
+    }
+
     @Bean
     FilterRegistrationBean<RequestIdFilter> requestIdFilter() {
         FilterRegistrationBean<RequestIdFilter> reg = new FilterRegistrationBean<>(new RequestIdFilter());

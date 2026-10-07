@@ -5,17 +5,22 @@ import io.meridian.common.id.Ids;
 import io.meridian.events.OutboxWriter;
 import io.meridian.notification.domain.DeliveryPolicy;
 import io.meridian.notification.domain.NotificationLifecycle;
+import io.meridian.notification.domain.SensitiveContent;
 import io.meridian.notification.domain.TemplateRenderer;
 import io.meridian.notification.infrastructure.ContactDirectory;
 import io.meridian.notification.infrastructure.NotificationStore;
+import io.meridian.notification.infrastructure.SensitiveContentStore;
 import io.meridian.web.crud.CrudEngine;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +34,10 @@ import tools.jackson.databind.node.ObjectNode;
  * Notification use cases: direct and templated sends (preferences, quiet hours, dedupe), resend, cancel, mark-read,
  * provider receipts and the due-work sweep. Each state change runs in its own transaction; provider calls happen in
  * {@link DeliveryService#dispatch} after the notification row is committed.
+ *
+ * <p>Sensitive content (SEC-10): OTPs / PINs / passwords in template variables (see {@link SensitiveContent}) and
+ * digit codes in already-rendered SECURITY messages are stored, returned and published only in redacted form; the
+ * clear text is kept in memory ({@link SensitiveContentStore}) until the provider accepted the message.
  */
 @Service
 public class NotificationService {
@@ -43,10 +52,13 @@ public class NotificationService {
     private final JsonMapper json;
     private final TransactionTemplate tx;
     private final ContactDirectory contacts;
+    private final SensitiveContentStore sensitive;
 
     public NotificationService(NotificationStore store, CrudEngine crud, DeliveryService delivery, OutboxWriter outbox,
-                               JsonMapper json, TransactionTemplate tx, ContactDirectory contacts) {
+                               JsonMapper json, TransactionTemplate tx, ContactDirectory contacts,
+                               SensitiveContentStore sensitive) {
         this.contacts = contacts;
+        this.sensitive = sensitive;
         this.store = store;
         this.crud = crud;
         this.delivery = delivery;
@@ -67,11 +79,40 @@ public class NotificationService {
                 && store.json("notification_template", UUID.fromString(values.get("notification_template_id").asString())).isEmpty()) {
             throw ApiException.unprocessable("template_not_found", "notification_template_id does not exist");
         }
-        return submit(values, null);
+        SensitiveContentStore.Clear clear = null;
+        if (securityMessage(values.path("category").asString(""), values.path("channel").asString(""))) {
+            String subject = values.hasNonNull("subject") ? values.get("subject").asString() : null;
+            String text = values.path("body").asString(null);
+            String redactedSubject = SensitiveContent.redactDigits(subject);
+            String redactedBody = SensitiveContent.redactDigits(text);
+            if (!Objects.equals(redactedSubject, subject) || !Objects.equals(redactedBody, text)) {
+                clear = new SensitiveContentStore.Clear(subject, text);
+                if (redactedSubject != null) {
+                    values.put("subject", redactedSubject);
+                }
+                if (redactedBody != null) {
+                    values.put("body", redactedBody);
+                }
+            }
+        }
+        return submit(values, null, clear);
     }
 
-    /** Validates, applies preferences / quiet hours / dedupe, stores, then dispatches if due now. */
+    /** SECURITY messages on external channels: codes in the text are never stored in clear. */
+    static boolean securityMessage(String category, String channel) {
+        return "SECURITY".equals(category) && !"IN_APP".equals(channel);
+    }
+
     public Submitted submit(ObjectNode values, UUID forcedProviderId) {
+        return submit(values, forcedProviderId, null);
+    }
+
+    /**
+     * Validates, applies preferences / quiet hours / dedupe, stores, then dispatches if due now.
+     *
+     * @param clear clear subject / body when {@code values} holds the redacted form (kept in memory only)
+     */
+    Submitted submit(ObjectNode values, UUID forcedProviderId, SensitiveContentStore.Clear clear) {
         String channel = values.get("channel").asString();
         String destination = values.path("destination").asString(null);
         String problem = DeliveryPolicy.destinationProblem(channel, destination);
@@ -127,6 +168,9 @@ public class NotificationService {
             return stored;
         }
         UUID id = UUID.fromString(json.readTree(stored.row()).get("id").asString());
+        if (clear != null) {
+            sensitive.put(id, clear);
+        }
         if ("QUEUED".equals(values.get("status").asString())) {
             return new Submitted(delivery.dispatch(id, forcedProviderId, false, Instant.now()), true);
         }
@@ -212,12 +256,27 @@ public class NotificationService {
         JsonNode template = c.template();
         String subject;
         String body;
+        String storedSubject;
+        String storedBody;
         try {
             subject = TemplateRenderer.render(text(template, "subject"), vars, false, true);
             body = TemplateRenderer.render(template.get("body").asString(), vars, "EMAIL".equals(ch), true);
+            // SEC-10: sensitive variables are rendered only into the message handed to the provider
+            Set<String> used = new LinkedHashSet<>(TemplateRenderer.variables(text(template, "subject")));
+            used.addAll(TemplateRenderer.variables(template.get("body").asString()));
+            Map<String, Object> storedVars = SensitiveContent.redactedVariables(vars,
+                    SensitiveContent.sensitiveVariables(used, vars));
+            storedSubject = TemplateRenderer.render(text(template, "subject"), storedVars, false, true);
+            storedBody = TemplateRenderer.render(template.get("body").asString(), storedVars, "EMAIL".equals(ch), true);
         } catch (TemplateRenderer.MissingVariablesException e) {
             throw missingVariables(e);
         }
+        if (securityMessage(req.category() != null ? req.category() : template.get("category").asString(), ch)) {
+            storedSubject = SensitiveContent.redactDigits(storedSubject);
+            storedBody = SensitiveContent.redactDigits(storedBody);
+        }
+        SensitiveContentStore.Clear clear = Objects.equals(storedSubject, subject) && Objects.equals(storedBody, body)
+                ? null : new SensitiveContentStore.Clear(subject == null ? null : cut(subject), body);
         ObjectNode values = json.createObjectNode();
         values.put("recipient_type", req.recipientType());
         if (req.recipientId() != null) {
@@ -228,10 +287,10 @@ public class NotificationService {
         values.put("notification_template_id", template.get("id").asString());
         values.put("category", req.category() != null ? req.category() : template.get("category").asString());
         values.put("locale", template.get("locale").asString());
-        if (subject != null) {
-            values.put("subject", subject.length() > 255 ? subject.substring(0, 255) : subject);
+        if (storedSubject != null) {
+            values.put("subject", cut(storedSubject));
         }
-        values.put("body", body);
+        values.put("body", storedBody);
         if (req.data() != null) {
             values.set("data", json.valueToTree(req.data()));
         } else if (vars.get("data") instanceof Map<?, ?> data) {
@@ -254,7 +313,11 @@ public class NotificationService {
         if (req.sourceEventId() != null) {
             values.put("source_event_id", req.sourceEventId());
         }
-        return submit(values, null);
+        return submit(values, null, clear);
+    }
+
+    private static String cut(String subject) {
+        return subject.length() > 255 ? subject.substring(0, 255) : subject;
     }
 
     /**
@@ -310,6 +373,7 @@ public class NotificationService {
                         "Only QUEUED or SCHEDULED notifications can be cancelled; this one is " + status);
             }
             store.update(id, "CANCELLED", "");
+            sensitive.remove(id);
             String row = row(id);
             outbox.publish("platform.notification.cancelled", "notification", id, json.readTree(row));
             return row;
@@ -387,6 +451,7 @@ public class NotificationService {
 
     /** Sends notifications whose scheduled time or retry time has come. Returns how many were processed. */
     public int processDue(Instant now) {
+        sensitive.purgeExpired();
         int processed = 0;
         for (UUID id : store.due(now, 200)) {
             try {

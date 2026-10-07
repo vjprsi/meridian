@@ -85,9 +85,10 @@ public final class ShareTargets {
         return s.length() > 255 ? s.substring(0, 255) : s;
     }
 
+    /** Delegates the address rules to the shared outbound policy (SEC-08); raw IPv6 literals stay refused here. */
     static boolean publicHost(String host) {
         String h = host.trim().toLowerCase(Locale.ROOT);
-        if (h.isEmpty() || h.length() > 253) {
+        if (h.contains(":") || !io.meridian.web.outbound.OutboundUrlPolicy.isPublicHostLiteral(h)) {
             return false;
         }
         try {
@@ -95,19 +96,7 @@ public final class ShareTargets {
         } catch (IllegalArgumentException e) {
             return false;
         }
-        if (h.equals("localhost") || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) {
-            return false;
-        }
-        if (h.matches("\\d{1,3}(\\.\\d{1,3}){3}")) {
-            String[] o = h.split("\\.");
-            int a = Integer.parseInt(o[0]);
-            int b = Integer.parseInt(o[1]);
-            return !(a == 10 || a == 127 || a == 0 || (a == 169 && b == 254) || (a == 172 && b >= 16 && b <= 31)
-                    || (a == 192 && b == 168) || a >= 224);
-        }
-        if (h.contains(":")) {
-            return false; // raw IPv6 literals are not accepted
-        }
-        return h.matches("[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+");
+        return h.matches("\\d{1,3}(\\.\\d{1,3}){3}")
+                || h.matches("[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+");
     }
 }

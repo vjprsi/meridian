@@ -502,6 +502,93 @@ class NotificationFlowIT {
                 json.readTree(payload.replace(customer, nobody))))).isEmpty();
     }
 
+    @Test
+    @Order(13)
+    void otpsAreSentButNeverStoredReturnedOrPublished() throws Exception {
+        // SEC-10. A provider that records what it is handed (the only place the clear OTP may appear).
+        when(services.post(eq("workflow-service"), eq("/v1/approval-requests"), any(), anyString())).thenAnswer(inv -> {
+            ObjectNode apr = ((ObjectNode) json.valueToTree(inv.getArgument(2))).deepCopy();
+            apr.put("id", UUID.randomUUID().toString());
+            apr.put("status", "PENDING");
+            return apr;
+        });
+        post("/v1/notification-providers", """
+                {"channel":"WHATSAPP","provider_name":"CAPTURE","priority":1,"credentials_ref":"vault:capture",
+                 "status":"ACTIVE"}""", 201);
+        JsonNode t = post("/v1/notification-templates", """
+                {"code":"CARD_3DS_OTP_IT","channel":"WHATSAPP","locale":"en","category":"SECURITY",
+                 "body":"Your code is {{otp}} for {{merchant_name}}. Ref {{ref}}"}""", 201);
+        post("/v1/notification-templates/" + t.get("id").asString() + "/publish", null, 200);
+        approvalOutcome(t.get("id").asString(), "approved", "APPROVED");
+
+        // templated (3DS / tokenisation / payee alias): otp by convention, ref declared sensitive by the caller
+        JsonNode n = post("/v1/notifications/send-templated", """
+                {"template_code":"CARD_3DS_OTP_IT","recipient_type":"CUSTOMER","recipient_id":"%s","channel":"WHATSAPP",
+                 "category":"SECURITY","variables":{"otp":"482913","merchant_name":"Shop","ref":"R-77",
+                 "sensitive_variables":["ref"],"destination":"+254700000077"}}""".formatted(CUSTOMER), 201);
+        String id = n.get("id").asString();
+        assertThat(n.get("status").asString()).isEqualTo("SENT");
+        assertThat(n.get("body").asString()).isEqualTo("Your code is [redacted:otp] for Shop. Ref [redacted:ref]");
+        assertThat(CaptureAdapter.SENT).anySatisfy(m -> assertThat(m).isEqualTo("Your code is 482913 for Shop. Ref R-77"));
+        assertThat(get("/v1/notifications/" + id, TENANT).toString()).doesNotContain("482913").doesNotContain("R-77");
+        assertThat(get("/v1/notifications?channel=WHATSAPP", TENANT).toString()).doesNotContain("482913");
+        assertThat(outboxPayloads(id)).isNotEmpty().allSatisfy(p -> assertThat(p).doesNotContain("482913"));
+        assertThat(sensitive.size()).isZero(); // purged once the provider accepted it
+
+        // already-rendered SECURITY message (onboarding / wallet / contact verification): digit codes redacted
+        JsonNode direct = post("/v1/notifications", """
+                {"recipient_type":"EXTERNAL","channel":"WHATSAPP","destination":"+254700000078","category":"SECURITY",
+                 "subject":"Your verification code","body":"Your verification code is 731904. Never share it."}""", 201);
+        assertThat(direct.get("status").asString()).isEqualTo("SENT");
+        assertThat(direct.get("body").asString()).isEqualTo("Your verification code is [redacted]. Never share it.");
+        assertThat(CaptureAdapter.SENT).contains("Your verification code is 731904. Never share it.");
+        assertThat(outboxPayloads(direct.get("id").asString())).allSatisfy(p -> assertThat(p).doesNotContain("731904"));
+
+        // the clear text lives only in memory: once it is gone (restart, TTL) the message fails instead of sending
+        String later = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5).toString();
+        JsonNode scheduled = post("/v1/notifications", """
+                {"recipient_type":"EXTERNAL","channel":"WHATSAPP","destination":"+254700000079","category":"SECURITY",
+                 "body":"Code 555123","scheduled_at":"%s"}""".formatted(later), 201);
+        assertThat(scheduled.get("status").asString()).isEqualTo("SCHEDULED");
+        sensitive.remove(UUID.fromString(scheduled.get("id").asString()));
+        callAs(() -> notifications.processDue(Instant.now().plus(10, ChronoUnit.MINUTES)));
+        JsonNode failed = get("/v1/notifications/" + scheduled.get("id").asString(), TENANT);
+        assertThat(failed.get("status").asString()).isEqualTo("FAILED");
+        assertThat(failed.get("failure_reason").asString()).startsWith("sensitive_content_unavailable");
+        assertThat(CaptureAdapter.SENT).noneMatch(m -> m.contains("555123"));
+    }
+
+    @Autowired
+    io.meridian.notification.infrastructure.SensitiveContentStore sensitive;
+
+    private List<String> outboxPayloads(String aggregateId) {
+        return jdbc.sql("select payload::text from outbox where aggregate_id = ?::uuid")
+                .param(aggregateId).query(String.class).list();
+    }
+
+    /** Records messages handed to providers named CAPTURE (stands in for an SMS / WhatsApp gateway). */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class CaptureAdapter {
+        static final List<String> SENT = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @org.springframework.context.annotation.Bean
+        @org.springframework.core.annotation.Order(0)
+        io.meridian.notification.infrastructure.ChannelAdapter captureAdapter() {
+            return new io.meridian.notification.infrastructure.ChannelAdapter() {
+                @Override
+                public boolean supports(Provider provider) {
+                    return "CAPTURE".equals(provider.providerName());
+                }
+
+                @Override
+                public Result send(Provider provider, Message message) {
+                    SENT.add(message.body());
+                    return new Result("ACCEPTED", "cap_" + UUID.randomUUID(), null, java.util.Map.of("adapter", "capture"));
+                }
+            };
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** A workflow-service decision (platform.approval_request.{verb}) as delivered through libs/meridian-approvals. */

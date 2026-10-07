@@ -35,6 +35,12 @@ spring:
 
 meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
+  # SEC-02: secrets injected from the secret store (Helm secretKeyRef). Outside security-mode=dev the service
+  # refuses to start when one is missing, short or a committed development default (RequiredSecrets).
+  required-secrets:
+    - meridian.cards.callback-secret
+    - meridian.cards.tokens.otp-key
+    - meridian.cards.tokens.payload-key
   events:
     topic: meridian.cards.v1
   cards:
