@@ -581,6 +581,9 @@ services:
           - "is_primary bool nn default=false ro | Default factor"
           - "status enum:MfaFactorStatus nn default=PENDING_VERIFICATION ro | Status (changed by /verify)"
           - "last_used_at ts ro | Last successful use"
+          - "failed_attempts int nn default=0 ro | Consecutive failed verifications (lockout after the limit)"
+          - "locked_until ts ro | Verification locked until this time after too many failures"
+          - "last_used_step int ro | TOTP time step last accepted (a code is never accepted twice)"
         response_only:
           - "totp_secret string(64) | Base32 TOTP seed (TOTP enrolment only)"
           - "otpauth_uri string(500) | otpauth:// provisioning URI for authenticator apps (TOTP enrolment only)"

@@ -38,6 +38,11 @@ meridian:
                               # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
   events:
     topic: meridian.platform.v1
+  identity:
+    # SEC-25: key encrypting staff TOTP seeds at rest (from the secret store); the local value works in dev mode only
+    mfa-seed-key: ${MERIDIAN_IDENTITY_MFA_SEED_KEY:local-dev-mfa-seed-key-not-for-production}
+  required-secrets:
+    - meridian.identity.mfa-seed-key
 
 management:
   endpoints:

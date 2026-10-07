@@ -4,6 +4,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.events.OutboxWriter;
 import io.meridian.identity.domain.Base32;
 import io.meridian.identity.domain.Secrets;
+import io.meridian.identity.domain.SeedCipher;
 import io.meridian.identity.domain.Totp;
 import io.meridian.identity.infrastructure.IdentityStore;
 import io.meridian.web.crud.CrudEngine;
@@ -28,9 +29,21 @@ public class MfaService {
     private final SessionService sessions;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final io.meridian.identity.domain.SeedCipher seeds;
+    private final org.springframework.transaction.support.TransactionTemplate tx;
+    private final int maxAttempts;
+    private final java.time.Duration lockout;
 
     public MfaService(IdentityStore store, CrudEngine crud, UserService users, SessionService sessions,
-                      OutboxWriter outbox, JsonMapper json) {
+                      OutboxWriter outbox, JsonMapper json,
+                      org.springframework.transaction.support.TransactionTemplate tx,
+                      @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-seed-key}") String seedKey,
+                      @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-max-attempts:5}") int maxAttempts,
+                      @org.springframework.beans.factory.annotation.Value("${meridian.identity.mfa-lockout:PT15M}") java.time.Duration lockout) {
+        this.seeds = new io.meridian.identity.domain.SeedCipher(seedKey);
+        this.tx = tx;
+        this.maxAttempts = maxAttempts;
+        this.lockout = lockout;
         this.store = store;
         this.crud = crud;
         this.users = users;
@@ -69,9 +82,13 @@ public class MfaService {
         v.put("status", "PENDING_VERIFICATION");
         v.put("is_primary", false);
         Map<String, String> secrets = Map.of();
+        v.remove("totp_seed_enc"); // never client-supplied
         if ("TOTP".equals(type)) {
             String secret = Base32.encode(Secrets.randomBytes(20));
-            v.put("totp_seed_enc", secret);
+            // SEC-25: encrypted at rest, bound to the factor id
+            String factorId = io.meridian.common.id.Ids.newId().toString();
+            v.put("id", factorId);
+            v.put("totp_seed_enc", seeds.encrypt(secret, factorId));
             secrets = Map.of("totp_secret", secret,
                     "otpauth_uri", Totp.otpauthUri(ISSUER, user.get("username").asString(), secret));
         }
@@ -79,9 +96,23 @@ public class MfaService {
         return new Enrolment(store.publicView(row), secrets);
     }
 
-    @Transactional
+    /** Outcome of a verification attempt; failures are returned so the attempt counter commits (SEC-25). */
+    private record Attempt(String row, ApiException failure) {}
+
     public String verify(UUID userId, UUID factorId, String code, JsonNode assertion) {
+        Attempt a = tx.execute(s -> attempt(userId, factorId, code, assertion));
+        if (a.failure() != null) {
+            throw a.failure();
+        }
+        return a.row();
+    }
+
+    private Attempt attempt(UUID userId, UUID factorId, String code, JsonNode assertion) {
         JsonNode f = lockFactor(userId, factorId);
+        if (f.hasNonNull("locked_until") && java.time.OffsetDateTime.parse(f.get("locked_until").asString())
+                .isAfter(java.time.OffsetDateTime.now())) {
+            throw new ApiException(429, "factor_locked", "Too many failed attempts; try again later");
+        }
         String status = f.get("status").asString();
         if ("DISABLED".equals(status)) {
             throw ApiException.conflict("factor_disabled", "Factor is disabled");
@@ -94,11 +125,18 @@ public class MfaService {
                 if (code == null || code.isBlank()) {
                     throw ApiException.unprocessable("code_required", "A TOTP code is required");
                 }
-                OptionalLong step = Totp.verify(Base32.decode(f.get("totp_seed_enc").asString()), code.trim(),
-                        Instant.now(), Totp.DEFAULT_WINDOW);
-                if (step.isEmpty()) {
-                    throw ApiException.unprocessable("invalid_code", "The code is not valid");
+                String stored = f.get("totp_seed_enc").asString();
+                String seed = seeds.decrypt(stored, factorId.toString());
+                OptionalLong step = Totp.verify(Base32.decode(seed), code.trim(), Instant.now(), Totp.DEFAULT_WINDOW);
+                long last = f.hasNonNull("last_used_step") ? f.get("last_used_step").asLong() : -1;
+                if (step.isEmpty() || step.getAsLong() <= last) {
+                    return new Attempt(null, recordFailure(f, factorId));
                 }
+                store.jdbc().sql("""
+                        update mfa_factor set last_used_step = ?, failed_attempts = 0, locked_until = null,
+                          totp_seed_enc = ? where id = ?""")
+                        .params((int) step.getAsLong(), SeedCipher.isEncrypted(stored) ? stored
+                                : seeds.encrypt(seed, factorId.toString()), factorId).update();
             }
             case "WEBAUTHN" -> {
                 boolean ok = assertion != null && assertion.isObject()
@@ -121,7 +159,19 @@ public class MfaService {
         store.jdbc().sql("update app_user set mfa_enrolled = true where id = ?").param(userId).update();
         outbox.publish("platform.mfa_factor.verified", "mfa_factor", factorId, store.publicView(row));
         users.activateIfInvited(userId);
-        return row;
+        return new Attempt(row, null);
+    }
+
+    /** Counts a failed verification (committed with the attempt); locks the factor after the limit. */
+    private ApiException recordFailure(JsonNode f, UUID factorId) {
+        int failed = f.path("failed_attempts").asInt(0) + 1;
+        if (failed >= maxAttempts) {
+            store.jdbc().sql("update mfa_factor set failed_attempts = ?, locked_until = now() + make_interval(secs => ?) where id = ?")
+                    .params(failed, (double) lockout.toSeconds(), factorId).update();
+            return new ApiException(429, "factor_locked", "Too many failed attempts; try again later");
+        }
+        store.jdbc().sql("update mfa_factor set failed_attempts = ? where id = ?").params(failed, factorId).update();
+        return ApiException.unprocessable("invalid_code", "The code is not valid");
     }
 
     @Transactional

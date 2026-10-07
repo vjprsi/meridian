@@ -169,6 +169,21 @@ class IdentityFlowIT {
         assertThat(ok.has("totp_secret")).isFalse();
         assertThat(outboxCount("platform.mfa_factor.verified", totpFactor)).isEqualTo(1);
         assertThat(post(verify, "{\"code\":\"" + good + "\"}", 409).get("code").asString()).isEqualTo("factor_already_verified");
+        // SEC-25: the seed is encrypted at rest; failed verifications lock the factor
+        String storedSeed = io.meridian.common.tenancy.TenantContext.callAs(java.util.UUID.fromString(TENANT), "test",
+                () -> jdbc.sql("select totp_seed_enc from mfa_factor where id = ?::uuid").param(totpFactor)
+                        .query(String.class).single());
+        assertThat(storedSeed).startsWith("v1:").doesNotContain(totpSecret);
+        JsonNode backup = post("/v1/users/" + alice + "/mfa-factors",
+                "{\"user_id\":\"" + alice + "\",\"factor_type\":\"TOTP\",\"label\":\"backup\"}", 201);
+        String verifyBackup = "/v1/users/" + alice + "/mfa-factors/" + backup.get("id").asString() + "/verify";
+        String backupGood = Totp.at(Base32.decode(backup.get("totp_secret").asString()), Instant.now(), 6);
+        String backupWrong = backupGood.equals("000000") ? "111111" : "000000";
+        for (int i = 1; i <= 4; i++) {
+            assertThat(post(verifyBackup, "{\"code\":\"" + backupWrong + "\"}", 422).get("code").asString()).isEqualTo("invalid_code");
+        }
+        assertThat(post(verifyBackup, "{\"code\":\"" + backupWrong + "\"}", 429).get("code").asString()).isEqualTo("factor_locked");
+        assertThat(post(verifyBackup, "{\"code\":\"" + backupGood + "\"}", 429).get("code").asString()).isEqualTo("factor_locked");
         JsonNode user = get("/v1/users/" + alice, TENANT);
         assertThat(user.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(user.get("mfa_enrolled").asBoolean()).isTrue();
