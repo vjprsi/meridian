@@ -28,7 +28,11 @@ public class CallbackService {
     private final QuoteService quotes;
     private final TransferService transfers;
 
-    public CallbackService(Environment env, Rows rows, QuoteService quotes, TransferService transfers) {
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
+
+    public CallbackService(Environment env, Rows rows, QuoteService quotes, TransferService transfers,
+                           io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.env = env;
         this.rows = rows;
         this.quotes = quotes;
@@ -63,9 +67,15 @@ public class CallbackService {
         if (code == null || payload == null || !payload.isObject()) {
             throw ApiException.badRequest("invalid_callback", "switch_code and a payload object are required");
         }
-        if (!InteropCrypto.verifySignature(secret(code), body, signature)) {
+        String secret = secret(code);
+        if (secret == null || secret.isBlank() || tenantId == null) {
             throw new ApiException(401, "invalid_signature", "Missing or invalid " + HEADER + " for switch " + code);
         }
+        // SEC-17: v2 over "<ts>.<nonce>.<tenant_id>.<canonical body>" (fresh, single use, tenant-bound)
+        callbacks.verify("switch:" + code, tenantId.toString(),
+                InteropCrypto.canonicalJson(body).getBytes(java.nio.charset.StandardCharsets.UTF_8), signature,
+                io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                b -> InteropCrypto.signText(secret, new String(b, java.nio.charset.StandardCharsets.UTF_8)));
         try {
             return TenantContext.callAs(tenantId, "switch:" + code, () -> {
                 ObjectNode sw = rows.queryOne("select row_to_json(s)::text from interop_switch s where code = ?", code)

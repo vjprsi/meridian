@@ -66,7 +66,27 @@ public final class CallbackVerifier {
     public void verify(String provider, String tenant, byte[] body, String signature, Headers headers,
                        Function<byte[], String> sign) {
         Headers h = headers == null ? Headers.NONE : headers;
-        verify(provider, tenant, body, signature, h.timestamp(), h.nonce(), sign);
+        verify(provider, tenant, body, body, signature, h.timestamp(), h.nonce(), sign);
+    }
+
+    /** With the request's v2 headers and a narrower legacy payload. */
+    public void verify(String provider, String tenant, byte[] body, byte[] legacyBody, String signature, Headers headers,
+                       Function<byte[], String> sign) {
+        Headers h = headers == null ? Headers.NONE : headers;
+        verify(provider, tenant, body, legacyBody, signature, h.timestamp(), h.nonce(), sign);
+    }
+
+    /** Raw body of the current spec-[public] request as received (empty when not cached / not yet read). */
+    public static byte[] cachedBody() {
+        if (org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+                instanceof org.springframework.web.context.request.ServletRequestAttributes a) {
+            var cached = org.springframework.web.util.WebUtils.getNativeRequest(a.getRequest(),
+                    org.springframework.web.util.ContentCachingRequestWrapper.class);
+            if (cached != null) {
+                return cached.getContentAsByteArray();
+            }
+        }
+        return new byte[0];
     }
 
     public boolean acceptsLegacy() {
@@ -94,6 +114,15 @@ public final class CallbackVerifier {
      */
     public void verify(String provider, String tenant, byte[] body, String signature, String timestamp, String nonce,
                        Function<byte[], String> sign) {
+        verify(provider, tenant, body, body, signature, timestamp, nonce, sign);
+    }
+
+    /**
+     * As {@link #verify(String, String, byte[], String, String, String, Function)}, where the deprecated legacy
+     * signature covered {@code legacyBody} (e.g. only some fields) while v2 covers the complete {@code body}.
+     */
+    public void verify(String provider, String tenant, byte[] body, byte[] legacyBody, String signature,
+                       String timestamp, String nonce, Function<byte[], String> sign) {
         if (signature == null || signature.isBlank()) {
             throw new ApiException(401, "invalid_signature", "The callback signature is missing");
         }
@@ -103,7 +132,8 @@ public final class CallbackVerifier {
                 throw new ApiException(401, "invalid_signature", "Callbacks must be signed with "
                         + TIMESTAMP_HEADER + " and " + NONCE_HEADER + " (signature v2)");
             }
-            if (!matches(sign.apply(body == null ? new byte[0] : body), signature)) {
+            byte[] legacy = legacyBody == null ? body : legacyBody;
+            if (!matches(sign.apply(legacy == null ? new byte[0] : legacy), signature)) {
                 throw new ApiException(401, "invalid_signature", "The callback signature does not match");
             }
             log.warn("Accepted a legacy (body-only) callback signature from {}; legacy signatures are deprecated", provider);

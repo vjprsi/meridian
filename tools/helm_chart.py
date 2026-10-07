@@ -298,6 +298,9 @@ data:
   MERIDIAN_SECURITY_PLATFORM_OPERATOR_TENANT: {{ $g.auth.platformOperatorTenant | quote }}
   # SEC-16: load balancer / ingress addresses whose X-Forwarded-* the edge gateway believes (comma separated CIDRs)
   MERIDIAN_GATEWAY_TRUSTED_PROXIES: {{ join "," $g.trustedProxies | quote }}
+  # SEC-17: provider callbacks must use v2 signatures (timestamp + nonce) once this is false
+  MERIDIAN_CALLBACKS_ACCEPT_LEGACY_SIGNATURES: {{ $g.callbacks.acceptLegacySignatures | quote }}
+  MERIDIAN_CALLBACKS_MAX_SKEW: {{ $g.callbacks.maxSkew | quote }}
   MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
@@ -413,6 +416,9 @@ def values_yaml(rows, app_version):
         '    audience: "meridian-api"          # SEC-14: required aud of every access token',
         '    platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)',
         "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress in front of the edge gateway",
+        "  callbacks:                # SEC-17: provider callback signatures",
+        "    acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2",
+        '    maxSkew: "5m"',
         "  otel:",
         '    endpoint: "http://otel-collector.monitoring:4318"',
         "    samplingProbability: 0.1",

@@ -84,7 +84,7 @@ class CallbackVerifierTest {
                 .doesNotThrowAnyException();
         code(() -> verifier(false).verify("p", TENANT, BODY, legacy, null, null, SIGN), "invalid_signature");
         code(() -> verifier(true).verify("p", TENANT, BODY, "00" + legacy.substring(2), null, null, SIGN), "invalid_signature");
-        code(() -> verifier(true).verify("p", TENANT, BODY, null, null, null, SIGN), "invalid_signature");
+        code(() -> verifier(true).verify("p", TENANT, BODY, (String) null, null, null, SIGN), "invalid_signature");
         // half a v2 header set is not a legacy request
         code(() -> verifier(true).verify("p", TENANT, BODY, legacy, String.valueOf(NOW.getEpochSecond()), null, SIGN),
                 "invalid_signature");

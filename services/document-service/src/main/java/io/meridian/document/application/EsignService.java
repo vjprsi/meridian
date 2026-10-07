@@ -62,7 +62,9 @@ public class EsignService {
     public EsignService(CrudEngine crud, DocumentStore store, DocumentService documents, EsignProvider provider,
                         OutboxWriter outbox, JdbcClient jdbc, JsonMapper json,
                         @Value("${meridian.esign.callback-secret:change-me-esign-callback-secret}") String callbackSecret,
-                        @Value("${meridian.esign.default-validity:P30D}") Duration defaultValidity) {
+                        @Value("${meridian.esign.default-validity:P30D}") Duration defaultValidity,
+                        io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.crud = crud;
         this.store = store;
         this.documents = documents;
@@ -297,6 +299,8 @@ public class EsignService {
         return ids.size();
     }
 
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
+
     /** Computes the callback signature header value for a raw body (used by providers' sandbox and tests). */
     public String sign(byte[] rawBody) {
         try {
@@ -308,12 +312,14 @@ public class EsignService {
         }
     }
 
-    public void verifySignature(byte[] rawBody, String header) {
-        if (header == null || rawBody == null || rawBody.length == 0
-                || !MessageDigest.isEqual(sign(rawBody).getBytes(StandardCharsets.UTF_8),
-                        header.trim().getBytes(StandardCharsets.UTF_8))) {
+    /** SEC-17: v2 over {@code <ts>.<nonce>.<PROVIDER>.<raw body>} (fresh, single use); legacy while the flag is on. */
+    public void verifySignature(String provider, byte[] rawBody, String header) {
+        if (header == null || rawBody == null || rawBody.length == 0 || provider == null) {
             throw new ApiException(401, "invalid_signature", "Missing or invalid " + SIGNATURE_HEADER + " header");
         }
+        String code = provider.toUpperCase(java.util.Locale.ROOT);
+        callbacks.verify("esign:" + code, code, rawBody, header, io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                this::sign);
     }
 
     private void setStatus(UUID id, String status, String declineReason, boolean complete) {

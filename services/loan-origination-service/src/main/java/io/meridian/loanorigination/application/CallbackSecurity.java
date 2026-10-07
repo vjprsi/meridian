@@ -5,7 +5,6 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.loanorigination.config.OriginationProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
@@ -29,28 +28,51 @@ public class CallbackSecurity {
 
     private final JdbcClient jdbc;
     private final OriginationProperties props;
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
 
-    public CallbackSecurity(JdbcClient jdbc, OriginationProperties props) {
+    public CallbackSecurity(JdbcClient jdbc, OriginationProperties props,
+                            io.meridian.web.callback.CallbackVerifier callbacks) {
         this.jdbc = jdbc;
         this.props = props;
+        this.callbacks = callbacks;
+    }
+
+    /** The provider's own secret ({@code callback-secrets.<CODE>}), else the shared default. */
+    String secretFor(String provider) {
+        String own = provider == null ? null : props.callbackSecrets().get(provider.toUpperCase(Locale.ROOT));
+        return own != null && !own.isBlank() ? own : props.callbackSecret();
     }
 
     public String sign(byte[] rawBody) {
+        return hmac(props.callbackSecret(), rawBody);
+    }
+
+    public String sign(String provider, byte[] data) {
+        return hmac(secretFor(provider), data);
+    }
+
+    private static String hmac(String secret, byte[] data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(props.callbackSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return "sha256=" + HexFormat.of().formatHex(mac.doFinal(rawBody));
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return "sha256=" + HexFormat.of().formatHex(mac.doFinal(data));
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    public void verify(byte[] rawBody, String header) {
-        if (header == null || rawBody == null || rawBody.length == 0
-                || !MessageDigest.isEqual(sign(rawBody).getBytes(StandardCharsets.UTF_8),
-                        header.trim().getBytes(StandardCharsets.UTF_8))) {
+    /**
+     * SEC-17: per-provider secret; v2 signature over {@code <ts>.<nonce>.<PROVIDER>.<raw body>} (fresh, single use);
+     * legacy body-only signatures while the deprecation flag is on.
+     */
+    public void verify(String provider, byte[] rawBody, String header) {
+        if (header == null || rawBody == null || rawBody.length == 0 || provider == null) {
             throw new ApiException(401, "invalid_signature", "Missing or invalid " + SIGNATURE_HEADER + " header");
         }
+        String code = provider.toUpperCase(Locale.ROOT);
+        String secret = secretFor(code);
+        callbacks.verify("lending:" + code, code, rawBody, header, io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                b -> hmac(secret, b));
     }
 
     /** Records where callbacks for {@code reference} belong (inside the caller's transaction). */

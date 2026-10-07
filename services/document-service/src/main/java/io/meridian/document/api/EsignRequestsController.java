@@ -71,7 +71,7 @@ public class EsignRequestsController implements EsignRequestsApi {
     @Override
     public ResponseEntity<Map<String, Object>> esignRequestsCallbacksEvents(String provider,
                                                                            EsignRequestsCallbacksEventsRequest body) {
-        esign.verifySignature(RawBodyConfig.currentBody(), request.getHeader(EsignService.SIGNATURE_HEADER));
+        esign.verifySignature(provider, RawBodyConfig.currentBody(), request.getHeader(EsignService.SIGNATURE_HEADER));
         EsignService.CallbackRoute route = esign.route(provider, body.getEnvelopeId());
         EsignService.CallbackEvent event = new EsignService.CallbackEvent(body.getEnvelopeId(), body.getEvent(),
                 body.getSignerEmail(), body.getSignedDocumentId(), body.getReason());

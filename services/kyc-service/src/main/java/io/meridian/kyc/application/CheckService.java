@@ -11,7 +11,6 @@ import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
@@ -28,6 +27,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Provider checks: routing to an adapter, synchronous and asynchronous (callback) results, retries with fallback. */
 @Service
 public class CheckService {
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
     static final String TABLE = "kyc_check";
     private static final Set<String> CALLBACK_STATUSES = Set.of("PASSED", "FAILED", "INCONCLUSIVE", "ERROR", "EXPIRED");
     /** Server-owned outcome fields that a client cannot set on create. */
@@ -43,7 +43,8 @@ public class CheckService {
     private final Environment env;
 
     public CheckService(Rows rows, CrudEngine crud, KycSupport kyc, ProfileService profiles, ProviderService providers,
-                        ServiceClient services, Environment env) {
+                        ServiceClient services, Environment env, io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.rows = rows;
         this.crud = crud;
         this.kyc = kyc;
@@ -221,31 +222,46 @@ public class CheckService {
             throw ApiException.unprocessable("invalid_callback", "Unsupported result status " + status);
         }
         String tenant = text(payload, "tenant_id");
-        verifySignature(providerCode.toUpperCase(java.util.Locale.ROOT),
-                (tenant == null ? "" : tenant + ":") + reference + ":" + status, text(payload, "signature"));
-    }
-
-    private void verifySignature(String code, String message, String signature) {
+        String code = providerCode.toUpperCase(java.util.Locale.ROOT);
         String secret = env.getProperty("meridian.kyc.webhook-secrets." + code);
         if (secret == null || secret.isBlank()) {
             throw new ApiException(401, "callbacks_not_configured", "No webhook secret is configured for provider " + code);
         }
-        if (signature == null) {
-            throw new ApiException(401, "invalid_signature", "Callback signature is missing");
+        // SEC-17: v2 signs every field the service applies (canonical JSON of the payload without "signature": score,
+        // reason codes, summary, ...) plus timestamp, nonce and tenant; the legacy "[tenant:]reference:status"
+        // signature (score / reasons unsigned) is accepted only while the deprecation flag is on.
+        tools.jackson.databind.node.ObjectNode unsigned = asReceived(payload);
+        unsigned.remove("signature");
+        callbacks.verify("kyc:" + code, tenant,
+                io.meridian.web.callback.CanonicalJson.of(unsigned).getBytes(StandardCharsets.UTF_8),
+                ((tenant == null ? "" : tenant + ":") + reference + ":" + status).getBytes(StandardCharsets.UTF_8),
+                text(payload, "signature"), io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                b -> hmacHex(secret, b));
+    }
+
+    private static final tools.jackson.databind.json.JsonMapper PLAIN = tools.jackson.databind.json.JsonMapper.builder().build();
+
+    /** The payload exactly as the provider sent it (numbers as numbers), from the cached raw body when available. */
+    private static tools.jackson.databind.node.ObjectNode asReceived(JsonNode bound) {
+        byte[] raw = io.meridian.web.callback.CallbackVerifier.cachedBody();
+        if (raw.length > 0) {
+            try {
+                JsonNode p = PLAIN.readTree(raw).get("payload");
+                if (p != null && p.isObject()) {
+                    return ((tools.jackson.databind.node.ObjectNode) p).deepCopy();
+                }
+            } catch (RuntimeException e) {
+                // fall back to the bound payload
+            }
         }
+        return ((tools.jackson.databind.node.ObjectNode) bound).deepCopy();
+    }
+
+    private static String hmacHex(String secret, byte[] data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] expected = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-            byte[] given;
-            try {
-                given = HexFormat.of().parseHex(signature.toLowerCase(java.util.Locale.ROOT));
-            } catch (IllegalArgumentException e) {
-                throw new ApiException(401, "invalid_signature", "Callback signature is invalid");
-            }
-            if (!MessageDigest.isEqual(expected, given)) {
-                throw new ApiException(401, "invalid_signature", "Callback signature is invalid");
-            }
+            return HexFormat.of().formatHex(mac.doFinal(data));
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException(e);
         }

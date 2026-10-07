@@ -76,6 +76,29 @@ public class MeridianWebAutoConfiguration {
         return new io.meridian.web.outbound.OutboundHttp(policy);
     }
 
+    /**
+     * Keeps the raw body of spec-[public] requests (provider callbacks, up to 1 MiB) readable after JSON binding, so
+     * signatures can be checked over exactly what the provider sent ({@code CallbackVerifier.cachedBody()}).
+     */
+    @Bean
+    FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> publicRawBodyFilter(JsonMapper json,
+                                                                                                Environment env) {
+        var publicRoutes = ScopeInterceptor.routes(publicRoutes(json, env.getProperty("spring.application.name", "")));
+        var filter = new org.springframework.web.filter.OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest req,
+                                            jakarta.servlet.http.HttpServletResponse res,
+                                            jakarta.servlet.FilterChain chain)
+                    throws jakarta.servlet.ServletException, java.io.IOException {
+                chain.doFilter(publicRoutes.test(req)
+                        ? new org.springframework.web.util.ContentCachingRequestWrapper(req, 1 << 20) : req, res);
+            }
+        };
+        FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+        return reg;
+    }
+
     @Bean
     FilterRegistrationBean<RequestIdFilter> requestIdFilter() {
         FilterRegistrationBean<RequestIdFilter> reg = new FilterRegistrationBean<>(new RequestIdFilter());
