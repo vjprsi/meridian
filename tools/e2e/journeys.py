@@ -326,16 +326,17 @@ def journey_setup(j: Journey):
     j.step("notification: tenant channel providers", providers)
 
     def alert_rule():
-        t = api.post("/v1/notification-templates", {"code": "PAYMENT_SETTLED", "channel": "IN_APP", "locale": "en",
-                     "category": "TRANSACTIONAL", "subject": "Payment {{status}}",
-                     "body": "Your payment of {{amount}} {{currency}} is {{status}} (ref {{end_to_end_id}})."})
-        api.post(f"/v1/notification-templates/{t['id']}/publish", {})
-        approve_via_inbox(api, "notification_template", t["id"], check_maker_blocked=False)
-        wait_for("template ACTIVE", lambda: api.get(f"/v1/notification-templates/{t['id']}")["status"] == "ACTIVE", 15)
+        for ch in ("EMAIL", "IN_APP"):
+            t = api.post("/v1/notification-templates", {"code": "PAYMENT_SETTLED", "channel": ch, "locale": "en",
+                         "category": "TRANSACTIONAL", "subject": "Payment {{status}}",
+                         "body": "Your payment of {{amount}} {{currency}} is {{status}} (ref {{end_to_end_id}})."})
+            api.post(f"/v1/notification-templates/{t['id']}/publish", {})
+            approve_via_inbox(api, "notification_template", t["id"], check_maker_blocked=False)
+            wait_for("template ACTIVE", lambda: api.get(f"/v1/notification-templates/{t['id']}")["status"] == "ACTIVE", 60)
         api.post("/v1/notification-rules", {"event_type": "payments.payment.settled", "template_code": "PAYMENT_SETTLED",
-                 "channels": ["IN_APP"], "recipient_expression": "CUSTOMER:customer_id", "category": "TRANSACTIONAL",
-                 "is_active": True})
-        return "IN_APP alert on payments.payment.settled (template approved in inbox)"
+                 "channels": ["EMAIL", "IN_APP"], "recipient_expression": "CUSTOMER:customer_id",
+                 "category": "TRANSACTIONAL", "is_active": True})
+        return "EMAIL (customer's verified contact) / IN_APP alert on payments.payment.settled; templates approved in inbox"
     j.step("notification: payment alert template (inbox) + rule", alert_rule)
     j.final = {"legal_entity": le["id"], "ledger": book["id"]}
 
@@ -661,8 +662,8 @@ def journey_b(j: Journey):
            (lambda d: f"{len(d)} timeline entries" if d else None)(
                api.get(f"/v1/servicing/customers/{a['customer_id']}/timeline?limit=50").get("data", [])), timeout=30),
            optional=True)
-    j.step("notification-service: customer notified (Kafka)", lambda: wait_for("notification", lambda:
-           (lambda d: f"{len(d)} notifications: " + ", ".join(sorted({n.get('source_event_type') or '?' for n in d})) if d else None)(
+    j.step("notification-service: customer alerted by e-mail (Kafka -> rule -> customer contact -> SMTP)", lambda: wait_for("notification", lambda:
+           (lambda d: f"{len(d)} alerts: " + ", ".join(sorted({f"{n.get('channel')}:{n.get('status')}" for n in d})) if d else None)(
                [n for n in api.get(f"/v1/notifications?recipient_id={a['customer_id']}&limit=50").get("data", [])
                 if (n.get("source_event_type") or "").startswith("payments.")]), timeout=20),
            optional=True)
