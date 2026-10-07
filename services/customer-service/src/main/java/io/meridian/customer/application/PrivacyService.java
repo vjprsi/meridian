@@ -17,6 +17,7 @@ import io.meridian.customer.api.generated.model.CustomerRelationship;
 import io.meridian.customer.api.generated.model.PrivacyRequest;
 import io.meridian.customer.domain.Lifecycles;
 import io.meridian.customer.infrastructure.Crypto;
+import io.meridian.customer.infrastructure.DataSubjectFanout;
 import io.meridian.customer.infrastructure.ExternalServices;
 import io.meridian.customer.infrastructure.Rows;
 import io.meridian.web.crud.CrudEngine;
@@ -38,10 +39,15 @@ import tools.jackson.databind.node.ObjectNode;
  * PARTIALLY_COMPLETED, or REJECTED with a reason. Execution:
  * <ul>
  *   <li>ACCESS / EXPORT compile all customer data (secrets excluded) into a JSON package stored as a restricted
- *       document in document-service;</li>
- *   <li>ERASURE anonymises personal data where lawful. An open relationship (contract) or the AML record-keeping
- *       period (5 years after the relationship ends) block erasure of the identity record; what is blocked is
- *       listed in retention_blockers and the request completes partially;</li>
+ *       document in document-service, including the customer's rows in every service listed in
+ *       {@code meridian.privacy.services} (their internal data-lifecycle export; GAP-08). If one of them cannot answer
+ *       the request fails (502) and stays IN_PROGRESS, so an incomplete package is never delivered;</li>
+ *   <li>ERASURE anonymises personal data where lawful, here and in every listed service. An active legal hold
+ *       (archive-service) blocks all erasure; an open relationship (contract) blocks erasure of the identity record and
+ *       everything elsewhere; within the AML record-keeping period (5 years after the relationship ends) identity data
+ *       is kept here and the services keep their retained records ({@code within_retention}); append-only records
+ *       are always kept. What is kept, and every service that could not be reached, is listed in retention_blockers
+ *       and the request completes partially (erasure is idempotent: a new request re-runs it);</li>
  *   <li>OBJECTION / RESTRICTION stop marketing and profiling (consents withdrawn, marketing flags off);</li>
  *   <li>RECTIFICATION is applied by the handler through the normal update APIs and then confirmed here.</li>
  * </ul>
@@ -61,10 +67,12 @@ public class PrivacyService {
     private final ExternalServices external;
     private final JsonMapper json;
     private final ContactService contacts;
+    private final DataSubjectFanout fanout;
 
     public PrivacyService(Rows rows, CrudEngine crud, Guards guards, Events events, ConsentService consents,
-                          ExternalServices external, JsonMapper json, ContactService contacts) {
+                          ExternalServices external, JsonMapper json, ContactService contacts, DataSubjectFanout fanout) {
         this.rows = rows;
+        this.fanout = fanout;
         this.contacts = contacts;
         this.crud = crud;
         this.guards = guards;
@@ -153,6 +161,7 @@ public class PrivacyService {
         switch (text(r, "request_type")) {
             case "ACCESS", "EXPORT" -> {
                 ObjectNode export = compileExport(customer);
+                export.set("services", exportElsewhere(customerId, id));
                 byte[] content = json.writeValueAsBytes(export);
                 Map<String, Object> sections = new LinkedHashMap<>();
                 export.properties().forEach(e -> sections.put(e.getKey(), e.getValue().isArray() ? e.getValue().size() : 1));
@@ -160,7 +169,7 @@ public class PrivacyService {
                 v.put("result_document_id", documentId.toString());
             }
             case "ERASURE" -> {
-                ArrayNode blockers = erase(customer);
+                ArrayNode blockers = erase(customer, id);
                 if (!blockers.isEmpty()) {
                     outcome = "PARTIALLY_COMPLETED";
                     v.set("retention_blockers", blockers);
@@ -202,6 +211,19 @@ public class PrivacyService {
         return e;
     }
 
+    /** The customer's rows in the other services (fails when one of them cannot answer). */
+    private ObjectNode exportElsewhere(UUID customerId, UUID requestId) {
+        ObjectNode out = json.createObjectNode();
+        for (DataSubjectFanout.Outcome o : fanout.export(customerId, requestId)) {
+            if (o.failed()) {
+                throw new ApiException(502, "export_incomplete", o.service() + " could not export its data (" + o.error()
+                        + "); the request stays IN_PROGRESS, execute it again");
+            }
+            out.set(o.service(), o.body() == null ? json.createObjectNode() : o.body().path("tables"));
+        }
+        return out;
+    }
+
     private ArrayNode list(String table, UUID customerId, Class<?> model) {
         ArrayNode out = json.createArrayNode();
         rows.query("select row_to_json(t)::text from " + table + " t where t.customer_id = ? order by t.id", customerId)
@@ -211,12 +233,21 @@ public class PrivacyService {
 
     // ------------------------------------------------------------------ erasure
 
-    private ArrayNode erase(ObjectNode customer) {
+    private ArrayNode erase(ObjectNode customer, UUID requestId) {
         UUID id = UUID.fromString(text(customer, "id"));
         String status = text(customer, "status");
         ArrayNode blockers = json.createArrayNode();
         // Always lawful: consent-based processing (marketing, profiling, analytics) stops.
         stopMarketing(id, Set.of("MARKETING", "PROFILING", "ANALYTICS", "LOCATION", "DATA_SHARING_THIRD_PARTY"), "Erasure request");
+        // A legal hold (litigation, investigation, regulator) preserves everything, here and in every other service.
+        tools.jackson.databind.JsonNode holds = fanout.legalHolds(id);
+        if (holds != null && holds.path("on_hold").asBoolean(false)) {
+            List<String> names = new java.util.ArrayList<>();
+            holds.path("holds").forEach(h -> names.add(h.path("name").asString(h.path("legal_hold_id").asString(""))));
+            blockers.add(blocker("all_personal_data", "LEGAL_HOLD",
+                    "Legal hold " + String.join(", ", names) + " covers this customer; nothing is erased until it is released", null));
+            return blockers;
+        }
         boolean onboarded = customer.get("onboarded_at") != null && !customer.get("onboarded_at").isNull();
         if (Lifecycles.CUSTOMER_OPEN.contains(status) && !"PROSPECT".equals(status) && !"PENDING_KYC".equals(status)) {
             blockers.add(blocker("customer_profile", "CONTRACT",
@@ -232,10 +263,13 @@ public class PrivacyService {
         rows.execute("""
                 update customer_credential set status = 'REVOKED', secret_hash = null, public_key = null,
                     webauthn_credential_id = null where customer_id = ?""", id);
+        OffsetDateTime ended = Json.timestamp(customer, "closed_at");
+        OffsetDateTime retainUntil = (ended == null ? now() : ended).plusYears(AML_RETENTION_YEARS);
+        boolean withinRetention = onboarded && retainUntil.isAfter(now());
+        // The other services: anonymise what may go, report what they must keep (and who could not be reached).
+        eraseElsewhere(id, requestId, withinRetention, retainUntil, blockers);
         if (onboarded) {
-            OffsetDateTime ended = Json.timestamp(customer, "closed_at");
-            OffsetDateTime retainUntil = (ended == null ? now() : ended).plusYears(AML_RETENTION_YEARS);
-            if (retainUntil.isAfter(now())) {
+            if (withinRetention) {
                 blockers.add(blocker("identity_and_kyc", "LEGAL_OBLIGATION",
                         "AML/CFT record keeping: identification data is retained for " + AML_RETENTION_YEARS
                                 + " years after the relationship ends", retainUntil.toLocalDate().toString()));
@@ -275,6 +309,28 @@ public class PrivacyService {
         ObjectNode row = rows.update("customer", id, v);
         events.publish("party.customer.updated", "customer", row, Customer.class);
         return blockers;
+    }
+
+    private void eraseElsewhere(UUID customerId, UUID requestId, boolean withinRetention, OffsetDateTime retainUntil,
+                                ArrayNode blockers) {
+        for (DataSubjectFanout.Outcome o : fanout.erase(customerId, requestId, withinRetention)) {
+            if (o.failed()) {
+                blockers.add(blocker(o.service(), "NOT_EXECUTED", o.service() + " could not be reached (" + o.error()
+                        + "); submit a new erasure request to complete it", null));
+                continue;
+            }
+            if (o.body() == null) {
+                continue;
+            }
+            for (tools.jackson.databind.JsonNode t : o.body().path("tables")) {
+                if ("RETAINED".equals(t.path("action").asString()) && t.path("records").asLong(0) > 0) {
+                    boolean appendOnly = t.path("reason").asString("").startsWith("Append-only");
+                    blockers.add(blocker(o.service() + "/" + t.path("table").asString(),
+                            t.path("lawful_basis").asString("LEGAL_OBLIGATION"), t.path("reason").asString(""),
+                            appendOnly || !withinRetention ? null : retainUntil.toLocalDate().toString()));
+                }
+            }
+        }
     }
 
     private void stopMarketing(UUID customerId, Set<String> purposes, String reason) {

@@ -11,10 +11,13 @@ import tools.jackson.databind.JsonNode;
  * <ul>
  *   <li>count — {@code {table_name, created_before, exclude}} -> {@code {count}}</li>
  *   <li>extract — {@code {table_name, created_before, after_id, limit, exclude}} -> {@code {records:[{id, created_at, ...}], skipped_hold}}</li>
- *   <li>confirm — {@code {table_name, archived_object_id, first_record_id, last_record_id, record_count}}: the
- *       batch is safely archived and may leave the online store</li>
+ *   <li>confirm — {@code {table_name, archived_object_id, first_record_id, last_record_id, record_count, created_before,
+ *       exclude}}: the batch is safely archived and leaves the online store (the owning service re-selects exactly the
+ *       extracted rows with the same cutoff and exclusions; append-only tables stay online)</li>
  *   <li>purge — {@code {table_name, action, record_selector, exclude}} -> {@code {records_purged}}</li>
  * </ul>
+ * Calls are made with this service's own identity ({@link ServiceClient#asService}): the owning services accept
+ * data-lifecycle commands only from archive-service and customer-service (GAP-08).
  */
 @Component
 public class SourceClient {
@@ -37,18 +40,18 @@ public class SourceClient {
     }
 
     public JsonNode count(String service, JsonNode body, String key) {
-        return services.post(service, countPath, body, key);
+        return ServiceClient.asService(() -> services.post(service, countPath, body, key));
     }
 
     public JsonNode extract(String service, JsonNode body, String key) {
-        return services.post(service, extractPath, body, key);
+        return ServiceClient.asService(() -> services.post(service, extractPath, body, key));
     }
 
     public JsonNode confirm(String service, JsonNode body, String key) {
-        return services.post(service, confirmPath, body, key);
+        return ServiceClient.asService(() -> services.post(service, confirmPath, body, key));
     }
 
     public JsonNode purge(String service, JsonNode body, String key) {
-        return services.post(service, purgePath, body, key);
+        return ServiceClient.asService(() -> services.post(service, purgePath, body, key));
     }
 }

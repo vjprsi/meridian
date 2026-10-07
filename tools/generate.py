@@ -1234,7 +1234,59 @@ def gen_manifest(domains):
             })
             if s.scope or d.scope:
                 out[-1]["scope"] = s.scope or d.scope
+            pd = personal_data(s)
+            if pd:
+                out[-1]["personal_data"] = pd
     mp.write_text(json.dumps(out, indent=2), encoding="utf-8", newline="\n")
+
+
+# Polymorphic owner columns: (<prefix>_type, <prefix>_id) where <prefix>_type = 'CUSTOMER' points at a customer.
+_POLY_OWNER = ("owner", "recipient", "subject", "party")
+
+
+def _subject_paths(t, by_name, depth=0):
+    """How rows of table t are linked to a customer (data subject): direct customer columns, polymorphic owner pairs,
+    or (up to two levels) a foreign key to a parent table of the same service that is linked itself."""
+    if t.name == "customer":
+        return [{"column": "id"}]
+    paths = []
+    for c in t.columns:
+        if c.type == "uuid" and not c.std and ((c.fk or c.ref) == "customer" or c.name == "customer_id"):
+            paths.append({"column": c.name})
+    names = {c.name for c in t.columns}
+    for pre in _POLY_OWNER:
+        if f"{pre}_type" in names and f"{pre}_id" in names:
+            paths.append({"column": f"{pre}_id", "type_column": f"{pre}_type", "type_value": "CUSTOMER"})
+    if not paths and depth < 2:
+        for c in t.columns:
+            if c.fk and c.fk != t.name and c.fk in by_name and _subject_paths(by_name[c.fk], by_name, depth + 1):
+                paths.append({"column": c.name, "parent": c.fk})
+    return paths
+
+
+def personal_data(s):
+    """Per-table personal-data map of a service for services.json (GAP-07 audit masking, GAP-08 data lifecycle / DSAR):
+    {table: {pii: [columns marked pii], subject: [paths to the customer], hidden: [secret / hidden columns],
+    immutable}} for every tenant table that holds pii columns or is linked to a customer. A subject path is
+    {column} (customer id column), {column, type_column, type_value} (polymorphic owner) or {column, parent} (foreign
+    key to a parent table of the same service, itself linked)."""
+    by_name = {t.name: t for t in s.tables}
+    out = {}
+    for t in s.tables:
+        if not t.tenant:
+            continue
+        pii = [c.name for c in t.columns if c.pii]
+        paths = _subject_paths(t, by_name)
+        if not pii and not paths:
+            continue
+        e = {"pii": pii, "subject": paths}
+        hidden = [c.name for c in t.columns if c.secret or c.type == "bytes" or (c.hide and c.name != "tenant_id")]
+        if hidden:
+            e["hidden"] = hidden          # never leaves the service (secrets, hashes, binary): left out of DSAR exports
+        if t.immutable:
+            e["immutable"] = True
+        out[t.name] = e
+    return out
 
 
 def gen_routes(endpoints):

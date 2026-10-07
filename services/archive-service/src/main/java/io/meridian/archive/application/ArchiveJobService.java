@@ -197,7 +197,8 @@ public class ArchiveJobService {
             if (records == null || !records.isArray() || records.isEmpty()) {
                 break;
             }
-            afterId = writeBatch(jobId, batchNo, service, db, table, cls, policy, records);
+            afterId = writeBatch(jobId, batchNo, service, db, table, cls, policy, records,
+                    job.get("cutoff_date").asString(), exclude);
             if (!res.path("has_more").asBoolean(false)) {
                 break;
             }
@@ -207,7 +208,7 @@ public class ArchiveJobService {
 
     /** Writes one immutable batch and its manifest; returns the last record id. */
     private String writeBatch(UUID jobId, int batchNo, String service, String db, String table, JsonNode cls, JsonNode policy,
-                              JsonNode records) {
+                              JsonNode records, String cutoff, JsonNode exclude) {
         StringBuilder lines = new StringBuilder();
         OffsetDateTime min = null;
         OffsetDateTime max = null;
@@ -264,6 +265,8 @@ public class ArchiveJobService {
         confirm.put("last_record_id", last);
         confirm.put("record_count", records.size());
         confirm.put("checksum_sha256", checksum);
+        confirm.put("created_before", cutoff);
+        confirm.set("exclude", exclude);
         source.confirm(service, confirm, "arj-" + jobId + "-" + batchNo + "-confirm");
         return last;
     }

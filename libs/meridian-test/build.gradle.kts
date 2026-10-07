@@ -7,4 +7,6 @@ dependencies {
     api("org.testcontainers:testcontainers-postgresql")
     api("org.testcontainers:testcontainers-kafka")
     api("org.testcontainers:testcontainers-junit-jupiter")
+    // DataLifecycleCheck (GAP-08 service-level checks)
+    api("tools.jackson.core:jackson-databind")
 }
