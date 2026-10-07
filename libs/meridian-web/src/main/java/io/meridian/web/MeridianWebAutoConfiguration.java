@@ -95,6 +95,16 @@ public class MeridianWebAutoConfiguration {
             }
         };
         FilterRegistrationBean<org.springframework.web.filter.OncePerRequestFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
+        return reg;
+    }
+
+    /** SEC-26: request body cap ({@code meridian.http.max-body-size}, default 16MB). */
+    @Bean
+    FilterRegistrationBean<BodySizeFilter> bodySizeFilter(Environment env) {
+        long max = env.getProperty("meridian.http.max-body-size", org.springframework.util.unit.DataSize.class,
+                org.springframework.util.unit.DataSize.ofMegabytes(16)).toBytes();
+        FilterRegistrationBean<BodySizeFilter> reg = new FilterRegistrationBean<>(new BodySizeFilter(max));
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         return reg;
     }
