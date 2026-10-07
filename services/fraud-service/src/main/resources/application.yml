@@ -38,6 +38,15 @@ meridian:
                               # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
   events:
     topic: meridian.risk.v1
+  fraud:
+    ml:
+      environment: PRODUCTION          # ai-platform deployments (of FRAUD models) this instance serves
+      refresh-ttl-ms: 300000           # background refresh of a tenant's models (deployment events reload at once)
+      failure-backoff-ms: 30000        # retry interval after ai-platform-service was unreachable (rules decide meanwhile)
+      feature-logging: true            # read real-time features for every evaluation (training data), not only ML policies
+      feature-topics: meridian.payments.v1,meridian.cards.v1,meridian.wallets.v1,meridian.risk.v1
+      feature-group: fraud-service-feature-store
+      model-events-topic: meridian.reporting.v1
 
 management:
   endpoints:

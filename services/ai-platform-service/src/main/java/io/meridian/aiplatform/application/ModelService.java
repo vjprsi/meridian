@@ -60,6 +60,11 @@ public class ModelService {
         if (sha != null && !sha.matches("[0-9a-f]{64}")) {
             throw Fields.invalid("artifact_sha256", "invalid_checksum", "artifact_sha256 must be 64 lower-case hex characters");
         }
+        if (existing != null && values.has("artifact_sha256") && !java.util.Objects.equals(sha, Fields.text(existing, "artifact_sha256"))
+                && store.count("select count(*) from ml_model_artifact where ml_model_version_id = ?",
+                        UUID.fromString(existing.get("id").asString())) > 0) {
+            throw ApiException.conflict("artifact_locked", "The version's inline artefact is uploaded; its checksum cannot change");
+        }
         if (merged.hasNonNull("training_from") && merged.hasNonNull("training_to")
                 && Fields.date(merged, "training_to").isBefore(Fields.date(merged, "training_from"))) {
             throw Fields.invalid("training_to", "invalid_range", "training_to must not be before training_from");
@@ -257,6 +262,95 @@ public class ModelService {
         }
         outbox.publish("reporting.model_deployment.activated", "model_deployment", id, row);
         return row.toString();
+    }
+
+    /** Largest inline artefact accepted (UTF-8 bytes). */
+    public static final int MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
+
+    /**
+     * Stores the inline scoring artefact of a version (write-once, while the version is editable). The content must be
+     * JSON and its SHA-256 must equal the version's {@code artifact_sha256}, so what was validated and approved is
+     * byte-for-byte what consumers load (they verify the checksum again).
+     */
+    @Transactional
+    public ObjectNode uploadArtifact(UUID versionId, String format, String content) {
+        JsonNode v = store.requireLocked("ml_model_version", versionId);
+        if (!Lifecycles.VERSION_EDITABLE.contains(v.get("status").asString())) {
+            throw ApiException.conflict("version_locked", "The artefact of a version in status " + v.get("status").asString()
+                    + " cannot be set; register a new version");
+        }
+        if (store.count("select count(*) from ml_model_artifact where ml_model_version_id = ?", versionId) > 0) {
+            throw ApiException.conflict("artifact_exists", "The version already has an artefact (write-once); register a new version");
+        }
+        if (format == null || !format.matches("[a-z0-9][a-z0-9._/-]{0,63}")) {
+            throw Fields.invalid("format", "invalid_format", "format is a lower-case identifier such as meridian-fraud-model/1");
+        }
+        if (content == null || content.isBlank()) {
+            throw Fields.invalid("content", "required", "content is required");
+        }
+        byte[] bytes = content.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (bytes.length > MAX_ARTIFACT_BYTES) {
+            throw ApiException.unprocessable("artifact_too_large", "The artefact exceeds " + MAX_ARTIFACT_BYTES + " bytes");
+        }
+        try {
+            if (!json.readTree(content).isObject()) {
+                throw ApiException.unprocessable("invalid_artifact", "The artefact must be a JSON object");
+            }
+        } catch (tools.jackson.core.JacksonException e) {
+            throw ApiException.unprocessable("invalid_artifact", "The artefact is not valid JSON");
+        }
+        String sha = sha256(bytes);
+        if (!sha.equals(Fields.text(v, "artifact_sha256"))) {
+            throw ApiException.unprocessable("checksum_mismatch", "SHA-256 of the content (" + sha
+                    + ") differs from the version's artifact_sha256");
+        }
+        ObjectNode a = json.createObjectNode();
+        a.put("ml_model_version_id", versionId.toString());
+        a.put("format", format);
+        a.put("content", content);
+        a.put("sha256", sha);
+        a.put("size_bytes", bytes.length);
+        JsonNode row = json.readTree(crud.insert("ml_model_artifact", a));
+        ObjectNode out = json.createObjectNode();
+        out.put("ml_model_version_id", versionId.toString());
+        out.put("format", format);
+        out.put("sha256", sha);
+        out.put("size_bytes", bytes.length);
+        out.put("created_at", row.path("created_at").asString());
+        out.put("created_by", row.path("created_by").asString(null));
+        return out;
+    }
+
+    /** The inline artefact with its checksum and the version's declared checksum (404 when none was uploaded). */
+    @Transactional(readOnly = true)
+    public ObjectNode artifact(UUID versionId) {
+        JsonNode v = store.require("ml_model_version", versionId);
+        JsonNode a = store.row("select row_to_json(t)::text from ml_model_artifact t where t.ml_model_version_id = ?", versionId)
+                .orElseThrow(() -> ApiException.notFound("artifact of model version", versionId));
+        ObjectNode out = json.createObjectNode();
+        out.put("ml_model_version_id", versionId.toString());
+        out.put("ml_model_id", v.get("ml_model_id").asString());
+        out.put("model_version", v.path("model_version").asString());
+        out.put("status", v.path("status").asString());
+        out.put("format", a.get("format").asString());
+        out.put("sha256", a.get("sha256").asString());
+        out.put("artifact_sha256", Fields.text(v, "artifact_sha256"));
+        out.put("size_bytes", a.get("size_bytes").asInt());
+        out.put("content", a.get("content").asString());
+        out.put("created_at", a.path("created_at").asString());
+        return out;
+    }
+
+    public static String contentSha(String content) {
+        return sha256(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    static String sha256(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static UUID uuid(JsonNode n, String f) {

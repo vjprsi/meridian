@@ -666,6 +666,18 @@ services:
           - "decision_comment text ro | Committee comment"
         unique: [[ml_model_id, model_version]]
 
+      - name: ml_model_artifact
+        prefix: mma
+        description: Inline scoring artefact of a model version (JSON, e.g. logistic regression or a tree ensemble) for in-process scoring by the consuming service. Write-once
+        immutable: true
+        fr: [AI-02]
+        columns:
+          - "ml_model_version_id uuid nn fk=ml_model_version uq | Model version"
+          - "format string(64) nn | Artefact format, e.g. meridian-fraud-model/1"
+          - "content text nn | Artefact (UTF-8 JSON); its SHA-256 equals the version's artifact_sha256"
+          - "sha256 string(64) nn | SHA-256 of the content (64 hex)"
+          - "size_bytes int nn | Content size in bytes"
+
       - name: model_deployment
         prefix: mdp
         description: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
@@ -715,6 +727,8 @@ services:
           - "freshness_sla_seconds int | Maximum staleness"
           - "owner string(64) | Owner"
           - "contains_pii bool nn default=false | Derived from personal data"
+          - "feature_set string(64) idx | Group of features computed together, e.g. fraud-realtime-v1"
+          - "definition json | Exact computation - source events, entity key, aggregation, window, bucket, transform, missing value"
 
       - name: copilot_definition
         prefix: cpd
@@ -832,6 +846,8 @@ services:
           - "POST /{id}/approve | Approve the version (model risk committee; not the submitter) | comment text | ml_model_version"
           - "POST /{id}/reject | Reject the version | reason text nn | ml_model_version"
           - "POST /{id}/deploy | Deploy an approved version to an environment | environment string(32) nn, mode enum:ModelDeploymentMode nn, traffic_percent int, thresholds json, auto_rollback bool | model_deployment"
+          - "POST /{id}/artifact | Upload the inline scoring artefact (max 2 MB) while the version is editable; its SHA-256 must equal artifact_sha256; write-once | format string(64) nn, content text nn | object"
+          - "GET /{id}/artifact | Inline scoring artefact of the version with its checksum | | object"
 
       - resource: model-deployments
         path: /v1/ai/deployments
@@ -856,7 +872,7 @@ services:
         path: /v1/ai/features
         table: ml_feature_definition
         ops: [list, get, create, update]
-        filters: [entity, online, contains_pii]
+        filters: [entity, online, contains_pii, name, feature_set]
 
       - resource: copilots
         path: /v1/ai/copilots

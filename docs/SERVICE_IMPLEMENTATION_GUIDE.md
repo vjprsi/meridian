@@ -409,6 +409,22 @@ limits, sanctions and product-catalog services.
 - **Check-then-act across replicas** (inbound messages, external callbacks): `AdvisoryLocks.withLock(key, wait, work)`.
 - **Body size.** `meridian.http.max-body-size` (16MB default); raise it only for upload services.
 
+## Governed ML models (fraud-service, ai-platform-service)
+
+Models are trained outside the platform, registered in ai-platform-service (version + `artifact_sha256`, inline
+artefact via `POST /v1/ai/model-versions/{id}/artifact`, four-eyes approval, shadow -> canary -> champion) and run
+in-process by the consuming service. See `docs/ML_FRAUD_TRAINING.md` for the fraud runtime, artefact format and
+retraining loop. Rules for any service doing the same:
+
+- Load artefacts with the service identity, verify `sha256(content) == artifact_sha256` and the feature list, compile
+  once per (version, checksum); never score with an artefact that failed either check.
+- Only the deciding deployment (champion, or the canary of the subject's slice) may influence the outcome; challengers
+  and shadows are scored and logged, never decide.
+- Fail safe: a missing / failing / slow model falls back to the rule-based path and the result says `degraded`.
+- Features used online must be catalogued in ai-platform (`/v1/ai/features`, `definition` = exact computation,
+  `feature_set`); consumers of domain events de-duplicate on `ce_id` in the same statement as their writes.
+- Reload on `reporting.model_deployment.*` events with a per-instance consumer group (every replica must reload).
+
 ## Tests (required per service)
 
 - Keep the generated `<Name>ApplicationTests` (context + migration).

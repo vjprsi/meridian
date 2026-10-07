@@ -5,6 +5,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.fraud.infrastructure.Db;
 import io.meridian.fraud.infrastructure.Downstream;
+import io.meridian.fraud.infrastructure.FeatureStore;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.util.Set;
@@ -33,9 +34,11 @@ public class FraudAlertService {
     private final Downstream downstream;
     private final TransactionTemplate tx;
     private final JsonMapper json;
+    private final FeatureStore featureStore;
 
     public FraudAlertService(Db db, CrudEngine crud, OutboxWriter outbox, Downstream downstream, TransactionTemplate tx,
-                             JsonMapper json) {
+                             JsonMapper json, FeatureStore featureStore) {
+        this.featureStore = featureStore;
         this.db = db;
         this.crud = crud;
         this.outbox = outbox;
@@ -149,6 +152,14 @@ public class FraudAlertService {
             }
             if (loss != null && recovered != null && recovered.compareTo(loss) > 0) {
                 throw ApiException.unprocessable("invalid_amount", "recovered_amount cannot exceed loss_amount");
+            }
+            String label = Db.str(v, "label");
+            if (("FRAUD".equals(label) || "NOT_FRAUD".equals(label)) && db.one(
+                    "select '1' from fraud_feedback where fraud_score_id = ? and label in ('FRAUD', 'NOT_FRAUD') limit 1", scoreId).isEmpty()) {
+                // first outcome of the evaluation: counts towards the merchant's fraud rate (merchant_risk feature)
+                db.one("select to_json(coalesce(features->'context'->>'merchant_id', ''))::text from fraud_score where id = ?", scoreId)
+                        .map(n -> n.asString(""))
+                        .ifPresent(m -> featureStore.label(m, "FRAUD".equals(label), TenantContext.principal()));
             }
             String row = crud.insert("fraud_feedback", v);
             JsonNode n = json.readTree(row);

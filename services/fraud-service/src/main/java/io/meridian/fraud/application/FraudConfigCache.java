@@ -4,6 +4,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.fraud.domain.DecisionEngine;
 import io.meridian.fraud.domain.expr.ExpressionException;
 import io.meridian.fraud.domain.expr.RuleExpression;
+import io.meridian.fraud.domain.ml.ScoreCombination;
 import io.meridian.fraud.infrastructure.Db;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -83,10 +84,16 @@ public class FraudConfigCache {
                 .thenComparing(DecisionEngine.Rule::code)));
         Map<String, DecisionEngine.Policy> policies = new HashMap<>();
         for (JsonNode p : db.list("select row_to_json(p)::text from fraud_decision_policy p where is_active")) {
+            Map<String, DecisionEngine.Thresholds> channels = new HashMap<>();
+            p.path("channel_thresholds").properties().forEach(e -> channels.put(e.getKey(), new DecisionEngine.Thresholds(
+                    e.getValue().path("step_up").asInt(), e.getValue().path("review").asInt(), e.getValue().path("block").asInt())));
             policies.put(p.get("subject_type").asString(), new DecisionEngine.Policy(
                     p.get("step_up_threshold").asInt(), p.get("review_threshold").asInt(), p.get("block_threshold").asInt(),
                     Db.uuid(p, "model_id"), Db.uuid(p, "shadow_model_id"), p.get("timeout_ms").asInt(),
-                    DecisionEngine.Decision.valueOf(p.get("fallback_decision").asString())));
+                    DecisionEngine.Decision.valueOf(p.get("fallback_decision").asString()),
+                    ScoreCombination.valueOf(p.path("combination").asString("ADDITIVE")),
+                    p.path("model_weight").asDouble(0.5), p.path("model_confidence").asDouble(0.8),
+                    p.path("model_timeout_ms").asInt(10), Map.copyOf(channels), p.path("use_model_thresholds").asBoolean(false)));
         }
         List<ListMeta> lists = db.list("select row_to_json(l)::text from fraud_list l where is_active").stream()
                 .map(l -> new ListMeta(UUID.fromString(l.get("id").asString()), l.get("code").asString(),

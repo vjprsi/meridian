@@ -128,7 +128,7 @@ public class EvaluationStore {
      * Inserts score, hits and alert plus their outbox events in one statement. Returns the stored score row, or
      * null when a concurrent request with the same idempotency key won (the caller then replays).
      */
-    public JsonNode persist(ObjectNode score, ArrayNode hits, ObjectNode alertOrNull, String principal) {
+    public JsonNode persist(ObjectNode score, ArrayNode hits, ObjectNode alertOrNull, ArrayNode modelScores, String principal) {
         String headers = json.writeValueAsString(java.util.Map.of("ce_principal", principal));
         String sql = """
                 with s as (
@@ -136,12 +136,14 @@ public class EvaluationStore {
                       card_id, amount, currency, channel, merchant_category_code, counterparty_country,
                       device_fingerprint_id, ip_address, score, model_score, rule_score, model_id, model_version, decision,
                       reason_codes, features, shadow_decision, latency_ms, correlation_id, session_id, fraud_alert_id,
-                      idempotency_key)
+                      idempotency_key, rules_component_score, combination, ml_model_version_id, ml_deployment_id, degraded,
+                      degraded_reason)
                   select r.id, current_setting('app.tenant_id')::uuid, :principal, r.subject_type, r.subject_id,
                       r.customer_id, r.account_id, r.card_id, r.amount, r.currency, r.channel, r.merchant_category_code,
                       r.counterparty_country, r.device_fingerprint_id, r.ip_address, r.score, r.model_score, r.rule_score,
                       r.model_id, r.model_version, r.decision, r.reason_codes, r.features, r.shadow_decision, r.latency_ms,
-                      r.correlation_id, r.session_id, r.fraud_alert_id, r.idempotency_key
+                      r.correlation_id, r.session_id, r.fraud_alert_id, r.idempotency_key, r.rules_component_score,
+                      r.combination, r.ml_model_version_id, r.ml_deployment_id, coalesce(r.degraded, false), r.degraded_reason
                   from json_populate_record(null::fraud_score, cast(:score as json)) r
                   on conflict (tenant_id, idempotency_key) do nothing
                   returning *
@@ -154,6 +156,18 @@ public class EvaluationStore {
                   from json_populate_recordset(null::fraud_rule_hit, cast(:hits as json)) r
                   where exists (select 1 from s)
                   returning id
+                ),
+                m as (
+                  insert into fraud_model_score (tenant_id, created_by, fraud_score_id, subject_type, channel, ml_model_id,
+                      ml_model_version_id, model_deployment_id, model_version, role, decided, score, probability, would_decide,
+                      latency_us, error, feature_vector, top_contributions)
+                  select current_setting('app.tenant_id')::uuid, :principal, r.fraud_score_id, r.subject_type, r.channel,
+                      r.ml_model_id, r.ml_model_version_id, r.model_deployment_id, r.model_version, r.role,
+                      coalesce(r.decided, false), r.score, r.probability, r.would_decide, coalesce(r.latency_us, 0), r.error,
+                      r.feature_vector, r.top_contributions
+                  from json_populate_recordset(null::fraud_model_score, cast(:model_scores as json)) r
+                  where exists (select 1 from s)
+                  returning 1
                 ),
                 a as (
                   insert into fraud_alert (id, tenant_id, created_by, updated_by, fraud_score_id, customer_id, subject_type,
@@ -188,6 +202,7 @@ public class EvaluationStore {
                 .param("principal", principal)
                 .param("score", json.writeValueAsString(score))
                 .param("hits", json.writeValueAsString(hits))
+                .param("model_scores", json.writeValueAsString(modelScores))
                 .param("alerts", json.writeValueAsString(alerts))
                 .param("sla", slaMinutes)
                 .param("headers", headers)

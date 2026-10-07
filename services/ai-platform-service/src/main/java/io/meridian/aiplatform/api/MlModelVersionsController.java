@@ -5,6 +5,7 @@ import io.meridian.aiplatform.api.generated.model.MlModelVersion;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionCreate;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionUpdate;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionsApproveRequest;
+import io.meridian.aiplatform.api.generated.model.MlModelVersionsArtifactRequest;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionsDeployRequest;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionsRejectRequest;
 import io.meridian.aiplatform.api.generated.model.MlModelVersionsSubmitForApprovalRequest;
@@ -93,6 +94,25 @@ public class MlModelVersionsController implements MlModelVersionsApi {
         String reason = Fields.requireText(req, "reason");
         return idempotency.execute(idempotencyKey, responses.action("reject", id, req), MlModelVersion.class,
                 () -> responses.ok(models.reject(id, reason), MlModelVersion.class));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> mlModelVersionsArtifact(UUID id, String idempotencyKey,
+                                                                      MlModelVersionsArtifactRequest body) {
+        TenantContext.require();
+        JsonNode req = json.valueToTree(body);
+        String format = Fields.requireText(req, "format");
+        String content = Fields.requireText(req, "content");
+        // the fingerprint carries the content's checksum, not the content
+        ObjectNode fp = json.createObjectNode().put("format", format).put("sha256", ModelService.contentSha(content));
+        return responses.object(idempotency.execute(idempotencyKey, responses.action("artifact", id, fp), JsonNode.class,
+                () -> ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(models.uploadArtifact(id, format, content))));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> mlModelVersionsGetArtifact(UUID id) {
+        TenantContext.require();
+        return responses.object(models.artifact(id));
     }
 
     @Override
