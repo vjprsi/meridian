@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.security.access.AccessDeniedException;
@@ -71,6 +72,13 @@ public class ProblemHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     ResponseEntity<ProblemDetail> mediaType(HttpMediaTypeNotSupportedException e, HttpServletRequest req) {
         return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type", e.getMessage(), req, List.of());
+    }
+
+    /** The client's Accept header excludes every representation of the resource (e.g. a text/plain receipt). */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    ResponseEntity<ProblemDetail> notAcceptable(HttpMediaTypeNotAcceptableException e, HttpServletRequest req) {
+        return problem(HttpStatus.NOT_ACCEPTABLE, "not_acceptable", "None of the accepted media types can be produced; "
+                + "supported: " + e.getSupportedMediaTypes(), req, List.of());
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
