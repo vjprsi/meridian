@@ -87,6 +87,15 @@ Spec gaps (flows still local or with no place to record a rejection):
   re-open a request after an approved decision fails a business check (e.g. insufficient funding).
 - Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
 
+## Developer portal gaps (from portal v1)
+
+- API clients: no revoke/delete action (status is read-only); no developer/organisation ownership, so "my apps" are
+  all tenant clients; no self-service sandbox tenant provisioning; usage response untyped.
+- Webhooks: no per-event replay (only time-window replays and per-delivery retry).
+- Contracts don't declare response headers (ETag, Idempotent-Replayed, rate limits); `/v1/oauth-scopes` may be empty.
+- Open banking: no TPP self-registration endpoint for a portal screen.
+- Sandbox simulators (card auths, test clocks) not built yet.
+
 ## Per-domain notes
 
 - platform: `ssoProviderCreate` lacks `client_secret`; `config_entry` lacks submitter; `audit_event` lacks consumed-event id;
