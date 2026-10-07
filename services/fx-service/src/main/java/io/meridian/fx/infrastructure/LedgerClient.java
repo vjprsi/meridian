@@ -30,7 +30,8 @@ public class LedgerClient {
     public UUID post(UUID ledgerId, String key, String description, String sourceType, UUID sourceId,
                      LocalDate valueDate, List<Leg> legs) {
         if (ledgerId == null) {
-            throw new ApiException(500, "ledger_not_configured", "meridian.fx.ledger-id is not configured");
+            throw ApiException.unprocessable("ledger_not_configured",
+                    "No ledger book is configured for this tenant (config-service ledger/fx-service.ledger_id or meridian.fx.ledger-id)");
         }
         ObjectNode body = json.createObjectNode();
         body.put("ledger_id", ledgerId.toString());

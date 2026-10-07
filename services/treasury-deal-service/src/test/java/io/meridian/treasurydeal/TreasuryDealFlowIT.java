@@ -106,6 +106,9 @@ class TreasuryDealFlowIT {
         });
         when(serviceClient.get(anyString(), anyString())).thenAnswer(i -> {
             String path = i.getArgument(1);
+            if ("config-service".equals(i.getArgument(0))) { // no tenant ledger settings: deployment properties apply
+                return json.readTree("{\"namespace\":\"ledger\",\"values\":{}}");
+            }
             calls.add(new Call(i.getArgument(0), "GET", path, null, null));
             if (path.startsWith("/v1/reference/fx-rates/latest?base=EUR&quote=USD")) {
                 return json.readTree("{\"rate\":\"1.0900000000\"}");

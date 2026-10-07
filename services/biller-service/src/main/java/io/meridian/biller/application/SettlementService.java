@@ -143,9 +143,11 @@ public class SettlementService {
             return s;
         }
         Lifecycle.settlement(Rows.str(s, "status"), "PAID");
-        if (props.settlementClearingAccountId() == null) {
-            throw new ApiException(500, "settlement_account_not_configured",
-                    "meridian.biller.settlement-clearing-account-id is not configured");
+        UUID clearingAccount = props.settlementClearingAccountId();
+        if (clearingAccount == null) {
+            throw ApiException.unprocessable("settlement_account_not_configured", "No settlement clearing account is "
+                    + "configured for this tenant (config-service ledger/biller-service.settlement_clearing_account_id or "
+                    + "meridian.biller.settlement-clearing-account-id)");
         }
         ObjectNode biller = catalog.biller(Rows.uuid(s, "biller_id"));
         if (biller.get("settlement_wallet_id") == null || biller.get("settlement_wallet_id").isNull()) {
@@ -161,7 +163,7 @@ public class SettlementService {
             body.put("amount", net.toPlainString());
             body.put("currency", Rows.str(s, "currency"));
             body.put("payer_wallet_id", Rows.str(biller, "settlement_wallet_id"));
-            body.put("counterparty_ledger_account_id", props.settlementClearingAccountId().toString());
+            body.put("counterparty_ledger_account_id", clearingAccount.toString());
             body.put("biller_id", Rows.str(biller, "id"));
             body.put("payee_external_ref", paymentReference);
             body.put("description", "Biller settlement " + Rows.str(biller, "biller_code") + " " + Rows.str(s, "period_start")

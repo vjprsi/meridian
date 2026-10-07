@@ -120,6 +120,10 @@ public class Clients {
 
     public UUID post(UUID ledgerId, String entryType, String description, String currency, String sourceType,
                      UUID sourceId, String reference, List<Leg> legs, String key) {
+        if (ledgerId == null) {
+            throw ApiException.unprocessable("ledger_not_configured", "No ledger book is configured for this tenant "
+                    + "(config-service ledger/card-clearing-service.ledger_id or meridian.cards.ledger-id)");
+        }
         ObjectNode body = json.createObjectNode();
         body.put("ledger_id", ledgerId.toString());
         body.put("entry_type", entryType);
@@ -134,8 +138,8 @@ public class Clients {
         ArrayNode entries = body.putArray("entries");
         for (Leg l : legs) {
             if (l.account() == null) {
-                throw new ApiException(500, "ledger_account_not_configured",
-                        "A ledger account required for this posting is not configured");
+                throw ApiException.unprocessable("ledger_account_not_configured",
+                        "A ledger account required for this posting is not configured for this tenant");
             }
             ObjectNode e = entries.addObject();
             e.put("ledger_account_id", l.account().toString());
