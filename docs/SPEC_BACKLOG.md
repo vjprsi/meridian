@@ -87,6 +87,16 @@ Spec gaps (flows still local or with no place to record a rejection):
   re-open a request after an approved decision fails a business check (e.g. insufficient funding).
 - Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
 
+## Customer channel security (critical, in progress)
+
+Found while building web/customer-web: no customer identity and no customer-scoped API; domain services trust
+customer_id from filters/bodies and do no ownership checks, so customer scoping was browser-only. Fix in progress:
+`channels` domain with customer-channel-service (`/v1/me/*` BFF, object-level authorization, server-built bodies,
+step-up for money movement), Keycloak customer client + customer_id claim, customer tokens rejected by operator
+APIs. Follow-ups: inbox trusts sender_type/opened_by/reader_type and include_internal from the body; onboarding has
+no public applicant surface (applicant token, OTP for phone step, typed step fields, server-generated
+application_number); customer sessions; customer MFA/passkeys.
+
 ## Resume point (paused 2026-10-07)
 
 - Full build after the e2e fixes: only billing-service BillingFlowIT fails (issueAndPayInvoice,
