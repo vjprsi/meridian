@@ -6,6 +6,7 @@ import io.meridian.events.OutboxWriter;
 import io.meridian.notification.domain.DeliveryPolicy;
 import io.meridian.notification.domain.NotificationLifecycle;
 import io.meridian.notification.domain.TemplateRenderer;
+import io.meridian.notification.infrastructure.ContactDirectory;
 import io.meridian.notification.infrastructure.NotificationStore;
 import io.meridian.web.crud.CrudEngine;
 import java.time.Instant;
@@ -41,9 +42,11 @@ public class NotificationService {
     private final OutboxWriter outbox;
     private final JsonMapper json;
     private final TransactionTemplate tx;
+    private final ContactDirectory contacts;
 
     public NotificationService(NotificationStore store, CrudEngine crud, DeliveryService delivery, OutboxWriter outbox,
-                               JsonMapper json, TransactionTemplate tx) {
+                               JsonMapper json, TransactionTemplate tx, ContactDirectory contacts) {
+        this.contacts = contacts;
         this.store = store;
         this.crud = crud;
         this.delivery = delivery;
@@ -184,6 +187,9 @@ public class NotificationService {
                         ? req.destination() : null;
             } else {
                 destination = resolveDestination(ch, vars, req.recipientId());
+                if (destination == null) { // e.g. a domain event names the customer but not their phone / e-mail
+                    destination = contacts.destination(req.recipientType(), req.recipientId(), ch).orElse(null);
+                }
             }
             if (destination == null) {
                 problems.add(ch + ": no destination");

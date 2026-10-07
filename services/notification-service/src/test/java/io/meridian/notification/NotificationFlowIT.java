@@ -471,6 +471,37 @@ class NotificationFlowIT {
         assertThat(cancel.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    @Order(12)
+    void ruleWithoutDestinationInTheEventUsesTheCustomersVerifiedContact() throws Exception {
+        // Domain events name the customer but rarely carry their e-mail/phone: customer-service contacts fill the gap.
+        String customer = "0199a000-0000-7000-8000-00000000beef";
+        when(services.get(eq("customer-service"), eq("/v1/customers/" + customer + "/contacts?limit=50"))).thenReturn(json.readTree("""
+                {"data":[
+                  {"contact_type":"MOBILE","phone":"+254700000009","is_verified":true,"is_primary":true},
+                  {"contact_type":"EMAIL","email":"old@example.com","is_verified":true,"is_primary":false,"valid_to":"2020-01-01"},
+                  {"contact_type":"EMAIL","email":"unverified@example.com","is_verified":false,"is_primary":true},
+                  {"contact_type":"EMAIL","email":"verified@example.com","is_verified":true,"is_primary":false}],
+                 "has_more":false}"""));
+        post("/v1/notification-rules", """
+                {"event_type":"payments.payment.settled","template_code":"WELCOME","channels":["EMAIL"],
+                 "recipient_expression":"CUSTOMER:customer_id","category":"TRANSACTIONAL"}""", 201);
+        String payload = """
+                {"customer_id":"%s","amount":"150.00","currency":"KES","name":"Ann","account":{"last4":"1234"}}""".formatted(customer);
+        List<UUID> created = callAs(() -> rules.onEvent("ce-contacts-1", "payments.payment.settled", json.readTree(payload)));
+        assertThat(java.util.Set.copyOf(created)).hasSize(1); // the payments.payment.* rule matches too (same event: deduplicated)
+        JsonNode n = get("/v1/notifications/" + created.getFirst(), TENANT);
+        assertThat(n.get("channel").asString()).isEqualTo("EMAIL");
+        assertThat(n.get("destination").asString()).isEqualTo("verified@example.com");
+
+        // no usable contact: the rule produces nothing (and does not fail the consumer)
+        String nobody = "0199a000-0000-7000-8000-00000000dead";
+        when(services.get(eq("customer-service"), eq("/v1/customers/" + nobody + "/contacts?limit=50")))
+                .thenThrow(new io.meridian.common.error.ApiException(404, "not_found", "no such customer"));
+        assertThat(callAs(() -> rules.onEvent("ce-contacts-2", "payments.payment.settled",
+                json.readTree(payload.replace(customer, nobody))))).isEmpty();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** A workflow-service decision (platform.approval_request.{verb}) as delivered through libs/meridian-approvals. */
