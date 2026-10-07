@@ -171,6 +171,12 @@ channels:
         $ref: '#/components/messages/CardsCardDisputeDeadlineApproaching'
       CardsCardDisputeClosed:
         $ref: '#/components/messages/CardsCardDisputeClosed'
+  channels:
+    address: meridian.channels.v1
+    description: Customer Channels events
+    messages:
+      ChannelsCustomerActionDenied:
+        $ref: '#/components/messages/ChannelsCustomerActionDenied'
   engagement:
     address: meridian.engagement.v1
     description: 'Engagement: Rewards, Insights and Campaigns events'
@@ -1672,6 +1678,10 @@ operations:
     action: send
     channel:
       $ref: '#/channels/cards'
+  publishChannels:
+    action: send
+    channel:
+      $ref: '#/channels/channels'
   publishEngagement:
     action: send
     channel:
@@ -3424,6 +3434,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CardDispute'
+    ChannelsCustomerActionDenied:
+      name: channels.customer_action.denied
+      title: A customer referenced an object that is not theirs (object-level authorization denial)
+      summary: A customer referenced an object that is not theirs (object-level authorization denial)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.customer_action.denied
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerAction'
     EngagementRewardsProgramActivated:
       name: engagement.rewards_program.activated
       title: A rewards program went live
@@ -25825,6 +25857,103 @@ components:
       - provisional_credit_reversed
       - recovered_amount
       - written_off_amount
+    CustomerAction:
+      type: object
+      description: Audit trail of customer actions through the channel, including object-level denials and step-up refusals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Signed-in customer (from the token)
+        action:
+          type: string
+          maxLength: 64
+          description: Operation (operation id of the /v1/me endpoint)
+        object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT,
+            DEVICE, BUDGET, INSIGHT
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object acted on, or the object id that was refused
+        outcome:
+          type: string
+          enum:
+          - SUCCEEDED
+          - DENIED
+          - STEP_UP_REQUIRED
+          - FAILED
+          description: Result
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Problem code when not SUCCEEDED
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the record created downstream (payment, payee, standing order...)
+        auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the customer's last authentication when the action ran
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Authentication context class of the token
+        channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: WEB or MOBILE
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address (first X-Forwarded-For hop) (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent
+      required:
+      - id
+      - created_at
+      - customer_id
+      - action
+      - outcome
     RewardsProgram:
       type: object
       description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings

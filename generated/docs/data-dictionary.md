@@ -2019,6 +2019,41 @@ API: internal only · Requirements: CRD-08
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+## Customer Channels (`channels`)
+
+Experience API for the bank's own customer apps (web banking, mobile). Every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Domain services keep their operator APIs; customer tokens carry no domain scope and are rejected there.
+
+
+### Service `customer-channel-service` — database `customer_channel_db`
+
+Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning services); keeps only the audit trail of what each customer did or was refused.
+
+
+#### `customer_action` (append-only)
+
+Audit trail of customer actions through the channel, including object-level denials and step-up refusals
+
+API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /v1/me/budgets, /v1/me/cards, /v1/me/contacts, /v1/me/devices, /v1/me/documents, /v1/me/inbox/threads, /v1/me/insights, /v1/me/kyc, /v1/me/loans, /v1/me/notification-preferences, /v1/me/notifications, /v1/me/payees, /v1/me/payments, /v1/me/profile, /v1/me/rewards, /v1/me/standing-orders, /v1/me/wallets
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| customer_id | uuid | no | ref → customer | customer_id | Signed-in customer (from the token) |
+| action | varchar(64) | no |  | action | Operation (operation id of the /v1/me endpoint) |
+| object_type | varchar(40) | yes |  | object_type | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT |
+| object_id | uuid | yes |  | object_id | Object acted on, or the object id that was refused |
+| outcome | varchar(40) (CustomerActionOutcome) | no |  | outcome | Result |
+| error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
+| result_id | uuid | yes |  | result_id | Id of the record created downstream (payment, payee, standing order...) |
+| auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the customer's last authentication when the action ran |
+| acr | varchar(64) | yes |  | acr | Authentication context class of the token |
+| channel | varchar(16) | yes |  | channel | WEB or MOBILE |
+| ip_address | inet | yes |  | ip_address | Client address (first X-Forwarded-For hop) |
+| user_agent | varchar(255) | yes |  | user_agent | Client user agent |
+
 ## Engagement: Rewards, Insights and Campaigns (`engagement`)
 
 Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and personal finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.

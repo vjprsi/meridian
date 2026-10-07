@@ -57,7 +57,7 @@ public class OnboardingApplicantController implements OnboardingApplicantApi {
     }
 
     @Override
-    public ResponseEntity<OnboardingApplication> onboardingApplicantGetGet(UUID id, UUID tenantId) {
+    public ResponseEntity<OnboardingApplication> onboardingApplicantGet(UUID id, UUID tenantId) {
         return ResponseEntity.ok(actions.model(authenticated(tenantId, id, () -> applicant.view(id)),
                 OnboardingApplication.class));
     }
