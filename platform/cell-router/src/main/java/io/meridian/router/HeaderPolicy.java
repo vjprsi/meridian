@@ -32,7 +32,8 @@ public final class HeaderPolicy {
             "x-forwarded-port", "x-forwarded-prefix", "forwarded", "x-real-ip", "x-client-ip", "true-client-ip");
     /** Identity headers that only the local dev stack or Meridian services themselves may send. */
     static final Set<String> INTERNAL = Set.of("x-tenant-id", "x-user", "x-roles", "x-permissions",
-            "x-mfa-verified", "x-customer-id", "x-auth-time", "x-acr", "x-on-behalf-of-customer",
+            "x-mfa-verified", "x-customer-id", "x-auth-time", "x-acr", "x-amr", "x-session-id",
+            "x-on-behalf-of-customer",
             "x-meridian-service", "x-caller-service", "x-agent-id", "x-business-customer-id",
             "x-business-user-id", "x-business-m2m-client", "x-merchant-id", "x-merchant-user-id");
 

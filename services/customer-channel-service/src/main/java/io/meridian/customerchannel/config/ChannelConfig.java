@@ -1,6 +1,8 @@
 package io.meridian.customerchannel.config;
 
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.customerchannel.application.CustomerSessions;
+import org.springframework.beans.factory.ObjectProvider;
 import io.meridian.web.security.CustomerContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -13,14 +15,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Every /v1/me request must come from a signed-in customer of a tenant: staff, service and anonymous callers get
- * 403 {@code customer_identity_required} (or 401 {@code tenant_required}) before any controller runs.
+ * 403 {@code customer_identity_required} (or 401 {@code tenant_required}) before any controller runs. The request's
+ * session is then registered or refreshed ({@link CustomerSessions}); a signed-out session gets 401
+ * {@code session_revoked}.
  */
 @Configuration
 @EnableConfigurationProperties(ChannelProperties.class)
 public class ChannelConfig {
 
     @Bean
-    WebMvcConfigurer customerOnly() {
+    WebMvcConfigurer customerOnly(ObjectProvider<CustomerSessions> sessions) {
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
@@ -29,6 +33,8 @@ public class ChannelConfig {
                     public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
                         CustomerContext.require();
                         TenantContext.require();
+                        // session registry: new-device alerts; a signed-out session is refused (401 session_revoked)
+                        sessions.getObject().track(req, res);
                         return true;
                     }
                 }).addPathPatterns("/v1/me", "/v1/me/**");

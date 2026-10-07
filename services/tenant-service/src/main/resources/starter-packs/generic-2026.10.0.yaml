@@ -1095,6 +1095,41 @@ steps:
          lookup: {query: {event_type: payments.payment.settled}, match: {template_code: PAYMENT_SETTLED}},
          body: {event_type: payments.payment.settled, template_code: PAYMENT_SETTLED, channels: "${param.alert_channels}",
                 recipient_expression: "CUSTOMER:customer_id", category: TRANSACTIONAL, is_active: true}}
+      - key: tpl_new_device_sign_in_push
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: PUSH, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: PUSH}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: PUSH, locale: "${param.language}", category: SECURITY, subject: "New sign-in",
+               body: "New sign-in to your account from {{device_label}}. Not you? Sign out everywhere in Security and contact us."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_new_device_sign_in_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "New sign-in to your account",
+               body: "Your account was signed in to from a new device: {{device_label}} (address {{ip_address}}) at {{seen_at}}. If this was not you, open Security in the app, choose Sign out everywhere and contact us."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_new_device_sign_in_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: SMS, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: SMS}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "New sign-in to your account from {{device_label}}. Not you? Sign out everywhere in the app and call us."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - {key: rule_new_device_sign_in, title: Alert on a sign-in from a new device, service: notification-service, path: /v1/notification-rules, update: PATCH,
+         update_exclude: [event_type, template_code],
+         lookup: {query: {event_type: channels.customer_session.new_device}, match: {template_code: NEW_DEVICE_SIGN_IN}},
+         body: {event_type: channels.customer_session.new_device, template_code: NEW_DEVICE_SIGN_IN, channels: [PUSH, EMAIL, SMS],
+                recipient_expression: "CUSTOMER:customer_id", category: SECURITY, is_active: true}}
       - {key: rule_payment_received, title: Alert on incoming payments, service: notification-service, path: /v1/notification-rules, update: PATCH,
          update_exclude: [event_type, template_code],
          lookup: {query: {event_type: payments.payment.received}, match: {template_code: PAYMENT_RECEIVED}},

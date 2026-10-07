@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+    "/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer's sessions, active ones first (refreshed from the identity provider when the sessions client is configured; is_current marks this session) */
+        get: operations["mySessionsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/{session_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out one of the customer's sessions: refused by the channel at once and ended at the identity provider */
+        post: operations["mySessionsRevoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out everywhere: every active session of the customer, including this one unless include_current is false */
+        post: operations["mySessionsRevokeAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The current authentication (acr, amr, auth_time, session), the second factors enrolled at the identity provider ({id, type, label, created_at}; empty when the sessions client is not configured) and the step-up policy per operation ({operation, acr, max_age_seconds}) */
+        get: operations["mySecurityGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/profile": {
         parameters: {
             query?: never;
@@ -1193,6 +1261,19 @@ export interface components {
                 code?: string;
                 message?: string;
             }[];
+        };
+        /** @description One page of CustomerSession results (newest first) */
+        CustomerSessionPage: {
+            data: components["schemas"]["CustomerSession"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        MySessionsRevokeRequest: {
+            reason?: string;
+        };
+        MySessionsRevokeAllRequest: {
+            include_current?: boolean;
         };
         MyProfileUpdateRequest: {
             preferred_language: string;
@@ -2860,7 +2941,7 @@ export interface components {
             customer_id: string;
             /** @description Operation (operation id of the /v1/me endpoint) */
             action: string;
-            /** @description ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT */
+            /** @description ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT, SESSION */
             object_type?: string | null;
             /**
              * Format: uuid
@@ -3156,6 +3237,87 @@ export interface components {
             custom_field_4?: string | null;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
+        };
+        /** @description A sign-in session of the customer, registered the first time the channel sees the identity provider session (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured. A session from a device the customer never used before raises channels.customer_session.new_device. */
+        CustomerSession: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Signed-in customer (from the token)
+             */
+            customer_id: string;
+            /** @description Identity provider session id (sid claim) */
+            session_id: string;
+            /** @description Identity provider user id (token sub) */
+            subject?: string | null;
+            /** @description SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent */
+            device_hash?: string | null;
+            /** @description Readable device, e.g. Chrome on Windows */
+            device_label?: string | null;
+            /** @description Client user agent when the session was first seen */
+            user_agent?: string | null;
+            /** @description Client address when the session was first seen (IPv4 or IPv6 address) */
+            ip_address?: string | null;
+            /** @description Client address of the latest request (IPv4 or IPv6 address) */
+            last_ip_address?: string | null;
+            /**
+             * Format: date-time
+             * @description First request of the session through the channel
+             */
+            first_seen_at: string;
+            /**
+             * Format: date-time
+             * @description Latest request (updated at most once a minute)
+             */
+            last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description Last authentication of the session (token auth_time)
+             */
+            auth_time?: string | null;
+            /** @description Highest authentication level seen in the session */
+            acr?: string | null;
+            /** @description The device had not been used by the customer before (alert sent) */
+            new_device: boolean;
+            /**
+             * @description ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)
+             * @enum {string}
+             */
+            status: "ACTIVE" | "REVOKED" | "ENDED";
+            /**
+             * Format: date-time
+             * @description When the session was signed out
+             */
+            revoked_at?: string | null;
+            /** @description Why (customer's reason, SIGN_OUT_EVERYWHERE, ...) */
+            revoked_reason?: string | null;
+            /** @description The identity provider confirmed the session was ended */
+            idp_session_ended: boolean;
+            /** @description The session of the request (returned once; never stored) */
+            readonly is_current?: boolean;
         };
         /** @description A customer or internal deposit account (current, savings, call, notice, escrow, settlement) */
         DepositAccount: {
@@ -4942,6 +5104,21 @@ export interface components {
             readonly fraud_alert_id?: string | null;
             /** @description Fraud scoring timed out or was unavailable; the configured fallback decided */
             readonly fraud_degraded: boolean;
+            /**
+             * Format: int32
+             * @description Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+             */
+            readonly fraud_rescore_attempts: number;
+            /**
+             * Format: date-time
+             * @description Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+             */
+            readonly fraud_next_rescore_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token
+             */
+            readonly upstream_fraud_score_id?: string | null;
             /** @description Why the payment is ON_HOLD (FRAUD_REVIEW) */
             readonly hold_reason?: string | null;
             /** @description Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) */
@@ -6381,6 +6558,134 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    mySessionsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySessionsRevoke: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySessionsRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySessionsRevokeAll: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySessionsRevokeAllRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySecurityGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     myProfileGet: {
         parameters: {
             query?: never;

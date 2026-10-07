@@ -77,7 +77,8 @@ public class TenantFilter extends OncePerRequestFilter {
             principal = user == null || user.isBlank() ? "dev-user" : user;
             callingService = req.getHeader(SERVICE_HEADER);
             customer = CustomerContext.fromDevHeaders(req.getHeader(CustomerContext.CUSTOMER_HEADER),
-                    req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
+                    req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER),
+                    req.getHeader(CustomerContext.AMR_HEADER), req.getHeader(CustomerContext.SESSION_HEADER))
                     .orElse(null);
         }
         if (customer != null) {

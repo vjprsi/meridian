@@ -119,8 +119,10 @@ npm run test:e2e     # Playwright smoke with a mocked/absent backend (uses the l
 ```
 
 - Sign in with Keycloak (public PKCE client `meridian-customer-web`; demo user `demo.customer` /
-  `Meridian#Customer2026`, set its `customer_id` attribute to a customer of the demo tenant) or in dev mode by picking a
-  tenant and customer on `/login`.
+  `Meridian#Customer2026` with a demo authenticator app, TOTP base32 secret `JVSXE2LENFQW4RDFNVXVI33UOAZDAMRW`; set its
+  `customer_id` attribute to a customer of the demo tenant) or in dev mode by picking a tenant and customer on `/login`.
+- Security (`/security`): sign-in strength (acr / amr), second factors (passkey, security key, authenticator app:
+  enrolled and removed at Keycloak through `kc_action`), sessions with sign-out per session and "sign out everywhere".
 - Every signed-in screen calls only the customer channel `/v1/me/*` (`customer-channel-service`, see below); sign-up
   still uses the onboarding services before a customer exists.
 - Screens: sign-up (journey-driven onboarding, document upload, KYC status), home, account detail with transactions and
@@ -147,9 +149,18 @@ is the experience API behind `/v1/me/*`; the 60+ domain services keep their oper
 - Bodies are rebuilt server-side (customer, debtor account and currency, creditor details from the payee, sender /
   opener types, document owner, KYC status are never taken from the client); downstream Idempotency-Keys are derived
   per customer.
-- Step-up: payments, standing orders (create, resume), loan repayment, payee add / trust, card unfreeze and limits,
-  new contact points and device revocation need `auth_time` within `meridian.channels.step-up-max-age` (5 min; optional
-  `step-up-acr`), else 401 `step_up_required` with `WWW-Authenticate: Bearer error="insufficient_user_authentication"`.
+- Step-up (Keycloak Levels of Authentication): payments, standing orders (create, resume), loan repayment, payee add /
+  trust, card unfreeze and limits, new contact points and device revocation need acr 2 (password + WebAuthn / passkey /
+  authenticator app) from an authentication at most 5 minutes old (`meridian.channels.step-up.{acr,max-age,amr}`,
+  per operation under `operations`), else 401 `step_up_required` with the RFC 9470 challenge
+  `WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="2", max_age=300`; the app steps up
+  with `acr_values=2&max_age=300`.
+- Sessions: registered by the token's `sid` (`customer_session`; dev `X-Session-Id`), listed and signed out through
+  `/v1/me/sessions` (one, or `revoke-all`); a signed-out session is refused at once (401 `session_revoked`) and ended at
+  Keycloak through the `meridian-customer-sessions` admin client when configured
+  (`meridian.channels.sessions.identity-provider.*`). A sign-in from a device the customer never used publishes
+  `channels.customer_session.new_device` (starter-pack rule `NEW_DEVICE_SIGN_IN`: push / e-mail / SMS). Details:
+  `docs/SERVICE_IMPLEMENTATION_GUIDE.md`, "Customer MFA, step-up and sessions".
 
 ## Agent app (PWA, works offline)
 

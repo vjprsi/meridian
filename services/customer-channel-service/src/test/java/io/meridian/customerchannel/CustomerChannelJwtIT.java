@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,15 +75,29 @@ class CustomerChannelJwtIT {
         when(decoder.decode(anyString())).thenAnswer(i -> token(i.getArgument(0)));
     }
 
-    /** Token values: customer-fresh, customer-stale, customer-weak (no auth_time), staff-admin, service. */
+    /**
+     * Token values: customer-fresh (acr 2, amr pwd+otp), customer-acr1 (recent password-only sign-in), customer-stale
+     * (acr 2 an hour ago), customer-weak (no auth_time / acr), customer-sid-&lt;sid&gt; (acr 2 with that session),
+     * staff-admin, service.
+     */
     private static Jwt token(String value) {
         Jwt.Builder b = Jwt.withTokenValue(value).header("alg", "RS256").subject("kc-" + value)
                 .claim("tenant_id", TENANT).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300));
+        if (value.startsWith("customer-sid-")) {
+            return b.subject("kc-user-a").claim("scope", "openid profile channels:customer").claim("customer_id", A)
+                    .claim("auth_time", Instant.now().minusSeconds(30).getEpochSecond()).claim("acr", "2")
+                    .claim("amr", List.of("pwd", "otp")).claim("sid", value.substring("customer-sid-".length()))
+                    .build();
+        }
         return switch (value) {
             case "customer-fresh" -> b.claim("scope", "openid profile channels:customer").claim("customer_id", A)
-                    .claim("auth_time", Instant.now().minusSeconds(30).getEpochSecond()).build();
+                    .claim("auth_time", Instant.now().minusSeconds(30).getEpochSecond()).claim("acr", "2")
+                    .claim("amr", List.of("pwd", "otp")).build();
+            case "customer-acr1" -> b.claim("scope", "openid profile channels:customer").claim("customer_id", A)
+                    .claim("auth_time", Instant.now().minusSeconds(10).getEpochSecond()).claim("acr", "1")
+                    .claim("amr", List.of("pwd")).build();
             case "customer-stale" -> b.claim("scope", "openid profile channels:customer").claim("customer_id", A)
-                    .claim("auth_time", Instant.now().minusSeconds(3600).getEpochSecond()).build();
+                    .claim("auth_time", Instant.now().minusSeconds(3600).getEpochSecond()).claim("acr", "2").build();
             case "customer-weak" -> b.claim("scope", "openid channels:customer").claim("customer_id", A).build();
             case "staff-admin" -> b.claim("scope", "cards:* payments:* meridian:admin").claim("customer_id", B).build();
             case "service" -> b.claim("scope", "meridian:internal channels:customer").claim("customer_id", B).build();
@@ -107,18 +122,54 @@ class CustomerChannelJwtIT {
     }
 
     @Test
-    void stepUpUsesTheTokensAuthTime() throws Exception {
+    void stepUpNeedsAcr2FromARecentAuthentication() throws Exception {
         String transfer = "{\"kind\":\"OWN_TRANSFER\",\"from_account_id\":\"%s\",\"to_account_id\":\"%s\",\"amount\":\"5\"}"
                 .formatted(accountA, accountA2);
-        for (String t : new String[] {"customer-stale", "customer-weak"}) {
+        for (String t : new String[] {"customer-stale", "customer-weak", "customer-acr1"}) {
             HttpResponse<String> r = call(t, "POST", "/v1/me/payments", transfer, null);
             assertThat(r.statusCode()).as(t).isEqualTo(401);
             assertThat(json.readTree(r.body()).path("code").asString()).isEqualTo("step_up_required");
+            // RFC 9470 challenge: the app re-authenticates with acr_values=2 and max_age=300
+            assertThat(r.headers().firstValue("WWW-Authenticate")).as(t).hasValueSatisfying(h -> assertThat(h)
+                    .startsWith("Bearer error=\"insufficient_user_authentication\"")
+                    .contains("acr_values=\"2\"").contains("max_age=300"));
         }
+        assertThat(json.readTree(call("customer-acr1", "POST", "/v1/me/payments", transfer, null).body())
+                .path("detail").asString()).contains("second factor");
+        // card unfreeze and payee trust follow the same policy; reads need no step-up
+        assertThat(call("customer-acr1", "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        JsonNode sec = json.readTree(call("customer-acr1", "GET", "/v1/me/security", null, null).body());
+        assertThat(sec.path("authentication").path("acr").asString()).isEqualTo("1");
+        sec.path("step_up").path("operations").forEach(o -> assertThat(o.path("satisfied").asBoolean()).isFalse());
         assertThat(bank.writes()).isEmpty();
         HttpResponse<String> ok = call("customer-fresh", "POST", "/v1/me/payments", transfer, null);
         assertThat(ok.statusCode()).isEqualTo(200);
         assertThat(json.readTree(ok.body()).path("customer_id").asString()).isEqualTo(A);
+    }
+
+    @Test
+    void sessionsComeFromTheSidClaimAndASignedOutSessionIsRefused() throws Exception {
+        String sid1 = UUID.randomUUID().toString();
+        String sid2 = UUID.randomUUID().toString();
+        assertThat(call("customer-sid-" + sid1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        assertThat(call("customer-sid-" + sid2, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
+        JsonNode list = json.readTree(call("customer-sid-" + sid1, "GET", "/v1/me/sessions", null, null).body());
+        String other = null;
+        for (JsonNode s : list.path("data")) {
+            if (s.path("session_id").asString().equals(sid2)) {
+                other = s.path("id").asString();
+                assertThat(s.path("is_current").asBoolean()).isFalse();
+                assertThat(s.path("subject").asString()).isEqualTo("kc-user-a");
+            }
+        }
+        assertThat(other).isNotNull();
+        // the X-Session-Id dev header is ignored in JWT mode: the session is the token's sid
+        assertThat(call("customer-sid-" + sid1, "POST", "/v1/me/sessions/" + other + "/revoke", "{}", null)
+                .statusCode()).isEqualTo(200);
+        HttpResponse<String> refused = call("customer-sid-" + sid2, "GET", "/v1/me/cards", null, null);
+        assertThat(refused.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(refused.body()).path("code").asString()).isEqualTo("session_revoked");
+        assertThat(call("customer-sid-" + sid1, "GET", "/v1/me/cards", null, null).statusCode()).isEqualTo(200);
     }
 
     private HttpResponse<String> call(String token, String method, String path, String body, String customerHeader)
@@ -126,7 +177,8 @@ class CustomerChannelJwtIT {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
                 // dev-mode headers must be ignored in JWT mode
-                .header("X-Auth-Time", String.valueOf(Instant.now().getEpochSecond()));
+                .header("X-Auth-Time", String.valueOf(Instant.now().getEpochSecond()))
+                .header("X-Acr", "2").header("X-Session-Id", "spoofed-session");
         if (token != null) {
             b.header("Authorization", "Bearer " + token);
         }

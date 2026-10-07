@@ -39,8 +39,26 @@ meridian:
   events:
     topic: meridian.channels.v1
   channels:
-    step-up-max-age: PT5M     # money movement / security changes need an authentication at most this old
-    step-up-acr: []           # e.g. [gold] to also require a strong acr from the identity provider
+    # Step-up (money movement, payee add/trust, contact changes, card unfreeze and limits, standing orders, loan
+    # repayment, device revocation): acr level (Keycloak Levels of Authentication, realm acr.loa.map) and the age of
+    # the authentication (auth_time). Per-operation overrides by operation id; amr = methods of which one is required.
+    step-up:
+      acr: "2"                # password + second factor (WebAuthn / passkey / authenticator app)
+      max-age: PT5M
+      amr: []
+      operations: {}          # e.g. myCardsReplaceLimits: {acr: "1", max-age: PT15M}
+    acr-levels: {"0": 0, "1": 1, "2": 2}
+    sessions:
+      enabled: true           # register sessions by sid; refuse signed-out ones (401 session_revoked)
+      new-device-alerts: true # channels.customer_session.new_device -> notification rule NEW_DEVICE_SIGN_IN
+      touch-interval: PT1M
+      # Keycloak admin client used to list / end the customer's own sessions and list their factors (optional; without
+      # it revocation is enforced by the channel only and the factor list is empty).
+      # identity-provider:
+      #   base-url: http://localhost:15180
+      #   realm: meridian
+      #   client-id: meridian-customer-sessions
+      #   client-secret: meridian-customer-sessions-secret
   # JWT mode: the channel never forwards a customer's token; it calls the domain services with this service identity
   # for the customer's tenant (required, else customer requests fail with 503 service_identity_not_configured).
   # service-auth:

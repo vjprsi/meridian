@@ -4,6 +4,7 @@ import io.meridian.common.error.ApiException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,10 @@ public final class CustomerContext {
     public static final String CUSTOMER_HEADER = "X-Customer-Id";
     public static final String AUTH_TIME_HEADER = "X-Auth-Time";
     public static final String ACR_HEADER = "X-Acr";
+    /** Dev mode only: authentication methods (comma-separated amr values, e.g. {@code pwd,otp}). */
+    public static final String AMR_HEADER = "X-Amr";
+    /** Dev mode only: the sign-in session (stands in for the token's {@code sid} claim). */
+    public static final String SESSION_HEADER = "X-Session-Id";
     /**
      * Sent by {@link io.meridian.web.client.ServiceClient} on calls made for a customer: the customer the calling
      * service acts for. Receivers may honour it only together with an internal service token.
@@ -41,8 +46,20 @@ public final class CustomerContext {
      * @param customerId customer id (customer-service)
      * @param authTime   time of the last interactive authentication ({@code auth_time}); null if unknown
      * @param acr        authentication context class ({@code acr}); null if absent
+     * @param amr        authentication methods of the last authentication ({@code amr}, RFC 8176); empty if absent
+     * @param sessionId  identity provider session ({@code sid}); null if absent
+     * @param subject    identity provider user ({@code sub}); null in dev mode
      */
-    public record CustomerPrincipal(UUID customerId, Instant authTime, String acr) {
+    public record CustomerPrincipal(UUID customerId, Instant authTime, String acr, List<String> amr, String sessionId,
+                                    String subject) {
+        public CustomerPrincipal {
+            amr = amr == null ? List.of() : List.copyOf(amr);
+        }
+
+        public CustomerPrincipal(UUID customerId, Instant authTime, String acr) {
+            this(customerId, authTime, acr, List.of(), null, null);
+        }
+
         /** Age of the last authentication, empty when the token does not say when it happened. */
         public Optional<Duration> authAge(Instant now) {
             return authTime == null ? Optional.empty() : Optional.of(Duration.between(authTime, now));
@@ -102,18 +119,43 @@ public final class CustomerContext {
             return Optional.empty();
         }
         return Optional.of(new CustomerPrincipal(customer, epoch(jwt.getClaims().get("auth_time")),
-                jwt.getClaimAsString("acr")));
+                jwt.getClaimAsString("acr"), amr(jwt.getClaims().get("amr")), blankToNull(jwt.getClaimAsString("sid")),
+                jwt.getSubject()));
     }
 
     /** Dev security mode: customer from {@value #CUSTOMER_HEADER}, auth time from {@value #AUTH_TIME_HEADER}. */
     public static Optional<CustomerPrincipal> fromDevHeaders(String customerHeader, String authTimeHeader,
                                                              String acrHeader) {
+        return fromDevHeaders(customerHeader, authTimeHeader, acrHeader, null, null);
+    }
+
+    /**
+     * Dev security mode, with the authentication methods ({@value #AMR_HEADER}, comma-separated) and the session
+     * ({@value #SESSION_HEADER}).
+     */
+    public static Optional<CustomerPrincipal> fromDevHeaders(String customerHeader, String authTimeHeader,
+                                                             String acrHeader, String amrHeader, String sessionHeader) {
         UUID customer = parseUuid(customerHeader);
         if (customer == null) {
             return Optional.empty();
         }
-        return Optional.of(new CustomerPrincipal(customer, epoch(authTimeHeader),
-                acrHeader == null || acrHeader.isBlank() ? null : acrHeader.trim()));
+        String session = blankToNull(sessionHeader);
+        return Optional.of(new CustomerPrincipal(customer, epoch(authTimeHeader), blankToNull(acrHeader),
+                amr(amrHeader), session != null && session.length() <= 64 ? session : null, null));
+    }
+
+    private static List<String> amr(Object value) {
+        if (value instanceof Collection<?> c) {
+            return c.stream().map(String::valueOf).filter(s -> !s.isBlank()).map(String::trim).toList();
+        }
+        if (value instanceof String s && !s.isBlank()) {
+            return java.util.Arrays.stream(s.split("[,\\s]+")).filter(x -> !x.isBlank()).toList();
+        }
+        return List.of();
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     static Set<String> scopes(Jwt jwt) {

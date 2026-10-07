@@ -38,6 +38,21 @@ export type SecureMessageThread = S["SecureMessageThread"];
 export type SecureMessage = S["SecureMessage"];
 export type Notification = S["Notification"];
 export type NotificationPreference = S["NotificationPreference"];
+export type CustomerSession = S["CustomerSession"];
+
+/** GET /v1/me/security (`object` in the contract; shape built by customer-channel-service SecurityOverview). */
+export interface SecurityOverview {
+  authentication: { acr?: string | null; level: number; amr: string[]; auth_time?: string | null; session_id?: string | null };
+  /** False when the factors could not be read (no identity provider client configured): then factors is empty. */
+  factors_available: boolean;
+  factors: { id: string; type: "otp" | "webauthn" | "webauthn-passwordless" | string; label?: string | null; created_at?: string | null }[];
+  /** null when unknown (factors not available). */
+  has_second_factor: boolean | null;
+  step_up: { acr: string; max_age_seconds: number;
+    operations: { operation: string; acr: string; max_age_seconds: number; amr: string[]; satisfied: boolean }[] };
+  /** Keycloak application-initiated actions (kc_action) for enrolment and removal ({id} = factor id). */
+  enrolment: { authenticator_app: string; security_key: string; passkey: string; remove: string };
+}
 
 /** Request bodies of the channel: the server fills in customer, debtor details, channel and type. */
 export type MyPayment = S["MyPaymentsCreateRequest"];

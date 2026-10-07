@@ -214,7 +214,10 @@ class StarterPackFlowIT {
         assertThat(fake.all(bank, "/v1/wallet-fee-rules")).hasSize(6);
         assertThat(fake.all(bank, "/v1/wallet-tier-limits")).hasSize(4);
         assertThat(fake.all(bank, "/v1/approval-policies")).hasSize(12).allSatisfy(p -> assertThat(p.get("allow_self_approval").asBoolean()).isFalse());
-        assertThat(fake.all(bank, "/v1/notification-rules")).allSatisfy(r -> assertThat(r.get("channels").toString()).isEqualTo("[\"EMAIL\",\"IN_APP\"]"));
+        // payment alerts use the pack's alert_channels; the new-device security alert has its own fixed channels
+        assertThat(fake.all(bank, "/v1/notification-rules")).allSatisfy(r -> assertThat(r.get("channels").toString())
+                .isEqualTo("NEW_DEVICE_SIGN_IN".equals(r.get("template_code").asString())
+                        ? "[\"PUSH\",\"EMAIL\",\"SMS\"]" : "[\"EMAIL\",\"IN_APP\"]"));
         // LEDGER_EOD closes every book of the tenant (no ledger_id pinned) and is active
         assertThat(fake.all(bank, "/v1/operations/eod-jobs")).singleElement().satisfies(j -> {
             assertThat(j.get("parameters").isEmpty()).isTrue();
@@ -225,7 +228,7 @@ class StarterPackFlowIT {
 
         // maker-checker: submitted, never approved; requests listed in the run; the operator is the maker
         List<String> pendingApprovals = fake.all(bank, FakePlatform.APPROVALS).stream().map(r -> r.get("id").asString()).toList();
-        assertThat(pendingApprovals).hasSize(16 + 3 + 1 + 12); // config entries (ledger routing incl. wallet and fx, account numbering), product versions, plan, templates
+        assertThat(pendingApprovals).hasSize(16 + 3 + 1 + 15); // config entries (ledger routing incl. wallet and fx, account numbering), product versions, plan, templates
         assertThat(fake.all(bank, FakePlatform.APPROVALS)).allSatisfy(r -> {
             assertThat(r.get("status").asString()).isEqualTo("PENDING");
             assertThat(r.get("maker").asString()).isEqualTo(OPERATOR);
@@ -278,7 +281,7 @@ class StarterPackFlowIT {
     @Test
     @Order(4)
     void afterTheCheckerApprovesResumePublishesAndActivates() throws Exception {
-        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(32);
+        assertThat(fake.approveAll(bank, CHECKER)).isEqualTo(35);   // incl. 3 NEW_DEVICE_SIGN_IN templates
         JsonNode run = call("POST", "/v1/starter-pack-runs/" + bankRun + "/resume", null, bank.toString(), "tenant-admin", 200);
         assertThat(run.get("trigger").asString()).isEqualTo("RESUME");
         assertThat(run.get("resumed_from_id").asString()).isEqualTo(bankRun);

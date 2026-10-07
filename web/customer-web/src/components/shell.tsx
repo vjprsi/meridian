@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { href: "/rewards", label: "nav.rewards", icon: "M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z" },
   { href: "/inbox", label: "nav.inbox", icon: "M3 5h18v14H3zM3 5l9 7 9-7" },
   { href: "/profile", label: "nav.profile", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9a8 8 0 0 1 16 0" },
+  { href: "/security", label: "nav.security", icon: "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4" },
 ];
 const MOBILE = ["/", "/move", "/cards", "/inbox"];
 

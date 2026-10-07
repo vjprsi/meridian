@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { customers, unwrap } from "@/api/client";
 import type { Customer } from "@/api/types";
-import { DEFAULT_TENANT, oidc, saveSession, type Session } from "@/lib/auth";
+import { DEFAULT_TENANT, devSessionId, oidc, saveSession, type Session } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
 import { useSession } from "@/components/providers";
 import { Preferences } from "@/components/shell";
@@ -48,7 +48,8 @@ export default function LoginPage() {
   }
 
   function signInAs(c: Customer) {
-    const s: Session = { mode: "dev", tenantId, customerId: c.id!, user: `customer:${c.customer_number ?? c.id}` };
+    const s: Session = { mode: "dev", tenantId, customerId: c.id!, user: `customer:${c.customer_number ?? c.id}`,
+      sid: devSessionId() };
     saveSession(s);
     setSession(s);
     router.replace("/");

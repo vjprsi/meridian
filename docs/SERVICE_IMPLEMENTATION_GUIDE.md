@@ -194,6 +194,59 @@ Unauthenticated prospects use `/v1/onboarding/public/applications/*` (`[public]`
   and applicants (422 `invalid_fields` / `missing_fields` with `input.<field>` errors).
 - `application_number` is server-generated (`APP-<yyyymmdd>-<8 base32>`); client values are ignored.
 
+### Customer MFA, step-up and sessions (customer-channel-service, Keycloak)
+
+**Levels of Authentication.** `tools/keycloak_realm.py` binds the browser flow "meridian customer browser" to the
+`meridian-customer-web` client (`authenticationFlowBindingOverrides`) with client attributes `acr.loa.map`
+`{"1":1,"2":2}`, `default.acr.values` 1 and `minimum.acr.value` 1:
+
+| acr | Sub-flow (Condition - Level of Authentication) | amr | Kept for |
+| --- | --- | --- | --- |
+| 1 | username + password | `pwd` | 10 h (`loa-max-age` 36000) |
+| 2 | one of: WebAuthn (security key / passkey as 2FA), WebAuthn passwordless (passkey), OTP form (TOTP app) | `hwk` / `otp` | 300 s |
+
+Step-up is an authorization request with `acr_values=2&max_age=300` (customer-web: `signinPopup`). Within the same
+SSO session Keycloak asks only the second factor and advances `auth_time`; after `max_age` it asks the password too;
+within 300 s of the last level-2 authentication it answers from SSO. Customer tokens carry `acr`, `amr` (execution
+config `default.reference.value` / `default.reference.maxAge`), `sid` and `auth_time`. A user without a second factor
+cannot reach acr 2 (Keycloak shows an error); first-factor enrolment is deliberately not offered inside the step-up
+flow, because whoever knows only the password could then enrol their own authenticator and reach acr 2. Enrolment
+and removal are application-initiated actions: `kc_action=CONFIGURE_TOTP`, `webauthn-register`,
+`webauthn-register-passwordless`, `delete_credential:<credential id>` (Keycloak re-asks an existing factor before a
+new one is added). Password-grant tokens (local scripts) carry acr 1 and no `auth_time`, and need a `totp` parameter
+once the user has an authenticator app. The realm also defines the OIDC `profile`, `email` and `web-origins` scopes
+(an imported realm with its own client scopes gets none of Keycloak's built-ins, and every web app asks for
+`openid profile email`). Local demo: `demo.customer` has a TOTP credential (base32 `JVSXE2LENFQW4RDFNVXVI33UOAZDAMRW`).
+
+**Policy in the channel.** `StepUp` maps the token's acr to a level (`meridian.channels.acr-levels`) and checks, per
+operation (`meridian.channels.step-up.operations.<operationId>` overrides `acr`, `max-age`, `amr`; default acr 2,
+5 minutes, no amr requirement), level, amr and `auth_time`. A refusal is 401 `step_up_required` with
+`WWW-Authenticate: Bearer error="insufficient_user_authentication", error_description="...", acr_values="2",
+max_age=300` (RFC 9470), audited as `STEP_UP_REQUIRED`. `GET /v1/me/security` shows the current acr / amr, the
+customer's second factors (from Keycloak) and each step-up operation with `satisfied`. Dev mode: `X-Auth-Time`,
+`X-Acr`, `X-Amr`, `X-Session-Id` (stripped by the edge gateway and the cell router).
+
+**Sessions: registry plus the Keycloak admin API (why both).** Keycloak knows which sessions are alive and can end them,
+but cannot recall an access token it already issued (valid up to 15 minutes) and does not know whether a device is
+new to the customer. The channel therefore keeps `customer_session` keyed by `sid` (device hash from `X-Device-Id` or
+the user agent, label, IPs, first / last seen, highest acr) and refuses any request of a REVOKED / ENDED session with
+401 `session_revoked` (the app signs out locally). When `meridian.channels.sessions.identity-provider.{base-url, realm,
+client-id, client-secret}` is set (client `meridian-customer-sessions`, client credentials, realm-management
+`view-users` + `manage-users`, no Meridian scope or audience), listing reconciles with Keycloak (`GET
+/admin/realms/{realm}/users/{sub}/sessions`: unknown live sessions added, vanished ones ENDED), revoking also calls
+`DELETE /admin/realms/{realm}/sessions/{sid}`, and sign-out-everywhere `POST /users/{sub}/logout` (or ends every
+other session when `include_current` is false). Calls are only ever made for the `sub` of the caller's own token, ids
+are pattern-checked before they enter a URL, and failures degrade to the channel-only revocation. Keycloak has no role
+narrower than `manage-users` for ending sessions: keep the secret in the service's secret store and consider Keycloak
+fine-grained admin permissions (v2) to confine the client to customer users. The first session of a customer raises
+no alert; a session from a device hash the customer never used publishes `channels.customer_session.new_device`
+(starter pack: templates and rule `NEW_DEVICE_SIGN_IN`, category SECURITY, channels PUSH / EMAIL / SMS); revocations
+publish `channels.customer_session.revoked`.
+
+**Verify against a real Keycloak.** `MERIDIAN_KEYCLOAK_TEST_URL=http://127.0.0.1:<port>` enables
+`IdentityProviderSessionsTest.againstARealKeycloak` (realm imported from `infra/local/keycloak/meridian-realm.json`):
+demo.customer signs in with password + TOTP, the sessions client lists and ends the session.
+
 ## Per-tenant ledger settings (config-service namespace `ledger`)
 
 Ledger books, internal (GL / clearing / income / funding) accounts, treasury wallets and similar ids are tenant

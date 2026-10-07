@@ -41,12 +41,26 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
   meridian-readonly          confidential, client credentials, read scopes only (authorisation tests)
   meridian-customer-web      public, authorization code + PKCE (customer web banking); only the customer scope plus
                              openid/profile; tokens carry customer_id and tenant_id from user attributes (admin-managed,
-                             not editable by the user) and auth_time / acr for step-up; password grant for local testing
-                             (password-grant tokens carry no auth_time, so step-up operations refuse them)
+                             not editable by the user), auth_time / acr / amr / sid for step-up and sessions; password
+                             grant for local testing (password-grant tokens carry no auth_time, so step-up operations
+                             refuse them). Browser flow override "meridian customer browser" with Levels of
+                             Authentication (acr.loa.map {"1": 1, "2": 2}): acr 1 = password, acr 2 = password plus a
+                             second factor (WebAuthn security key / passkey, or a TOTP authenticator app). Step-up:
+                             authorization request with acr_values=2 (and max_age); the second factor is asked again
+                             when the level-2 authentication is older than CUSTOMER_LOA2_MAX_AGE. Enrolment through
+                             application-initiated actions (kc_action=CONFIGURE_TOTP / webauthn-register /
+                             webauthn-register-passwordless; removal kc_action=delete_credential:<id>)
+  meridian-customer-sessions confidential, client credentials, used only by customer-channel-service to list and end a
+                             customer's own Keycloak sessions and list their sign-in factors (admin REST API, always for
+                             the sub of the customer's token). Service-account roles realm-management view-users and
+                             manage-users (Keycloak has no narrower role for user sessions); no Meridian scope, no
+                             meridian-api audience, so its tokens are useless against the Meridian APIs
 Users:
   ops.admin          staff demo user (console), demo tenant, realm role meridian-admin
   platform.operator  platform operator (console), platform-operator tenant, realm role platform-operator
-  demo.customer      customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant
+  demo.customer      customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant.
+                     Has a demo TOTP authenticator (secret DEMO_CUSTOMER_TOTP_SECRET, base32 in the guide) so acr 2
+                     can be reached locally; enrol more factors in the app (Security)
   demo.agent         agent demo user (agent-app, Meridian#Agent2026); set its agent_id attribute to an ACTIVE agent of
                      the demo tenant
   demo.business.admin     business portal admin (Meridian#Business2026); business_customer_id = a business customer
@@ -107,6 +121,128 @@ BUSINESS_SCOPE = "channels:business"
 MERCHANT_SCOPE = "channels:merchant"
 # The cell router's only scope: tenant routing / cell reads in the registry (spec `scopes:` on tenant-service).
 ROUTING_SCOPE = "platform:routing-read"
+# Customer Levels of Authentication (acr): 1 = password, 2 = password + second factor. The second factor is asked
+# again when a step-up (acr_values=2) comes more than CUSTOMER_LOA2_MAX_AGE seconds after the last one; the channel
+# additionally checks auth_time (meridian.channels.step-up.max-age).
+CUSTOMER_ACR_LOA_MAP = {"1": 1, "2": 2}
+CUSTOMER_LOA1_MAX_AGE = 36000
+CUSTOMER_LOA2_MAX_AGE = 300
+CUSTOMER_BROWSER_FLOW = "meridian customer browser"
+CUSTOMER_BROWSER_FLOW_ID = "0199a000-0000-7000-8000-00000000f101"   # fixed: the client override refers to it
+# Local demo only: TOTP secret of demo.customer (Keycloak keeps the raw secret; authenticator apps use its base32).
+DEMO_CUSTOMER_TOTP_SECRET = "MeridianDemoTotp2026"
+CUSTOMER_SESSIONS_CLIENT = "meridian-customer-sessions"
+
+
+def execution(authenticator: str, requirement: str, priority: int, config: str | None = None) -> dict:
+    e = {"authenticator": authenticator, "authenticatorFlow": False, "requirement": requirement,
+         "priority": priority, "autheticatorFlow": False, "userSetupAllowed": False}
+    if config:
+        e["authenticatorConfig"] = config
+    return e
+
+
+def sub_flow(alias: str, requirement: str, priority: int) -> dict:
+    return {"flowAlias": alias, "authenticatorFlow": True, "requirement": requirement, "priority": priority,
+            "autheticatorFlow": True, "userSetupAllowed": False}
+
+
+def flow(alias: str, description: str, executions: list, top: bool = False, flow_id: str | None = None) -> dict:
+    f = {"alias": alias, "description": description, "providerId": "basic-flow", "topLevel": top, "builtIn": False,
+         "authenticationExecutions": executions}
+    if flow_id:
+        f["id"] = flow_id
+    return f
+
+
+def customer_browser_flows() -> tuple[list, list]:
+    """Browser flow of the customer client with Levels of Authentication (Keycloak step-up).
+
+    cookie (SSO; satisfies only the level the session already reached)
+    | forms
+        level 1 (Condition - Level of Authentication 1): username + password            -> acr 1, amr pwd
+        level 2 (Condition - Level of Authentication 2): one second factor              -> acr 2, amr hwk / otp
+            WebAuthn (security key or passkey registered as 2FA) | WebAuthn passwordless passkey | TOTP app
+    Each authenticator carries an AMR reference (default.reference.value, RFC 8176) for the amr claim and how long
+    it stays in amr after it ran (default.reference.maxAge, seconds; without it Keycloak drops the reference as soon
+    as the second in which the authenticator ran is over).
+    """
+    def amr(value: str, max_age: int) -> dict:
+        return {"default.reference.value": value, "default.reference.maxAge": str(max_age)}
+
+    configs = [
+        {"alias": "meridian-customer-loa1", "config": {"loa-condition-level": "1",
+                                                       "loa-max-age": str(CUSTOMER_LOA1_MAX_AGE)}},
+        {"alias": "meridian-customer-loa2", "config": {"loa-condition-level": "2",
+                                                       "loa-max-age": str(CUSTOMER_LOA2_MAX_AGE)}},
+        {"alias": "meridian-customer-amr-pwd", "config": amr("pwd", CUSTOMER_LOA1_MAX_AGE)},
+        {"alias": "meridian-customer-amr-otp", "config": amr("otp", CUSTOMER_LOA2_MAX_AGE)},
+        {"alias": "meridian-customer-amr-hwk", "config": amr("hwk", CUSTOMER_LOA2_MAX_AGE)},
+        {"alias": "meridian-customer-amr-passkey", "config": amr("hwk", CUSTOMER_LOA2_MAX_AGE)},
+    ]
+    flows = [
+        flow(CUSTOMER_BROWSER_FLOW, "Customer sign-in with Levels of Authentication: acr 1 password, acr 2 password "
+             "plus WebAuthn or TOTP (step-up with acr_values=2)",
+             [execution("auth-cookie", "ALTERNATIVE", 10),
+              sub_flow("meridian customer forms", "ALTERNATIVE", 20)], top=True, flow_id=CUSTOMER_BROWSER_FLOW_ID),
+        flow("meridian customer forms", "Level 1 and level 2 sub-flows",
+             [sub_flow("meridian customer level 1", "CONDITIONAL", 10),
+              sub_flow("meridian customer level 2", "CONDITIONAL", 20)]),
+        flow("meridian customer level 1", "acr 1: username and password",
+             [execution("conditional-level-of-authentication", "REQUIRED", 10, "meridian-customer-loa1"),
+              execution("auth-username-password-form", "REQUIRED", 20, "meridian-customer-amr-pwd")]),
+        flow("meridian customer level 2", "acr 2: a second factor (asked again after the level-2 max age)",
+             [execution("conditional-level-of-authentication", "REQUIRED", 10, "meridian-customer-loa2"),
+              sub_flow("meridian customer second factor", "REQUIRED", 20)]),
+        flow("meridian customer second factor", "WebAuthn (2FA), passkey or TOTP authenticator app",
+             [execution("webauthn-authenticator", "ALTERNATIVE", 10, "meridian-customer-amr-hwk"),
+              execution("webauthn-authenticator-passwordless", "ALTERNATIVE", 20, "meridian-customer-amr-passkey"),
+              execution("auth-otp-form", "ALTERNATIVE", 30, "meridian-customer-amr-otp")]),
+    ]
+    return flows, configs
+
+
+def oidc_standard_scopes() -> list:
+    """The OIDC scopes the web apps request (openid profile email) plus web-origins. An imported realm that lists its
+    own clientScopes gets none of Keycloak's built-in scopes, and an authorization request naming a missing scope
+    fails with invalid_scope."""
+    def prop(name, attribute, claim, json_type="String"):
+        return {"name": name, "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-property-mapper",
+                "config": {"user.attribute": attribute, "claim.name": claim, "jsonType.label": json_type,
+                           "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true",
+                           "introspection.token.claim": "true"}}
+    shown = {"include.in.token.scope": "true", "display.on.consent.screen": "true"}
+    return [
+        {"name": "profile", "protocol": "openid-connect", "description": "OpenID Connect built-in scope: profile",
+         "attributes": shown, "protocolMappers": [
+             prop("username", "username", "preferred_username"), prop("given name", "firstName", "given_name"),
+             prop("family name", "lastName", "family_name"),
+             {"name": "full name", "protocol": "openid-connect", "protocolMapper": "oidc-full-name-mapper",
+              "config": {"id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true",
+                         "introspection.token.claim": "true"}}]},
+        {"name": "email", "protocol": "openid-connect", "description": "OpenID Connect built-in scope: email",
+         "attributes": shown, "protocolMappers": [
+             prop("email", "email", "email"), prop("email verified", "emailVerified", "email_verified", "boolean")]},
+        {"name": "web-origins", "protocol": "openid-connect", "description": "Allowed web origins (CORS)",
+         "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "false"},
+         "protocolMappers": [{"name": "allowed web origins", "protocol": "openid-connect",
+                              "protocolMapper": "oidc-allowed-origins-mapper",
+                              "config": {"access.token.claim": "true", "introspection.token.claim": "true"}}]},
+    ]
+
+
+def required_actions() -> list:
+    """Enrolment / removal of factors (also started by the app as application-initiated actions, kc_action)."""
+    actions = [("CONFIGURE_TOTP", "Configure OTP"), ("webauthn-register", "Webauthn Register"),
+               ("webauthn-register-passwordless", "Webauthn Register Passwordless"),
+               ("delete_credential", "Delete Credential"), ("UPDATE_PASSWORD", "Update Password"),
+               ("VERIFY_EMAIL", "Verify Email"), ("UPDATE_PROFILE", "Update Profile"),
+               ("TERMS_AND_CONDITIONS", "Terms and Conditions"), ("VERIFY_PROFILE", "Verify Profile"),
+               ("update_user_locale", "Update User Locale"), ("CONFIGURE_RECOVERY_AUTHN_CODES",
+                                                               "Recovery Authentication Codes")]
+    off = {"TERMS_AND_CONDITIONS", "CONFIGURE_RECOVERY_AUTHN_CODES"}
+    return [{"alias": a, "name": n, "providerId": a, "enabled": a not in off, "defaultAction": False,
+             "priority": 10 * (i + 1), "config": {}} for i, (a, n) in enumerate(actions)]
 
 
 def attribute_mapper(name: str, attribute: str) -> dict:
@@ -200,7 +336,7 @@ def main():
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
               for n in scope_names + [CHANNELS_ADMIN_SCOPE, "meridian:internal", operator, ROUTING_SCOPE]
-              + channel_scopes + privileged]
+              + channel_scopes + privileged] + oidc_standard_scopes()
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
@@ -217,6 +353,8 @@ def main():
          "config": {"user.session.note": "AUTH_TIME", "claim.name": "auth_time", "jsonType.label": "long",
                     "access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
         {"name": "acr", "protocol": "openid-connect", "protocolMapper": "oidc-acr-mapper",
+         "config": {"access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "amr", "protocol": "openid-connect", "protocolMapper": "oidc-amr-mapper",
          "config": {"access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
         {"name": "sub", "protocol": "openid-connect", "protocolMapper": "oidc-sub-mapper",
          "config": {"access.token.claim": "true", "introspection.token.claim": "true"}},
@@ -241,6 +379,7 @@ def main():
     read_scopes = [n for n in scope_names if n.endswith(":read")]
     console_scopes = scope_names + [CHANNELS_ADMIN_SCOPE]
     portal_scopes = ["platform:read", "platform:write"]
+    customer_flows, customer_flow_configs = customer_browser_flows()
     realm = {
         "realm": "meridian",
         "enabled": True,
@@ -249,6 +388,21 @@ def main():
         "ssoSessionIdleTimeout": 1800,
         "bruteForceProtected": True,
         "passwordPolicy": "length(12) and upperCase(1) and digits(1) and specialChars(1) and notUsername",
+        # Customer second factors (Keycloak built-ins): TOTP authenticator apps and WebAuthn (security keys and
+        # passkeys). The relying party id defaults to the host name Keycloak is served on.
+        "otpPolicyType": "totp", "otpPolicyAlgorithm": "HmacSHA1", "otpPolicyDigits": 6, "otpPolicyPeriod": 30,
+        "otpPolicyLookAheadWindow": 1, "otpPolicyCodeReusable": False,
+        "webAuthnPolicyRpEntityName": "Meridian", "webAuthnPolicySignatureAlgorithms": ["ES256", "RS256"],
+        "webAuthnPolicyUserVerificationRequirement": "preferred", "webAuthnPolicyRequireResidentKey": "not specified",
+        "webAuthnPolicyAvoidSameAuthenticatorRegister": True,
+        "webAuthnPolicyPasswordlessRpEntityName": "Meridian",
+        "webAuthnPolicyPasswordlessSignatureAlgorithms": ["ES256", "RS256"],
+        "webAuthnPolicyPasswordlessRequireResidentKey": "Yes",
+        "webAuthnPolicyPasswordlessUserVerificationRequirement": "required",
+        "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": True,
+        "authenticationFlows": customer_flows,
+        "authenticatorConfig": customer_flow_configs,
+        "requiredActions": required_actions(),
         "clientScopes": scopes,
         "roles": {"realm": [
             {"name": "meridian-admin", "description": "Tenant superuser: may receive meridian:admin"},
@@ -294,10 +448,20 @@ def main():
              "directAccessGrantsEnabled": True,           # local testing only (scripts obtaining a customer token)
              "fullScopeAllowed": False,
              "redirectUris": [o + "/*" for o in CUSTOMER_WEB_ORIGINS], "webOrigins": CUSTOMER_WEB_ORIGINS,
-             "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
+             "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+",
+                            # acr values the app may request (acr_values=1 / 2) and the default level (password)
+                            "acr.loa.map": json.dumps(CUSTOMER_ACR_LOA_MAP, separators=(",", ":")),
+                            "default.acr.values": "1", "minimum.acr.value": "1"},
+             "authenticationFlowBindingOverrides": {"browser": CUSTOMER_BROWSER_FLOW_ID},
              "protocolMappers": customer_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + customer_scopes,
              "optionalClientScopes": []},
+            # customer-channel-service only: list / end the signed-in customer's own Keycloak sessions and list their
+            # sign-in factors (admin REST API for the token's sub). No Meridian scope or audience.
+            {"clientId": CUSTOMER_SESSIONS_CLIENT, "name": "Customer sessions (customer-channel-service)",
+             "publicClient": False, "secret": "meridian-customer-sessions-secret", "serviceAccountsEnabled": True,
+             "standardFlowEnabled": False, "directAccessGrantsEnabled": False, "implicitFlowEnabled": False,
+             "fullScopeAllowed": True, "protocolMappers": [], "defaultClientScopes": [], "optionalClientScopes": []},
             {"clientId": "meridian-agent-app", "name": "Meridian agent outlet app", "publicClient": True,
              "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
              "directAccessGrantsEnabled": True,           # local testing only (scripts obtaining an agent token)
@@ -338,7 +502,14 @@ def main():
             {"username": "demo.customer", "enabled": True, "email": "demo.customer@meridian.local",
              "emailVerified": True, "firstName": "Demo", "lastName": "Customer",
              "attributes": {"customer_id": [DEMO_CUSTOMER], "tenant_id": [DEMO_TENANT]},
-             "credentials": [{"type": "password", "value": "Meridian#Customer2026", "temporary": False}]},
+             "credentials": [{"type": "password", "value": "Meridian#Customer2026", "temporary": False},
+                             {"type": "otp", "userLabel": "Demo authenticator app",
+                              "secretData": json.dumps({"value": DEMO_CUSTOMER_TOTP_SECRET}),
+                              "credentialData": json.dumps({"subType": "totp", "digits": 6, "counter": 0,
+                                                            "period": 30, "algorithm": "HmacSHA1"})}]},
+            {"username": f"service-account-{CUSTOMER_SESSIONS_CLIENT}", "enabled": True,
+             "serviceAccountClientId": CUSTOMER_SESSIONS_CLIENT,
+             "clientRoles": {"realm-management": ["view-users", "manage-users"]}},
             {"username": "demo.agent", "enabled": True, "email": "demo.agent@meridian.local",
              "emailVerified": True, "firstName": "Demo", "lastName": "Agent",
              "attributes": {"agent_id": [DEMO_AGENT], "tenant_id": [DEMO_TENANT]},

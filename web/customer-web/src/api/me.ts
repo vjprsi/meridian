@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/components/providers";
 import { ApiError, me, unwrap } from "./client";
-import type { DepositAccount } from "./types";
+import type { DepositAccount, SecurityOverview } from "./types";
 
 /**
  * Data of the signed-in customer, all from the customer channel (/v1/me/*). The server decides who "me" is (token
@@ -146,4 +146,22 @@ export function useMyAccount(id: string) {
   const account = listed ?? single.data;
   const error = accounts.error ?? single.error ?? null;
   return { account, isPending: accounts.isPending || (!listed && single.isPending && single.fetchStatus !== "idle"), error };
+}
+
+/** The customer's sign-in security: authentication strength, second factors, step-up policy. */
+export function useSecurity(enabled = true) {
+  const c = useCustomerId();
+  return useQuery({
+    queryKey: ["security", c], enabled: !!c && enabled,
+    queryFn: async () => unwrap(await me.GET("/v1/me/security")) as unknown as SecurityOverview,
+  });
+}
+
+/** The customer's sign-in sessions (active first; is_current marks this one). */
+export function useMySessions() {
+  const c = useCustomerId();
+  return useQuery({
+    queryKey: ["sessions", c], enabled: !!c,
+    queryFn: async () => unwrap(await me.GET("/v1/me/sessions", { params: { query: { limit: 50 } } })).data,
+  });
 }
