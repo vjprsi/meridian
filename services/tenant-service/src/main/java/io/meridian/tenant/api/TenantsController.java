@@ -12,16 +12,19 @@ import io.meridian.tenant.api.generated.model.TenantsApplyStarterPackRequest;
 import io.meridian.tenant.api.generated.model.TenantsMigrateRequest;
 import io.meridian.tenant.api.generated.model.TenantsProvisionFromTemplateRequest;
 import io.meridian.tenant.api.generated.model.TenantsReinstateRequest;
+import io.meridian.tenant.api.generated.model.TenantsSetStandbyRequest;
 import io.meridian.tenant.api.generated.model.TenantsSuspendRequest;
 import io.meridian.tenant.application.StarterPackService;
 import io.meridian.tenant.application.TenantLifecycleService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -106,6 +109,22 @@ public class TenantsController implements TenantsApi {
         return idempotency.execute(idempotencyKey, body, TenantPlacement.class,
                 () -> Responses.of(HttpStatus.OK, tenants.migrate(id, body.getCellId(), body.getScheduledAt()),
                         TenantPlacement.class, json));
+    }
+
+    @Override
+    public ResponseEntity<Tenant> tenantsSetStandby(UUID id, String idempotencyKey, TenantsSetStandbyRequest body) {
+        TenantContext.require();
+        return idempotency.execute(idempotencyKey, body, Tenant.class, () -> Responses.of(HttpStatus.OK,
+                tenants.setStandby(id, body.getCellId(), body.getReason()), Tenant.class, json));
+    }
+
+    /** Routing view for the cell router (operator scope; the router calls it with its service identity). */
+    @Override
+    public ResponseEntity<Map<String, Object>> tenantsRouting(UUID id) {
+        TenantContext.require();
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-store")
+                .body(json.convertValue(tenants.routing(id), new TypeReference<Map<String, Object>>() {}));
     }
 
     @Override

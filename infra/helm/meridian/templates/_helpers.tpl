@@ -6,6 +6,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/version: {{ .root.Values.global.image.tag | default .root.Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 meridian.io/domain: {{ .domain | default "platform" }}
+meridian.io/cell: {{ .root.Values.global.cell.id | default "unassigned" | quote }}
 {{- end }}
 
 {{- define "meridian.selector" -}}

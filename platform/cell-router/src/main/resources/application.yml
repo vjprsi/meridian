@@ -1,0 +1,67 @@
+# Cell router (S20): global entry tier in front of the cells (http://localhost:18100/v1/...).
+server:
+  port: 18100
+  shutdown: graceful
+  tomcat:
+    max-swallow-size: 2MB          # SEC-26: do not drain huge rejected bodies
+    max-http-form-post-size: 2MB
+
+spring:
+  application:
+    name: cell-router
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    bootstrap-servers: localhost:19092
+    consumer:
+      auto-offset-reset: latest
+
+meridian:
+  # SEC-13: jwt (default) = tenant from the verified token's tenant_id claim, internal identity headers dropped;
+  # dev = X-Tenant-Id (local stack only, MERIDIAN_SECURITY_MODE=dev).
+  security-mode: jwt
+  router:
+    registry-url: http://localhost:9124            # tenant-service (control plane)
+    operator-tenant: ""                            # SEC-15: platform-operator tenant id
+    auth:                                          # router service identity (client credentials)
+      token-uri: ""
+      client-id: ""
+      client-secret: ""
+    jwt:
+      jwk-set-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/certs
+      issuer: http://localhost:15180/realms/meridian
+      audiences: []                                # SEC-14: e.g. [meridian-api]
+      tenant-claim: tenant_id
+    cache-ttl: 30s
+    negative-ttl: 5s
+    max-stale: 15m
+    cells-refresh: 15s
+    timeout: 30s
+    retry-after: 30s
+    max-body-size: 64MB
+    trusted-proxies: []                            # SEC-16: regional load balancer CIDRs
+    health:
+      enabled: true
+      interval: 5s
+      probe-timeout: 2s
+      path: /actuator/health/readiness
+      failure-threshold: 3                         # unhealthy after 3 consecutive failures (~15s)
+      success-threshold: 5                         # healthy again after 5 consecutive successes (~25s)
+      auto-failover: false                         # true only where standby cells are READ_ONLY warm standbys
+    events:
+      enabled: true
+      topic: meridian.platform.v1
+    cell-overrides: {}                             # break-glass, e.g. {aws-euw1-c01: OFFLINE}
+
+management:
+  server:
+    port: 18101                                    # metrics and probes off the routed port (SEC-31)
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

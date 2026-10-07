@@ -38,6 +38,11 @@ meridian:
                               # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
   events:
     topic: meridian.platform.v1
+  tenant:
+    move:
+      # S20: a tenant move's copy may be confirmed only this long after the write freeze, so that writes admitted by a
+      # cell router before it saw the freeze (placement cache TTL + request timeout) cannot land after the checkpoint.
+      freeze-grace: 45s
 
 management:
   endpoints:

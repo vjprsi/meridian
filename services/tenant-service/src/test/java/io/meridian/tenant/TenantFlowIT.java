@@ -69,6 +69,7 @@ class TenantFlowIT {
     String cell1;
     String cell2;
     String bank;
+    String beta;
     String legalEntity;
 
     @BeforeEach
@@ -143,6 +144,7 @@ class TenantFlowIT {
     @Order(2)
     void tenantLifecycleAndCapacity() throws Exception {
         JsonNode plain = post("/v1/platform/tenants", tenantBody("beta", cell1, null), 201, OPERATOR);
+        beta = plain.get("id").asString();
         assertThat(get("/v1/platform/cells/" + cell1, OPERATOR).get("tenant_count").asInt()).isEqualTo(2);
         JsonNode full = post("/v1/platform/tenants", tenantBody("gamma", cell1, null), 422, OPERATOR);
         assertThat(full.get("code").asString()).isEqualTo("cell_capacity_exhausted");
@@ -190,29 +192,33 @@ class TenantFlowIT {
     @Test
     @Order(3)
     void migrationAndDraining() throws Exception {
-        JsonNode notActive = post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 422, OPERATOR);
+        // a live tenant (data on its cell) only moves through the maker-checker tenant-moves workflow
+        assertThat(post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 409, OPERATOR)
+                .get("code").asString()).isEqualTo("use_tenant_move");
+        JsonNode notActive = post("/v1/platform/tenants/" + beta + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 422, OPERATOR);
         assertThat(notActive.get("code").asString()).isEqualTo("cell_not_accepting_tenants");
         JsonNode c2 = get("/v1/platform/cells/" + cell2, OPERATOR);
         HttpResponse<String> activate = send("PATCH", "/v1/platform/cells/" + cell2, "{\"status\":\"ACTIVE\"}", null,
                 OPERATOR, c2.get("row_version").asString());
         assertThat(activate.statusCode()).as(activate.body()).isEqualTo(200);
 
-        JsonNode placement = post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 200, OPERATOR);
+        JsonNode placement = post("/v1/platform/tenants/" + beta + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 200, OPERATOR);
         assertThat(placement.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(placement.get("role").asString()).isEqualTo("PRIMARY");
         assertThat(placement.get("cell_id").asString()).isEqualTo(cell2);
         assertThat(placement.get("from_cell_id").asString()).isEqualTo(cell1);
-        assertThat(get("/v1/platform/tenants/" + bank, OPERATOR).get("cell_id").asString()).isEqualTo(cell2);
-        JsonNode history = get("/v1/platform/tenants/" + bank + "/placements", OPERATOR).get("data");
+        assertThat(get("/v1/platform/tenants/" + beta, OPERATOR).get("cell_id").asString()).isEqualTo(cell2);
+        JsonNode history = get("/v1/platform/tenants/" + beta + "/placements", OPERATOR).get("data");
         assertThat(history).hasSize(2);
         java.util.List<String> statuses = new java.util.ArrayList<>();
         history.forEach(h -> statuses.add(h.get("status").asString()));
         assertThat(statuses).containsExactlyInAnyOrder("ACTIVE", "COMPLETED");
         assertThat(get("/v1/platform/cells/" + cell1, OPERATOR).get("tenant_count").asInt()).isEqualTo(1);
         assertThat(get("/v1/platform/cells/" + cell2, OPERATOR).get("tenant_count").asInt()).isEqualTo(1);
-        assertThat(post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 422, OPERATOR)
+        assertThat(post("/v1/platform/tenants/" + beta + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 422, OPERATOR)
                 .get("code").asString()).isEqualTo("same_cell");
         assertThat(jdbc.sql("select count(*) from outbox where event_type = 'platform.tenant.migrated' and payload->>'subject_tenant_id' = ?")
-                .param(bank).query(Long.class).single()).isEqualTo(1L);
+                .param(beta).query(Long.class).single()).isEqualTo(1L);
         assertThat(send("GET", "/v1/platform/tenants/" + UUID.randomUUID() + "/placements", null, null, OPERATOR, null)
                 .statusCode()).isEqualTo(404);
 
@@ -224,7 +230,7 @@ class TenantFlowIT {
         assertThat(outbox("platform.cell.drain_started", cell1)).isEqualTo(1);
         assertThat(post("/v1/platform/cells/" + cell1 + "/drain", "{\"reason\":\"again\"}", 409, OPERATOR)
                 .get("code").asString()).isEqualTo("invalid_transition");
-        assertThat(post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell1 + "\"}", 422, OPERATOR)
+        assertThat(post("/v1/platform/tenants/" + beta + "/migrate", "{\"cell_id\":\"" + cell1 + "\"}", 422, OPERATOR)
                 .get("code").asString()).isEqualTo("cell_not_accepting_tenants");
     }
 

@@ -1,4 +1,10 @@
 {{- $g := .Values.global -}}
+{{- if and $g.cell.id (not (regexMatch "^[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?$" $g.cell.id)) }}
+{{- fail "global.cell.id must be the cell code of the tenant registry (lowercase letters, digits, dashes)" }}
+{{- end }}
+{{- if not (has $g.cell.role (list "primary" "standby")) }}
+{{- fail "global.cell.role must be primary or standby" }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -23,6 +29,18 @@ data:
   MERIDIAN_CALLBACKS_ACCEPT_LEGACY_SIGNATURES: {{ $g.callbacks.acceptLegacySignatures | quote }}
   MERIDIAN_CALLBACKS_MAX_SKEW: {{ $g.callbacks.maxSkew | quote }}
   MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
+  # S20: which cell this is (the cell router maps tenants to cells; telemetry is tagged per cell and region)
+  MERIDIAN_CELL_ID: {{ $g.cell.id | quote }}
+  MERIDIAN_CELL_REGION: {{ $g.cell.region | quote }}
+  MERIDIAN_CELL_ROLE: {{ $g.cell.role | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_MERIDIAN_CELL: {{ $g.cell.id | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ $g.cell.region | quote }}
+  {{- if eq $g.cell.role "standby" }}
+  # warm standby: its database is a read-only replica and its topics are replicated, so it neither relays outboxes
+  # nor consumes events (that would apply them twice); promotion = role primary (helm upgrade, rolling restart)
+  MERIDIAN_EVENTS_RELAY_ENABLED: "false"
+  SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+  {{- end }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: {{ $g.otel.samplingProbability | quote }}

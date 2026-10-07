@@ -20,6 +20,34 @@ output "documents_bucket" {
   value = aws_s3_bucket.documents.bucket
 }
 
+output "documents_bucket_arn" {
+  value = aws_s3_bucket.documents.arn
+}
+
+output "postgres_cluster_arn" {
+  value = aws_rds_cluster.pg.arn
+}
+
+output "postgres_reader_endpoint" {
+  value = aws_rds_cluster.pg.reader_endpoint
+}
+
+output "kafka_cluster_arn" {
+  value = aws_msk_cluster.events.arn
+}
+
+output "kafka_security_group_id" {
+  value = aws_security_group.kafka.id
+}
+
+output "private_subnet_ids" {
+  value = module.vpc.private_subnets
+}
+
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
 output "kms_key_arn" {
   value = aws_kms_key.cell.arn
 }

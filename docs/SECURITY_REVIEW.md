@@ -82,6 +82,15 @@ not collide). Open = not yet addressed.
 | SEC-39 | Fixed | sanctions-service publisher downloads go through `OutboundHttp` (https, public addresses, pinned resolution, no redirects, `max-response-bytes` 64MB, 422 `source_url_not_allowed`); internal document-service links: no redirects, 64MB cap. | `DownstreamPolicyTest` | None known. |
 | SEC-40 | Fixed | card-vault PAN DEK rotation re-encrypts in 500-record transactions; after 20 batches it continues on a background thread for the tenant (`status: IN_PROGRESS`). | `CardVaultFlowIT.rotatePanDekReEncryptsEverything` | A crash during background re-encryption leaves records under the old key (still decryptable); rerunning rotation finishes them. |
 
+S20 (multi-region cells) keeps SEC-13 / SEC-15: the new registry tables and operations (`tenant_move`, cell
+`/offline` `/read-only` `/online`, tenant `/set-standby` `/routing`, `/v1/platform/tenant-moves`) are `operator_only`
+and generated with `platform:operator` (`OperatorOnlyRegistryTest`); tenant moves are maker-checker through central
+approvals (`tenant_move`, owner tenant-service; four-eyes at execution), and `/migrate` no longer moves tenants that
+hold data. The cell router takes the tenant only from a JWT it verifies (JWKS, issuer, expiry, audience) or, for
+public callback routes, the `tenant_id` parameter; it strips the same internal headers as the edge gateway
+(`HeaderPolicyParityTest`) and reads the registry with its own service identity. Cell `/offline` is deliberately
+single-operator (break-glass, audited) so a regional failover is not blocked by an approval round.
+
 ## Findings
 
 | ID | Sev | Category (OWASP API 2023) | Location | Description | Exploit scenario | Recommended fix | Status |

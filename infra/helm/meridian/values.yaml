@@ -26,7 +26,11 @@ global:
     serviceClientSecret: "meridian-service-client"
     audience: "meridian-api"          # SEC-14: required aud of every access token
     platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)
-  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress in front of the edge gateway
+  cell:                     # S20: identity of this cell in the tenant registry
+    id: ""                  # cell code, e.g. aws-euw1-c01 (empty: single-cell install)
+    region: ""              # cloud region, e.g. eu-west-1
+    role: primary           # primary | standby (warm DR standby: READ_ONLY in the registry until promoted)
+  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress / cell router in front of the gateway
   callbacks:                # SEC-17: provider callback signatures
     acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2
     maxSkew: "5m"
