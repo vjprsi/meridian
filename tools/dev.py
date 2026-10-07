@@ -133,6 +133,11 @@ def up(names: list[str], reset: bool = False) -> None:
                                      # SEC-13: services and gateway default to jwt; the local stack opts into dev
                                      # mode (tenant/user from X-Tenant-Id / X-User, gateway forwards them)
                                      "MERIDIAN_SECURITY_MODE": os.environ.get("MERIDIAN_SECURITY_MODE", "dev"),
+                                     # local infra (Mailpit SMTP, Keycloak, S3) lives on localhost: allow private targets
+                                     # and plain http for outbound calls; both are honoured only in dev security mode
+                                     "MERIDIAN_OUTBOUND_ALLOW_PRIVATE_NETWORKS": os.environ.get("MERIDIAN_OUTBOUND_ALLOW_PRIVATE_NETWORKS", "true"),
+                                     "MERIDIAN_OUTBOUND_ALLOW_HTTP": os.environ.get("MERIDIAN_OUTBOUND_ALLOW_HTTP", "true"),
+                                     "MERIDIAN_NOTIFICATIONS_EXTRA_SMTP_PORTS": "11025",  # Mailpit
                                      # 63 services share one local PostgreSQL (max_connections=600)
                                      "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE": os.environ.get("MERIDIAN_DB_POOL", "6")})
         pid_file(t["name"]).write_text(str(proc.pid))

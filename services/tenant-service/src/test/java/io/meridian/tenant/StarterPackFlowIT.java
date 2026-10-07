@@ -168,10 +168,11 @@ class StarterPackFlowIT {
             assertThat(e.get("namespace").asString()).isIn("ledger", "account_numbering");
             assertThat(e.get("status").asString()).isEqualTo("PENDING_APPROVAL");
         });
-        // account numbering of the main legal entity (deposit-service): keyed by its code, scheme from its country
+        // account numbering of the main legal entity (deposit-service): keyed by its id, scheme from its country
+        String mainEntity = fake.all(bank, "/v1/legal-entities").getFirst().get("id").asString();
         assertThat(fake.all(bank, "/v1/config/entries").stream().filter(e -> e.get("namespace").asString().equals("account_numbering")))
                 .singleElement().satisfies(e -> {
-                    assertThat(e.get("config_key").asString()).isEqualTo("MAIN");
+                    assertThat(e.get("config_key").asString()).isEqualTo("le-" + mainEntity);
                     assertThat(e.at("/value/scheme").asString()).isEqualTo("AUTO");
                 });
         // the public sign-up journey: a DRAFT with typed fields for the bank's entity and products, published by a checker

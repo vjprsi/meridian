@@ -104,7 +104,16 @@ def esign_callback(provider: str, envelope_id: str, status: str):
 @journey("E", "Lending: application, champion scorecard auto-decide, offer, accept, e-sign, book, disburse, repay")
 def journey_e(j: Journey):
     api = j.api
-    acct = ensure_account(j, "account_a", "Amina", "Otieno")
+    # The sandbox bureau scores by the customer id's last hex digit (560 + 20*digit; 0 = no hit, 14/15 = thin/
+    # delinquent files). The champion approves from 650, so borrow with a customer whose id ends in 5..13.
+    acct = None
+    for n in range(8):
+        cand = ensure_account(j, f"borrower_{n}", "Wanjiku", f"Borrower{n}")
+        if 5 <= int(cand["customer_id"][-1], 16) <= 13:
+            acct = cand
+            break
+    if acct is None:
+        fail("no sandbox-approvable borrower after 8 customers")
     cid = acct["customer_id"]
     pid, vid = create_loan_product(j)
     champion_scorecard(j)

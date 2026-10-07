@@ -71,10 +71,11 @@ class AccountNumberingIT {
             RACE_ENTITY, "{\"code\":\"KE01\",\"country\":\"KE\"}");
 
     /** Namespace account_numbering per tenant (config-service resolve). */
+    // keyed as stored by config-service (lower-case): entity code lower-cased, or "le-<legal entity id>"
     static final Map<String, String> SETTINGS = Map.of(
-            KE_TENANT, "{\"KE01\":{\"bank_code\":\"68\",\"branch_code\":\"001\"}}",
-            GB_TENANT, "{\"default\":{\"branch_code\":\"400515\"},\"UK02\":{\"branch_code\":\"400515\"}}",
-            US_TENANT, "{\"US01\":{\"bank_code\":\"021\",\"pattern\":\"{bank}{serial}{check}\",\"serial_length\":8,\"check_digit\":\"MOD97\"}}",
+            KE_TENANT, "{\"ke01\":{\"bank_code\":\"68\",\"branch_code\":\"001\"}}",
+            GB_TENANT, "{\"default\":{\"branch_code\":\"400515\"},\"uk02\":{\"branch_code\":\"400515\"}}",
+            US_TENANT, "{\"us01\":{\"bank_code\":\"021\",\"pattern\":\"{bank}{serial}{check}\",\"serial_length\":8,\"check_digit\":\"MOD97\"}}",
             // 90 possible serials: 30 concurrent openings must collide and retry
             RACE_TENANT, "{\"default\":{\"bank_code\":\"68\",\"branch_code\":\"002\",\"serial_length\":2}}");
 

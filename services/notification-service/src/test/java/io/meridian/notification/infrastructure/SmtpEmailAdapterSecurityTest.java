@@ -33,7 +33,7 @@ class SmtpEmailAdapterSecurityTest {
         StaticListableBeanFactory beans = new StaticListableBeanFactory(Map.of("mail", relay));
         return new SmtpEmailAdapter(beans.getBeanProvider(JavaMailSender.class),
                 OutboundUrlPolicy.fromEnvironment(new MockEnvironment().withProperty("meridian.security-mode", "jwt")),
-                List.of("meridian.local", "mail.meridian.example"));
+                List.of("meridian.local", "mail.meridian.example"), List.of());
     }
 
     Provider provider(String sender, String config) {

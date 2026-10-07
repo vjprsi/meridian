@@ -143,8 +143,9 @@ class StarterPackDefinitionTest {
             JsonNode body = PackTemplates.render(numbering.body(), new PackTemplates.Context(params, k -> "id:" + k, null,
                     "2026-10-07", "t", code, "v"));
             assertThat(body.get("namespace").asString()).isEqualTo("account_numbering");
-            // keyed by the legal entity the pack creates, so deposit-service finds it from the account's legal entity
-            assertThat(body.get("config_key").asString()).isEqualTo(params.get("legal_entity_code").asString());
+            // keyed by the id of the legal entity the pack creates (config keys are lower-case; deposit-service looks
+            // up the account's legal entity id first)
+            assertThat(body.get("config_key").asString()).isEqualTo("le-id:legal_entity");
             if ("KE".equals(code)) {
                 assertThat(body.at("/value/scheme").asString()).isEqualTo("NATIONAL");
                 assertThat(body.at("/value/bank_code").asString()).matches("[0-9]{2}");

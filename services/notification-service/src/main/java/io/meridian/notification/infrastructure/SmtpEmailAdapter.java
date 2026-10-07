@@ -27,6 +27,8 @@ import org.springframework.stereotype.Component;
 public class SmtpEmailAdapter implements ChannelAdapter {
     /** Submission ports a tenant SMTP relay may use (SEC-18: no arbitrary port scanning through the adapter). */
     static final java.util.Set<Integer> SMTP_PORTS = java.util.Set.of(25, 465, 587, 2525);
+    /** Mail submission ports a tenant SMTP host may use: the standard ones plus {@code meridian.notifications.extra-smtp-ports}. */
+    private final java.util.Set<Integer> allowedPorts;
 
     private final ObjectProvider<JavaMailSender> defaultSender;
     private final Map<String, JavaMailSenderImpl> senders = new ConcurrentHashMap<>();
@@ -35,7 +37,12 @@ public class SmtpEmailAdapter implements ChannelAdapter {
 
     public SmtpEmailAdapter(ObjectProvider<JavaMailSender> defaultSender, io.meridian.web.outbound.OutboundUrlPolicy policy,
                             @org.springframework.beans.factory.annotation.Value(
-                                    "${meridian.notifications.platform-sender-domains:meridian.local}") java.util.List<String> platformDomains) {
+                                    "${meridian.notifications.platform-sender-domains:meridian.local}") java.util.List<String> platformDomains,
+                            @org.springframework.beans.factory.annotation.Value(
+                                    "${meridian.notifications.extra-smtp-ports:}") java.util.List<Integer> extraPorts) {
+        java.util.Set<Integer> ports = new java.util.TreeSet<>(SMTP_PORTS);
+        ports.addAll(extraPorts);
+        this.allowedPorts = java.util.Set.copyOf(ports);
         this.defaultSender = defaultSender;
         this.policy = policy;
         this.platformDomains = platformDomains.stream().map(d -> d.trim().toLowerCase(java.util.Locale.ROOT))
@@ -63,9 +70,9 @@ public class SmtpEmailAdapter implements ChannelAdapter {
 
     /** SEC-18: a tenant-configured SMTP host must be a public address on a mail submission port. */
     void checkHost(String host, int port) {
-        if (!SMTP_PORTS.contains(port)) {
+        if (!allowedPorts.contains(port)) {
             throw new io.meridian.web.outbound.OutboundUrlPolicy.RejectedException("port_not_allowed",
-                    "smtp_port must be one of " + SMTP_PORTS);
+                    "smtp_port must be one of " + allowedPorts);
         }
         policy.check("https://" + host + ":" + port + "/");
     }

@@ -79,7 +79,13 @@ public class AccountNumbering {
         country = country.toUpperCase(Locale.ROOT);
         JsonNode all = settings(tenant);
         ObjectNode s = JsonNodeFactory.instance.objectNode();
-        for (String key : new String[] {"default", text(entity, "code"), legalEntityId.toString()}) {
+        // config keys are lower-case and start with a letter: entity code lower-cased, entity id as "le-<uuid>"
+        String code = text(entity, "code");
+        for (String key : new String[] {"default", code == null ? null : code.toLowerCase(java.util.Locale.ROOT),
+                "le-" + legalEntityId}) {
+            if (key == null) {
+                continue;
+            }
             JsonNode entry = key == null ? null : all.get(key);
             if (entry != null && entry.isObject()) {
                 entry.properties().forEach(e -> {
