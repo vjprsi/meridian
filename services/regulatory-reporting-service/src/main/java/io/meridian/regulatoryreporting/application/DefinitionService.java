@@ -225,6 +225,26 @@ public class DefinitionService {
         return published.toString();
     }
 
+    /**
+     * Checker step: rejects a DRAFT version (four eyes against its author). Versions are immutable, so a REJECTED
+     * version is final: the maker creates a corrected version.
+     */
+    @Transactional
+    public String rejectVersion(UUID versionId, String reason) {
+        JsonNode version = store.requireLocked("report_definition_version", versionId);
+        Lifecycles.version(version.get("status").asString(), "REJECTED");
+        if (TenantContext.principal().equals(Fields.text(version, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The author of a definition version cannot reject it");
+        }
+        JsonNode rejected = store.updateReturning("""
+                update report_definition_version t set status = 'REJECTED', rejected_by = ?, rejected_at = ?,
+                rejection_reason = ?, updated_by = ? where t.id = ? returning row_to_json(t)::text""",
+                TenantContext.principal(), io.meridian.common.time.Clocks.now(), reason, TenantContext.principal(), versionId);
+        outbox.publish("reporting.report_definition.version_rejected", "report_definition_version", versionId, rejected);
+        approvals.cancelOpen(APPROVAL_RESOURCE, versionId, null, "rejected directly");
+        return rejected.toString();
+    }
+
     /** Deprecates a definition: no new runs or versions; its schedules are deactivated. */
     @Transactional
     public String deprecate(UUID definitionId, String reason) {

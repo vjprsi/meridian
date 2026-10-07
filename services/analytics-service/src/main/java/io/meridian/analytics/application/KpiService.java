@@ -114,7 +114,7 @@ public class KpiService {
     @Transactional(readOnly = true)
     public boolean awaitsCertification(UUID id, String checksum) {
         return store.find("analytics_kpi", id)
-                .filter(k -> !k.path("is_certified").asBoolean(false))
+                .filter(k -> !k.path("is_certified").asBoolean(false) && !k.hasNonNull("certification_rejected_at"))
                 .filter(k -> checksum == null || checksum.equals(definitionChecksum(k)))
                 .isPresent();
     }
@@ -147,11 +147,18 @@ public class KpiService {
         if (unit != null && !UNITS.contains(unit)) {
             throw Fields.invalid("unit", "invalid_unit", "unit must be one of " + UNITS);
         }
-        if (existing != null && existing.path("is_certified").asBoolean(false)
-                && DEFINITION_FIELDS.stream().anyMatch(f -> values.has(f) && !values.get(f).equals(existing.get(f)))) {
+        boolean definitionChanged = existing != null
+                && DEFINITION_FIELDS.stream().anyMatch(f -> values.has(f) && !values.get(f).equals(existing.get(f)));
+        if (definitionChanged && existing.path("is_certified").asBoolean(false)) {
             values.put("is_certified", false);
             values.putNull("certified_by");
             values.putNull("certified_at");
+        }
+        if (definitionChanged && existing.hasNonNull("certification_rejected_at")) {
+            // the rework answers the declined certification; update() submits the new definition
+            values.putNull("certification_rejected_by");
+            values.putNull("certification_rejected_at");
+            values.putNull("certification_rejection_reason");
         }
     }
 
@@ -173,6 +180,10 @@ public class KpiService {
         if (k.path("is_certified").asBoolean(false)) {
             throw ApiException.conflict("already_certified", "KPI " + k.get("code").asString() + " is already certified");
         }
+        if (k.hasNonNull("certification_rejected_at")) {
+            throw ApiException.conflict("certification_rejected", "Certification of KPI " + k.get("code").asString()
+                    + " was declined by " + Fields.text(k, "certification_rejected_by") + "; rework the definition first");
+        }
         if (TenantContext.principal().equals(Fields.text(k, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "The author of a KPI cannot certify it");
         }
@@ -188,6 +199,33 @@ public class KpiService {
         }
         outbox.publish("reporting.analytics_kpi.certified", "analytics_kpi", id, payload);
         approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "certified directly");
+        return row.toString();
+    }
+
+    /**
+     * Data governance declines certification (four-eyes: not the author). The KPI stays uncertified until the author
+     * changes its definition, which clears the decline and submits it again.
+     */
+    @Transactional
+    public String rejectCertification(UUID id, String reason) {
+        JsonNode k = store.requireLocked("analytics_kpi", id);
+        if (k.path("is_certified").asBoolean(false)) {
+            throw ApiException.conflict("already_certified", "KPI " + k.get("code").asString() + " is already certified");
+        }
+        if (k.hasNonNull("certification_rejected_at")) {
+            throw ApiException.conflict("certification_rejected", "Certification of KPI " + k.get("code").asString()
+                    + " was already declined; rework the definition first");
+        }
+        if (TenantContext.principal().equals(Fields.text(k, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The author of a KPI cannot decline its certification");
+        }
+        JsonNode row = store.updateReturning("""
+                update analytics_kpi t set certification_rejected_by = ?, certification_rejected_at = ?,
+                certification_rejection_reason = ?, updated_by = ? where t.id = ? returning row_to_json(t)::text""",
+                TenantContext.principal(), io.meridian.common.time.Clocks.now(), reason, TenantContext.principal(), id)
+                .orElseThrow();
+        outbox.publish("reporting.analytics_kpi.certification_rejected", "analytics_kpi", id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "certification declined directly");
         return row.toString();
     }
 

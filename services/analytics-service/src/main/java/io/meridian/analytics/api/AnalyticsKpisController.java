@@ -6,6 +6,7 @@ import io.meridian.analytics.api.generated.model.AnalyticsKpiCreate;
 import io.meridian.analytics.api.generated.model.AnalyticsKpiUpdate;
 import io.meridian.analytics.api.generated.model.AnalyticsKpisCertifyRequest;
 import io.meridian.analytics.api.generated.model.AnalyticsKpisEvaluateRequest;
+import io.meridian.analytics.api.generated.model.AnalyticsKpisRejectCertificationRequest;
 import io.meridian.analytics.application.Fields;
 import io.meridian.analytics.application.KpiService;
 import io.meridian.analytics.infrastructure.Store;
@@ -72,6 +73,16 @@ public class AnalyticsKpisController implements AnalyticsKpisApi {
         JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
         return idempotency.execute(idempotencyKey, responses.action("certify", id, req), AnalyticsKpi.class,
                 () -> responses.ok(kpis.certify(id, Fields.text(req, "comment")), AnalyticsKpi.class));
+    }
+
+    @Override
+    public ResponseEntity<AnalyticsKpi> analyticsKpisRejectCertification(UUID id, String idempotencyKey,
+                                                                         AnalyticsKpisRejectCertificationRequest body) {
+        TenantContext.require();
+        JsonNode req = json.valueToTree(body);
+        String reason = Fields.requireText(req, "reason");
+        return idempotency.execute(idempotencyKey, responses.action("reject-certification", id, req), AnalyticsKpi.class,
+                () -> responses.ok(kpis.rejectCertification(id, reason), AnalyticsKpi.class));
     }
 
     @Override

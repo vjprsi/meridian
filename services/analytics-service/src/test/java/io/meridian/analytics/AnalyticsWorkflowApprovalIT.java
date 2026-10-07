@@ -108,12 +108,20 @@ class AnalyticsWorkflowApprovalIT {
         Map<?, ?> payload = (Map<?, ?>) lastRequest.get().get("payload");
 
         dispatcher.dispatch(UUID.fromString(TENANT), decision(kpi, payload, "ben"), Outcome.REJECTED);
-        assertThat(get("/v1/analytics/kpis/" + kpi).get("is_certified").asBoolean()).isFalse();
+        JsonNode declined = get("/v1/analytics/kpis/" + kpi);
+        assertThat(declined.get("is_certified").asBoolean()).isFalse();
+        assertThat(declined.get("certification_rejected_by").asString()).isEqualTo("ben");
         assertThat(certifiedEvents(kpi)).isZero();
+        // a declined KPI cannot be certified (late approval or direct) until the definition is reworked
+        dispatcher.dispatch(UUID.fromString(TENANT), decision(kpi, payload, "ben"), Outcome.APPROVED);
+        assertThat(get("/v1/analytics/kpis/" + kpi).get("is_certified").asBoolean()).isFalse();
+        assertThat(post("/v1/analytics/kpis/" + kpi + "/certify", "{}", 409, "ben").get("code").asString())
+                .isEqualTo("certification_rejected");
 
-        // rework of the definition resubmits with a new checksum; an approval of the old definition does nothing
+        // rework of the definition clears the decline and resubmits with a new checksum
         JsonNode current = get("/v1/analytics/kpis/" + kpi);
         patch("/v1/analytics/kpis/" + kpi, "{\"metric\":{\"aggregate\":\"COUNT\"}}", current.get("row_version").asInt(), "anna");
+        assertThat(get("/v1/analytics/kpis/" + kpi).hasNonNull("certification_rejected_at")).isFalse();
         Map<?, ?> resubmitted = (Map<?, ?>) lastRequest.get().get("payload");
         assertThat(resubmitted.get("definition_checksum")).isNotEqualTo(payload.get("definition_checksum"));
         dispatcher.dispatch(UUID.fromString(TENANT), decision(kpi, payload, "ben"), Outcome.APPROVED);
@@ -127,6 +135,18 @@ class AnalyticsWorkflowApprovalIT {
         // the current submission is applied
         dispatcher.dispatch(UUID.fromString(TENANT), decision(kpi, resubmitted, "ben"), Outcome.APPROVED);
         assertThat(get("/v1/analytics/kpis/" + kpi).get("is_certified").asBoolean()).isTrue();
+    }
+
+    @Test
+    void certificationDeclinedDirectlyKeepsFourEyes() throws Exception {
+        String kpi = createKpi("anna");
+        assertThat(post("/v1/analytics/kpis/" + kpi + "/reject-certification", "{\"reason\":\"mine\"}", 422, "anna")
+                .get("code").asString()).isEqualTo("four_eyes_violation");
+        JsonNode k = post("/v1/analytics/kpis/" + kpi + "/reject-certification", "{\"reason\":\"filter excludes closed\"}",
+                200, "ben");
+        assertThat(k.get("certification_rejection_reason").asString()).isEqualTo("filter excludes closed");
+        assertThat(post("/v1/analytics/kpis/" + kpi + "/reject-certification", "{\"reason\":\"again\"}", 409, "ben")
+                .get("code").asString()).isEqualTo("certification_rejected");
     }
 
     @Test
