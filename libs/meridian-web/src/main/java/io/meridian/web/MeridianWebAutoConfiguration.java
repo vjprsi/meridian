@@ -114,6 +114,16 @@ public class MeridianWebAutoConfiguration {
         return new Idempotency(jdbc, json, tx);
     }
 
+    /** Public provider callbacks: v2 signatures with timestamp, nonce and tenant binding (SEC-17). */
+    @Bean
+    @ConditionalOnMissingBean
+    io.meridian.web.callback.CallbackVerifier callbackVerifier(JdbcClient jdbc, Environment env) {
+        return new io.meridian.web.callback.CallbackVerifier(new io.meridian.web.callback.NonceStore.Jdbc(jdbc),
+                env.getProperty("meridian.callbacks.max-skew", java.time.Duration.class, java.time.Duration.ofMinutes(5)),
+                env.getProperty("meridian.callbacks.accept-legacy-signatures", Boolean.class, true),
+                java.time.Clock.systemUTC());
+    }
+
     @Bean
     static MeridianJsonCustomizer meridianJsonCustomizer() {
         return new MeridianJsonCustomizer();

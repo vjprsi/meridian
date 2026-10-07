@@ -311,6 +311,35 @@ class RoutingFlowIT {
     }
 
     @Test
+    @Order(99)
+    void inboundV2SignaturesAreFreshSingleUseAndBoundToTheRail() throws Exception {
+        fake.paymentsByE2e.put(outboundE2e, outboundPaymentId);
+        String pacs002 = pacs002("STS-V2-0001", outboundE2e, "ACSC");
+        String ts = String.valueOf(java.time.Instant.now().getEpochSecond());
+        String nonce = "evt-" + UUID.randomUUID();
+        String sig = v2(ts, nonce, bacs, pacs002);
+        Res ok = inbound(bacs, "pacs.002.001.10", pacs002, sig, ts, nonce);
+        assertThat(ok.status()).as(String.valueOf(ok.body())).isEqualTo(200);
+        Res replay = inbound(bacs, "pacs.002.001.10", pacs002, sig, ts, nonce);
+        assertThat(replay.status()).isEqualTo(409);
+        assertThat(replay.body().get("code").asString()).isEqualTo("callback_replayed");
+
+        String other = UUID.randomUUID().toString();
+        String n2 = "evt-" + UUID.randomUUID();
+        assertThat(inbound(bacs, "pacs.002.001.10", pacs002, v2(ts, n2, other, pacs002), ts, n2).body().get("code")
+                .asString()).as("signed for another rail").isEqualTo("invalid_signature");
+        String old = String.valueOf(java.time.Instant.now().minusSeconds(3600).getEpochSecond());
+        String n3 = "evt-" + UUID.randomUUID();
+        assertThat(inbound(bacs, "pacs.002.001.10", pacs002, v2(old, n3, bacs, pacs002), old, n3).body().get("code")
+                .asString()).isEqualTo("stale_callback");
+    }
+
+    private static String v2(String ts, String nonce, String rail, String payload) {
+        return BankCodes.sign(SECRET, new String(io.meridian.web.callback.CallbackVerifier.v2Payload(ts, nonce, rail,
+                payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)), java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
     @Order(7)
     void inboundCreditRecallReturnAndReplay() throws Exception {
         String pacs008 = """
@@ -540,12 +569,20 @@ class RoutingFlowIT {
     }
 
     private Res inbound(String rail, String type, String payload, String signature) throws Exception {
+        return inbound(rail, type, payload, signature, null, null);
+    }
+
+    private Res inbound(String rail, String type, String payload, String signature, String ts, String nonce)
+            throws Exception {
         String body = json.writeValueAsString(java.util.Map.of("message_type", type, "payload", payload));
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/payment-rails/" + rail
                         + "/inbound")).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
         if (signature != null) {
             b.header("X-Rail-Signature", signature);
+        }
+        if (ts != null) {
+            b.header("X-Callback-Timestamp", ts).header("X-Callback-Nonce", nonce);
         }
         return res(http.send(b.build(), HttpResponse.BodyHandlers.ofString()));
     }

@@ -40,9 +40,12 @@ public class InboundService {
     private final SettlementService settlement;
     private final RoutingProperties props;
     private final TransactionTemplate tx;
+    private final io.meridian.web.callback.CallbackVerifier callbacks;
 
     public InboundService(Rows rows, Events events, Downstream downstream, SettlementService settlement,
-                          RoutingProperties props, TransactionTemplate tx) {
+                          RoutingProperties props, TransactionTemplate tx,
+                          io.meridian.web.callback.CallbackVerifier callbacks) {
+        this.callbacks = callbacks;
         this.rows = rows;
         this.events = events;
         this.downstream = downstream;
@@ -74,10 +77,21 @@ public class InboundService {
         if (payload == null || payload.isBlank()) {
             throw ApiException.badRequest("payload_required", "payload is required");
         }
-        if (!BankCodes.verify(secret, payload, signature)) {
-            storeRejected(railId, IsoMessages.canonical(declaredType), "UNKNOWN", null, payload, "FAILED", false,
-                    "invalid or missing X-Rail-Signature", null, null);
-            throw new ApiException(401, "invalid_signature", "X-Rail-Signature does not match the payload");
+        // SEC-17: v2 signature over "<timestamp>.<nonce>.<rail id>.<payload>", fresh and single-use; legacy
+        // payload-only signatures only while meridian.callbacks.accept-legacy-signatures is on
+        try {
+            if (secret == null) {
+                throw new ApiException(401, "invalid_signature", "No callback secret is configured for this rail");
+            }
+            callbacks.verify("rail:" + railId, railId.toString(), payload.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    signature, io.meridian.web.callback.CallbackVerifier.Headers.current(),
+                    b -> BankCodes.sign(secret, new String(b, java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (ApiException e) {
+            if ("invalid_signature".equals(e.code()) || "stale_callback".equals(e.code())) {
+                storeRejected(railId, IsoMessages.canonical(declaredType), "UNKNOWN", null, payload, "FAILED", false,
+                        "invalid or missing X-Rail-Signature (" + e.code() + ")", null, null);
+            }
+            throw e;
         }
         IsoMessages.Parsed parsed;
         try {
