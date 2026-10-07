@@ -97,6 +97,14 @@ APIs. Follow-ups: inbox trusts sender_type/opened_by/reader_type and include_int
 no public applicant surface (applicant token, OTP for phone step, typed step fields, server-generated
 application_number); customer sessions; customer MFA/passkeys.
 
+## Agent channel (follow-up of customer channel)
+
+web/agent-app (offline PWA) calls domain APIs directly with a staff-like token: needs the same treatment as customers:
+agent identity (agent_id claim / "agent of signed-in user"), an agent-channel BFF scoping every call to the agent's
+own outlets, tills, float and customers it serves, device binding with a signing key for offline batches
+(payload_signature today is a digest only), idempotency keys on float requests and offline batches, larger offline
+batch payloads, typed quote/balance responses, a gateway health endpoint.
+
 ## Resume point (paused 2026-10-07)
 
 - Full build after the e2e fixes: only billing-service BillingFlowIT fails (issueAndPayInvoice,
