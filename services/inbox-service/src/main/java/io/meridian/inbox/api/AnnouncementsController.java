@@ -22,8 +22,10 @@ public class AnnouncementsController implements AnnouncementsApi {
     private final AnnouncementService announcements;
     private final Http http;
     private final Idempotency idempotency;
+    private final Callers callers;
 
-    public AnnouncementsController(AnnouncementService announcements, Http http, Idempotency idempotency) {
+    public AnnouncementsController(AnnouncementService announcements, Http http, Idempotency idempotency, Callers callers) {
+        this.callers = callers;
         this.announcements = announcements;
         this.http = http;
         this.idempotency = idempotency;
@@ -62,7 +64,7 @@ public class AnnouncementsController implements AnnouncementsApi {
     @Override
     public ResponseEntity<Void> announcementsDismiss(UUID id, String idempotencyKey, AnnouncementsDismissRequest body) {
         TenantContext.require();
-        UUID customer = UUID.fromString(Json.required(http.tree(body), "customer_id"));
+        UUID customer = callers.current().customerFor(UUID.fromString(Json.required(http.tree(body), "customer_id")));
         return idempotency.execute(idempotencyKey, Map.of("op", "announcements.dismiss", "id", id.toString(),
                 "customer_id", customer.toString()), Void.class, () -> {
                     announcements.dismiss(id, customer);
@@ -74,6 +76,7 @@ public class AnnouncementsController implements AnnouncementsApi {
     public ResponseEntity<AnnouncementPage> announcementsActive(UUID customerId, String app, String placement, String language,
                                                                 Integer limit, String cursor) {
         TenantContext.require();
+        callers.current().customerFor(customerId);
         return ResponseEntity.ok(http.read(announcements.active(customerId, app, placement, language, limit),
                 AnnouncementPage.class));
     }

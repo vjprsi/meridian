@@ -16,7 +16,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Repository
 public class Rows {
     private static final Set<String> TABLES =
-            Set.of("onboarding_journey", "onboarding_application", "onboarding_step", "onboarding_offline_batch");
+            Set.of("onboarding_journey", "onboarding_application", "onboarding_step", "onboarding_offline_batch",
+                    "onboarding_applicant_token", "onboarding_otp");
 
     private final JdbcClient jdbc;
     private final CrudEngine crud;

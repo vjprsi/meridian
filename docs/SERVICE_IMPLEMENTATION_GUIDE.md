@@ -100,6 +100,47 @@ people) and `TenantContext.via()` names the relaying service client. Without `X-
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed
 this" decisions.
 
+### Acting for a customer (`X-On-Behalf-Of-Customer`)
+
+The customer channel service (BFF) relays customer requests with its internal token, `X-Tenant-Id` and
+`X-On-Behalf-Of-Customer: <customer id>`. A domain service treats the caller as that customer **only** when
+`TenantContext.via()` is present (internal token); the same header from any other token is refused with 403
+`on_behalf_not_allowed` (a staff or customer token can never pick a customer). In dev mode (no tokens) the header is
+taken as the relay would send it, which is how flow tests act as a customer.
+
+- Who is speaking is derived, never read from the body: fields such as `sender_type`, `opened_by`, `reader_type`
+  and the staff user ids are `ro` in the spec; a body value that disagrees with the caller is 422 (`sender_mismatch`,
+  `reader_mismatch`, `customer_mismatch`).
+- Customer callers are deny-by-default: an interceptor allows only the operations meant for customers; each of them
+  checks ownership and answers 404 for another customer's object. Staff-only data (internal notes,
+  `include_internal=true`) is 403 `staff_only`.
+- Put the caller identity in idempotency fingerprints so a key replay never crosses callers.
+- Reference implementation: inbox-service (`Callers`, `Caller`, `CustomerAccess`).
+
+### Public applicant surface (onboarding-service)
+
+Unauthenticated prospects use `/v1/onboarding/public/applications/*` (`[public]` actions, tenant from `?tenant_id`).
+
+- `start` takes a published journey code, a `device_fingerprint` and an optional `attestation_token`
+  (`meridian.onboarding.public.attestation-required` makes it mandatory; the verdict check itself is a placeholder).
+  Starts are rate-limited per client IP and per device fingerprint per tenant (429 `rate_limited`); behind the
+  gateway set `meridian.onboarding.public.client-ip-header=X-Forwarded-For` (the gateway must overwrite that header).
+- It returns an opaque applicant token (`oat_…`, 32 random bytes) once; only its SHA-256 is stored
+  (`onboarding_applicant_token`). Send it as `X-Applicant-Token` (not `Authorization`, which the resource server
+  would try to parse as a JWT). Tokens are short-lived, bound to one application (404 for any other), rotated by
+  `token/refresh` and revoked on submit. Check the token before anything else.
+- Contact steps (PHONE_ / EMAIL_VERIFICATION) complete only through `otp/send` + `otp/verify`: 6-digit code sent via
+  notification-service, HMAC-SHA256 at rest (`onboarding_otp`), expiry, attempt limit with lockout, resend cooldown
+  and a per-application send limit. Failed attempts are returned (not thrown) from the transactional method so the
+  counter commits before the 422.
+- Applicant step input accepts only the step's declared fields; bank-managed values (`kyc_profile_id`,
+  `kyc_document_id`, `customer_id`) are never accepted from the applicant. Documents go through document-service
+  with owner `ONBOARDING_APPLICATION`/<application id>; DOCUMENT fields must reference the application's own documents.
+- Typed step fields in the journey definition (`{name, type, label_key, required, pattern, enum, min_length,
+  max_length, min, max}`; plain names stay valid) are returned by next-step and validated server-side for staff
+  and applicants (422 `invalid_fields` / `missing_fields` with `input.<field>` errors).
+- `application_number` is server-generated (`APP-<yyyymmdd>-<8 base32>`); client values are ignored.
+
 ## Per-tenant ledger settings (config-service namespace `ledger`)
 
 Ledger books, internal (GL / clearing / income / funding) accounts, treasury wallets and similar ids are tenant

@@ -42,6 +42,7 @@ enums:
                        PRODUCT_SELECTION, TERMS_ACCEPTANCE, SIGNATURE, CREDENTIAL_SETUP, MANUAL_REVIEW, CUSTOM]
   OnboardingStepStatus: [PENDING, IN_PROGRESS, COMPLETED, FAILED, SKIPPED, WAITING_REVIEW]
   OfflineSyncStatus: [RECEIVED, VALIDATING, APPLIED, CONFLICT, REJECTED]
+  OnboardingOtpStatus: [PENDING, VERIFIED, EXPIRED, LOCKED, SUPERSEDED]
   KycProfileStatus: [NOT_STARTED, IN_PROGRESS, VERIFIED, REFER, REJECTED, EXPIRED, REVIEW_DUE]
   KycCheckType: [DOCUMENT_OCR, DOCUMENT_AUTHENTICITY, LIVENESS, FACE_MATCH, DATABASE_VERIFICATION, ADDRESS_VERIFICATION,
                  PHONE_VERIFICATION, EMAIL_VERIFICATION, REGISTRY_LOOKUP, UBO_DISCOVERY, TAX_ID_VERIFICATION,
@@ -514,7 +515,10 @@ services:
     description: >
       No-code onboarding journeys per product, segment and country; runs applications step by step
       across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and
-      syncs offline agent-assisted applications.
+      syncs offline agent-assisted applications. Unauthenticated prospects use the public applicant surface
+      (/v1/onboarding/public/applications): start on a published journey by code (rate-limited, attestation token),
+      then act with a short-lived opaque applicant token sent as X-Applicant-Token, stored only as a SHA-256 hash and
+      bound to one application (any other application answers 404), rotated through token/refresh.
     tables:
       - name: onboarding_journey
         prefix: ojn
@@ -530,9 +534,10 @@ services:
           - "channels json[] nn | Allowed channels (OnboardingChannel values)"
           - "product_ids json[] | Products that can be opened at the end of the journey"
           - "target_tier enum:CustomerKycTier nn | KYC tier granted on approval"
-          - "definition json nn | Steps, branching conditions and screens (server-driven UI)"
+          - "definition json nn | Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max}"
           - "decision_rules json | Auto-approve / refer / reject rules"
           - "expiry_days int nn default=30 | Days before an idle application expires"
+          - "legal_entity_id uuid ref=legal_entity | Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)"
           - "published_at ts ro | Publication time"
           - "published_by string(64) ro | Checker who published the version"
           - "retired_at ts ro | Retirement time"
@@ -545,7 +550,7 @@ services:
         description: One customer's run through an onboarding journey
         fr: [ONB-01, ONB-05]
         columns:
-          - "application_number string(32) nn uq | Human-readable reference"
+          - "application_number string(32) nn uq ro | Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>)"
           - "onboarding_journey_id uuid nn fk=onboarding_journey idx | Journey version"
           - "customer_id uuid ref=customer idx | Customer created or matched"
           - "legal_entity_id uuid ref=legal_entity idx | Bank entity that will hold the relationship (needed to create the customer)"
@@ -598,6 +603,48 @@ services:
           - "completed_at ts | Completion"
           - "error string(500) | Last error"
         unique: [[onboarding_application_id, step_code]]
+        response_only:
+          - "fields json[] | Typed field definitions of the step from the journey ({name, type, label_key, required, pattern, enum, min_length, max_length, min, max}), returned by next-step"
+
+      - name: onboarding_applicant_token
+        prefix: oat
+        description: Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest)
+        ext: false
+        fr: [ONB-01]
+        columns:
+          - "onboarding_application_id uuid nn fk=onboarding_application idx | Application the token is bound to"
+          - "token_hash string(64) nn uq hide | SHA-256 of the token (the token itself is never stored)"
+          - "expires_at ts nn ro | Expiry (short-lived; rotate with token/refresh)"
+          - "revoked_at ts ro | Revocation time (rotated, application closed)"
+          - "revoked_reason string(32) ro | ROTATED, SUBMITTED, CLOSED"
+          - "last_used_at ts ro | Last authenticated request"
+          - "issued_ip inet ro | Client IP at issue"
+          - "device_fingerprint string(128) ro | Device fingerprint at issue"
+        response_only:
+          - "applicant_token string(128) | The token, returned once when issued; send it as X-Applicant-Token"
+          - "application_number string(32) | Server-generated application reference"
+          - "current_step string(64) | Code of the current step"
+
+      - name: onboarding_otp
+        prefix: otp
+        description: One-time code sent to verify the applicant's phone or email for a contact step (hashes only)
+        ext: false
+        fr: [ONB-01]
+        columns:
+          - "onboarding_application_id uuid nn fk=onboarding_application idx | Application"
+          - "step_code string(64) nn | PHONE_VERIFICATION or EMAIL_VERIFICATION step"
+          - "channel string(16) nn ro | SMS or EMAIL"
+          - "destination string(254) nn pii hide | Phone or email the code was sent to"
+          - "code_hash string(64) nn hide | HMAC-SHA256 of the code (the code itself is never stored)"
+          - "status enum:OnboardingOtpStatus nn default=PENDING ro | Status"
+          - "attempts int nn default=0 ro | Wrong attempts so far"
+          - "max_attempts int nn default=5 ro | Wrong attempts before the code is locked"
+          - "expires_at ts nn ro | Code expiry"
+          - "verified_at ts ro | Verification time"
+          - "notification_id uuid ref=notification ro | Notification that delivered the code"
+        response_only:
+          - "destination_masked string(254) | Masked destination, e.g. +2547******01"
+          - "resend_after ts | Earliest time a new code can be requested"
 
       - name: onboarding_offline_batch
         prefix: oob
@@ -641,6 +688,25 @@ services:
           - "POST /{id}/request-info | Ask the applicant for more information | message string(1000) nn, step_codes json[] | onboarding_application"
           - "POST /{id}/abandon | Mark as abandoned | | onboarding_application"
           - "POST /{id}/resume | Send a resume link to the applicant (new expiry and delivery channel) | | object"
+      - resource: onboarding-applicant
+        path: /v1/onboarding/public/applications
+        table: onboarding_application
+        description: >
+          Public applicant surface for unauthenticated prospects. Every action except start needs the applicant token
+          in X-Applicant-Token (401 applicant_token_required / applicant_token_invalid / applicant_token_expired); a
+          token only opens its own application (404 for any other id). Risk and review fields are never returned.
+        ops: []
+        actions:
+          - "POST /start?tenant_id:uuid! | [public] Start an application on the tenant's PUBLISHED journey with this code (channel MOBILE_APP or WEB, allowed by the journey). Rate-limited per client IP and per device_fingerprint (429 rate_limited); attestation_token carries the CAPTCHA / app attestation verdict (422 attestation_required when it is required). The application_number is server-generated. Returns the applicant token (once) | journey_code string(64) nn, channel enum:OnboardingChannel nn, device_fingerprint string(128) nn, attestation_token string(4096), product_ids json[], utm json | onboarding_applicant_token"
+          - "GET /{id}?tenant_id:uuid! | [public] The applicant's own application (no risk, decision or review fields) | | onboarding_application"
+          - "GET /{id}/next-step?tenant_id:uuid! | [public] The current step with its typed field definitions | | onboarding_step"
+          - "POST /{id}/steps/{step_code}?tenant_id:uuid! | [public] Submit a step; input is validated against the step's typed fields (422 invalid_fields with input.<field> errors). Contact verification steps complete only through otp/verify | input json nn | onboarding_step"
+          - "POST /{id}/otp/send?tenant_id:uuid! | [public] Send a one-time code for a PHONE_VERIFICATION or EMAIL_VERIFICATION step through notification-service; a new code supersedes the previous one; resend cooldown and a per-application send limit (429 otp_send_limit) | step_code string(64) nn, destination string(254) nn | onboarding_otp"
+          - "POST /{id}/otp/verify?tenant_id:uuid! | [public] Verify the code (422 otp_invalid, otp_expired, otp_locked after max_attempts wrong codes); completes the contact step and records the verified phone or email | step_code string(64) nn, code string(12) nn | onboarding_step"
+          - "POST /{id}/documents?tenant_id:uuid! | [public] Register a document with document-service for the applicant (owner ONBOARDING_APPLICATION) and return its pre-signed upload (document_id, method, url, headers, expires_at) | step_code string(64) nn, document_type string(40) nn, file_name string(255) nn, content_type string(120) nn | object"
+          - "POST /{id}/documents/{document_id}/complete?tenant_id:uuid! | [public] Confirm the uploaded content of one of the application's documents (starts virus scanning in document-service) | size_bytes bigint nn, checksum string(64) nn | object"
+          - "POST /{id}/submit?tenant_id:uuid! | [public] Submit the application for decision; the applicant token is revoked | | onboarding_application"
+          - "POST /{id}/token/refresh?tenant_id:uuid! | [public] Rotate the applicant token: the presented token is revoked and a new one is issued | | onboarding_applicant_token"
       - resource: onboarding-offline-batches
         path: /v1/onboarding/offline-batches
         table: onboarding_offline_batch

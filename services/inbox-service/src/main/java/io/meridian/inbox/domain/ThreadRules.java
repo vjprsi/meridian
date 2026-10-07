@@ -24,6 +24,20 @@ public final class ThreadRules {
         }
     }
 
+    /**
+     * The sender type of a message, derived from the caller: a customer is always CUSTOMER; a bank-side caller is
+     * STAFF unless it declares SYSTEM or BOT. Returns null when the declared value contradicts the caller.
+     */
+    public static String senderFor(boolean customerCaller, String declared) {
+        if (customerCaller) {
+            return declared == null || "CUSTOMER".equals(declared) ? "CUSTOMER" : null;
+        }
+        if (declared == null) {
+            return "STAFF";
+        }
+        return Set.of("STAFF", "SYSTEM", "BOT").contains(declared) ? declared : null;
+    }
+
     public static Check canSend(String threadStatus, String senderType, boolean internalNote) {
         if (!SENDERS.contains(senderType)) {
             return new Check("invalid_sender", "sender_type must be one of " + SENDERS);
