@@ -37,11 +37,21 @@ public class CatalogStore {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final CrudEngine crud;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public CatalogStore(JdbcClient jdbc, JsonMapper json, CrudEngine crud) {
+    public CatalogStore(JdbcClient jdbc, JsonMapper json, CrudEngine crud, io.meridian.web.time.BusinessDates businessDates) {
         this.jdbc = jdbc;
         this.json = json;
         this.crud = crud;
+        this.businessDates = businessDates;
+    }
+
+    /**
+     * Today's business date (business-day-service, tenant-wide): default as-of date for pricing, and the reference
+     * for "not in the past / not in the future" checks; falls back to the UTC calendar date.
+     */
+    public java.time.LocalDate today() {
+        return businessDates.today(() -> java.time.LocalDate.now(java.time.ZoneOffset.UTC));
     }
 
     public Optional<JsonNode> find(String table, UUID id) {

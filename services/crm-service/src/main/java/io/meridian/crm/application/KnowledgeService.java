@@ -170,7 +170,7 @@ public class KnowledgeService {
         v.put("published_at", rows.now().toString());
         v.putNull("archived_at");
         if (text(a, "review_due") == null) {
-            v.put("review_due", rows.now().toLocalDate().plusMonths(12).toString());
+            v.put("review_due", rows.today().plusMonths(12).toString());
         }
         ObjectNode row = rows.update(T, id, v);
         events.publish("servicing.knowledge_article.published", T, row, KnowledgeArticle.class);

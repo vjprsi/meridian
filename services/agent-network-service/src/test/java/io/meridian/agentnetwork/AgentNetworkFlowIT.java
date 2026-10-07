@@ -59,6 +59,9 @@ class AgentNetworkFlowIT {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     @MockitoBean
     ServiceClient serviceClient;
 
@@ -417,6 +420,25 @@ class AgentNetworkFlowIT {
                 "wallets.agent_float_request.approved", "wallets.agent_float_request.rejected", "wallets.agent_till.opened",
                 "wallets.agent_till.closed", "wallets.agent_device.lost", "wallets.agent_kyc_document.verified",
                 "wallets.cash_management_request.completed");
+    }
+
+    @Test
+    @Order(11)
+    void documentExpiryUsesTheBusinessDate() throws Exception {
+        when(serviceClient.get(org.mockito.ArgumentMatchers.eq("business-day-service"), anyString()))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2032-01-01\"}]}"));
+        businessDates.invalidate();
+        try {
+            // valid by the calendar today, expired by the business date
+            post("/v1/agent-kyc-documents", """
+                    {"agent_id":"%s","document_type":"ID","document_id":"%s","expires_at":"2031-12-31"}"""
+                    .formatted(superAgent, UUID.randomUUID()), "ops1", 422, "document_expired");
+            post("/v1/agent-kyc-documents", """
+                    {"agent_id":"%s","document_type":"ID","document_id":"%s","expires_at":"2032-01-01"}"""
+                    .formatted(superAgent, UUID.randomUUID()), "ops1", 201);
+        } finally {
+            businessDates.invalidate();
+        }
     }
 
     // ------------------------------------------------------------------ helpers

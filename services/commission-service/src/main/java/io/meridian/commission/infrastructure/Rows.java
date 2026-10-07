@@ -31,7 +31,15 @@ public class Rows {
     private final CrudEngine crud;
     private final JsonMapper json;
 
-    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json) {
+    private final io.meridian.web.time.BusinessDates businessDates;
+
+    /** The tenant's business date (business-day-service), else the database's calendar date. */
+    public java.time.LocalDate today() {
+        return businessDates.today(() -> jdbc.sql("select current_date").query(java.time.LocalDate.class).single());
+    }
+
+    public Rows(JdbcClient jdbc, CrudEngine crud, JsonMapper json, io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.jdbc = jdbc;
         this.crud = crud;
         this.json = json;

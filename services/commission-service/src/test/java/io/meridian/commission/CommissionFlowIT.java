@@ -3,6 +3,7 @@ package io.meridian.commission;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import io.meridian.common.tenancy.TenantContext;
@@ -60,6 +61,9 @@ class CommissionFlowIT {
 
     @Value("${local.server.port}")
     int port;
+
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
 
     @Autowired
     JsonMapper json;
@@ -282,6 +286,24 @@ class CommissionFlowIT {
     private JsonNode rule(String plan, String name, String beneficiary, String extra, int expected) throws Exception {
         return post("/v1/commission-rules", "{\"commission_plan_id\":\"" + plan + "\",\"name\":\"" + name
                 + "\",\"txn_type\":\"CASH_IN\",\"beneficiary\":\"" + beneficiary + "\"," + extra + "}", "maker", expected);
+    }
+
+    @Test
+    @Order(5)
+    void retirementDatesUseTheBusinessDate() throws Exception {
+        when(serviceClient.get(eq("business-day-service"), anyString()))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2031-02-03\"}]}"));
+        businessDates.invalidate();
+        try {
+            String plan = post("/v1/commission-plans", """
+                    {"code":"BD-RETIRE","name":"Retire me","applies_to":"AGENT","currency":"KES","payout_frequency":"DAILY",
+                     "valid_from":"2020-01-01"}""", "maker", 201).get("id").asString();
+            JsonNode retired = post("/v1/commission-plans/" + plan + "/retire", "{}", "checker", 200);
+            assertThat(retired.get("status").asString()).isEqualTo("RETIRED");
+            assertThat(retired.get("valid_to").asString()).isEqualTo("2031-02-03");
+        } finally {
+            businessDates.invalidate();
+        }
     }
 
     private String accrue(String txn, String type, String status, String amount, UUID agent) {

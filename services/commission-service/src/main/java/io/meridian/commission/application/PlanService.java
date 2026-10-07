@@ -258,9 +258,10 @@ public class PlanService {
         if (effective != null) {
             rows.execute("update commission_plan set status = 'RETIRED', retired_at = now(), valid_to = ? where id = ?", effective, id);
         } else {
+            LocalDate today = rows.today();
             rows.execute("""
                     update commission_plan set status = 'RETIRED', retired_at = now(),
-                           valid_to = least(coalesce(valid_to, current_date), current_date) where id = ?""", id);
+                           valid_to = least(coalesce(valid_to, ?), ?) where id = ?""", today, today, id);
         }
         rows.execute("update commission_plan set valid_to = greatest(valid_to, valid_from) where id = ?", id);
         ObjectNode after = rows.get(PLAN, id);

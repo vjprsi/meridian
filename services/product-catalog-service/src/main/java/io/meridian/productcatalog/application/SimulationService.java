@@ -60,7 +60,7 @@ public class SimulationService {
         values.put("horizon_months", horizon);
         Map<String, Object> scenarioMap = CatalogStore.toMap(values.get("scenario"));
         boolean lending = PricingService.LENDING.contains(product.get("family").asString());
-        SimulationEngine.Scenario scenario = scenario(scenarioMap, horizon, lending);
+        SimulationEngine.Scenario scenario = scenario(scenarioMap, horizon, lending, store.today());
         String currency = product.get("currency").asString().trim();
         SimulationEngine.Product p = productInputs(versionId, currency, lending, scenario.startDate());
 
@@ -156,7 +156,7 @@ public class SimulationService {
     }
 
     /** Parses and validates the scenario JSON (422 on bad input). */
-    static SimulationEngine.Scenario scenario(Map<String, Object> s, int horizon, boolean lending) {
+    static SimulationEngine.Scenario scenario(Map<String, Object> s, int horizon, boolean lending, LocalDate today) {
         try {
             String mode = s.get("mode") != null ? s.get("mode").toString().toUpperCase(java.util.Locale.ROOT)
                     : (lending ? "LOAN" : "DEPOSIT");
@@ -164,7 +164,7 @@ public class SimulationService {
                 throw ApiException.unprocessable("invalid_scenario", "mode must be DEPOSIT or LOAN");
             }
             LocalDate start = s.get("start_date") != null ? LocalDate.parse(s.get("start_date").toString())
-                    : LocalDate.now().withDayOfMonth(1);
+                    : today.withDayOfMonth(1);
             NavigableMap<Integer, BigDecimal> path = new TreeMap<>();
             if (s.get("rate_path") instanceof List<?> l) {
                 for (Object o : l) {

@@ -52,7 +52,7 @@ public class PricingService {
 
     public Map<String, Object> effectiveRate(UUID configId, BigDecimal balance, LocalDate asOf) {
         JsonNode cfg = store.require("interest_rate_config", configId);
-        LocalDate date = asOf == null ? LocalDate.now() : asOf;
+        LocalDate date = asOf == null ? store.today() : asOf;
         RateCalculator.Config c = inputs.rateConfig(cfg);
         BigDecimal index = c.isFloating() ? inputs.indexRate(cfg, date).orElse(null) : null;
         RateCalculator.Result r = RateCalculator.compute(c, balance, date, index);
@@ -104,7 +104,7 @@ public class PricingService {
     public Map<String, Object> calculateFee(UUID feeId, BigDecimal baseAmount, Integer occurrenceNo, UUID customerId,
                                             Map<String, Object> context) {
         JsonNode f = store.require("fee_definition", feeId);
-        LocalDate asOf = context.get("as_of") != null ? LocalDate.parse(context.get("as_of").toString()) : LocalDate.now();
+        LocalDate asOf = context.get("as_of") != null ? LocalDate.parse(context.get("as_of").toString()) : store.today();
         FeeCalculator.Context ctx = new FeeCalculator.Context(asOf, occurrenceNo, dec(context, "balance"),
                 dec(context, "average_balance"), dec(context, "salary_credit"), integer(context, "transaction_count"),
                 str(context, "segment"), bool(context, "bundle_member"), str(context, "promotion_code"),
@@ -164,7 +164,7 @@ public class PricingService {
     public Map<String, Object> eligibility(UUID productId, UUID customerId, Map<String, Object> profile, String channel) {
         JsonNode product = store.require("product", productId);
         JsonNode version = publishedVersion(product);
-        LocalDate asOf = profile.get("as_of") != null ? LocalDate.parse(profile.get("as_of").toString()) : LocalDate.now();
+        LocalDate asOf = profile.get("as_of") != null ? LocalDate.parse(profile.get("as_of").toString()) : store.today();
         List<EligibilityEvaluator.Rule> rules = new ArrayList<>();
         for (JsonNode r : store.children("eligibility_rule", "product_version_id", ProductService.id(version), "id")) {
             UUID dt = r.hasNonNull("decision_table_id") ? UUID.fromString(r.get("decision_table_id").asString()) : null;
@@ -269,7 +269,7 @@ public class PricingService {
         String currency = product.get("currency").asString().trim();
         int minor = FeeCalculator.minorUnits(currency);
         Map<String, Object> applicant = q.applicant() == null ? Map.of() : q.applicant();
-        LocalDate today = LocalDate.now();
+        LocalDate today = store.today();
         OffsetDateTime now = io.meridian.common.time.Clocks.now();
         BigDecimal amount = q.amount() == null ? BigDecimal.ZERO : q.amount();
         int term = q.termMonths() == null ? 12 : q.termMonths();

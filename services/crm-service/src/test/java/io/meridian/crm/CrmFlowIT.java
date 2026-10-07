@@ -84,6 +84,9 @@ class CrmFlowIT {
     @MockitoBean
     ServiceClient serviceClient;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     final HttpClient http = HttpClient.newHttpClient();
     final AtomicBoolean ledgerDown = new AtomicBoolean(false);
     final List<JsonNode> postings = new ArrayList<>();
@@ -534,10 +537,15 @@ class CrmFlowIT {
         assertThat(code(post("/v1/servicing/knowledge-articles/" + article + "/feedback", "{\"helpful\":true}", 409)))
                 .isEqualTo("invalid_transition");
         assertThat(code(post("/v1/servicing/knowledge-articles/" + article + "/publish", null, 422))).isEqualTo("four_eyes_violation");
+        // review dates and the {{today}} placeholder use the tenant's business date
+        when(serviceClient.get(eq("business-day-service"), startsWith("/v1/operations/business-days")))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2031-05-06\"}]}"));
+        businessDates.invalidate();
         JsonNode published = json.readTree(send("POST", "/v1/servicing/knowledge-articles/" + article + "/publish", null, key(),
                 TENANT, "checker").body());
         assertThat(published.get("status").asString()).isEqualTo("PUBLISHED");
         assertThat(published.get("reviewed_by").asString()).isEqualTo("checker");
+        assertThat(published.get("review_due").asString()).isEqualTo("2032-05-06");
         assertThat(post("/v1/servicing/knowledge-articles/" + article + "/feedback", "{\"helpful\":true}", 200)
                 .get("helpful_count").asInt()).isEqualTo(1);
         JsonNode hits = get("/v1/servicing/knowledge-articles/search?q=declined%20card").get("data");
@@ -559,6 +567,11 @@ class CrmFlowIT {
         assertThat(rendered.get("rendered").asString()).startsWith("Dear Alice, your case " + caseNumber + " (Card declined abroad) is REOPENED.");
         assertThat(rendered.get("unresolved_placeholders").get(0).asString()).isEqualTo("unknown");
         assertThat(rendered.get("complete").asBoolean()).isFalse();
+        String dated = post("/v1/servicing/canned-responses", """
+                {"code":"DATED","title":"Dated","body":"As of {{today}}"}""", 201).get("id").asString();
+        assertThat(post("/v1/servicing/canned-responses/" + dated + "/render", "{}", 200).get("rendered").asString())
+                .isEqualTo("As of 2031-05-06");
+        businessDates.invalidate();
         assertThat(code(post("/v1/servicing/canned-responses/" + canned + "/render", """
                 {"service_case_id":"%s","customer_id":"%s"}""".formatted(cardCase, BOB), 422))).isEqualTo("customer_mismatch");
 

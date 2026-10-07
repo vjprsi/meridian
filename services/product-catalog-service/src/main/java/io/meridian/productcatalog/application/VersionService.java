@@ -310,7 +310,7 @@ public class VersionService {
             throw ApiException.conflict("invalid_source_version", "Version " + from.get("version_no").asInt()
                     + " was never published, so no accounts are pinned to it");
         }
-        if (effectiveDate.isBefore(LocalDate.now())) {
+        if (effectiveDate.isBefore(store.today())) {
             throw ApiException.unprocessable("effective_date_in_past", "effective_date cannot be in the past");
         }
         ObjectNode payload = (ObjectNode) target.deepCopy();
