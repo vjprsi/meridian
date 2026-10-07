@@ -1,0 +1,35 @@
+{
+  "description": "MR-GAME-DAY AZ loss in one cell: cut the AZ's subnets for 10 minutes and fail the Aurora writer over to another AZ. Expected: RTO < 1 min, RPO 0 (BCP_DR section 5). Replace the ${...} placeholders (tofu outputs of infra/tofu/modules/cell).",
+  "roleArn": "${fis_role_arn}",
+  "tags": {"meridian:game-day": "az-loss", "meridian:cell": "${cell_id}"},
+  "stopConditions": [
+    {"source": "aws:cloudwatch:alarm", "value": "${abort_alarm_arn}"}
+  ],
+  "targets": {
+    "az-subnets": {
+      "resourceType": "aws:ec2:subnet",
+      "resourceArns": ["${subnet_arn_az_a_private}", "${subnet_arn_az_a_data}"],
+      "selectionMode": "ALL"
+    },
+    "aurora": {
+      "resourceType": "aws:rds:cluster",
+      "resourceArns": ["${aurora_cluster_arn}"],
+      "selectionMode": "ALL"
+    }
+  },
+  "actions": {
+    "disrupt-az": {
+      "actionId": "aws:network:disrupt-connectivity",
+      "parameters": {"duration": "PT10M", "scope": "all"},
+      "targets": {"Subnets": "az-subnets"}
+    },
+    "aurora-failover": {
+      "actionId": "aws:rds:failover-db-cluster",
+      "targets": {"Clusters": "aurora"}
+    }
+  },
+  "logConfiguration": {
+    "cloudWatchLogsConfiguration": {"logGroupArn": "${fis_log_group_arn}"},
+    "logSchemaVersion": 2
+  }
+}

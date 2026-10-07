@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-10-07 · Owner: TBD (Head of SRE / BCM coordinator) · Design reference:
 [docs/MULTI_REGION.md](../MULTI_REGION.md) (topology, replication, RPO statement, failover runbook) · Status: designed,
-**not yet exercised** (no game day run, GAP-11)
+game-day tooling built (MR-GAME-DAY), **not yet exercised** (no game day run, GAP-11)
 
 ## 1. Scope and assumptions
 
@@ -49,7 +49,7 @@ Other scenarios:
 | S3 documents | Versioning, optional object lock (GOVERNANCE, `object_lock_days`), CRR both ways with KMS re-encryption | Per object lock / lifecycle (lifecycle rules not defined - proposed) | `infra/tofu/modules/cell`, `region` |
 | Archive objects | WORM (`archived_object.worm_retain_until`), SHA-256 manifests | Per retention policy | archive-service (owning services answer `/v1/internal/data-lifecycle/*`) |
 | Secrets | Secrets Manager with replicas in the DR region (`secret_replicas`, DR KMS key) | Versions kept by Secrets Manager | `infra/tofu/modules/region` (`aws_kms_key.dr_secrets`) |
-| Kafka | Not backed up: events are reproducible from service outboxes during the relay window; consumers idempotent | Topic retention (cluster config) | Outbox rows are deleted after relay (follow-up: keep relayed rows for a window, MULTI_REGION section 4) |
+| Kafka | Not backed up: relayed events stay in each service's outbox for the replay window and can be re-published with their original ids (`POST /v1/internal/ops/outbox/replay`, automatically on standby promotion); consumers de-duplicate by `ce_id` (exceptions in MULTI_REGION section 4) | Topic retention (cluster config); outbox replay window 72 h (`global.outbox.retention`) | `OutboxRetentionReplayIT`; [MULTI_REGION section 8.3](../MULTI_REGION.md#83-outbox-replay-retention) |
 | Infrastructure state | OpenTofu state in S3 (`meridian-tofu-state`, encrypted, lock file) | Bucket versioning to confirm (bucket not managed in repo) | `infra/tofu/envs/*/main.tf` |
 | Configuration | Helm values per environment, tenant config in config-service (database) | Git history; DB backups | - |
 
@@ -76,11 +76,22 @@ Other scenarios:
 | Annual | Tabletop: card key compromise, ransomware / logical corruption, IdP outage, control-plane loss, loss of a payment rail | Decisions and comms per [RUNBOOKS](RUNBOOKS.md) within target times | TBD (BCM coordinator) |
 | After major change | Targeted DR test of the changed component | - | Change owner |
 
-Prerequisites for the first regional game day ([MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs)):
-FIS templates and the synthetic tenant probe; dashboards for the RTO timeline; MSK IAM client settings in the chart;
-reverse MSK Replicator for failback; runtime promotion without rolling restart (RTO margin); outbox retention for
-replay; control-plane DR (tenant-service and workflow-service in their own region pair); fast config channel for router
+Game-day kit (MR-GAME-DAY, [MULTI_REGION section 8](../MULTI_REGION.md#8-game-day-kit-mr-game-day)), in place:
+fault-injection templates with expected alerts (`tools/gameday/faults.py`; AWS FIS `tools/gameday/fis/az-loss.json`,
+`region-loss.json`), the RPO probe tenant (`tools/gameday/rpo_probe.py`: last acknowledged vs last present write,
+RPO seconds, client-observed RTO), the `Meridian / Game day (failover timeline)` dashboard, standby promotion without
+rolling restart (RTO margin ~60-90 s), outbox retention (72 h) with replay by original event id, and the data mover for
+tenant moves. MSK IAM client settings are in the chart (GAP-16).
+
+Still needed before / for the first regional game day ([MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs)):
+a staging region pair (PLT-IAC applied), the monitoring stack and paging (GAP-10), reverse MSK Replicator for failback,
+control-plane DR (tenant-service and workflow-service in their own region pair) and a fast config channel for router
 break-glass overrides.
+
+Game-day procedure per exercise: (1) `rpo_probe.py setup` + `write` against the router; (2) record T0 and inject with
+`faults.py <fault> --execute [--cloud]` or the FIS template; (3) follow MULTI_REGION section 5, timestamps per step;
+(4) `rpo_probe.py check` against the promoted side; (5) compare fired alerts with the expected list printed by
+`faults.py`; (6) record RTO, RPO, findings in section 7 history below.
 
 ## 6. Business continuity (people and process)
 
@@ -105,7 +116,7 @@ the tracker and in this document's history.
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-11 | No game day yet; data mover, FIS, outbox retention, control-plane DR, MSK IAM config, reverse replicator | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
+| GAP-11 | No game day yet (tooling done: data mover, fault injection + FIS, RPO probe, in-place promotion, outbox replay); open: control-plane DR, reverse replicator, CDE-scoped mover, replay hardening of four consumers | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | GAP-01 | No HSM key backup / ceremony for card keys (KMS mode covered by the multi-region CDE key); a dedicated CDE database cluster (`cde_dedicated_db`) has no cross-region replica yet | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | GAP-10 | Dashboards / alerts for detection and RTO measurement | TBD (SRE) | PLT-OBSERVABILITY |
 | - | S3 lifecycle rules and tofu-state bucket versioning not managed in the repo | TBD (Platform) | Proposed |

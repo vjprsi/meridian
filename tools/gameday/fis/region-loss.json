@@ -1,0 +1,26 @@
+{
+  "description": "MR-GAME-DAY simulated loss of the primary region's cell: cut every subnet of the primary cell (gateways, services, Aurora writer, MSK) for 30 minutes. The failover itself is the runbook (docs/MULTI_REGION.md section 5): cell OFFLINE, Aurora Global failover, standby cell ONLINE (services promote in place). Expected: RTO < 5 min, RPO = replication lag (rpo_probe.py check). Replace the ${...} placeholders (tofu outputs of infra/tofu/modules/cell and region).",
+  "roleArn": "${fis_role_arn}",
+  "tags": {"meridian:game-day": "region-loss", "meridian:cell": "${primary_cell_id}"},
+  "stopConditions": [
+    {"source": "aws:cloudwatch:alarm", "value": "${abort_alarm_arn}"}
+  ],
+  "targets": {
+    "primary-cell-subnets": {
+      "resourceType": "aws:ec2:subnet",
+      "resourceTags": {"meridian:cell": "${primary_cell_id}"},
+      "selectionMode": "ALL"
+    }
+  },
+  "actions": {
+    "disrupt-region-cell": {
+      "actionId": "aws:network:disrupt-connectivity",
+      "parameters": {"duration": "PT30M", "scope": "all"},
+      "targets": {"Subnets": "primary-cell-subnets"}
+    }
+  },
+  "logConfiguration": {
+    "cloudWatchLogsConfiguration": {"logGroupArn": "${fis_log_group_arn}"},
+    "logSchemaVersion": 2
+  }
+}

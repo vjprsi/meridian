@@ -293,8 +293,14 @@ chain; search-service indexes ~97 event types (`meridian.search.indexer.lag`, `m
 4. After catch-up, verify the chain for the affected range per tenant:
    `POST /v1/audit-events/verify-chain {"from_sequence": n, "to_sequence": m}` (max 100,000 per call). A break publishes
    `platform.audit_chain.broken` -> SEV1 (possible tampering).
-5. Standby cells must not consume (listeners off when `global.cell.role=standby`); if lag appears there, a promotion
-   happened or the config is wrong.
+5. Standby cells must not consume (listeners held while `global.cell.role=standby`); if lag appears there, a
+   promotion happened (`GET /v1/internal/ops/cell-role` on the service, `python tools/gameday/faults.py cell-role`) or
+   the config is wrong.
+6. Events lost between the regions in an unplanned failover, or a consumer that skipped records: re-publish from the
+   outbox with the original ids (relayed rows are kept 72 h): `python tools/gameday/faults.py outbox-replay --from
+   <iso> --to <iso> [--types payments.*] [--tenant <id>] --services <producers> --dry-run`, check the counts, then
+   again with `--execute` (without `--dry-run`). Consumers de-duplicate by `ce_id`; filter event types for ranges
+   older than a few minutes (collections, notification, fraud features, router: MULTI_REGION section 4).
 
 ## 8. Database connection exhaustion
 
@@ -322,14 +328,29 @@ Full procedure, timings and roles: [docs/MULTI_REGION.md](../MULTI_REGION.md) se
 (failover runbook). Summary:
 
 - Tenant move **[4-eyes]**: plan (`POST /v1/platform/tenant-moves`) -> approve in workflow-service -> `/freeze` ->
-  `/start-copy` -> data mover `/confirm-copy` (not before freeze + 45 s) -> `/switch` -> `/unfreeze`; `/cancel` until
-  the switch. **[gap: GAP-11, no data mover implementation yet]**
+  `/start-copy` -> the data mover (`platform/data-mover`) copies, verifies and calls `/confirm-copy` itself (not before
+  freeze + 45 s) -> `/switch` -> `/unfreeze`; `/cancel` until the switch (stops the copy).
+  - Watch the copy: data mover management port `GET /actuator/moves/{move_id}` (status, per-table rows copied, source
+    vs target digests, last error); dashboard `Meridian / Game day`; alert `MeridianDataMoverRunFailed`.
+  - FAILED with `already holds ... rows`: the target has rows of the tenant (an earlier cancelled move): clean them
+    with the DBA (target cell only, never the source), then `POST /actuator/moves/{move_id}` to retry.
+  - FAILED with `schema version`: deploy the same release to both cells, then retry.
+  - FAILED with `verification failed`: something wrote to the target or the source after the freeze. Do **not**
+    switch; cancel the move (`/cancel`), find the writer (scheduled job, a router that missed the freeze), clean the
+    target, plan again.
+  - Transient errors (5xx, timeouts) need nothing: any mover instance resumes from the last page within 30 s.
+  - Tenants with card data: the CDE services are closed to the mover (GAP-11 residual); use `DUMP_RESTORE`.
 - Unplanned regional failover (break-glass, single operator, audited): `POST /v1/platform/cells/{id}/offline` (or
   router `cellOverrides` if the control plane is down) -> `aws rds failover-global-cluster ... --allow-data-loss` ->
-  `helm upgrade ... --set global.cell.role=primary` on the standby -> `POST /v1/platform/cells/{standby}/online`. Budget
-  < 300 s.
-- Planned evacuation (RPO 0): `/read-only`, drain outbox and MSK Replicator lag, `switchover-global-cluster`, swap roles,
-  `/offline` + `/online`.
+  `POST /v1/platform/cells/{standby}/online`: the standby's services promote themselves in place within ~5 s once
+  their database accepts writes (no `helm upgrade` / rolling restart on the critical path; replay of the last 60 s of
+  relayed events included). Check with `python tools/gameday/faults.py cell-role --url-template ...`; a service stuck
+  in `WAITING_FOR_DATABASE` / `FAILED`: `POST /v1/internal/ops/cell-role/retry` (or `promote-cell`). Budget < 300 s.
+  Make the role permanent in `deploy/` afterwards.
+- Planned evacuation (RPO 0): `/read-only`, drain outbox and MSK Replicator lag, `switchover-global-cluster`,
+  `/offline` + `/online` (in-place promotion), demote the old primary's services (`/v1/internal/ops/cell-role/demote`).
+- Game-day tooling: fault injection `tools/gameday/faults.py` (prints the expected alerts), RPO probe
+  `tools/gameday/rpo_probe.py`, FIS templates `tools/gameday/fis/`.
 - After an unplanned failover: run reconciliation for `[failover - lag, failover]` against rail / scheme files
   (section 6) and check idempotent client retries.
 
@@ -395,6 +416,6 @@ wired]**. Escalation: primary 5 min -> secondary 10 min -> IC 15 min -> CTO 30 m
 | GAP-21 | Webhook encryption key and MFA seed key cannot be rotated | TBD (Platform) | Proposed |
 | GAP-12 | Connection budget / PgBouncer | TBD (Platform) | [SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget) |
 | GAP-10 | Alerting / paging not wired; on-call names TBD | TBD (SRE) | PLT-OBSERVABILITY |
-| GAP-11 | Data mover for tenant moves; game day | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
+| GAP-11 | Game day not run (tooling done, MR-GAME-DAY); CDE-scoped data mover; control-plane DR | TBD (SRE) | [MULTI_REGION section 7](../MULTI_REGION.md#7-what-a-real-game-day-still-needs) |
 | - | Card ZPK grace period | TBD (Cards) | [SPEC_BACKLOG Wave B Cards](../SPEC_BACKLOG.md#wave-b-results-and-open-items) |
 | - | No EOD jobs for ledger verification or archive runs (audit chain verification and seals run daily since GAP-07) | TBD (Operations) | Proposed |
