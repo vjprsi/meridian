@@ -80,6 +80,8 @@ export function reconcile(o: AttemptOutcome): Decision {
 }
 
 const VERIFIER = "meridian-agent-outbox-v1";
+/** Wrong PINs after which the outbox is erased (SEC-23). */
+export const WIPE_AFTER = 10;
 
 interface KeyMeta { salt: string; verifier: Sealed; binding: string; iterations: number }
 interface LockMeta { failures: number; lockedUntil?: string }
@@ -155,6 +157,14 @@ export class Outbox {
       return true;
     } catch {
       const failures = lock.failures + 1;
+      // SEC-23: after WIPE_AFTER wrong PINs the encrypted queue and its key material are destroyed (a stolen device
+      // gets a bounded number of online guesses; offline work must then be re-captured).
+      if (failures >= WIPE_AFTER) {
+        for (const r of await this.store.all()) await this.store.delete(r.id);
+        await this.store.setMeta("key", null);
+        await this.store.setMeta("lock", { failures: 0 } satisfies LockMeta);
+        throw new OfflineLimitError("locked", "Too many wrong PINs: the offline queue on this device was erased");
+      }
       const next: LockMeta = { failures };
       if (failures >= 5) {
         const minutes = 5 * 2 ** (failures - 5);
