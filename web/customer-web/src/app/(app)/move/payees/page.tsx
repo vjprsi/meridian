@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { idem, payments, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { qk, useCustomerId, useMyPayees } from "@/api/me";
-import type { Payee, PayeeCreate } from "@/api/types";
+import type { MyPayee, Payee } from "@/api/types";
 import { StepUpConfirm } from "@/components/step-up";
 import {
   Async, Badge, Button, Card, Empty, ErrorBanner, Field, Input, LinkButton, Notice, PageHeader, Select, masked,
 } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 
-const EMPTY = { name: "", nickname: "", account_id_type: "ACCOUNT_NUMBER" as PayeeCreate["account_id_type"],
+const EMPTY = { name: "", nickname: "", account_id_type: "ACCOUNT_NUMBER" as MyPayee["account_id_type"],
   account_number: "", bank_name: "", agent_clearing_id: "", country: "KE", currency: "" };
 
 export default function Payees() {
@@ -27,9 +27,9 @@ export default function Payees() {
   const refresh = () => qc.invalidateQueries({ queryKey: qk.payees(c) });
 
   const add = useMutation({
-    mutationFn: async () => unwrap(await payments.POST("/v1/payees", {
+    mutationFn: async () => unwrap(await me.POST("/v1/me/payees", {
       params: { header: idem() },
-      body: { customer_id: c, beneficiary_type: "INDIVIDUAL", name: form.name.trim(),
+      body: { beneficiary_type: "INDIVIDUAL", name: form.name.trim(),
         nickname: form.nickname || undefined, account_id_type: form.account_id_type,
         account_number: form.account_number.replace(/\s+/g, "").toUpperCase(), bank_name: form.bank_name || undefined,
         agent_clearing_id: form.agent_clearing_id || undefined, country: form.country.toUpperCase(),
@@ -38,15 +38,15 @@ export default function Payees() {
     onSuccess: () => { setConfirmAdd(false); setForm(EMPTY); refresh(); },
   });
   const verify = useMutation({
-    mutationFn: async (id: string) => unwrap(await payments.POST("/v1/payees/{id}/verify", { params: { path: { id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/payees/{payee_id}/verify", { params: { path: { payee_id: id }, header: idem() } })),
     onSuccess: refresh,
   });
   const trust = useMutation({
-    mutationFn: async (id: string) => unwrap(await payments.POST("/v1/payees/{id}/trust", { params: { path: { id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/payees/{payee_id}/trust", { params: { path: { payee_id: id }, header: idem() } })),
     onSuccess: () => { setTrusting(null); refresh(); },
   });
   const remove = useMutation({
-    mutationFn: async (id: string) => unwrap(await payments.DELETE("/v1/payees/{id}", { params: { path: { id } } })),
+    mutationFn: async (id: string) => unwrap(await me.DELETE("/v1/me/payees/{payee_id}", { params: { path: { payee_id: id }, header: idem() } })),
     onSuccess: () => { setRemoving(null); refresh(); },
   });
 
@@ -110,7 +110,7 @@ export default function Payees() {
               <Input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} />
             </Field>
             <Field label={t("payees.idType")}>
-              <Select value={form.account_id_type} onChange={(e) => setForm({ ...form, account_id_type: e.target.value as PayeeCreate["account_id_type"] })}
+              <Select value={form.account_id_type} onChange={(e) => setForm({ ...form, account_id_type: e.target.value as MyPayee["account_id_type"] })}
                 options={[{ value: "ACCOUNT_NUMBER", label: t("payees.accountNumber") }, { value: "IBAN", label: "IBAN" }]} />
             </Field>
             <Field label={form.account_id_type === "IBAN" ? "IBAN" : t("payees.accountNumber")} error={errors.account_number}>

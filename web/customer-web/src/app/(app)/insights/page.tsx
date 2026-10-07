@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { idem, insights, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { useCustomerId, useMyAccounts } from "@/api/me";
 import type { Budget, SpendingByCategory } from "@/api/types";
 import {
@@ -30,16 +30,16 @@ export default function Insights() {
 
   const spending = useQuery({
     queryKey: ["spending", c, range], enabled: !!c,
-    queryFn: async () => unwrap(await insights.GET("/v1/insights/spending/by-category", {
-      params: { query: { customer_id: c, ...ranges[range] } } })) as unknown as SpendingByCategory,
+    queryFn: async () => unwrap(await me.GET("/v1/me/insights/spending", {
+      params: { query: ranges[range] } })) as unknown as SpendingByCategory,
   });
   const cards = useQuery({
     queryKey: ["insight-cards", c], enabled: !!c,
-    queryFn: async () => unwrap(await insights.GET("/v1/insights/cards", { params: { query: { customer_id: c, limit: 10 } } }))
-      .data.filter((x) => x.customer_id === c && x.delivery_status !== "DISMISSED" && x.delivery_status !== "EXPIRED"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/insights/cards", { params: { query: { limit: 10 } } })).data,
   });
   const dismiss = useMutation({
-    mutationFn: async (id: string) => unwrap(await insights.POST("/v1/insights/cards/{id}/dismiss", { params: { path: { id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/insights/cards/{insight_id}/dismiss", {
+      params: { path: { insight_id: id }, header: idem() } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["insight-cards", c] }),
   });
 
@@ -112,32 +112,32 @@ function Budgets({ currency }: { currency: string }) {
   const budgets = useQuery({
     queryKey: ["budgets", c], enabled: !!c,
     queryFn: async () => {
-      const list = unwrap(await insights.GET("/v1/insights/budgets", { params: { query: { customer_id: c, limit: 50 } } }))
-        .data.filter((b) => b.customer_id === c && b.status !== "ARCHIVED");
+      const list = unwrap(await me.GET("/v1/me/budgets", { params: { query: { limit: 50 } } })).data;
       return Promise.all(list.map(async (b) => {
-        const r = await insights.GET("/v1/insights/budgets/{id}/current-period", { params: { path: { id: b.id! } } });
+        const r = await me.GET("/v1/me/budgets/{budget_id}/current-period", { params: { path: { budget_id: b.id! } } });
         return { budget: b, period: r.data };
       }));
     },
   });
   const categories = useQuery({
     queryKey: ["spend-categories"],
-    queryFn: async () => unwrap(await insights.GET("/v1/insights/categories", { params: { query: { is_active: true, is_income: false, limit: 200 } } }))
-      .data.filter((x) => x.level !== "SUBCATEGORY"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/insights/categories", { params: { query: { limit: 200 } } }))
+      .data.filter((x) => !x.is_income && x.level !== "SUBCATEGORY"),
     staleTime: 10 * 60_000,
   });
   const [form, setForm] = useState({ name: "", spend_category_id: "", amount: "", period_type: "MONTHLY" as Budget["period_type"] });
   const [err, setErr] = useState<Record<string, string>>({});
   const create = useMutation({
-    mutationFn: async () => unwrap(await insights.POST("/v1/insights/budgets", {
+    mutationFn: async () => unwrap(await me.POST("/v1/me/budgets", {
       params: { header: idem() },
-      body: { customer_id: c, name: form.name, spend_category_id: form.spend_category_id || undefined, amount: form.amount,
-        currency, period_type: form.period_type, starts_on: new Date().toISOString().slice(0, 10), notify_customer: true },
+      body: { name: form.name, spend_category_id: form.spend_category_id || undefined, amount: form.amount,
+        currency, period_type: form.period_type, starts_on: new Date().toISOString().slice(0, 10) },
     })),
     onSuccess: () => { setForm({ ...form, name: "", amount: "" }); qc.invalidateQueries({ queryKey: ["budgets", c] }); },
   });
   const archive = useMutation({
-    mutationFn: async (id: string) => unwrap(await insights.POST("/v1/insights/budgets/{id}/archive", { params: { path: { id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/budgets/{budget_id}/archive", {
+      params: { path: { budget_id: id }, header: idem() } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets", c] }),
   });
 

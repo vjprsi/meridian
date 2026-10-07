@@ -2,8 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { useCustomerId, useMe, useMyAccounts, useMyPayees } from "@/api/me";
-import type { PaymentCreate } from "@/api/types";
+import { useMyAccounts, useMyPayees } from "@/api/me";
+import type { MyPayment } from "@/api/types";
 import { accountName } from "@/components/banking";
 import { AMOUNT, PaymentFlow } from "@/components/payment-flow";
 import { Card, Empty, ErrorBanner, Field, Input, LinkButton, Loading, Money, Notice, PageHeader, Select, masked } from "@/components/ui";
@@ -11,9 +11,7 @@ import { useT } from "@/lib/i18n";
 
 export default function PayPayee() {
   const t = useT();
-  const c = useCustomerId();
   const params = useSearchParams();
-  const me = useMe();
   const accounts = useMyAccounts();
   const payees = useMyPayees();
   const [form, setForm] = useState({ from: "", payee: params.get("payee") ?? "", amount: "", reference: "", date: "" });
@@ -29,21 +27,17 @@ export default function PayPayee() {
   const cooling = payee?.cooling_off_until && new Date(payee.cooling_off_until) > new Date();
   const today = new Date().toISOString().slice(0, 10);
 
-  function build(): PaymentCreate | null {
+  function build(): MyPayment | null {
     const e: Record<string, string> = {};
     if (!from) e.from = t("form.required");
     if (!payee) e.payee = t("form.required");
     if (!AMOUNT.test(form.amount)) e.amount = t("form.amount");
     setErrors(e);
     if (Object.keys(e).length || !from || !payee) return null;
+    // creditor details come from the payee record on the server; only the payee id travels
     return {
-      payment_type: "DOMESTIC", direction: "OUTBOUND", channel: "WEB", priority: "NORMAL",
-      customer_id: c, debtor_account_id: from.id, debtor_name: me.data?.display_name ?? undefined,
-      payee_id: payee.id, creditor_name: payee.name, creditor_account_id_type: payee.account_id_type,
-      creditor_account_number: payee.account_number, creditor_agent_bic: payee.agent_bic ?? undefined,
-      creditor_agent_clearing_id: payee.agent_clearing_id ?? undefined, creditor_country: payee.country,
-      amount: form.amount, currency: from.currency, reference: form.reference || undefined,
-      remittance_unstructured: form.reference || undefined,
+      kind: "PAYEE", from_account_id: from.id!, payee_id: payee.id, amount: form.amount, channel: "WEB",
+      reference: form.reference || undefined,
       requested_execution_date: form.date && form.date !== today ? form.date : undefined,
     };
   }
@@ -79,8 +73,8 @@ export default function PayPayee() {
             <PaymentFlow build={build} submitLabel={t("pay.confirm")}
               summary={(b) => [
                 { label: t("transfer.from"), value: from ? accountName(from) : "" },
-                { label: t("pay.payee"), value: `${b.creditor_name} · ${masked(b.creditor_account_number)}` },
-                { label: t("pay.amount"), value: <Money amount={b.amount} currency={b.currency} /> },
+                { label: t("pay.payee"), value: payee ? `${payee.name} · ${masked(payee.account_number)}` : "" },
+                { label: t("pay.amount"), value: <Money amount={b.amount} currency={from?.currency} /> },
                 ...(b.reference ? [{ label: t("pay.reference"), value: b.reference }] : []),
                 ...(b.requested_execution_date ? [{ label: t("pay.date"), value: b.requested_execution_date }] : []),
               ]} />

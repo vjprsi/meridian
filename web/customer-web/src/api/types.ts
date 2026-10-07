@@ -1,59 +1,55 @@
-import type { components as Cu } from "./gen/customer";
+import type { components as Me } from "./gen/customer-channel";
 import type { components as On } from "./gen/onboarding";
-import type { components as Ky } from "./gen/kyc";
-import type { components as De } from "./gen/deposit";
-import type { components as St } from "./gen/statement";
-import type { components as Pa } from "./gen/payment";
-import type { components as Ca } from "./gen/card";
-import type { components as Lo } from "./gen/loan";
-import type { components as Wa } from "./gen/wallet";
-import type { components as In } from "./gen/insights";
-import type { components as Re } from "./gen/rewards";
-import type { components as Ib } from "./gen/inbox";
-import type { components as No } from "./gen/notification";
 
-/** Model types from the owning services' generated contracts. */
-export type Customer = Cu["schemas"]["Customer"];
-export type CustomerContact = Cu["schemas"]["CustomerContact"];
-export type CustomerAddress = Cu["schemas"]["CustomerAddress"];
-export type CustomerDevice = Cu["schemas"]["CustomerDevice"];
-export type ContactVerification = Cu["schemas"]["ContactVerification"];
+type S = Me["schemas"];
+
+/** Model types of the customer channel contract (/v1/me/*); they are the owning services' models. */
+export type Customer = S["Customer"];
+export type CustomerContact = S["CustomerContact"];
+export type CustomerAddress = S["CustomerAddress"];
+export type CustomerDevice = S["CustomerDevice"];
+export type ContactVerification = S["ContactVerification"];
+export type KycProfile = S["KycProfile"];
+export type KycDocument = S["KycDocument"];
+export type DepositAccount = S["DepositAccount"];
+export type AccountHolder = S["AccountHolder"];
+export type AccountBalance = S["AccountBalance"];
+export type LedgerEntry = S["LedgerEntry"];
+export type StandingOrder = S["StandingOrder"];
+export type Statement = S["Statement"];
+export type Payment = S["Payment"];
+export type Payee = S["Payee"];
+export type Card = S["Card"];
+export type CardControl = S["CardControl"];
+export type CardSpendLimit = S["CardSpendLimit"];
+export type Loan = S["Loan"];
+export type ScheduleInstallment = S["ScheduleInstallment"];
+export type LoanRepayment = S["LoanRepayment"];
+export type Wallet = S["Wallet"];
+export type WalletTransaction = S["WalletTransaction"];
+export type Budget = S["Budget"];
+export type BudgetPeriod = S["BudgetPeriod"];
+export type SpendCategory = S["SpendCategory"];
+export type FinancialInsight = S["FinancialInsight"];
+export type PointsAccount = S["PointsAccount"];
+export type PointsLedgerEntry = S["PointsLedgerEntry"];
+export type CashbackTransaction = S["CashbackTransaction"];
+export type SecureMessageThread = S["SecureMessageThread"];
+export type SecureMessage = S["SecureMessage"];
+export type Notification = S["Notification"];
+export type NotificationPreference = S["NotificationPreference"];
+
+/** Request bodies of the channel: the server fills in customer, debtor details, channel and type. */
+export type MyPayment = S["MyPaymentsCreateRequest"];
+export type MyPayee = S["MyPayeesCreateRequest"];
+export type MyStandingOrder = S["MyStandingOrdersCreateRequest"];
+
+/** Sign-up (no customer yet). */
 export type OnboardingJourney = On["schemas"]["OnboardingJourney"];
 export type OnboardingApplication = On["schemas"]["OnboardingApplication"];
 export type OnboardingStep = On["schemas"]["OnboardingStep"];
-export type KycProfile = Ky["schemas"]["KycProfile"];
-export type KycDocument = Ky["schemas"]["KycDocument"];
-export type DepositAccount = De["schemas"]["DepositAccount"];
-export type AccountBalance = De["schemas"]["AccountBalance"];
-export type LedgerEntry = De["schemas"]["LedgerEntry"];
-export type StandingOrder = De["schemas"]["StandingOrder"];
-export type StandingOrderCreate = De["schemas"]["StandingOrderCreate"];
-export type Statement = St["schemas"]["Statement"];
-export type Payment = Pa["schemas"]["Payment"];
-export type PaymentCreate = Pa["schemas"]["PaymentCreate"];
-export type Payee = Pa["schemas"]["Payee"];
-export type PayeeCreate = Pa["schemas"]["PayeeCreate"];
-export type Card = Ca["schemas"]["Card"];
-export type CardControl = Ca["schemas"]["CardControl"];
-export type CardSpendLimit = Ca["schemas"]["CardSpendLimit"];
-export type Loan = Lo["schemas"]["Loan"];
-export type ScheduleInstallment = Lo["schemas"]["ScheduleInstallmentPage"]["data"][number];
-export type LoanRepayment = Lo["schemas"]["LoanRepayment"];
-export type Wallet = Wa["schemas"]["Wallet"];
-export type WalletTransaction = Wa["schemas"]["WalletTransaction"];
-export type Budget = In["schemas"]["Budget"];
-export type BudgetPeriod = In["schemas"]["BudgetPeriod"];
-export type SpendCategory = In["schemas"]["SpendCategory"];
-export type FinancialInsight = In["schemas"]["FinancialInsight"];
-export type PointsAccount = Re["schemas"]["PointsAccount"];
-export type PointsLedgerEntry = Re["schemas"]["PointsLedgerEntry"];
-export type CashbackTransaction = Re["schemas"]["CashbackTransaction"];
-export type SecureMessageThread = Ib["schemas"]["SecureMessageThread"];
-export type SecureMessage = Ib["schemas"]["SecureMessage"];
-export type Notification = No["schemas"]["Notification"];
-export type NotificationPreference = No["schemas"]["NotificationPreference"];
 
-/** Response of GET /v1/insights/spending/by-category (untyped in the contract; shape from insights-service). */
+/** Response of GET /v1/me/insights/spending (untyped in the contract; shape from insights-service). */
 export interface SpendingByCategory {
   customer_id: string;
   from: string;
@@ -72,7 +68,7 @@ export interface SpendingByCategory {
   }[];
 }
 
-/** Response of POST /v1/payments/validate (untyped in the contract; shape from payment-service). */
+/** Response of POST /v1/me/payments/validate (untyped in the contract; shape from payment-service). */
 export interface PaymentValidation {
   valid?: boolean;
   errors?: { code: string; message: string }[];

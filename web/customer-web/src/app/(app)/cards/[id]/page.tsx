@@ -3,8 +3,8 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { cards, idem, ifMatch, unwrap } from "@/api/client";
-import { assertMine, qk, useCustomerId } from "@/api/me";
+import { idem, me, unwrap } from "@/api/client";
+import { mine, qk, useCustomerId } from "@/api/me";
 import type { Card as CardT, CardControl, CardSpendLimit } from "@/api/types";
 import { AMOUNT } from "@/components/payment-flow";
 import { StepUpConfirm } from "@/components/step-up";
@@ -28,7 +28,7 @@ export default function CardDetail() {
   const { id } = useParams<{ id: string }>();
   const card = useQuery({
     queryKey: ["card", id], enabled: !!c,
-    queryFn: async () => assertMine(unwrap(await cards.GET("/v1/cards/{id}", { params: { path: { id } } })), c),
+    queryFn: () => mine(async () => unwrap(await me.GET("/v1/me/cards/{card_id}", { params: { path: { card_id: id } } }))),
   });
   const refreshCard = (next?: CardT) => {
     if (next) qc.setQueryData(["card", id], next);
@@ -41,22 +41,20 @@ export default function CardDetail() {
   const [replace, setReplace] = useState(true);
 
   const freeze = useMutation({
-    mutationFn: async () => unwrap(await cards.POST("/v1/cards/{id}/freeze", { params: { path: { id }, header: idem() }, body: { reason: "Frozen by customer" } })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/cards/{card_id}/freeze", { params: { path: { card_id: id }, header: idem() } })),
     onSuccess: refreshCard,
   });
   const unfreeze = useMutation({
-    mutationFn: async () => unwrap(await cards.POST("/v1/cards/{id}/unfreeze", { params: { path: { id }, header: idem() } })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/cards/{card_id}/unfreeze", { params: { path: { card_id: id }, header: idem() } })),
     onSuccess: (n) => { setConfirmUnfreeze(false); refreshCard(n); },
   });
   const report = useMutation({
-    mutationFn: async () => {
-      const blocked = unwrap(await cards.POST("/v1/cards/{id}/block", {
-        params: { path: { id }, header: idem() }, body: { status: lostReason, reason: `Reported ${lostReason.toLowerCase()} by customer` } }));
-      const replacement = replace
-        ? unwrap(await cards.POST("/v1/cards/{id}/replace", { params: { path: { id }, header: idem() }, body: { reason: lostReason } }))
-        : null;
-      return { blocked, replacement };
-    },
+    // one call: the channel blocks the card as lost / stolen and, if asked, orders the replacement
+    mutationFn: async () => ({
+      blocked: unwrap(await me.POST("/v1/me/cards/{card_id}/report-lost", {
+        params: { path: { card_id: id }, header: idem() }, body: { reason: lostReason, replace } })),
+      replacement: replace,
+    }),
     onSuccess: (r) => { setLost(false); refreshCard(r.blocked); },
   });
 
@@ -141,19 +139,13 @@ function Controls({ cardId }: { cardId: string }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["card-controls", cardId],
-    queryFn: async () => unwrap(await cards.GET("/v1/card-controls", { params: { query: { card_id: cardId, limit: 100 } } }))
-      .data.filter((x) => x.card_id === cardId),
+    queryFn: async () => unwrap(await me.GET("/v1/me/cards/{card_id}/controls", {
+      params: { path: { card_id: cardId }, query: { limit: 100 } } })).data,
   });
   const toggle = useMutation({
-    mutationFn: async ({ channel, block }: { channel: CardControl["channel"]; block: boolean }) => {
-      const existing = (q.data ?? []).find((x) => x.control_type === "CHANNEL_DENY" && x.channel === channel);
-      if (existing) {
-        return unwrap(await cards.PATCH("/v1/card-controls/{id}", {
-          params: { path: { id: existing.id! }, header: ifMatch(existing.row_version) }, body: { is_active: block } }));
-      }
-      return unwrap(await cards.POST("/v1/card-controls", {
-        params: { header: idem() }, body: { card_id: cardId, control_type: "CHANNEL_DENY", channel, is_active: true } }));
-    },
+    mutationFn: async ({ channel, block }: { channel: CardControl["channel"]; block: boolean }) =>
+      unwrap(await me.PUT("/v1/me/cards/{card_id}/channels/{channel}", {
+        params: { path: { card_id: cardId, channel }, header: idem() }, body: { blocked: block } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["card-controls", cardId] }),
   });
   return (
@@ -190,8 +182,8 @@ function Limits({ cardId }: { cardId: string }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["card-limits", cardId],
-    queryFn: async () => unwrap(await cards.GET("/v1/card-spend-limits", { params: { query: { card_id: cardId, limit: 100 } } }))
-      .data.filter((x) => x.card_id === cardId),
+    queryFn: async () => unwrap(await me.GET("/v1/me/cards/{card_id}/limits", {
+      params: { path: { card_id: cardId }, query: { limit: 100 } } })).data,
   });
   const [editing, setEditing] = useState<CardSpendLimit | null>(null);
   const [amount, setAmount] = useState("");
@@ -199,13 +191,14 @@ function Limits({ cardId }: { cardId: string }) {
   const [newLimit, setNewLimit] = useState({ period: "DAILY" as CardSpendLimit["period"], channel: "ANY" as CardSpendLimit["channel"], max_amount: "", currency: "KES" });
   const done = () => { setEditing(null); setAdding(false); qc.invalidateQueries({ queryKey: ["card-limits", cardId] }); };
   const save = useMutation({
-    mutationFn: async () => unwrap(await cards.PATCH("/v1/card-spend-limits/{id}", {
-      params: { path: { id: editing!.id! }, header: ifMatch(editing!.row_version) }, body: { max_amount: amount } })),
+    mutationFn: async () => unwrap(await me.PUT("/v1/me/cards/{card_id}/limits", {
+      params: { path: { card_id: cardId }, header: idem() },
+      body: { period: editing!.period, channel: editing!.channel, max_amount: amount } })),
     onSuccess: done,
   });
   const create = useMutation({
-    mutationFn: async () => unwrap(await cards.POST("/v1/card-spend-limits", {
-      params: { header: idem() }, body: { card_id: cardId, ...newLimit, currency: newLimit.currency.toUpperCase(), is_active: true } })),
+    mutationFn: async () => unwrap(await me.PUT("/v1/me/cards/{card_id}/limits", {
+      params: { path: { card_id: cardId }, header: idem() }, body: { ...newLimit, currency: newLimit.currency.toUpperCase() } })),
     onSuccess: done,
   });
   return (

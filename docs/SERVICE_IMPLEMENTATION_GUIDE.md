@@ -95,6 +95,14 @@ Lessons from the rollout (all 63 services):
 - Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
 
 
+Customer requests (`customer-channel-service`, `/v1/me/*`): a customer token (scope `channels:customer`, claim
+`customer_id`) is bound as `io.meridian.web.security.CustomerContext` (`CustomerContext.customerId()`, `authTime()`,
+`acr()`; dev mode: `X-Customer-Id` / `X-Auth-Time`). ServiceClient never forwards it: those calls use the service token
+(so `meridian.service-auth.*` is mandatory there), `X-User: customer:<id>` and `X-On-Behalf-Of-Customer: <id>`.
+A domain service that serves customer data relayed this way may honour `X-On-Behalf-Of-Customer` only with an internal
+token (inbox-service does, to derive sender / reader types). Customer tokens carry no domain scope, so operator endpoints
+refuse them; never add `channels:customer` to a domain operation.
+
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
 people) and `TenantContext.via()` names the relaying service client. Without `X-User` the principal is
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed

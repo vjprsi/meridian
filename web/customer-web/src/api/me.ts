@@ -2,13 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/components/providers";
-import { ApiError, cards, customers, deposits, loans, payments, unwrap, wallets } from "./client";
-import type { Card, DepositAccount, Loan, Wallet } from "./types";
+import { ApiError, me, unwrap } from "./client";
+import type { DepositAccount } from "./types";
 
 /**
- * Customer scoping. The platform has no "me" surface: every list is filtered here with customer_id = the signed-in
- * customer, and every fetch-by-id is checked against that customer before it is shown. This is a presentation
- * guard only; the services do not (yet) restrict a customer token to its own records (see README, "API gaps").
+ * Data of the signed-in customer, all from the customer channel (/v1/me/*). The server decides who "me" is (token
+ * customer_id claim; dev mode X-Customer-Id) and answers 404 for anything that is not theirs, so the app never sends
+ * a customer id and never filters other customers' rows itself.
  */
 
 export function useCustomerId(): string {
@@ -16,15 +16,24 @@ export function useCustomerId(): string {
   return session?.customerId ?? "";
 }
 
-/** Thrown when a record fetched by id does not belong to the signed-in customer. Rendered like a 404. */
+export function isNotFound(e: unknown): boolean {
+  return e instanceof ApiError && e.problem.status === 404;
+}
+
+/** The friendly form of the server's 404 for an object outside the customer's profile (or a missing one). */
 export function notMine(): ApiError {
   return new ApiError({ status: 404, code: "not_found", title: "Not found",
     detail: "This item is not available in your profile." });
 }
 
-export function assertMine<T extends { customer_id?: string | null }>(row: T, customerId: string): T {
-  if (!customerId || row.customer_id !== customerId) throw notMine();
-  return row;
+/** Runs a fetch of one object; the server's 404 (not the customer's, or gone) becomes {@link notMine}. */
+export async function mine<T>(fetch: () => Promise<T>): Promise<T> {
+  try {
+    return await fetch();
+  } catch (e) {
+    if (isNotFound(e)) throw notMine();
+    throw e;
+  }
 }
 
 export const qk = {
@@ -41,34 +50,31 @@ export function useMe() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.me(c), enabled: !!c,
-    queryFn: async () => unwrap(await customers.GET("/v1/customers/{id}", { params: { path: { id: c } } })),
+    queryFn: async () => unwrap(await me.GET("/v1/me/profile")),
   });
 }
 
+export type MyAccount = DepositAccount & { holder_role?: string; can_transact?: boolean };
+
 /**
- * Accounts the customer may see: accounts they own (customer_id) plus accounts where they are an active holder
- * with can_view (joint, signatory...). Closed and rejected accounts are hidden.
+ * Accounts the customer owns or holds with view rights (the server leaves out closed and rejected ones), each with
+ * the customer's role: PRIMARY for owned accounts, else the holder role and whether they may pay from it.
  */
 export function useMyAccounts() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.accounts(c), enabled: !!c,
-    queryFn: async (): Promise<(DepositAccount & { holder_role?: string; can_transact?: boolean })[]> => {
-      const [owned, holdings] = await Promise.all([
-        deposits.GET("/v1/deposit-accounts", { params: { query: { customer_id: c, limit: 100 } } }).then(unwrap),
-        deposits.GET("/v1/account-holders", { params: { query: { customer_id: c, status: "ACTIVE", limit: 100 } } })
-          .then(unwrap).catch(() => ({ data: [] as never[] })),
+    queryFn: async (): Promise<MyAccount[]> => {
+      const [accounts, holdings] = await Promise.all([
+        me.GET("/v1/me/accounts").then(unwrap),
+        me.GET("/v1/me/accounts/holdings").then(unwrap).catch(() => ({ data: [] as never[] })),
       ]);
-      const list: (DepositAccount & { holder_role?: string; can_transact?: boolean })[] =
-        owned.data.filter((a) => a.customer_id === c).map((a) => ({ ...a, holder_role: "PRIMARY", can_transact: true }));
-      const have = new Set(list.map((a) => a.id));
-      const extra = holdings.data.filter((h) => h.customer_id === c && h.can_view && !have.has(h.deposit_account_id));
-      const fetched = await Promise.all(extra.map(async (h) => {
-        const r = await deposits.GET("/v1/deposit-accounts/{id}", { params: { path: { id: h.deposit_account_id } } });
-        return r.data ? { ...r.data, holder_role: h.role, can_transact: h.can_transact } : null;
-      }));
-      for (const a of fetched) if (a) list.push(a);
-      return list.filter((a) => a.status !== "CLOSED" && a.status !== "REJECTED");
+      return accounts.data.map((a) => {
+        const h = holdings.data.find((x) => x.deposit_account_id === a.id);
+        return h && a.customer_id !== c
+          ? { ...a, holder_role: h.role, can_transact: h.can_transact }
+          : { ...a, holder_role: "PRIMARY", can_transact: true };
+      });
     },
   });
 }
@@ -76,7 +82,7 @@ export function useMyAccounts() {
 export function useAccountBalance(id: string | undefined) {
   return useQuery({
     queryKey: ["balance", id], enabled: !!id,
-    queryFn: async () => unwrap(await deposits.GET("/v1/deposit-accounts/{id}/balance", { params: { path: { id: id! } } })),
+    queryFn: async () => unwrap(await me.GET("/v1/me/accounts/{account_id}/balance", { params: { path: { account_id: id! } } })),
   });
 }
 
@@ -84,16 +90,14 @@ export function useMyWallets() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.wallets(c), enabled: !!c,
-    queryFn: async (): Promise<Wallet[]> =>
-      unwrap(await wallets.GET("/v1/wallets", { params: { query: { customer_id: c, wallet_type: "CUSTOMER", limit: 50 } } }))
-        .data.filter((w) => w.customer_id === c && w.status !== "CLOSED"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/wallets", { params: { query: { limit: 50 } } })).data,
   });
 }
 
 export function useWalletBalance(id: string | undefined) {
   return useQuery({
     queryKey: ["wallet-balance", id], enabled: !!id,
-    queryFn: async () => unwrap(await wallets.GET("/v1/wallets/{id}/balance", { params: { path: { id: id! } } })),
+    queryFn: async () => unwrap(await me.GET("/v1/me/wallets/{wallet_id}/balance", { params: { path: { wallet_id: id! } } })),
   });
 }
 
@@ -101,9 +105,7 @@ export function useMyCards() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.cards(c), enabled: !!c,
-    queryFn: async (): Promise<Card[]> =>
-      unwrap(await cards.GET("/v1/cards", { params: { query: { customer_id: c, limit: 50 } } }))
-        .data.filter((x) => x.customer_id === c && x.status !== "CLOSED" && x.status !== "REPLACED"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/cards", { params: { query: { limit: 50 } } })).data,
   });
 }
 
@@ -111,9 +113,7 @@ export function useMyLoans() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.loans(c), enabled: !!c,
-    queryFn: async (): Promise<Loan[]> =>
-      unwrap(await loans.GET("/v1/loans", { params: { query: { customer_id: c, limit: 50 } } }))
-        .data.filter((l) => l.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/loans", { params: { query: { limit: 50 } } })).data,
   });
 }
 
@@ -121,9 +121,7 @@ export function useMyPayees() {
   const c = useCustomerId();
   return useQuery({
     queryKey: qk.payees(c), enabled: !!c,
-    queryFn: async () =>
-      unwrap(await payments.GET("/v1/payees", { params: { query: { customer_id: c, limit: 100 } } }))
-        .data.filter((p) => p.customer_id === c && p.status !== "DELETED"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/payees", { params: { query: { limit: 100 } } })).data,
   });
 }
 
@@ -131,16 +129,21 @@ export function useMyPayments(limit = 10) {
   const c = useCustomerId();
   return useQuery({
     queryKey: [...qk.payments(c), limit], enabled: !!c,
-    queryFn: async () =>
-      unwrap(await payments.GET("/v1/payments", { params: { query: { customer_id: c, limit } } }))
-        .data.filter((p) => p.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/payments", { params: { query: { limit } } })).data,
   });
 }
 
-/** One of the customer's accounts by id (from the scoped list: an id outside it is "not found"). */
+/** One of the customer's accounts by id; the server answers 404 for an account that is not theirs. */
 export function useMyAccount(id: string) {
   const accounts = useMyAccounts();
-  const account = accounts.data?.find((a) => a.id === id);
-  const error = accounts.error ?? (accounts.data && !account ? notMine() : null);
-  return { account, isPending: accounts.isPending, error };
+  const listed = accounts.data?.find((a) => a.id === id);
+  const single = useQuery({
+    queryKey: ["account", id], enabled: !!id && accounts.isSuccess && !listed,
+    queryFn: () => mine(async (): Promise<MyAccount> =>
+      ({ ...unwrap(await me.GET("/v1/me/accounts/{account_id}", { params: { path: { account_id: id } } })), can_transact: false })),
+    retry: false,
+  });
+  const account = listed ?? single.data;
+  const error = accounts.error ?? single.error ?? null;
+  return { account, isPending: accounts.isPending || (!listed && single.isPending && single.fetchStatus !== "idle"), error };
 }

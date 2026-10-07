@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { customers, idem, ifMatch, notifications, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { qk, useCustomerId, useMe } from "@/api/me";
 import type { CustomerContact, CustomerDevice, NotificationPreference } from "@/api/types";
 import { Preferences } from "@/components/shell";
@@ -34,15 +34,15 @@ function Details() {
   const { locale } = useI18n();
   const c = useCustomerId();
   const qc = useQueryClient();
-  const me = useMe();
+  const self = useMe();
   const save = useMutation({
-    mutationFn: async () => unwrap(await customers.PATCH("/v1/customers/{id}", {
-      params: { path: { id: c }, header: ifMatch(me.data?.row_version) }, body: { preferred_language: locale } })),
+    mutationFn: async () => unwrap(await me.PATCH("/v1/me/profile", {
+      params: { header: idem() }, body: { preferred_language: locale } })),
     onSuccess: (n) => qc.setQueryData(qk.me(c), n),
   });
   return (
     <Card title={t("profile.details")}>
-      <Async q={me}>
+      <Async q={self}>
         {(m) => (
           <>
             <Summary items={[
@@ -73,18 +73,16 @@ function Contacts() {
   const qc = useQueryClient();
   const list = useQuery({
     queryKey: ["contacts", c], enabled: !!c,
-    queryFn: async () => unwrap(await customers.GET("/v1/customers/{customer_id}/contacts", { params: { path: { customer_id: c }, query: { limit: 50 } } }))
-      .data.filter((x) => x.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/contacts", { params: { query: { limit: 50 } } })).data,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["contacts", c] });
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ contact_type: "MOBILE" as CustomerContact["contact_type"], value: "" });
   const [formErr, setFormErr] = useState("");
   const add = useMutation({
-    mutationFn: async () => unwrap(await customers.POST("/v1/customers/{customer_id}/contacts", {
-      params: { path: { customer_id: c }, header: idem() },
-      body: { contact_type: form.contact_type, ...(form.contact_type === "EMAIL" ? { email: form.value.trim() } : { phone: form.value.trim() }),
-        is_primary: false, can_receive_otp: true, can_receive_marketing: false },
+    mutationFn: async () => unwrap(await me.POST("/v1/me/contacts", {
+      params: { header: idem() },
+      body: { contact_type: form.contact_type, ...(form.contact_type === "EMAIL" ? { email: form.value.trim() } : { phone: form.value.trim() }) },
     })),
     onSuccess: () => { setAdding(false); setForm({ ...form, value: "" }); refresh(); },
   });
@@ -92,12 +90,12 @@ function Contacts() {
   const [verifying, setVerifying] = useState<CustomerContact | null>(null);
   const [code, setCode] = useState("");
   const send = useMutation({
-    mutationFn: async (id: string) => unwrap(await customers.POST("/v1/customers/{customer_id}/contacts/{id}/send-verification", {
-      params: { path: { customer_id: c, id }, header: idem() } })),
+    mutationFn: async (id: string) => unwrap(await me.POST("/v1/me/contacts/{contact_id}/send-verification", {
+      params: { path: { contact_id: id }, header: idem() } })),
   });
   const verify = useMutation({
-    mutationFn: async () => unwrap(await customers.POST("/v1/customers/{customer_id}/contacts/{id}/verify", {
-      params: { path: { customer_id: c, id: verifying!.id! }, header: idem() }, body: { code: code.trim() } })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/contacts/{contact_id}/verify", {
+      params: { path: { contact_id: verifying!.id! }, header: idem() }, body: { code: code.trim() } })),
     onSuccess: () => { setVerifying(null); setCode(""); refresh(); },
   });
 
@@ -171,8 +169,7 @@ function Addresses() {
   const c = useCustomerId();
   const list = useQuery({
     queryKey: ["addresses", c], enabled: !!c,
-    queryFn: async () => unwrap(await customers.GET("/v1/customers/{customer_id}/addresses", { params: { path: { customer_id: c }, query: { limit: 20 } } }))
-      .data.filter((x) => x.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/addresses", { params: { query: { limit: 20 } } })).data,
   });
   return (
     <Card title={t("profile.addresses")}>
@@ -204,19 +201,13 @@ function NotificationPrefs() {
   const qc = useQueryClient();
   const prefs = useQuery({
     queryKey: ["notif-prefs", c], enabled: !!c,
-    queryFn: async () => unwrap(await notifications.GET("/v1/notification-preferences", {
-      params: { query: { recipient_type: "CUSTOMER", recipient_id: c, limit: 100 } } })).data.filter((p) => p.recipient_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/notification-preferences", { params: { query: { limit: 100 } } })).data,
   });
   const set = useMutation({
-    mutationFn: async ({ category, channel, enabled }: { category: NotificationPreference["category"]; channel: NotificationPreference["channel"]; enabled: boolean }) => {
-      const existing = (prefs.data ?? []).find((p) => p.category === category && p.channel === channel);
-      if (existing) {
-        return unwrap(await notifications.PATCH("/v1/notification-preferences/{id}", {
-          params: { path: { id: existing.id! }, header: ifMatch(existing.row_version) }, body: { is_enabled: enabled } }));
-      }
-      return unwrap(await notifications.POST("/v1/notification-preferences", {
-        params: { header: idem() }, body: { recipient_type: "CUSTOMER", recipient_id: c, category, channel, is_enabled: enabled } }));
-    },
+    // one call: the channel creates or updates the customer's preference for this category and channel
+    mutationFn: async ({ category, channel, enabled }: { category: NotificationPreference["category"]; channel: NotificationPreference["channel"]; enabled: boolean }) =>
+      unwrap(await me.PUT("/v1/me/notification-preferences", {
+        params: { header: idem() }, body: { category, channel, is_enabled: enabled } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notif-prefs", c] }),
   });
   return (
@@ -269,13 +260,13 @@ function Devices() {
   const qc = useQueryClient();
   const list = useQuery({
     queryKey: ["devices", c], enabled: !!c,
-    queryFn: async () => unwrap(await customers.GET("/v1/customers/{customer_id}/devices", { params: { path: { customer_id: c }, query: { limit: 50 } } }))
-      .data.filter((d) => d.customer_id === c && d.status !== "REVOKED"),
+    queryFn: async () => unwrap(await me.GET("/v1/me/devices", { params: { query: { limit: 50 } } }))
+      .data.filter((d) => d.status !== "REVOKED"),
   });
   const [revoking, setRevoking] = useState<CustomerDevice | null>(null);
   const revoke = useMutation({
-    mutationFn: async () => unwrap(await customers.POST("/v1/customers/{customer_id}/devices/{id}/revoke", {
-      params: { path: { customer_id: c, id: revoking!.id! }, header: idem() }, body: { reason: "Revoked by customer from web banking" } })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/devices/{device_id}/revoke", {
+      params: { path: { device_id: revoking!.id! }, header: idem() }, body: { reason: "Revoked by customer from web banking" } })),
     onSuccess: () => { setRevoking(null); qc.invalidateQueries({ queryKey: ["devices", c] }); },
   });
   return (

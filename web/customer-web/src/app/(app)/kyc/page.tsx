@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { idem, kyc, unwrap, uploadDocument } from "@/api/client";
-import { useCustomerId, useMe } from "@/api/me";
+import { idem, me, unwrap, uploadMyDocument } from "@/api/client";
+import { isNotFound, useCustomerId, useMe } from "@/api/me";
 import type { KycDocument } from "@/api/types";
 import { FileField, checkFile } from "@/components/file-field";
 import { Async, Badge, Button, Card, DateTime, Empty, ErrorBanner, Field, Notice, PageHeader, Select, Summary } from "@/components/ui";
@@ -25,16 +25,21 @@ export default function Kyc() {
   const t = useT();
   const c = useCustomerId();
   const qc = useQueryClient();
-  const me = useMe();
+  const self = useMe();
   const profile = useQuery({
     queryKey: ["kyc-profile", c], enabled: !!c,
-    queryFn: async () => unwrap(await kyc.GET("/v1/kyc/profiles", { params: { query: { customer_id: c, limit: 1 } } }))
-      .data.find((p) => p.customer_id === c) ?? null,
+    queryFn: async () => {
+      try {
+        return unwrap(await me.GET("/v1/me/kyc/profile"));
+      } catch (e) {
+        if (isNotFound(e)) return null;     // no KYC profile yet
+        throw e;
+      }
+    },
   });
   const docs = useQuery({
     queryKey: ["kyc-docs", c], enabled: !!c,
-    queryFn: async () => unwrap(await kyc.GET("/v1/kyc/documents", { params: { query: { customer_id: c, limit: 50 } } }))
-      .data.filter((d) => d.customer_id === c),
+    queryFn: async () => unwrap(await me.GET("/v1/me/kyc/documents", { params: { query: { limit: 50 } } })).data,
   });
 
   const [type, setType] = useState<KycType>("NATIONAL_ID");
@@ -43,10 +48,9 @@ export default function Kyc() {
   const upload = useMutation({
     mutationFn: async () => {
       const def = TYPES.find((x) => x.kyc === type)!;
-      const documentId = await uploadDocument(file!, "CUSTOMER", c, def.doc);
-      return unwrap(await kyc.POST("/v1/kyc/documents", {
-        params: { header: idem() },
-        body: { kyc_profile_id: profile.data!.id!, customer_id: c, document_type: type, document_id: documentId, captured_channel: "WEB" },
+      const documentId = await uploadMyDocument(file!, def.doc);
+      return unwrap(await me.POST("/v1/me/kyc/documents", {
+        params: { header: idem() }, body: { document_type: type, document_id: documentId },
       }));
     },
     onSuccess: () => { setFile(null); qc.invalidateQueries({ queryKey: ["kyc-docs", c] }); },
@@ -61,7 +65,7 @@ export default function Kyc() {
             {(p) => p && (
               <Summary items={[
                 { label: t("kyc.verification"), value: <Badge value={p.status} /> },
-                { label: t("profile.kycTier"), value: (p.achieved_tier ?? me.data?.kyc_tier ?? "—").replace("_", " ") },
+                { label: t("profile.kycTier"), value: (p.achieved_tier ?? self.data?.kyc_tier ?? "—").replace("_", " ") },
                 { label: t("kyc.identity"), value: <Badge value={p.identity_verified ? "VERIFIED" : "PENDING"} /> },
                 { label: t("kyc.address"), value: <Badge value={p.address_verified ? "VERIFIED" : "PENDING"} /> },
                 { label: t("kyc.nextReview"), value: <DateTime value={p.next_review_date} dateOnly /> },

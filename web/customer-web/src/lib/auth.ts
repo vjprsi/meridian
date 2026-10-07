@@ -10,7 +10,8 @@ import { UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
  *  - "dev":  local services in dev security mode; the app sends X-Tenant-Id / X-User headers and the customer is
  *    picked on the dev login screen.
  *
- * Whatever the mode, every request this app makes is scoped to session.customerId (see src/api/me.ts).
+ * Signed-in screens call only the customer channel (/v1/me/*): the server binds every request to the customer of the
+ * token (dev: X-Customer-Id) and refuses objects of anyone else (see src/api/me.ts).
  */
 export type AuthMode = "dev" | "oidc";
 
@@ -28,8 +29,12 @@ export interface Session {
 
 export const SESSION_KEY = "meridian.customer.session";
 export const DEFAULT_TENANT = "0199a000-0000-7000-8000-00000000000a";
-/** Money movement needs an authentication (or dev confirmation) no older than this. */
-export const STEP_UP_MAX_AGE_S = 300;
+/**
+ * Money movement needs an authentication (or dev confirmation) no older than this. The server enforces 300 s
+ * (meridian.channels.step-up-max-age, 401 step_up_required); the app asks again a little earlier so a confirmation
+ * dialog left open does not run into the server limit.
+ */
+export const STEP_UP_MAX_AGE_S = 240;
 
 let manager: UserManager | null = null;
 
@@ -104,8 +109,11 @@ export function authHeaders(s: Session | null = loadSession()): Record<string, s
   const headers: Record<string, string> = {};
   if (s?.mode === "oidc" && s.accessToken) headers.Authorization = `Bearer ${s.accessToken}`;
   else if (s) {
+    // dev security mode: the customer channel takes the customer and the last sign-in from these headers
     headers["X-Tenant-Id"] = s.tenantId;
     headers["X-User"] = s.user;
+    if (s.customerId) headers["X-Customer-Id"] = s.customerId;
+    if (s.stepUpAt) headers["X-Auth-Time"] = String(s.stepUpAt);
   }
   return headers;
 }

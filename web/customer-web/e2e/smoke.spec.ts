@@ -2,7 +2,6 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const TENANT = "0199a000-0000-7000-8000-00000000000a";
 const ME = "0199b000-0000-7000-8000-000000000001";
-const OTHER = "0199b000-0000-7000-8000-000000000002";
 /** Problem banners (Next adds its own empty role=alert route announcer). */
 const ALERT = "[role=alert]:not(#__next-route-announcer__)";
 
@@ -14,22 +13,30 @@ const account = (id: string, owner: string, nickname: string) => ({ id, customer
   account_number: `00012345${id.slice(-4)}`, currency: "KES", status: "ACTIVE", product_id: TENANT, product_version_id: TENANT,
   legal_entity_id: TENANT, mandate_rule: "ANY_ONE", minimum_balance: "0" });
 
-/** Mocks the gateway for one signed-in customer and records every API URL requested. */
-async function mockGateway(page: Page, seen: string[]) {
+const notFound = { type: "about:blank", title: "Not Found", status: 404, code: "not_found",
+  detail: "account 0199c000-0000-7000-8000-00000000bbb2 was not found" };
+
+interface Seen { url: string; customer: string | null; tenant: string | null }
+
+/**
+ * Mocks the gateway: the customer channel (/v1/me/*) for one signed-in customer, plus the dev-mode customer picker.
+ * The channel decides who "me" is, so the mock answers 404 for any other account, like the server does.
+ */
+async function mockGateway(page: Page, seen: Seen[]) {
   await page.route("**/v1/**", async (route: Route) => {
     const url = new URL(route.request().url());
-    seen.push(url.pathname + url.search);
+    const h = route.request().headers();
+    seen.push({ url: url.pathname + url.search, customer: h["x-customer-id"] ?? null, tenant: h["x-tenant-id"] ?? null });
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     const p = url.pathname;
     if (p === `/v1/customers/${ME}`) return json(customer);
     if (p === "/v1/customers/search") return json(page1([customer]));
-    if (p === "/v1/deposit-accounts") {
-      // A misbehaving backend returning another customer's account must not leak into the UI.
-      return json(page1([account("0199c000-0000-7000-8000-00000000aaa1", ME, "Everyday"),
-        account("0199c000-0000-7000-8000-00000000bbb2", OTHER, "Someone else")]));
+    if (p === "/v1/me/profile") return json(customer);
+    if (p === "/v1/me/accounts") return json(page1([account("0199c000-0000-7000-8000-00000000aaa1", ME, "Everyday")]));
+    if (p === "/v1/me/accounts/0199c000-0000-7000-8000-00000000bbb2") {
+      return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify(notFound) });
     }
     if (p.endsWith("/balance")) return json({ id: "x", ledger_account_id: "x", currency: "KES", available_balance: "15250.50", posted_balance: "15300.00", pending_debits: "49.50" });
-    if (p === "/v1/payments") return json(page1([]));
     if (p.startsWith("/v1/")) return json(page1([]));
     return route.continue();
   });
@@ -65,8 +72,8 @@ test("dev login with the gateway down shows a problem message", async ({ page })
   await expect(alert).toContainText("upstream_unavailable");
 });
 
-test("dev login picks a customer and every call is scoped to them", async ({ page }) => {
-  const seen: string[] = [];
+test("dev login picks a customer and every signed-in call goes to the customer channel as them", async ({ page }) => {
+  const seen: Seen[] = [];
   await mockGateway(page, seen);
   await page.goto("/login");
   await page.getByLabel("Customer", { exact: true }).fill("Amina");
@@ -74,11 +81,18 @@ test("dev login picks a customer and every call is scoped to them", async ({ pag
   await page.getByRole("button", { name: /Amina Otieno/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Hello, Amina" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Everyday/ })).toBeVisible();
-  await expect(page.getByText("Someone else")).toHaveCount(0);
-  for (const prefix of ["/v1/deposit-accounts?", "/v1/payments?", "/v1/cards?", "/v1/loans?", "/v1/wallets?"]) {
-    const call = seen.find((u) => u.startsWith(prefix));
-    expect(call, `${prefix} called`).toBeTruthy();
-    expect(call).toContain(`customer_id=${ME}`);
+  for (const prefix of ["/v1/me/accounts", "/v1/me/payments", "/v1/me/cards", "/v1/me/loans", "/v1/me/wallets"]) {
+    expect(seen.find((s) => s.url.startsWith(prefix)), `${prefix} called`).toBeTruthy();
+  }
+  // after sign-in only the channel is called, as the picked customer (dev: X-Customer-Id), and the app never names
+  // a customer in a query or path itself
+  const signedIn = seen.filter((s) => !s.url.startsWith("/v1/customers"));
+  expect(signedIn.length).toBeGreaterThan(5);
+  for (const s of signedIn) {
+    expect(s.url, s.url).toMatch(/^\/v1\/me\//);
+    expect(s.url).not.toContain("customer_id");
+    expect(s.customer).toBe(ME);
+    expect(s.tenant).toBe(TENANT);
   }
 });
 
@@ -102,13 +116,13 @@ test("an account outside the customer's profile is not shown", async ({ page }) 
 });
 
 test("transfer form validates before any money moves", async ({ page }) => {
-  const seen: string[] = [];
+  const seen: Seen[] = [];
   await mockGateway(page, seen);
   await devSession(page);
   await page.goto("/move/transfer");
   // Only one own account in the mock: the screen explains why a transfer is not possible.
   await expect(page.getByText("You need two active accounts")).toBeVisible();
-  expect(seen.some((u) => u.startsWith("/v1/payments/validate"))).toBe(false);
+  expect(seen.some((s) => s.url.startsWith("/v1/me/payments/validate"))).toBe(false);
 });
 
 test("PWA: manifest and app-shell service worker", async ({ request }) => {

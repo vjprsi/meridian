@@ -28,11 +28,6 @@ function stepsOf(j?: OnboardingJourney | null): StepDef[] {
   return Array.isArray(def?.steps) ? def!.steps! : [];
 }
 
-function newApplicationNumber() {
-  const d = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `WEB-${d}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-}
-
 function fieldKind(name: string): "file" | "date" | "email" | "tel" | "check" | "text" {
   const n = name.toLowerCase();
   if (n.endsWith("document_id") || n.endsWith("_document") || n.includes("selfie")) return "file";
@@ -111,7 +106,7 @@ function Start({ tenant, setTenant, headers, onCreated }:
   const create = useMutation({
     mutationFn: async (journey: string) => unwrap(await onboarding.POST("/v1/onboarding/applications", {
       params: { header: idem() }, headers,
-      body: { application_number: newApplicationNumber(), onboarding_journey_id: journey, channel: "WEB",
+      body: { onboarding_journey_id: journey, channel: "WEB",
         phone: form.phone.replace(/\s+/g, ""), email: form.email.trim() || undefined },
     })),
     onSuccess: (a) => onCreated(a.id!),

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { deposits, idem, unwrap } from "@/api/client";
+import { idem, me, unwrap } from "@/api/client";
 import { useMyAccounts, useMyPayees } from "@/api/me";
-import type { StandingOrder, StandingOrderCreate } from "@/api/types";
+import type { MyStandingOrder, StandingOrder } from "@/api/types";
 import { accountName } from "@/components/banking";
 import { AMOUNT } from "@/components/payment-flow";
 import { StepUpConfirm } from "@/components/step-up";
@@ -21,16 +21,12 @@ export default function StandingOrders() {
   const accounts = useMyAccounts();
   const payees = useMyPayees();
   const mine = (accounts.data ?? []).filter((a) => a.status === "ACTIVE");
-  const ids = mine.map((a) => a.id!);
 
+  // standing orders on every account of the customer, in one call
   const orders = useQuery({
-    queryKey: ["standing-orders", ids], enabled: accounts.isSuccess,
-    queryFn: async () => {
-      const pages = await Promise.all(ids.map(async (id) =>
-        unwrap(await deposits.GET("/v1/standing-orders", { params: { query: { deposit_account_id: id, limit: 100 } } }))
-          .data.filter((o) => o.deposit_account_id === id)));
-      return pages.flat().filter((o) => o.status !== "CANCELLED" && o.status !== "COMPLETED");
-    },
+    queryKey: ["standing-orders"], enabled: accounts.isSuccess,
+    queryFn: async () => unwrap(await me.GET("/v1/me/standing-orders"))
+      .data.filter((o) => o.status !== "CANCELLED" && o.status !== "COMPLETED"),
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["standing-orders"] });
 
@@ -38,20 +34,20 @@ export default function StandingOrders() {
   const [form, setForm] = useState({ from: "", target: "", amount: "", frequency: "MONTHLY" as StandingOrder["frequency"],
     start_date: tomorrow, end_date: "", reference: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [review, setReview] = useState<StandingOrderCreate | null>(null);
+  const [review, setReview] = useState<MyStandingOrder | null>(null);
   const [cancelling, setCancelling] = useState<StandingOrder | null>(null);
   const [key, setKey] = useState("");
 
   const create = useMutation({
-    mutationFn: async () => unwrap(await deposits.POST("/v1/standing-orders", { params: { header: idem(key) }, body: review! })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/standing-orders", { params: { header: idem(key) }, body: review! })),
     onSuccess: () => { setReview(null); setForm({ ...form, amount: "", reference: "" }); refresh(); },
   });
   const action = useMutation({
     mutationFn: async ({ id, op }: { id: string; op: "pause" | "resume" | "cancel" }) => {
-      const opts = { params: { path: { id }, header: idem() } };
-      if (op === "pause") return unwrap(await deposits.POST("/v1/standing-orders/{id}/pause", { ...opts, body: { reason: "Customer request" } }));
-      if (op === "resume") return unwrap(await deposits.POST("/v1/standing-orders/{id}/resume", opts));
-      return unwrap(await deposits.POST("/v1/standing-orders/{id}/cancel", { ...opts, body: { reason: "Customer request" } }));
+      const opts = { params: { path: { standing_order_id: id }, header: idem() } };
+      if (op === "pause") return unwrap(await me.POST("/v1/me/standing-orders/{standing_order_id}/pause", opts));
+      if (op === "resume") return unwrap(await me.POST("/v1/me/standing-orders/{standing_order_id}/resume", opts));
+      return unwrap(await me.POST("/v1/me/standing-orders/{standing_order_id}/cancel", opts));
     },
     onSuccess: () => { setCancelling(null); refresh(); },
   });
@@ -76,7 +72,7 @@ export default function StandingOrders() {
     const [kind, id] = form.target.split(":");
     setKey(crypto.randomUUID());
     setReview({
-      deposit_account_id: from.id!, amount: form.amount, currency: from.currency, frequency: form.frequency,
+      account_id: from.id!, amount: form.amount, frequency: form.frequency,
       start_date: form.start_date, end_date: form.end_date || undefined, reference: form.reference || undefined,
       ...(kind === "payee" ? { payee_id: id } : { beneficiary_account_id: id }),
     });
@@ -156,7 +152,7 @@ export default function StandingOrders() {
         items={review ? [
           { label: t("transfer.from"), value: from ? accountName(from) : "" },
           { label: t("so.to"), value: targetLabel(review) },
-          { label: t("pay.amount"), value: <Money amount={review.amount} currency={review.currency} /> },
+          { label: t("pay.amount"), value: <Money amount={review.amount} currency={from?.currency} /> },
           { label: t("so.frequency"), value: t(`freq.${review.frequency}`) },
           { label: t("so.start"), value: review.start_date },
           ...(review.end_date ? [{ label: t("so.end"), value: review.end_date }] : []),

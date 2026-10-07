@@ -3,8 +3,8 @@
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { idem, inbox, unwrap } from "@/api/client";
-import { assertMine, useCustomerId } from "@/api/me";
+import { idem, me, unwrap } from "@/api/client";
+import { mine, useCustomerId } from "@/api/me";
 import { Async, Badge, Button, Card, DateTime, Empty, ErrorBanner, Field, PageHeader, Textarea, cx } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 
@@ -15,17 +15,17 @@ export default function Thread() {
   const { id } = useParams<{ id: string }>();
   const thread = useQuery({
     queryKey: ["thread", id], enabled: !!c,
-    queryFn: async () => assertMine(unwrap(await inbox.GET("/v1/inbox/threads/{id}", { params: { path: { id } } })), c),
+    queryFn: () => mine(async () => unwrap(await me.GET("/v1/me/inbox/threads/{thread_id}", { params: { path: { thread_id: id } } }))),
   });
   const messages = useQuery({
     queryKey: ["thread-messages", id], enabled: thread.isSuccess,
-    // include_internal=false: staff notes are never requested by the customer app.
-    queryFn: async () => unwrap(await inbox.GET("/v1/inbox/threads/{id}/messages", {
-      params: { path: { id }, query: { include_internal: false, limit: 100 } } })).data.filter((m) => !m.is_internal_note),
+    // the channel never returns staff-only notes
+    queryFn: async () => unwrap(await me.GET("/v1/me/inbox/threads/{thread_id}/messages", {
+      params: { path: { thread_id: id }, query: { limit: 100 } } })).data,
     refetchInterval: 15_000,
   });
   const read = useMutation({
-    mutationFn: async () => unwrap(await inbox.POST("/v1/inbox/threads/{id}/read", { params: { path: { id }, header: idem() }, body: { reader_type: "CUSTOMER" } })),
+    mutationFn: async () => unwrap(await me.POST("/v1/me/inbox/threads/{thread_id}/read", { params: { path: { thread_id: id }, header: idem() } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["threads", c] }),
   });
   const marked = useRef(false);
@@ -39,9 +39,9 @@ export default function Thread() {
   const [body, setBody] = useState("");
   const [err, setErr] = useState("");
   const send = useMutation({
-    mutationFn: async () => unwrap(await inbox.POST("/v1/inbox/threads/{id}/messages", {
-      params: { path: { id }, header: idem() },
-      body: { body: body.trim(), sender_type: "CUSTOMER", client_message_id: crypto.randomUUID() },
+    mutationFn: async () => unwrap(await me.POST("/v1/me/inbox/threads/{thread_id}/messages", {
+      params: { path: { thread_id: id }, header: idem() },
+      body: { body: body.trim(), client_message_id: crypto.randomUUID() },
     })),
     onSuccess: () => { setBody(""); qc.invalidateQueries({ queryKey: ["thread-messages", id] }); qc.invalidateQueries({ queryKey: ["thread", id] }); },
   });
