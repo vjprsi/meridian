@@ -82,7 +82,40 @@ class ScopeInterceptorTest {
             assertThatThrownBy(() -> call(staff, "myAccountsList")).isInstanceOf(ApiException.class);
         }
         assertThat(call(jwt("meridian-console", "accounts:write"), "depositAccountsList")).isTrue();
-        assertThat(call(jwt("meridian-console", "meridian:admin"), "paymentsCreate")).isTrue();
+        assertThat(call(jwt("meridian-console", "meridian:admin", "2"), "paymentsCreate")).isTrue();
+    }
+
+    /**
+     * GAP-13: access resting on meridian:admin (the admin shortcut) or platform:operator needs acr 2; a password-only
+     * (or acr-less) staff token gets 401 insufficient_user_authentication with the RFC 9470 challenge. Domain scopes,
+     * internal service tokens and a disabled check (privileged-acr 0) are unaffected.
+     */
+    @Test
+    void privilegedScopesNeedAuthenticationLevelTwo() throws Exception {
+        for (String acr : new String[] {null, "0", "1", "silver"}) {
+            MockHttpServletResponse res = new MockHttpServletResponse();
+            assertThatThrownBy(() -> call(interceptor, jwt("meridian-console", "meridian:admin", acr), "paymentsCreate", res))
+                    .as("acr %s", acr).isInstanceOfSatisfying(ApiException.class, e -> {
+                        assertThat(e.status()).isEqualTo(401);
+                        assertThat(e.code()).isEqualTo("insufficient_user_authentication");
+                    });
+            assertThat(res.getHeader("WWW-Authenticate")).contains("insufficient_user_authentication")
+                    .contains("acr_values=\"2\"");
+        }
+        assertThatThrownBy(() -> call(jwt("meridian-console", "meridian:admin", "1"), "platformChange"))
+                .isInstanceOf(ApiException.class);
+        assertThat(call(jwt("meridian-console", "meridian:admin", "2"), "platformChange")).isTrue();
+        // a domain scope that grants the operation needs no step-up, even next to meridian:admin
+        assertThat(call(jwt("meridian-console", "payments:write meridian:admin", "1"), "paymentsCreate")).isTrue();
+        assertThat(call(jwt("meridian-console", "accounts:read"), "depositAccountsList")).isTrue();
+        // service tokens are exempt
+        assertThat(call(jwt("svc-deposit-service", "meridian:admin meridian:internal"), "paymentsCreate")).isTrue();
+        // check disabled
+        ScopeInterceptor off = new ScopeInterceptor(new MeridianProperties("jwt", "tenant_id"),
+                new SecurityProperties(null, null, null, null, 0), r -> false);
+        assertThat(call(off, jwt("meridian-console", "meridian:admin"), "paymentsCreate")).isTrue();
+        assertThat(ScopeInterceptor.privilegedOnly(Set.of("meridian:admin"), "payments:write")).isTrue();
+        assertThat(ScopeInterceptor.privilegedOnly(Set.of("meridian:admin", "payments:*"), "payments:write")).isFalse();
     }
 
     @Test
@@ -103,7 +136,7 @@ class ScopeInterceptorTest {
             assertThatThrownBy(() -> call(op, notOperator, "tenantsList")).isInstanceOf(ApiException.class);
         }
         Jwt operatorUser = Jwt.withTokenValue("t").header("alg", "none").subject("op-1").claim("azp", "meridian-console")
-                .claim("scope", "platform:operator").claim("tenant_id", operatorTenant)
+                .claim("scope", "platform:operator").claim("tenant_id", operatorTenant).claim("acr", "2")
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
         assertThat(call(op, operatorUser, "tenantsList")).isTrue();
         assertThat(call(op, jwt("meridian-service", "platform:operator meridian:internal"), "tenantsList")).isTrue();
@@ -189,9 +222,21 @@ class ScopeInterceptorTest {
     }
 
     private static boolean call(ScopeInterceptor interceptor, Jwt jwt, String method) throws Exception {
+        return call(interceptor, jwt, method, new MockHttpServletResponse());
+    }
+
+    private static boolean call(ScopeInterceptor interceptor, Jwt jwt, String method, MockHttpServletResponse res)
+            throws Exception {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
-        return interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(),
+        return interceptor.preHandle(new MockHttpServletRequest(), res,
                 new HandlerMethod(new Endpoints(), Endpoints.class.getMethod(method)));
+    }
+
+    static Jwt jwt(String azp, String scope, String acr) {
+        Jwt.Builder b = Jwt.withTokenValue("t").header("alg", "none").subject("user-1").claim("azp", azp)
+                .claim("scope", scope).claim("tenant_id", TENANT).issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60));
+        return acr == null ? b.build() : b.claim("acr", acr).build();
     }
 
     static Jwt jwt(String azp, String scope) {

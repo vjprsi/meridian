@@ -109,4 +109,51 @@ class ServiceClientTest {
             server.stop(0);
         }
     }
+
+    /**
+     * GAP-16: a service authenticates as its own client svc-&lt;spring.application.name&gt; (only the secret is
+     * configured); asService calls carry that token and name the service, which receivers check against the token's
+     * azp. An explicitly configured client id (the legacy shared client) still wins.
+     */
+    @Test
+    void asServiceUsesThePerServiceClientNamedAfterTheApplication() throws Exception {
+        var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        var basic = new java.util.concurrent.atomic.AtomicReference<String>();
+        var seen = new java.util.concurrent.atomic.AtomicReference<String>();
+        server.createContext("/token", ex -> {
+            String auth = ex.getRequestHeaders().getFirst("Authorization").substring("Basic ".length());
+            basic.set(new String(java.util.Base64.getDecoder().decode(auth), java.nio.charset.StandardCharsets.UTF_8));
+            byte[] body = "{\"access_token\":\"svc-token\",\"expires_in\":300}".getBytes();
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        server.createContext("/v1/x", ex -> {
+            var h = ex.getRequestHeaders();
+            seen.set(h.getFirst("Authorization") + "|" + h.getFirst("X-Meridian-Service"));
+            byte[] body = "{}".getBytes();
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        server.start();
+        String base = "http://127.0.0.1:" + server.getAddress().getPort();
+        try {
+            MockEnvironment env = new MockEnvironment();
+            env.setProperty("spring.application.name", "deposit-service");
+            env.setProperty("meridian.services.ledger-service.url", base);
+            env.setProperty("meridian.service-auth.token-uri", base + "/token");
+            env.setProperty("meridian.service-auth.client-secret", "per-service-secret");
+            assertThat(new ServiceTokenProvider(json, env).clientId()).isEqualTo("svc-deposit-service");
+            ServiceClient client = new ServiceClient(json, env);
+            ServiceClient.asService(() -> client.post("ledger-service", "/v1/x", java.util.Map.of(), "k"));
+            assertThat(basic.get()).isEqualTo("svc-deposit-service:per-service-secret");
+            assertThat(seen.get()).isEqualTo("Bearer svc-token|deposit-service");
+
+            env.setProperty("meridian.service-auth.client-id", "meridian-service");    // legacy shared client
+            assertThat(new ServiceTokenProvider(json, env).clientId()).isEqualTo("meridian-service");
+        } finally {
+            server.stop(0);
+        }
+    }
 }
