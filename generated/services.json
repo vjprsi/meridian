@@ -58,7 +58,233 @@
       "accounts.dormancy.marked_dormant",
       "accounts.cheque.returned",
       "accounts.virtual_account.created"
-    ]
+    ],
+    "personal_data": {
+      "deposit_account": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "account_holder": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "account_mandate": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "account_status_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ],
+        "immutable": true
+      },
+      "account_block": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "overdraft_facility": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "account_rate_override": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "interest_accrual": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ],
+        "immutable": true
+      },
+      "interest_capitalisation": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ],
+        "immutable": true
+      },
+      "fee_charge": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ],
+        "immutable": true
+      },
+      "term_deposit": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "term_deposit_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "term_deposit_id",
+            "parent": "term_deposit"
+          }
+        ],
+        "immutable": true
+      },
+      "savings_pot": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "savings_pot_rule": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "savings_pot_id",
+            "parent": "savings_pot"
+          }
+        ]
+      },
+      "sweep_rule": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "source_account_id",
+            "parent": "deposit_account"
+          },
+          {
+            "column": "target_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "sweep_execution": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "sweep_rule_id",
+            "parent": "sweep_rule"
+          }
+        ],
+        "immutable": true
+      },
+      "standing_order": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          },
+          {
+            "column": "beneficiary_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "scheduled_payment_execution": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "standing_order_id",
+            "parent": "standing_order"
+          }
+        ],
+        "immutable": true
+      },
+      "account_dormancy_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ],
+        "immutable": true
+      },
+      "account_closure": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "requested_by_customer_id"
+          }
+        ]
+      },
+      "cheque_book": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "cheque": {
+        "pii": [
+          "payee_name"
+        ],
+        "subject": [
+          {
+            "column": "cheque_book_id",
+            "parent": "cheque_book"
+          },
+          {
+            "column": "deposit_account_id",
+            "parent": "deposit_account"
+          }
+        ]
+      },
+      "virtual_account": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "owner_customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "statement-service",
@@ -81,7 +307,23 @@
       "accounts.statement.delivered",
       "accounts.statement.failed",
       "accounts.tax_certificate.generated"
-    ]
+    ],
+    "personal_data": {
+      "statement_schedule": {
+        "pii": [
+          "email"
+        ],
+        "subject": []
+      },
+      "tax_certificate": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "card-service",
@@ -123,7 +365,99 @@
       "cards.card_spend_limit.changed",
       "cards.card_pin.changed",
       "cards.card_statement_cycle.closed"
-    ]
+    ],
+    "personal_data": {
+      "card": {
+        "pii": [
+          "cardholder_name"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "card_status_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ],
+        "immutable": true
+      },
+      "card_order": {
+        "pii": [
+          "recipient_name",
+          "address_line1",
+          "address_line2",
+          "city",
+          "region",
+          "postal_code",
+          "phone"
+        ],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ]
+      },
+      "card_control": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ]
+      },
+      "card_spend_limit": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ]
+      },
+      "card_pin_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ],
+        "immutable": true
+      },
+      "card_replacement": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "old_card_id",
+            "parent": "card"
+          },
+          {
+            "column": "new_card_id",
+            "parent": "card"
+          }
+        ]
+      },
+      "card_statement_cycle": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_id",
+            "parent": "card"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "card-vault-service",
@@ -172,7 +506,36 @@
       "cards.card_authorization.stand_in_approved",
       "cards.card_stand_in_record.replayed",
       "cards.card_jit_funding.requested"
-    ]
+    ],
+    "personal_data": {
+      "card_authorization": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "card_jit_funding_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_authorization_id",
+            "parent": "card_authorization"
+          }
+        ],
+        "immutable": true
+      },
+      "card_stand_in_record": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_authorization_id",
+            "parent": "card_authorization"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "card-tokenization-service",
@@ -193,7 +556,31 @@
       "cards.card_token.step_up_required",
       "cards.card_token.declined",
       "cards.card_token.status_changed"
-    ]
+    ],
+    "personal_data": {
+      "card_token": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "otp_hash",
+          "otp_expires_at"
+        ]
+      },
+      "card_token_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_token_id",
+            "parent": "card_token"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "card-threeds-service",
@@ -212,7 +599,21 @@
     "events": [
       "cards.threeds_authentication.challenge_required",
       "cards.threeds_authentication.completed"
-    ]
+    ],
+    "personal_data": {
+      "threeds_authentication": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "authentication_value",
+          "otp_hash"
+        ]
+      }
+    }
   },
   {
     "name": "card-clearing-service",
@@ -265,7 +666,38 @@
       "cards.card_dispute.provisional_credit_reversed",
       "cards.card_dispute.deadline_approaching",
       "cards.card_dispute.closed"
-    ]
+    ],
+    "personal_data": {
+      "card_dispute": {
+        "pii": [
+          "customer_description"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "card_dispute_evidence": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_dispute_id",
+            "parent": "card_dispute"
+          }
+        ]
+      },
+      "card_dispute_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "card_dispute_id",
+            "parent": "card_dispute"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "customer-channel-service",
@@ -308,7 +740,26 @@
       "channels.customer_session.new_device",
       "channels.customer_session.revoked"
     ],
-    "scope": "channels:customer"
+    "scope": "channels:customer",
+    "personal_data": {
+      "customer_action": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "customer_session": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "agent-channel-service",
@@ -392,7 +843,67 @@
       "channels.business_payment.released",
       "channels.business_payment.rejected"
     ],
-    "scope": "channels:business"
+    "scope": "channels:business",
+    "personal_data": {
+      "business_user": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "business_entitlement": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "business_approval_rule": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "business_payment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "business_payment_approval": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "business_object": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ]
+      },
+      "business_action": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "merchant-channel-service",
@@ -503,7 +1014,96 @@
       "engagement.referral.payout_failed",
       "engagement.referral.rejected",
       "engagement.referral.expired"
-    ]
+    ],
+    "personal_data": {
+      "points_account": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "reward_transaction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "points_ledger_entry": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "points_account_id",
+            "parent": "points_account"
+          },
+          {
+            "column": "reward_transaction_id",
+            "parent": "reward_transaction"
+          },
+          {
+            "column": "counterparty_points_account_id",
+            "parent": "points_account"
+          }
+        ],
+        "immutable": true
+      },
+      "points_adjustment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "points_account_id",
+            "parent": "points_account"
+          },
+          {
+            "column": "points_ledger_entry_id",
+            "parent": "points_ledger_entry"
+          }
+        ]
+      },
+      "cashback_transaction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "redemption": {
+        "pii": [
+          "partner_member_id",
+          "voucher_code"
+        ],
+        "subject": [
+          {
+            "column": "points_account_id",
+            "parent": "points_account"
+          },
+          {
+            "column": "points_ledger_entry_id",
+            "parent": "points_ledger_entry"
+          }
+        ]
+      },
+      "referral": {
+        "pii": [
+          "referee_contact"
+        ],
+        "subject": [
+          {
+            "column": "referrer_customer_id"
+          },
+          {
+            "column": "referee_customer_id"
+          }
+        ],
+        "hidden": [
+          "device_hash"
+        ]
+      }
+    }
   },
   {
     "name": "insights-service",
@@ -544,7 +1144,68 @@
       "engagement.insight.delivered",
       "engagement.cash_flow.forecast_created",
       "engagement.cash_flow.low_balance_forecast"
-    ]
+    ],
+    "personal_data": {
+      "transaction_enrichment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "category_override_rule": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "budget": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "budget_period": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "budget_id",
+            "parent": "budget"
+          }
+        ]
+      },
+      "recurring_payment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "financial_insight": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "cash_flow_forecast": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "campaign-service",
@@ -591,7 +1252,34 @@
       "engagement.offer.withdrawn",
       "engagement.campaign_audience.converted",
       "engagement.campaign_audience.unsubscribed"
-    ]
+    ],
+    "personal_data": {
+      "offer_assignment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "marketing_consent_snapshot": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "campaign_audience_member": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "inbox-service",
@@ -620,7 +1308,48 @@
       "engagement.announcement.live",
       "engagement.announcement.withdrawn",
       "engagement.announcement.expired"
-    ]
+    ],
+    "personal_data": {
+      "secure_message_thread": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "secure_message": {
+        "pii": [
+          "body"
+        ],
+        "subject": [
+          {
+            "column": "secure_message_thread_id",
+            "parent": "secure_message_thread"
+          }
+        ],
+        "immutable": true
+      },
+      "secure_message_receipt": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "secure_message_id",
+            "parent": "secure_message"
+          }
+        ],
+        "immutable": true
+      },
+      "announcement_dismissal": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "ledger-service",
@@ -656,7 +1385,76 @@
       "ledger.hold.placed",
       "ledger.hold.captured",
       "ledger.hold.released"
-    ]
+    ],
+    "personal_data": {
+      "ledger_account": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "owner_id",
+            "type_column": "owner_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "journal_entry": {
+        "pii": [
+          "counterparty_name"
+        ],
+        "subject": [],
+        "immutable": true
+      },
+      "ledger_entry": {
+        "pii": [
+          "counterparty_name"
+        ],
+        "subject": [
+          {
+            "column": "ledger_account_id",
+            "parent": "ledger_account"
+          }
+        ],
+        "immutable": true
+      },
+      "account_balance": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "ledger_account_id",
+            "parent": "ledger_account"
+          }
+        ]
+      },
+      "hold": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "ledger_account_id",
+            "parent": "ledger_account"
+          }
+        ]
+      },
+      "hold_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "hold_id",
+            "parent": "hold"
+          }
+        ],
+        "immutable": true
+      },
+      "balance_snapshot": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "ledger_account_id",
+            "parent": "ledger_account"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "gl-service",
@@ -784,7 +1582,139 @@
       "lending.e_signature_request.declined",
       "lending.e_signature_request.voided",
       "lending.e_signature_request.expired"
-    ]
+    ],
+    "personal_data": {
+      "loan_application": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "ip_address",
+          "device_id"
+        ]
+      },
+      "loan_applicant": {
+        "pii": [
+          "date_of_birth",
+          "employer_name"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "loan_financial_item": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_applicant_id",
+            "parent": "loan_applicant"
+          }
+        ]
+      },
+      "loan_application_document": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          },
+          {
+            "column": "loan_applicant_id",
+            "parent": "loan_applicant"
+          }
+        ]
+      },
+      "bureau_report": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "credit_score": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          },
+          {
+            "column": "loan_applicant_id",
+            "parent": "loan_applicant"
+          }
+        ],
+        "immutable": true
+      },
+      "affordability_assessment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          }
+        ],
+        "immutable": true
+      },
+      "credit_decision": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          },
+          {
+            "column": "credit_score_id",
+            "parent": "credit_score"
+          },
+          {
+            "column": "affordability_assessment_id",
+            "parent": "affordability_assessment"
+          }
+        ],
+        "immutable": true
+      },
+      "credit_decision_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          },
+          {
+            "column": "credit_decision_id",
+            "parent": "credit_decision"
+          }
+        ]
+      },
+      "loan_offer": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_application_id",
+            "parent": "loan_application"
+          },
+          {
+            "column": "credit_decision_id",
+            "parent": "credit_decision"
+          }
+        ]
+      },
+      "e_signature_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_offer_id",
+            "parent": "loan_offer"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "loan-service",
@@ -852,7 +1782,197 @@
       "lending.bnpl_plan.refunded",
       "lending.bnpl_plan.cancelled",
       "lending.bnpl_plan.completed"
-    ]
+    ],
+    "personal_data": {
+      "loan": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "loan_status_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "loan_disbursement": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ]
+      },
+      "repayment_schedule": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ]
+      },
+      "schedule_installment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "repayment_schedule_id",
+            "parent": "repayment_schedule"
+          },
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ]
+      },
+      "loan_repayment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          },
+          {
+            "column": "credit_line_id",
+            "parent": "credit_line"
+          }
+        ],
+        "immutable": true
+      },
+      "loan_accrual": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ],
+        "immutable": true
+      },
+      "loan_fee_charge": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          },
+          {
+            "column": "schedule_installment_id",
+            "parent": "schedule_installment"
+          }
+        ]
+      },
+      "loan_rate_change": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          },
+          {
+            "column": "new_schedule_id",
+            "parent": "repayment_schedule"
+          }
+        ],
+        "immutable": true
+      },
+      "loan_restructure": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          },
+          {
+            "column": "new_schedule_id",
+            "parent": "repayment_schedule"
+          }
+        ]
+      },
+      "loan_prepayment_quote": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ]
+      },
+      "loan_write_off": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          }
+        ]
+      },
+      "loan_recovery": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "loan_id",
+            "parent": "loan"
+          },
+          {
+            "column": "loan_write_off_id",
+            "parent": "loan_write_off"
+          }
+        ],
+        "immutable": true
+      },
+      "credit_line": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "credit_line_limit_change": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "credit_line_id",
+            "parent": "credit_line"
+          }
+        ],
+        "immutable": true
+      },
+      "credit_line_drawdown": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "credit_line_id",
+            "parent": "credit_line"
+          }
+        ]
+      },
+      "credit_line_statement": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "credit_line_id",
+            "parent": "credit_line"
+          }
+        ]
+      },
+      "bnpl_plan": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "collateral-service",
@@ -885,7 +2005,45 @@
       "lending.collateral_link.released",
       "lending.collateral_link.ltv_breached",
       "lending.collateral_insurance.expiring"
-    ]
+    ],
+    "personal_data": {
+      "collateral": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "owner_customer_id"
+          }
+        ]
+      },
+      "collateral_valuation": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collateral_id",
+            "parent": "collateral"
+          }
+        ],
+        "immutable": true
+      },
+      "collateral_link": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collateral_id",
+            "parent": "collateral"
+          }
+        ]
+      },
+      "collateral_insurance": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collateral_id",
+            "parent": "collateral"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "collections-service",
@@ -931,7 +2089,65 @@
       "lending.legal_proceeding.requested",
       "lending.legal_proceeding.started",
       "lending.legal_proceeding.status_changed"
-    ]
+    ],
+    "personal_data": {
+      "collection_case": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "collection_action": {
+        "pii": [
+          "contact_channel_address"
+        ],
+        "subject": [
+          {
+            "column": "collection_case_id",
+            "parent": "collection_case"
+          }
+        ],
+        "immutable": true
+      },
+      "promise_to_pay": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collection_case_id",
+            "parent": "collection_case"
+          }
+        ]
+      },
+      "payment_plan": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collection_case_id",
+            "parent": "collection_case"
+          }
+        ]
+      },
+      "next_best_action": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collection_case_id",
+            "parent": "collection_case"
+          }
+        ]
+      },
+      "legal_proceeding": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "collection_case_id",
+            "parent": "collection_case"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "openbanking-service",
@@ -970,7 +2186,65 @@
       "openbanking.ob_payment_initiation.received",
       "openbanking.ob_payment_initiation.status_changed",
       "openbanking.ob_funds_confirmation.checked"
-    ]
+    ],
+    "personal_data": {
+      "ob_consent": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "ob_consent_account": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "ob_consent_id",
+            "parent": "ob_consent"
+          }
+        ]
+      },
+      "ob_authorisation": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "ob_payment_initiation": {
+        "pii": [
+          "creditor_name",
+          "creditor_account"
+        ],
+        "subject": [
+          {
+            "column": "ob_consent_id",
+            "parent": "ob_consent"
+          }
+        ]
+      },
+      "ob_funds_confirmation": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "ob_consent_id",
+            "parent": "ob_consent"
+          }
+        ],
+        "immutable": true
+      },
+      "ob_access_log": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "business-day-service",
@@ -1093,7 +2367,26 @@
       "operations.purge_request.rejected",
       "operations.purge_request.cancelled",
       "operations.purge_request.completed"
-    ]
+    ],
+    "personal_data": {
+      "legal_hold": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "purge_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "blocked_by_hold_id",
+            "parent": "legal_hold"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "customer-service",
@@ -1138,7 +2431,160 @@
       "party.consent.withdrawn",
       "party.privacy_request.completed",
       "party.privacy_request.rejected"
-    ]
+    ],
+    "personal_data": {
+      "customer": {
+        "pii": [
+          "display_name",
+          "title",
+          "first_name",
+          "middle_name",
+          "last_name",
+          "name_local_script",
+          "date_of_birth",
+          "place_of_birth",
+          "legal_name",
+          "deceased_on"
+        ],
+        "subject": [
+          {
+            "column": "id"
+          }
+        ]
+      },
+      "customer_identifier": {
+        "pii": [
+          "identifier_value"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "value_hash"
+        ]
+      },
+      "customer_address": {
+        "pii": [
+          "line1",
+          "line2",
+          "line3",
+          "city",
+          "district",
+          "postal_code"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_contact": {
+        "pii": [
+          "phone",
+          "email"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_relationship": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "related_customer_id"
+          }
+        ]
+      },
+      "customer_group": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "lead_customer_id"
+          }
+        ]
+      },
+      "customer_group_member": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_segment_assignment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_kyc_tier_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "customer_device": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "push_token"
+        ]
+      },
+      "customer_credential": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "secret_hash"
+        ]
+      },
+      "contact_verification": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "code_hash"
+        ]
+      },
+      "consent": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "privacy_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "onboarding-service",
@@ -1168,7 +2614,59 @@
       "party.onboarding_application.rejected",
       "party.onboarding_application.abandoned",
       "party.onboarding_offline_batch.processed"
-    ]
+    ],
+    "personal_data": {
+      "onboarding_application": {
+        "pii": [
+          "phone",
+          "email",
+          "collected_data"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "onboarding_step": {
+        "pii": [
+          "input"
+        ],
+        "subject": [
+          {
+            "column": "onboarding_application_id",
+            "parent": "onboarding_application"
+          }
+        ]
+      },
+      "onboarding_applicant_token": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "onboarding_application_id",
+            "parent": "onboarding_application"
+          }
+        ],
+        "hidden": [
+          "token_hash"
+        ]
+      },
+      "onboarding_otp": {
+        "pii": [
+          "destination"
+        ],
+        "subject": [
+          {
+            "column": "onboarding_application_id",
+            "parent": "onboarding_application"
+          }
+        ],
+        "hidden": [
+          "destination",
+          "code_hash"
+        ]
+      }
+    }
   },
   {
     "name": "kyc-service",
@@ -1203,7 +2701,72 @@
       "party.kyc_screening.disposed",
       "party.kyc_review.due",
       "party.kyc_review.completed"
-    ]
+    ],
+    "personal_data": {
+      "kyc_profile": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "kyc_document": {
+        "pii": [
+          "document_number",
+          "extracted_data"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "kyc_check": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "kyc_profile_id",
+            "parent": "kyc_profile"
+          },
+          {
+            "column": "kyc_document_id",
+            "parent": "kyc_document"
+          }
+        ],
+        "hidden": [
+          "request_payload",
+          "response_payload"
+        ]
+      },
+      "kyc_screening": {
+        "pii": [
+          "screened_name"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "kyc_risk_assessment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "kyc_review": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "payment-service",
@@ -1280,7 +2843,207 @@
       "payments.payment_link.disabled",
       "payments.payment_qr_code.created",
       "payments.payment_qr_code.paid"
-    ]
+    ],
+    "personal_data": {
+      "payment": {
+        "pii": [
+          "debtor_name",
+          "debtor_account_number",
+          "creditor_name",
+          "creditor_account_number",
+          "creditor_address",
+          "risk_context"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "payment_status_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          }
+        ],
+        "immutable": true
+      },
+      "payment_return": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          },
+          {
+            "column": "return_payment_id",
+            "parent": "payment"
+          }
+        ]
+      },
+      "payment_recall": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          },
+          {
+            "column": "return_id",
+            "parent": "payment_return"
+          }
+        ]
+      },
+      "payment_repair": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          }
+        ]
+      },
+      "payment_approval": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          },
+          {
+            "column": "bulk_payment_id",
+            "parent": "bulk_payment"
+          }
+        ]
+      },
+      "payee": {
+        "pii": [
+          "name",
+          "account_number",
+          "address",
+          "email",
+          "phone"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "payee_alias": {
+        "pii": [
+          "alias_value",
+          "display_name"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "otp_hash",
+          "otp_expires_at",
+          "otp_attempts"
+        ]
+      },
+      "payee_verification": {
+        "pii": [
+          "name_provided",
+          "account_number",
+          "matched_name"
+        ],
+        "subject": [
+          {
+            "column": "payee_id",
+            "parent": "payee"
+          },
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          }
+        ],
+        "immutable": true
+      },
+      "bulk_payment": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "bulk_payment_item": {
+        "pii": [
+          "creditor_name",
+          "creditor_account_number"
+        ],
+        "subject": [
+          {
+            "column": "bulk_payment_id",
+            "parent": "bulk_payment"
+          },
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          }
+        ]
+      },
+      "payment_mandate": {
+        "pii": [
+          "debtor_name",
+          "debtor_account_number"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "direct_debit_collection": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "mandate_id",
+            "parent": "payment_mandate"
+          },
+          {
+            "column": "payment_id",
+            "parent": "payment"
+          }
+        ]
+      },
+      "request_to_pay": {
+        "pii": [
+          "payer_alias_value"
+        ],
+        "subject": [
+          {
+            "column": "requester_customer_id"
+          },
+          {
+            "column": "payer_customer_id"
+          }
+        ]
+      },
+      "payment_link": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "payment_qr_code": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "routing-service",
@@ -1340,7 +3103,26 @@
       "payments.fx_deal.settled",
       "payments.fx_deal.cancelled",
       "payments.remittance_corridor.status_changed"
-    ]
+    ],
+    "personal_data": {
+      "fx_quote": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "fx_deal": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "fx_quote_id",
+            "parent": "fx_quote"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "tenant-service",
@@ -1442,7 +3224,64 @@
       "platform.api_client.secret_rotated",
       "platform.mfa_factor.verified",
       "platform.app_user.mfa_reset"
-    ]
+    ],
+    "personal_data": {
+      "app_user": {
+        "pii": [
+          "email",
+          "first_name",
+          "last_name",
+          "phone"
+        ],
+        "subject": [],
+        "hidden": [
+          "password_hash"
+        ]
+      },
+      "mfa_factor": {
+        "pii": [
+          "destination"
+        ],
+        "subject": [],
+        "hidden": [
+          "public_key",
+          "totp_seed_enc"
+        ]
+      },
+      "api_client": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "business_customer_id"
+          }
+        ],
+        "hidden": [
+          "client_secret_hash"
+        ]
+      },
+      "api_key": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "api_client_id",
+            "parent": "api_client"
+          }
+        ],
+        "hidden": [
+          "key_hash"
+        ]
+      },
+      "api_request_log": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "api_client_id",
+            "parent": "api_client"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "config-service",
@@ -1536,7 +3375,57 @@
       "platform.document.deleted",
       "platform.document_template.activated",
       "platform.generated_document.failed"
-    ]
+    ],
+    "personal_data": {
+      "document": {
+        "pii": [
+          "document_number"
+        ],
+        "subject": [
+          {
+            "column": "owner_id",
+            "type_column": "owner_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "hidden": [
+          "storage_uri",
+          "encryption_key_id",
+          "expiry_notified_on"
+        ]
+      },
+      "document_template": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "body_document_id",
+            "parent": "document"
+          }
+        ]
+      },
+      "generated_document": {
+        "pii": [
+          "data"
+        ],
+        "subject": [
+          {
+            "column": "owner_id",
+            "type_column": "owner_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "esign_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "owner_id",
+            "type_column": "owner_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "workflow-service",
@@ -1571,7 +3460,32 @@
       "platform.work_task.sla_breached",
       "platform.work_task.completed",
       "platform.work_task.escalated"
-    ]
+    ],
+    "personal_data": {
+      "workflow_instance": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "hidden": [
+          "engine_state"
+        ]
+      },
+      "work_task": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "notification-service",
@@ -1597,7 +3511,42 @@
       "platform.notification.failed",
       "platform.notification.cancelled",
       "platform.notification_preference.changed"
-    ]
+    ],
+    "personal_data": {
+      "notification": {
+        "pii": [
+          "destination",
+          "body"
+        ],
+        "subject": [
+          {
+            "column": "recipient_id",
+            "type_column": "recipient_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "notification_delivery_attempt": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "notification_id",
+            "parent": "notification"
+          }
+        ],
+        "immutable": true
+      },
+      "notification_preference": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "recipient_id",
+            "type_column": "recipient_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "webhook-service",
@@ -1636,17 +3585,34 @@
     "port": 9132,
     "description": "Tamper-evident, hash-chained audit log of every user, API and system action, retained per jurisdiction (10 years minimum), with regulator / DSAR exports under maker-checker.",
     "tags": [
+      "Audit Chain Verifications",
       "Audit Events",
       "Audit Retention Policies",
+      "Audit Seals",
       "Data Exports"
     ],
-    "tables": 3,
+    "tables": 5,
     "events": [
       "platform.audit_event.recorded",
       "platform.audit_chain.broken",
+      "platform.audit_chain.verified",
+      "platform.audit_seal.created",
+      "platform.audit_seal.tampered",
       "platform.data_export_request.completed",
       "platform.data_export_request.cancelled"
-    ]
+    ],
+    "personal_data": {
+      "data_export_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "billing-service",
@@ -1755,7 +3721,28 @@
       "product.decision_table_version.rejected",
       "product.product_price_quote.created",
       "product.product_price_quote.accepted"
-    ]
+    ],
+    "personal_data": {
+      "rule_evaluation_log": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "immutable": true
+      },
+      "product_price_quote": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "regulatory-reporting-service",
@@ -1796,7 +3783,22 @@
       "reporting.report_submission.rejected",
       "reporting.report_submission.deadline_approaching",
       "reporting.regulatory_pack.installed"
-    ]
+    ],
+    "personal_data": {
+      "crs_fatca_record": {
+        "pii": [
+          "holder_name",
+          "holder_address",
+          "date_of_birth",
+          "tin"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "analytics-service",
@@ -1867,7 +3869,33 @@
       "reporting.copilot_action.approved",
       "reporting.copilot_action.rejected",
       "reporting.llm_budget.exceeded"
-    ]
+    ],
+    "personal_data": {
+      "copilot_interaction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "immutable": true
+      },
+      "ai_copilot_feedback": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "copilot_interaction_id",
+            "parent": "copilot_interaction"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "fraud-service",
@@ -1910,7 +3938,83 @@
       "risk.device.trusted",
       "risk.fraud_list_entry.added",
       "risk.fraud_feedback.recorded"
-    ]
+    ],
+    "personal_data": {
+      "fraud_score": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "immutable": true
+      },
+      "fraud_rule_hit": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "fraud_score_id",
+            "parent": "fraud_score"
+          }
+        ],
+        "immutable": true
+      },
+      "fraud_alert": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "device_fingerprint": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "behavioural_signal": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "fraud_feedback": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "fraud_score_id",
+            "parent": "fraud_score"
+          }
+        ],
+        "immutable": true
+      },
+      "fraud_model_score": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "fraud_score_id",
+            "parent": "fraud_score"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "transaction-monitoring-service",
@@ -1948,7 +4052,65 @@
       "risk.customer_risk_rating.override_requested",
       "risk.customer_risk_rating.override_rejected",
       "risk.graph_entity.mule_suspected"
-    ]
+    ],
+    "personal_data": {
+      "tm_alert": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "tm_alert_transaction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "tm_alert_id",
+            "parent": "tm_alert"
+          }
+        ],
+        "immutable": true
+      },
+      "tm_transaction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "customer_risk_rating": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "risk_graph_entity": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "risk_graph_link": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "from_entity_id",
+            "parent": "risk_graph_entity"
+          },
+          {
+            "column": "to_entity_id",
+            "parent": "risk_graph_entity"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "sanctions-service",
@@ -1978,7 +4140,52 @@
       "risk.screening.cleared",
       "risk.screening_whitelist.added",
       "risk.screening_batch.completed"
-    ]
+    ],
+    "personal_data": {
+      "screening_request": {
+        "pii": [
+          "full_name",
+          "date_of_birth",
+          "identifiers"
+        ],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "screening_result": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "screening_match": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "screening_result_id",
+            "parent": "screening_result"
+          }
+        ]
+      },
+      "screening_whitelist": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "case-management-service",
@@ -2014,7 +4221,72 @@
       "risk.sar_report.filed",
       "risk.sar_report.acknowledged",
       "risk.sar_report.rejected"
-    ]
+    ],
+    "personal_data": {
+      "aml_case": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "aml_case_alert": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ]
+      },
+      "aml_case_note": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ],
+        "immutable": true
+      },
+      "aml_case_task": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ]
+      },
+      "aml_case_evidence": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ]
+      },
+      "aml_case_disposition": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ]
+      },
+      "sar_report": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "aml_case_id",
+            "parent": "aml_case"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "limits-service",
@@ -2047,7 +4319,45 @@
       "risk.limit_override.rejected",
       "risk.limit_override.expired",
       "risk.appetite_metric.breached"
-    ]
+    ],
+    "personal_data": {
+      "limit_usage": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "limit_override": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "limit_check": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          },
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ],
+        "hidden": [
+          "reservations"
+        ]
+      }
+    }
   },
   {
     "name": "crm-service",
@@ -2108,7 +4418,116 @@
       "servicing.knowledge_article.archived",
       "servicing.copilot_session.created",
       "servicing.copilot_feedback.recorded"
-    ]
+    ],
+    "personal_data": {
+      "work_item": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "subject_id",
+            "type_column": "subject_type",
+            "type_value": "CUSTOMER"
+          }
+        ]
+      },
+      "service_case": {
+        "pii": [
+          "description"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "case_comment": {
+        "pii": [
+          "body"
+        ],
+        "subject": [
+          {
+            "column": "service_case_id",
+            "parent": "service_case"
+          },
+          {
+            "column": "copilot_session_id",
+            "parent": "copilot_session"
+          }
+        ]
+      },
+      "complaint": {
+        "pii": [
+          "details"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "complaint_redress": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "complaint_id",
+            "parent": "complaint"
+          }
+        ]
+      },
+      "interaction": {
+        "pii": [
+          "summary"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_note": {
+        "pii": [
+          "body"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "customer_timeline_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "copilot_session": {
+        "pii": [
+          "prompt",
+          "output"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "immutable": true
+      },
+      "copilot_feedback": {
+        "pii": [
+          "edited_output"
+        ],
+        "subject": [
+          {
+            "column": "copilot_session_id",
+            "parent": "copilot_session"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "treasury-deal-service",
@@ -2285,7 +4704,112 @@
       "wallets.wallet_bank_link.removed",
       "wallets.wallet_pin_reset.requested",
       "wallets.wallet_pin_reset.completed"
-    ]
+    ],
+    "personal_data": {
+      "wallet": {
+        "pii": [
+          "msisdn"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ],
+        "hidden": [
+          "pin_hash",
+          "pin_failed_attempts"
+        ]
+      },
+      "wallet_transaction": {
+        "pii": [
+          "payee_msisdn",
+          "payee_name"
+        ],
+        "subject": [
+          {
+            "column": "payer_wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "payee_wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "wallet_bank_link_id",
+            "parent": "wallet_bank_link"
+          }
+        ],
+        "hidden": [
+          "confirmation_otp_hash"
+        ]
+      },
+      "wallet_transaction_leg": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "wallet_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "immutable": true
+      },
+      "wallet_bank_link": {
+        "pii": [
+          "account_number",
+          "account_name"
+        ],
+        "subject": [
+          {
+            "column": "wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "hidden": [
+          "verification_code_hash"
+        ]
+      },
+      "wallet_pin_reset": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "hidden": [
+          "otp_hash"
+        ]
+      },
+      "wallet_favorite": {
+        "pii": [
+          "target_msisdn"
+        ],
+        "subject": [
+          {
+            "column": "wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "target_wallet_id",
+            "parent": "wallet"
+          }
+        ]
+      },
+      "wallet_status_history": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "agent-network-service",
@@ -2322,7 +4846,117 @@
       "wallets.agent_device.lost",
       "wallets.agent_kyc_document.verified",
       "wallets.cash_management_request.completed"
-    ]
+    ],
+    "personal_data": {
+      "agent": {
+        "pii": [
+          "tax_id",
+          "contact_name",
+          "contact_msisdn",
+          "contact_email"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "agent_outlet": {
+        "pii": [
+          "contact_msisdn"
+        ],
+        "subject": [
+          {
+            "column": "agent_id",
+            "parent": "agent"
+          }
+        ]
+      },
+      "agent_float": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_id",
+            "parent": "agent"
+          },
+          {
+            "column": "agent_outlet_id",
+            "parent": "agent_outlet"
+          },
+          {
+            "column": "rebalance_source_agent_id",
+            "parent": "agent"
+          }
+        ]
+      },
+      "agent_float_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "requesting_agent_id",
+            "parent": "agent"
+          },
+          {
+            "column": "source_agent_id",
+            "parent": "agent"
+          }
+        ]
+      },
+      "agent_till": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_outlet_id",
+            "parent": "agent_outlet"
+          }
+        ]
+      },
+      "agent_device": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_id",
+            "parent": "agent"
+          },
+          {
+            "column": "agent_outlet_id",
+            "parent": "agent_outlet"
+          }
+        ]
+      },
+      "agent_kyc_document": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_id",
+            "parent": "agent"
+          }
+        ]
+      },
+      "cash_management_request": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_outlet_id",
+            "parent": "agent_outlet"
+          }
+        ]
+      },
+      "agent_performance_daily": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "agent_id",
+            "parent": "agent"
+          },
+          {
+            "column": "agent_outlet_id",
+            "parent": "agent_outlet"
+          }
+        ],
+        "immutable": true
+      }
+    }
   },
   {
     "name": "commission-service",
@@ -2379,7 +5013,30 @@
       "wallets.biller_settlement.approved",
       "wallets.biller_settlement.rejected",
       "wallets.biller_settlement.paid"
-    ]
+    ],
+    "personal_data": {
+      "bill_inquiry": {
+        "pii": [
+          "customer_name"
+        ],
+        "subject": [],
+        "hidden": [
+          "raw_response"
+        ]
+      },
+      "bill_payment": {
+        "pii": [
+          "customer_name"
+        ],
+        "subject": []
+      },
+      "airtime_topup": {
+        "pii": [
+          "target_msisdn"
+        ],
+        "subject": []
+      }
+    }
   },
   {
     "name": "merchant-service",
@@ -2414,7 +5071,90 @@
       "wallets.merchant_refund.completed",
       "wallets.merchant_refund.rejected",
       "wallets.merchant_refund.pending_bank_approval"
-    ]
+    ],
+    "personal_data": {
+      "merchant": {
+        "pii": [
+          "tax_id",
+          "contact_name",
+          "contact_msisdn",
+          "contact_email"
+        ],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "merchant_store": {
+        "pii": [
+          "contact_msisdn"
+        ],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          }
+        ]
+      },
+      "merchant_terminal": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          },
+          {
+            "column": "merchant_store_id",
+            "parent": "merchant_store"
+          }
+        ]
+      },
+      "merchant_qr": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          },
+          {
+            "column": "merchant_store_id",
+            "parent": "merchant_store"
+          },
+          {
+            "column": "merchant_terminal_id",
+            "parent": "merchant_terminal"
+          }
+        ]
+      },
+      "merchant_payment_link": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          }
+        ]
+      },
+      "merchant_settlement": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          }
+        ]
+      },
+      "merchant_refund": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "merchant_id",
+            "parent": "merchant"
+          }
+        ]
+      }
+    }
   },
   {
     "name": "channel-service",
@@ -2441,7 +5181,25 @@
       "wallets.ussd_session.completed",
       "wallets.sms_message.received",
       "wallets.sms_message.delivery_updated"
-    ]
+    ],
+    "personal_data": {
+      "ussd_session": {
+        "pii": [
+          "msisdn"
+        ],
+        "subject": [],
+        "hidden": [
+          "context"
+        ]
+      },
+      "sms_message": {
+        "pii": [
+          "msisdn",
+          "body"
+        ],
+        "subject": []
+      }
+    }
   },
   {
     "name": "disbursement-service",
@@ -2469,7 +5227,18 @@
       "wallets.disbursement_batch.completed",
       "wallets.disbursement_beneficiary.paid",
       "wallets.disbursement_beneficiary.failed"
-    ]
+    ],
+    "personal_data": {
+      "disbursement_beneficiary": {
+        "pii": [
+          "msisdn",
+          "national_id",
+          "full_name",
+          "matched_name"
+        ],
+        "subject": []
+      }
+    }
   },
   {
     "name": "interop-service",
@@ -2493,6 +5262,27 @@
       "wallets.interop_transfer.reserved",
       "wallets.interop_transfer.committed",
       "wallets.interop_transfer.aborted"
-    ]
+    ],
+    "personal_data": {
+      "interop_quote": {
+        "pii": [
+          "payee_party_id",
+          "payee_name"
+        ],
+        "subject": [],
+        "hidden": [
+          "fulfilment"
+        ]
+      },
+      "interop_transfer": {
+        "pii": [
+          "counterparty_party_id"
+        ],
+        "subject": [],
+        "hidden": [
+          "fulfilment"
+        ]
+      }
+    }
   }
 ]

@@ -21,6 +21,17 @@ security:
 tags:
 - name: Audit Events
   description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+- name: Audit Chain Verifications
+  description: 'One verification run of a tenant''s audit hash chain (daily schedule or on demand); incremental from the last
+    verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+
+    '
+- name: Audit Seals
+  description: 'One sealed daily batch of a tenant''s audit events exported to WORM object storage (S3 Object Lock): the events
+    in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal''s manifest hash,
+    so tampering with storage or database is detectable.
+
+    '
 - name: Audit Retention Policies
   description: Retention rule for audit and business records per resource type and jurisdiction
 - name: Data Exports
@@ -259,6 +270,334 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-required-scope: platform:write
       x-table: audit_event
+  /v1/audit-chain-verifications:
+    get:
+      operationId: auditChainVerificationsList
+      summary: List audit chain verifications
+      tags:
+      - Audit Chain Verifications
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - SCHEDULED
+          - ON_DEMAND
+      - name: valid
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditChainVerificationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: audit_chain_verification
+      x-crud: true
+      x-crud-list: true
+  /v1/audit-chain-verifications/{id}:
+    get:
+      operationId: auditChainVerificationsGet
+      summary: Retrieve audit chain verification
+      tags:
+      - Audit Chain Verifications
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditChainVerification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: audit_chain_verification
+      x-crud: true
+      x-crud-get: true
+  /v1/audit-chain-verifications/run:
+    post:
+      operationId: auditChainVerificationsRun
+      summary: Verify the tenant's hash chain now (incremental from the last valid run; full re-checks from the first event)
+      tags:
+      - Audit Chain Verifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditChainVerification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditChainVerificationsRunRequest'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: audit_chain_verification
+  /v1/audit-seals:
+    get:
+      operationId: auditSealsList
+      summary: List audit seals
+      tags:
+      - Audit Seals
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: seal_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditSealPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: audit_seal
+      x-crud: true
+      x-crud-list: true
+  /v1/audit-seals/{id}:
+    get:
+      operationId: auditSealsGet
+      summary: Retrieve audit seal
+      tags:
+      - Audit Seals
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditSeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: audit_seal
+      x-crud: true
+      x-crud-get: true
+  /v1/audit-seals/run:
+    post:
+      operationId: auditSealsRun
+      summary: Seal and export one UTC day now (default yesterday; days already sealed are returned as they are)
+      tags:
+      - Audit Seals
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditSeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditSealsRunRequest'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: audit_seal
+  /v1/audit-seals/{id}/verify:
+    post:
+      operationId: auditSealsVerify
+      summary: Re-read the sealed objects from storage and check content, manifest and chain hashes
+      tags:
+      - Audit Seals
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: audit_seal
   /v1/audit-retention-policies:
     get:
       operationId: auditRetentionPoliciesList
@@ -775,6 +1114,53 @@ components:
           additionalProperties: true
       required:
       - query
+    AuditChainVerificationPage:
+      type: object
+      description: One page of AuditChainVerification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditChainVerification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AuditChainVerificationsRunRequest:
+      type: object
+      properties:
+        full:
+          type: boolean
+    AuditSealPage:
+      type: object
+      description: One page of AuditSeal results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditSeal'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AuditSealsRunRequest:
+      type: object
+      properties:
+        seal_date:
+          type: string
+          format: date
     AuditRetentionPolicyPage:
       type: object
       description: One page of AuditRetentionPolicy results (newest first)
@@ -819,6 +1205,123 @@ components:
           maxLength: 255
       required:
       - reason
+    AuditChainVerification:
+      type: object
+      description: 'One verification run of a tenant''s audit hash chain (daily schedule or on demand); incremental from the
+        last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - SCHEDULED
+          - ON_DEMAND
+          description: Scheduled or on demand
+        valid:
+          type: boolean
+          description: True when every checked event links and hashes correctly
+        from_sequence:
+          type: integer
+          format: int64
+          description: First sequence checked
+        to_sequence:
+          type: integer
+          format: int64
+          description: Last sequence checked (head of the chain at the start of the run)
+        checked:
+          type: integer
+          format: int64
+          description: Events checked
+        first_broken_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: First sequence that failed
+        break_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP
+        broken_event_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Event that failed
+        head_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last event checked
+        started_at:
+          type: string
+          format: date-time
+          description: Start
+        finished_at:
+          type: string
+          format: date-time
+          description: End
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - trigger
+      - valid
+      - from_sequence
+      - to_sequence
+      - checked
+      - started_at
+      - finished_at
     AuditEvent:
       type: object
       description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
@@ -908,13 +1411,15 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: State before (PII masked)
+          description: 'State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed
+            psn: pseudonyms)'
         after_state:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: State after (PII masked)
+          description: 'State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn:
+            pseudonyms)'
         legal_entity_id:
           type:
           - string
@@ -1208,6 +1713,140 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    AuditSeal:
+      type: object
+      description: 'One sealed daily batch of a tenant''s audit events exported to WORM object storage (S3 Object Lock): the
+        events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal''s manifest
+        hash, so tampering with storage or database is detectable.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        seal_date:
+          type: string
+          format: date
+          description: UTC day sealed
+        from_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: First event sequence in the batch
+        to_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Last event sequence in the batch
+        event_count:
+          type: integer
+          format: int32
+          description: Events in the batch
+        first_prev_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: prev_hash of the first event (links to the previous batch)
+        last_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last event
+        content_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the events object
+        manifest_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the manifest object
+        previous_manifest_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Manifest hash of the previous seal of the tenant
+        storage_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Events object (s3://bucket/key)
+        manifest_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Manifest object
+        object_lock_mode:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: COMPLIANCE, GOVERNANCE or NONE
+        retain_until:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Object lock retain-until date
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - seal_date
+      - event_count
     DataExportRequest:
       type: object
       description: Export of audit or personal data for regulators, auditors or data-subject requests

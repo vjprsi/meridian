@@ -1175,6 +1175,12 @@ channels:
         $ref: '#/components/messages/PlatformAuditEventRecorded'
       PlatformAuditChainBroken:
         $ref: '#/components/messages/PlatformAuditChainBroken'
+      PlatformAuditChainVerified:
+        $ref: '#/components/messages/PlatformAuditChainVerified'
+      PlatformAuditSealCreated:
+        $ref: '#/components/messages/PlatformAuditSealCreated'
+      PlatformAuditSealTampered:
+        $ref: '#/components/messages/PlatformAuditSealTampered'
       PlatformDataExportRequestCompleted:
         $ref: '#/components/messages/PlatformDataExportRequestCompleted'
       PlatformDataExportRequestCancelled:
@@ -14226,6 +14232,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AuditEvent'
+    PlatformAuditChainVerified:
+      name: platform.audit_chain.verified
+      title: A hash-chain verification run finished
+      summary: A hash-chain verification run finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.audit_chain.verified
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AuditChainVerification'
+    PlatformAuditSealCreated:
+      name: platform.audit_seal.created
+      title: A daily batch was sealed and exported to WORM storage
+      summary: A daily batch was sealed and exported to WORM storage
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.audit_seal.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AuditSeal'
+    PlatformAuditSealTampered:
+      name: platform.audit_seal.tampered
+      title: A sealed batch no longer matches its manifest or the database
+      summary: A sealed batch no longer matches its manifest or the database
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.audit_seal.tampered
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AuditSeal'
     PlatformDataExportRequestCompleted:
       name: platform.data_export_request.completed
       title: A data export is ready
@@ -60686,13 +60758,15 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: State before (PII masked)
+          description: 'State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed
+            psn: pseudonyms)'
         after_state:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: State after (PII masked)
+          description: 'State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn:
+            pseudonyms)'
         legal_entity_id:
           type:
           - string
@@ -60798,6 +60872,257 @@ components:
       - service_name
       - hash
       - prev_hash
+    AuditChainVerification:
+      type: object
+      description: 'One verification run of a tenant''s audit hash chain (daily schedule or on demand); incremental from the
+        last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - SCHEDULED
+          - ON_DEMAND
+          description: Scheduled or on demand
+        valid:
+          type: boolean
+          description: True when every checked event links and hashes correctly
+        from_sequence:
+          type: integer
+          format: int64
+          description: First sequence checked
+        to_sequence:
+          type: integer
+          format: int64
+          description: Last sequence checked (head of the chain at the start of the run)
+        checked:
+          type: integer
+          format: int64
+          description: Events checked
+        first_broken_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: First sequence that failed
+        break_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP
+        broken_event_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Event that failed
+        head_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last event checked
+        started_at:
+          type: string
+          format: date-time
+          description: Start
+        finished_at:
+          type: string
+          format: date-time
+          description: End
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - trigger
+      - valid
+      - from_sequence
+      - to_sequence
+      - checked
+      - started_at
+      - finished_at
+    AuditSeal:
+      type: object
+      description: 'One sealed daily batch of a tenant''s audit events exported to WORM object storage (S3 Object Lock): the
+        events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal''s manifest
+        hash, so tampering with storage or database is detectable.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        seal_date:
+          type: string
+          format: date
+          description: UTC day sealed
+        from_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: First event sequence in the batch
+        to_sequence:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Last event sequence in the batch
+        event_count:
+          type: integer
+          format: int32
+          description: Events in the batch
+        first_prev_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: prev_hash of the first event (links to the previous batch)
+        last_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last event
+        content_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the events object
+        manifest_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the manifest object
+        previous_manifest_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Manifest hash of the previous seal of the tenant
+        storage_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Events object (s3://bucket/key)
+        manifest_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Manifest object
+        object_lock_mode:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: COMPLIANCE, GOVERNANCE or NONE
+        retain_until:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Object lock retain-until date
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - seal_date
+      - event_count
     DataExportRequest:
       type: object
       description: Export of audit or personal data for regulators, auditors or data-subject requests

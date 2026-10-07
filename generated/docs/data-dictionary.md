@@ -12084,8 +12084,8 @@ API: /v1/audit-events · Requirements: ADM-03
 | resource_id | varchar(64) | yes |  | resource_id | Resource id |
 | outcome | varchar(40) (AuditOutcome) | no |  | outcome | Outcome |
 | reason | varchar(500) | yes |  | reason | Reason or justification |
-| before_state | jsonb | yes |  | before_state | State before (PII masked) |
-| after_state | jsonb | yes |  | after_state | State after (PII masked) |
+| before_state | jsonb | yes |  | before_state | State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms) |
+| after_state | jsonb | yes |  | after_state | State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms) |
 | legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval, if maker-checker |
 | ip_address | inet | yes |  | ip_address | Client IP |
@@ -12097,6 +12097,68 @@ API: /v1/audit-events · Requirements: ADM-03
 | source_event_id | varchar(64) | yes |  | source_event_id (read-only) | CloudEvents id of the consumed domain event (de-duplication) |
 | hash | varchar(64) | no |  | hash (read-only) | SHA-256 over this event and prev_hash |
 | prev_hash | varchar(64) | no |  | prev_hash (read-only) | Hash of the previous event |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `audit_chain_verification` (append-only)
+
+One verification run of a tenant's audit hash chain (daily schedule or on demand); incremental from the last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+
+
+API: /v1/audit-chain-verifications · Requirements: ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| trigger | varchar(40) (AuditVerificationTrigger) | no |  | trigger | Scheduled or on demand |
+| valid | boolean | no |  | valid | True when every checked event links and hashes correctly |
+| from_sequence | bigint | no |  | from_sequence | First sequence checked |
+| to_sequence | bigint | no |  | to_sequence | Last sequence checked (head of the chain at the start of the run) |
+| checked | bigint | no |  | checked | Events checked |
+| first_broken_sequence | bigint | yes |  | first_broken_sequence | First sequence that failed |
+| break_reason | varchar(32) | yes |  | break_reason | HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP |
+| broken_event_id | uuid | yes |  | broken_event_id | Event that failed |
+| head_hash | varchar(64) | yes |  | head_hash | Hash of the last event checked |
+| started_at | timestamptz | no |  | started_at | Start |
+| finished_at | timestamptz | no |  | finished_at | End |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `audit_seal` (append-only)
+
+One sealed daily batch of a tenant's audit events exported to WORM object storage (S3 Object Lock): the events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal's manifest hash, so tampering with storage or database is detectable.
+
+
+API: /v1/audit-seals · Requirements: ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| seal_date | date | no |  | seal_date | UTC day sealed |
+| from_sequence | bigint | yes |  | from_sequence | First event sequence in the batch |
+| to_sequence | bigint | yes |  | to_sequence | Last event sequence in the batch |
+| event_count | integer | no |  | event_count | Events in the batch |
+| first_prev_hash | varchar(64) | yes |  | first_prev_hash | prev_hash of the first event (links to the previous batch) |
+| last_hash | varchar(64) | yes |  | last_hash | Hash of the last event |
+| content_sha256 | varchar(64) | yes |  | content_sha256 | SHA-256 of the events object |
+| manifest_sha256 | varchar(64) | yes |  | manifest_sha256 | SHA-256 of the manifest object |
+| previous_manifest_sha256 | varchar(64) | yes |  | previous_manifest_sha256 | Manifest hash of the previous seal of the tenant |
+| storage_uri | varchar(500) | yes |  | storage_uri | Events object (s3://bucket/key) |
+| manifest_uri | varchar(500) | yes |  | manifest_uri | Manifest object |
+| object_lock_mode | varchar(16) | yes |  | object_lock_mode | COMPLIANCE, GOVERNANCE or NONE |
+| retain_until | date | yes |  | retain_until | Object lock retain-until date |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

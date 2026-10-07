@@ -72,8 +72,8 @@ COMMENT ON COLUMN audit_event.resource_type IS 'Resource type';
 COMMENT ON COLUMN audit_event.resource_id IS 'Resource id';
 COMMENT ON COLUMN audit_event.outcome IS 'Outcome';
 COMMENT ON COLUMN audit_event.reason IS 'Reason or justification';
-COMMENT ON COLUMN audit_event.before_state IS 'State before (PII masked)';
-COMMENT ON COLUMN audit_event.after_state IS 'State after (PII masked)';
+COMMENT ON COLUMN audit_event.before_state IS 'State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms)';
+COMMENT ON COLUMN audit_event.after_state IS 'State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms)';
 COMMENT ON COLUMN audit_event.legal_entity_id IS 'Legal entity';
 COMMENT ON COLUMN audit_event.approval_request_id IS 'Approval, if maker-checker';
 COMMENT ON COLUMN audit_event.ip_address IS 'Client IP';
@@ -101,6 +101,114 @@ CREATE INDEX ix_audit_event_c2 ON audit_event (actor_id, occurred_at);
 ALTER TABLE audit_event ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON audit_event USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_audit_event_append_only BEFORE UPDATE OR DELETE ON audit_event FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- audit_chain_verification: One verification run of a tenant's audit hash chain (daily schedule or on demand); incremental from the last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+
+CREATE TABLE audit_chain_verification (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  trigger                      varchar(40) NOT NULL CHECK (trigger IN ('SCHEDULED', 'ON_DEMAND')),
+  valid                        boolean NOT NULL,
+  from_sequence                bigint NOT NULL,
+  to_sequence                  bigint NOT NULL,
+  checked                      bigint NOT NULL,
+  first_broken_sequence        bigint,
+  break_reason                 varchar(32),
+  broken_event_id              uuid,
+  head_hash                    varchar(64),
+  started_at                   timestamptz NOT NULL,
+  finished_at                  timestamptz NOT NULL,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE audit_chain_verification IS 'One verification run of a tenant''s audit hash chain (daily schedule or on demand); incremental from the last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric.
+';
+COMMENT ON COLUMN audit_chain_verification.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN audit_chain_verification.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN audit_chain_verification.created_at IS 'Creation time';
+COMMENT ON COLUMN audit_chain_verification.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN audit_chain_verification.trigger IS 'Scheduled or on demand';
+COMMENT ON COLUMN audit_chain_verification.valid IS 'True when every checked event links and hashes correctly';
+COMMENT ON COLUMN audit_chain_verification.from_sequence IS 'First sequence checked';
+COMMENT ON COLUMN audit_chain_verification.to_sequence IS 'Last sequence checked (head of the chain at the start of the run)';
+COMMENT ON COLUMN audit_chain_verification.checked IS 'Events checked';
+COMMENT ON COLUMN audit_chain_verification.first_broken_sequence IS 'First sequence that failed';
+COMMENT ON COLUMN audit_chain_verification.break_reason IS 'HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP';
+COMMENT ON COLUMN audit_chain_verification.broken_event_id IS 'Event that failed';
+COMMENT ON COLUMN audit_chain_verification.head_hash IS 'Hash of the last event checked';
+COMMENT ON COLUMN audit_chain_verification.started_at IS 'Start';
+COMMENT ON COLUMN audit_chain_verification.finished_at IS 'End';
+COMMENT ON COLUMN audit_chain_verification.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_chain_verification.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_chain_verification.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_chain_verification.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_chain_verification.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_audit_chain_verification_tenant ON audit_chain_verification (tenant_id, created_at);
+CREATE INDEX ix_audit_chain_verification_c1 ON audit_chain_verification (created_at);
+ALTER TABLE audit_chain_verification ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON audit_chain_verification USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_audit_chain_verification_append_only BEFORE UPDATE OR DELETE ON audit_chain_verification FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- audit_seal: One sealed daily batch of a tenant's audit events exported to WORM object storage (S3 Object Lock): the events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal's manifest hash, so tampering with storage or database is detectable.
+
+CREATE TABLE audit_seal (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  seal_date                    date NOT NULL,
+  from_sequence                bigint,
+  to_sequence                  bigint,
+  event_count                  integer NOT NULL DEFAULT 0,
+  first_prev_hash              varchar(64),
+  last_hash                    varchar(64),
+  content_sha256               varchar(64),
+  manifest_sha256              varchar(64),
+  previous_manifest_sha256     varchar(64),
+  storage_uri                  varchar(500),
+  manifest_uri                 varchar(500),
+  object_lock_mode             varchar(16),
+  retain_until                 date,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_audit_seal_1 UNIQUE (tenant_id, seal_date)
+);
+COMMENT ON TABLE audit_seal IS 'One sealed daily batch of a tenant''s audit events exported to WORM object storage (S3 Object Lock): the events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal''s manifest hash, so tampering with storage or database is detectable.
+';
+COMMENT ON COLUMN audit_seal.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN audit_seal.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN audit_seal.created_at IS 'Creation time';
+COMMENT ON COLUMN audit_seal.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN audit_seal.seal_date IS 'UTC day sealed';
+COMMENT ON COLUMN audit_seal.from_sequence IS 'First event sequence in the batch';
+COMMENT ON COLUMN audit_seal.to_sequence IS 'Last event sequence in the batch';
+COMMENT ON COLUMN audit_seal.event_count IS 'Events in the batch';
+COMMENT ON COLUMN audit_seal.first_prev_hash IS 'prev_hash of the first event (links to the previous batch)';
+COMMENT ON COLUMN audit_seal.last_hash IS 'Hash of the last event';
+COMMENT ON COLUMN audit_seal.content_sha256 IS 'SHA-256 of the events object';
+COMMENT ON COLUMN audit_seal.manifest_sha256 IS 'SHA-256 of the manifest object';
+COMMENT ON COLUMN audit_seal.previous_manifest_sha256 IS 'Manifest hash of the previous seal of the tenant';
+COMMENT ON COLUMN audit_seal.storage_uri IS 'Events object (s3://bucket/key)';
+COMMENT ON COLUMN audit_seal.manifest_uri IS 'Manifest object';
+COMMENT ON COLUMN audit_seal.object_lock_mode IS 'COMPLIANCE, GOVERNANCE or NONE';
+COMMENT ON COLUMN audit_seal.retain_until IS 'Object lock retain-until date';
+COMMENT ON COLUMN audit_seal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_seal.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_seal.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_seal.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN audit_seal.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_audit_seal_tenant ON audit_seal (tenant_id, created_at);
+ALTER TABLE audit_seal ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON audit_seal USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_audit_seal_append_only BEFORE UPDATE OR DELETE ON audit_seal FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- audit_retention_policy: Retention rule for audit and business records per resource type and jurisdiction
 CREATE TABLE audit_retention_policy (
