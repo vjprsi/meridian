@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { agents, commission, unwrap, wallet } from "@/api/client";
+import { api, unwrap } from "@/api/client";
 import { Card, DateTime, Icon, Money, Notice, Row, Tile } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
 import { useT } from "@/lib/i18n";
@@ -23,29 +23,28 @@ export default function Home() {
   const commissionBalance = useQuery({
     queryKey: ["commission-balance", p?.commissionWalletId],
     enabled: live && !!p?.commissionWalletId,
-    queryFn: async () => unwrap(await wallet.GET("/v1/wallets/{id}/balance", { params: { path: { id: p!.commissionWalletId! } } })),
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me/commission-balance")),
   });
   const commissionSummary = useQuery({
     queryKey: ["commission-summary", p?.agentId],
     enabled: live && !!p,
-    queryFn: async () => unwrap(await commission.GET("/v1/commission-earnings/summary", {
-      params: { query: { beneficiary_agent_id: p!.agentId } } })) as { groups?: SummaryGroup[] },
+    queryFn: async () => unwrap(await api.GET("/v1/agent/commissions/summary")) as { groups?: SummaryGroup[] },
   });
   const perf = useQuery({
     queryKey: ["performance", p?.agentId, today()],
     enabled: live && !!p,
-    queryFn: async () => unwrap(await agents.GET("/v1/agents/{id}/performance", {
-      params: { path: { id: p!.agentId }, query: { from: today(), to: today() } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/me/performance", {
+      params: { query: { from: today(), to: today() } } })).data,
   });
   const tills = useQuery({
     queryKey: ["tills", p?.outletId],
     enabled: live && !!p?.outletId,
-    queryFn: async () => unwrap(await agents.GET("/v1/agent-tills", { params: { query: { agent_outlet_id: p!.outletId! } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/tills", { params: { query: { agent_outlet_id: p!.outletId! } } })).data,
   });
   const device = useQuery({
     queryKey: ["device", p?.deviceId],
     enabled: live && !!p?.deviceId,
-    queryFn: async () => unwrap(await agents.GET("/v1/agent-devices/{id}", { params: { path: { id: p!.deviceId! } } })),
+    queryFn: async () => unwrap(await api.GET("/v1/agent/devices/{device_id}", { params: { path: { device_id: p!.deviceId! } } })),
   });
 
   if (!p) return null;

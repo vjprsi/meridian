@@ -63,7 +63,8 @@ async function probe() {
   if (forcedOffline || !navigator.onLine) return;
   try {
     // Any answer from the gateway (even 401/404) proves the platform is reachable; 502-504 come from the proxy.
-    const r = await fetch("/v1/billers?limit=1", { method: "GET", cache: "no-store", headers: { "X-Probe": "1" } });
+    // (agent channel only; there is no gateway health endpoint yet)
+    const r = await fetch("/v1/agent/billers?limit=1", { method: "GET", cache: "no-store", headers: { "X-Probe": "1" } });
     reportReachability(r.status < 502 || r.status > 504);
   } catch {
     reportReachability(false);

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { agents, idem, problemOf, unwrap } from "@/api/client";
+import { api, idem, problemOf, unwrap } from "@/api/client";
 import { OpOutcome } from "@/components/receipt";
 import { Badge, Button, Card, DateTime, Field, Input, Money, Notice, PageTitle, ProblemBox, Row, Select } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
@@ -14,12 +14,13 @@ import { submit } from "@/lib/outbox/runtime";
 import type { OutboxView, Problem } from "@/lib/outbox/types";
 import { useFloatBalance, useFloatPositions, useLive } from "@/lib/queries";
 
-const FUNDING = ["BANK_DEPOSIT", "MOBILE_MONEY", "CASH", "SUPER_AGENT_TRANSFER"];
+const FUNDING = ["BANK_TRANSFER", "CASH_DEPOSIT"];
 
 /**
- * Float management: balance and thresholds, top-up / rebalance requests to the super-agent or treasury
- * (agentFloatRequestsCreate, queued when offline), their status (agentFloatRequestsList, cancel), and physical
- * cash delivery / pickup requests for the outlet (cashManagementRequestsCreate / List / Cancel, online only).
+ * Float management: balance and thresholds, top-up (bank transfer or cash deposit, with its reference) or rebalance
+ * from the parent agent (agentMeFloatRequestsCreate, queued when offline; requesting agent, target wallet and source
+ * are set by the agent channel), their status (agentMeFloatRequestsList, cancel), and physical cash delivery /
+ * pickup requests for the outlet (agentMeCashRequestsCreate / List / Cancel, online only).
  */
 export default function FloatPage() {
   const t = useT();
@@ -29,10 +30,9 @@ export default function FloatPage() {
   const offline = useConnectivity() === "offline";
   const balance = useFloatBalance(p);
   const positions = useFloatPositions(p);
-  const [type, setType] = useState<"TOP_UP" | "REBALANCE" | "WITHDRAW">("TOP_UP");
-  const [source, setSource] = useState<"parent" | "treasury">("parent");
+  const [type, setType] = useState<"TOP_UP" | "REBALANCE">("TOP_UP");
   const [amount, setAmount] = useState("");
-  const [funding, setFunding] = useState("BANK_DEPOSIT");
+  const [funding, setFunding] = useState("BANK_TRANSFER");
   const [bankRef, setBankRef] = useState("");
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,11 +41,11 @@ export default function FloatPage() {
   const requests = useQuery({
     queryKey: ["float-requests", p?.agentId],
     enabled: live && !!p,
-    queryFn: async () => unwrap(await agents.GET("/v1/agent-float-requests", { params: { query: { requesting_agent_id: p!.agentId, limit: 50 } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/float-requests", { params: { query: { limit: 50 } } })).data,
   });
 
   if (!p) return null;
-  const parent = p.parentAgentId ?? p.superAgentId;
+  const parent = p.parentAgentId;
   const pos = positions.data?.find((f) => f.wallet_id === p.floatWalletId) ?? positions.data?.[0];
   const available = balance.data?.available_balance ?? p.floatAvailable;
   const low = available != null && pos?.low_float_alert_threshold != null && cmp(available, pos.low_float_alert_threshold) < 0;
@@ -54,17 +54,15 @@ export default function FloatPage() {
     e.preventDefault();
     setProblem(null);
     if (!isAmount(amount)) { setProblem({ detail: t("amount") }); return; }
+    if (type === "TOP_UP" && !bankRef.trim()) { setProblem({ title: t("bankReference"), code: "funding_proof_required" }); return; }
     setBusy(true);
     try {
       setResult(await submit("FLOAT_REQUEST", {
-        request: {
-          request_type: type, requesting_agent_id: p!.agentId,
-          source_agent_id: source === "parent" && parent ? parent : undefined,
-          target_wallet_id: p!.floatWalletId, amount, currency: p!.currency,
-          funding_method: funding, bank_reference: bankRef || undefined,
-        },
+        request: type === "TOP_UP"
+          ? { request_type: type, amount, funding_method: funding, bank_reference: bankRef.trim() }
+          : { request_type: type, amount },
         amount, currency: p!.currency,
-        display: { Type: type, Source: source === "parent" && parent ? "Super-agent" : "Treasury", Funding: funding },
+        display: { Type: type, Source: type === "REBALANCE" ? "Parent agent" : "Treasury", ...(type === "TOP_UP" ? { Funding: funding } : {}) },
       }, { offline }));
       void qc.invalidateQueries({ queryKey: ["float-requests"] });
     } catch (x) {
@@ -76,7 +74,7 @@ export default function FloatPage() {
 
   async function cancel(id: string) {
     try {
-      unwrap(await agents.POST("/v1/agent-float-requests/{id}/cancel", { params: { path: { id }, header: idem() }, body: { reason: "Cancelled by agent" } }));
+      unwrap(await api.POST("/v1/agent/float-requests/{float_request_id}/cancel", { params: { path: { float_request_id: id }, header: idem() }, body: { reason: "Cancelled by agent" } }));
       void requests.refetch();
     } catch (x) {
       setProblem(problemOf(x));
@@ -99,21 +97,22 @@ export default function FloatPage() {
         {result ? <OpOutcome view={result} onNew={() => { setResult(null); setAmount(""); setBankRef(""); }} /> : (
           <form onSubmit={request} className="flex flex-col gap-4">
             <Field label={t("requestType")}>
-              <Select value={type} onChange={(e) => setType(e.target.value as typeof type)} options={["TOP_UP", "REBALANCE", "WITHDRAW"]} />
-            </Field>
-            <Field label="Source">
-              <Select value={source} onChange={(e) => setSource(e.target.value as typeof source)}
-                options={[...(parent ? [{ value: "parent", label: "Super-agent" }] : []), { value: "treasury", label: "Treasury" }]} />
+              <Select value={type} onChange={(e) => setType(e.target.value as typeof type)}
+                options={parent ? ["TOP_UP", "REBALANCE"] : ["TOP_UP"]} />
             </Field>
             <Field label={`${t("amount")} (${p.currency})`}>
               <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(",", "."))} required />
             </Field>
-            <Field label={t("fundingMethod")}>
-              <Select value={funding} onChange={(e) => setFunding(e.target.value)} options={FUNDING} />
-            </Field>
-            <Field label={t("bankReference")}>
-              <Input value={bankRef} onChange={(e) => setBankRef(e.target.value)} />
-            </Field>
+            {type === "TOP_UP" && (
+              <>
+                <Field label={t("fundingMethod")}>
+                  <Select value={funding} onChange={(e) => setFunding(e.target.value)} options={FUNDING} />
+                </Field>
+                <Field label={t("bankReference")}>
+                  <Input value={bankRef} onChange={(e) => setBankRef(e.target.value)} required />
+                </Field>
+              </>
+            )}
             <ProblemBox problem={problem} />
             <Button type="submit" block disabled={busy || !p.floatWalletId}>{t("submit")}</Button>
           </form>
@@ -153,15 +152,15 @@ function CashRequests({ outletId, currency }: { outletId: string; currency: stri
   const list = useQuery({
     queryKey: ["cash-requests", outletId],
     enabled: live,
-    queryFn: async () => unwrap(await agents.GET("/v1/cash-management-requests", { params: { query: { agent_outlet_id: outletId, limit: 20 } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/cash-requests", { params: { query: { agent_outlet_id: outletId, limit: 20 } } })).data,
   });
 
   async function create(e: FormEvent) {
     e.preventDefault();
     setProblem(null);
     try {
-      unwrap(await agents.POST("/v1/cash-management-requests", { params: { header: idem() }, body: {
-        agent_outlet_id: outletId, request_type: type, amount, currency,
+      unwrap(await api.POST("/v1/agent/cash-requests", { params: { header: idem() }, body: {
+        agent_outlet_id: outletId, request_type: type, amount,
         requested_for: when ? new Date(when).toISOString() : undefined,
       } }));
       setAmount("");
@@ -173,7 +172,7 @@ function CashRequests({ outletId, currency }: { outletId: string; currency: stri
 
   async function cancel(id: string) {
     try {
-      unwrap(await agents.POST("/v1/cash-management-requests/{id}/cancel", { params: { path: { id }, header: idem() }, body: { reason: "Cancelled by agent" } }));
+      unwrap(await api.POST("/v1/agent/cash-requests/{cash_request_id}/cancel", { params: { path: { cash_request_id: id }, header: idem() }, body: { reason: "Cancelled by agent" } }));
       void list.refetch();
     } catch (x) {
       setProblem(problemOf(x));

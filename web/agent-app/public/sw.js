@@ -14,15 +14,15 @@ const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 const SHELL = `shell-${VERSION}`;
 const RSC = `rsc-${VERSION}`;
 const STATIC = "static-v1";
-const REF = "ref-v1";
+const REF = "ref-v2";
 const ROUTES = ["/", "/cash-in", "/cash-out", "/bills", "/airtime", "/onboarding", "/float", "/till", "/commissions",
   "/history", "/receipt", "/sync", "/settings", "/more", "/login", "/setup", "/auth/callback"];
 const ASSETS = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/maskable-512.png"];
+// Agent channel (/v1/agent) reference data only.
 const REF_PATTERNS = [
-  /^\/v1\/billers(\/[^/]+\/products)?$/,
-  /^\/v1\/biller-products$/,
-  /^\/v1\/onboarding\/journeys$/,
-  /^\/v1\/agents\/[^/]+(\/outlets|\/float)?$/,
+  /^\/v1\/agent\/billers(\/[^/]+\/products)?$/,
+  /^\/v1\/agent\/onboarding\/journeys$/,
+  /^\/v1\/agent\/me(\/outlets|\/floats)?$/,
 ];
 
 async function precache() {
@@ -60,7 +60,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const k of await caches.keys()) {
-      if ((k.startsWith("shell-") && k !== SHELL) || (k.startsWith("rsc-") && k !== RSC)) await caches.delete(k);
+      if ((k.startsWith("shell-") && k !== SHELL) || (k.startsWith("rsc-") && k !== RSC)
+        || (k.startsWith("ref-") && k !== REF)) await caches.delete(k);
     }
     await self.clients.claim();
   })());

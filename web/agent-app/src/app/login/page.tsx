@@ -9,7 +9,8 @@ import { Button, Field, Input, ProblemBox, Select } from "@/components/ui";
 import { ConnectivityPill } from "@/components/shell";
 import { setLang, useLang, useT } from "@/lib/i18n";
 
-const DEV_OPERATOR = "0199a000-0000-7000-8000-0000000000a1";
+/** Demo agent of the local stack (agent-network-service agent id); in JWT mode it comes from the token. */
+const DEV_AGENT = "0199a000-0000-7000-8000-0000000a0001";
 
 export default function LoginPage() {
   const t = useT();
@@ -18,17 +19,17 @@ export default function LoginPage() {
   const { setSession } = useSession();
   const [tenantId, setTenantId] = useState(DEFAULT_TENANT);
   const [user, setUser] = useState("agent.demo");
-  const [userId, setUserId] = useState(DEV_OPERATOR);
+  const [agentId, setAgentId] = useState(DEV_AGENT);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   function devSignIn(e: FormEvent) {
     e.preventDefault();
-    const s = { mode: "dev" as const, user, userId, tenantId };
+    const s = { mode: "dev" as const, user, userId: user, tenantId, agentId, authTime: Math.floor(Date.now() / 1000) };
     saveSession(s);
     setSession(s);
     const p = loadProfile();
-    router.replace(p && p.tenantId === tenantId ? "/" : "/setup");
+    router.replace(p && p.tenantId === tenantId && p.agentId === agentId ? "/" : "/setup");
   }
 
   async function sso() {
@@ -70,8 +71,8 @@ export default function LoginPage() {
         <Field label={t("user")} hint="X-User">
           <Input value={user} onChange={(e) => setUser(e.target.value)} required />
         </Field>
-        <Field label={t("userId")}>
-          <Input value={userId} onChange={(e) => setUserId(e.target.value)} required pattern="[\-0-9a-fA-F]{36}" />
+        <Field label={t("agentId")} hint="X-Agent-Id (the agent channel takes it from the token's agent_id in JWT mode)">
+          <Input value={agentId} onChange={(e) => setAgentId(e.target.value)} required pattern="[\-0-9a-fA-F]{36}" />
         </Field>
         <Button type="submit" variant="secondary" block>{t("continueDev")}</Button>
       </form>

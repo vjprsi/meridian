@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { agents, idem, unwrap, type AgentDevice } from "@/api/client";
+import { api, idem, unwrap, type AgentDevice } from "@/api/client";
 import { loadProfile } from "@/lib/agent-context";
 import { config } from "@/lib/config";
 import { isOnline } from "@/lib/connectivity";
@@ -29,13 +29,13 @@ function position(): Promise<GeolocationPosition | null> {
   });
 }
 
-/** Records a device heartbeat (agentDevicesHeartbeat) with the app version and, if the agent allowed it, location. */
+/** Records a device heartbeat (agentMeDevicesHeartbeat) with the app version and, if the agent allowed it, location. */
 export async function sendHeartbeat(): Promise<AgentDevice | null> {
   const p = loadProfile();
   if (!p?.deviceId || !loadSession() || !isOnline()) return null;
   const pos = await position();
-  const d = unwrap(await agents.POST("/v1/agent-devices/{id}/heartbeat", {
-    params: { path: { id: p.deviceId }, header: idem() },
+  const d = unwrap(await api.POST("/v1/agent/devices/{device_id}/heartbeat", {
+    params: { path: { device_id: p.deviceId }, header: idem() },
     body: {
       app_version: config.appVersion,
       ...(pos ? { latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6) } : {}),

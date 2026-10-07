@@ -1,8 +1,9 @@
 "use client";
 
-import { ApiError, agents, biller, onboarding, wallet } from "@/api/client";
+import { ApiError, api } from "@/api/client";
 import { uploadDocument, type DocType } from "@/lib/documents";
-import { fromB64, sha256Hex, toB64 } from "./crypto";
+import { batchPayload, sign } from "@/lib/device-key";
+import { fromB64, toB64 } from "./crypto";
 import type { AttemptOutcome, ExecContext, Executor, OpPayload, OutboxRecord, Problem } from "./types";
 
 type Res = { data?: unknown; error?: unknown; response: Response };
@@ -24,7 +25,6 @@ async function attempt(call: () => Promise<Res>): Promise<AttemptOutcome> {
 }
 
 const H = (key: string) => ({ "Idempotency-Key": key });
-const minutesBefore = (iso: string, m: number) => new Date(new Date(iso).getTime() - m * 60_000).toISOString();
 
 function withPin(body: Record<string, unknown>, ctx: ExecContext) {
   return ctx.agentPin ? { ...body, pin: ctx.agentPin } : body;
@@ -35,7 +35,7 @@ async function uploadAttachment(rec: OutboxRecord, p: OpPayload, applicationId: 
   const a = p.attachment!;
   try {
     const doc = await uploadDocument({
-      ownerType: "ONBOARDING_APPLICATION", ownerId: applicationId, bytes: fromB64(a.base64), contentType: a.contentType,
+      applicationId, bytes: fromB64(a.base64), contentType: a.contentType,
       fileName: a.fileName, documentType: a.documentType as DocType, keyPrefix: rec.idempotencyKey,
     });
     return { kind: "ok", status: 200, body: doc, replayed: false };
@@ -45,26 +45,25 @@ async function uploadAttachment(rec: OutboxRecord, p: OpPayload, applicationId: 
   }
 }
 
-/** Executes outbox records against the platform with the typed clients. */
+/**
+ * Executes outbox records against the agent channel (/v1/agent only). Money operations carry an
+ * X-Agent-Device-Proof (added by the API client) so a replay later than the sign-in's step-up window still passes.
+ */
 export const apiExecutor: Executor = {
   async execute(rec, p, ctx) {
     const key = H(rec.idempotencyKey);
     const body = p.request;
     switch (rec.kind) {
       case "CASH_IN":
-        return attempt(() => wallet.POST("/v1/wallet-transactions/cash-in", {
-          params: { header: key }, body: withPin(body, ctx) as never,
-        }));
+        return attempt(() => api.POST("/v1/agent/cash-in", { params: { header: key }, body: withPin(body, ctx) as never }));
       case "BILL_PAYMENT":
-        return attempt(() => biller.POST("/v1/bill-payments", { params: { header: key }, body: withPin(body, ctx) as never }));
+        return attempt(() => api.POST("/v1/agent/bill-payments", { params: { header: key }, body: withPin(body, ctx) as never }));
       case "AIRTIME":
-        return attempt(() => biller.POST("/v1/airtime-topups", { params: { header: key }, body: withPin(body, ctx) as never }));
+        return attempt(() => api.POST("/v1/agent/airtime-topups", { params: { header: key }, body: withPin(body, ctx) as never }));
       case "FLOAT_REQUEST":
-        return attempt(() => agents.POST("/v1/agent-float-requests", { params: { header: key }, body: body as never }));
+        return attempt(() => api.POST("/v1/agent/float-requests", { params: { header: key }, body: body as never }));
       case "ONBOARDING": {
-        const batch = await attempt(() => onboarding.POST("/v1/onboarding/offline-batches", {
-          params: { header: key }, body: body as never,
-        }));
+        const batch = await attempt(() => api.POST("/v1/agent/offline-batches", { params: { header: key }, body: body as never }));
         if (batch.kind !== "ok") return batch;
         const b = batch.body as { status: string; result?: { records?: { client_ref: string; outcome: string; reason?: string; application_id?: string }[]; error?: string } };
         const mine = b.result?.records?.find((r) => r.client_ref === p.display.client_ref);
@@ -85,52 +84,48 @@ export const apiExecutor: Executor = {
     }
   },
 
-  async lookup(rec, p) {
-    const since = minutesBefore(rec.createdAt, 10);
-    const match = <T extends { idempotency_key?: string }>(rows: T[] | undefined) =>
-      rows?.find((r) => r.idempotency_key === rec.idempotencyKey) ?? null;
-    if (rec.kind === "CASH_IN") {
-      const r = await wallet.GET("/v1/wallet-transactions", { params: { query: {
-        txn_type: "CASH_IN", payer_wallet_id: String(p.request.agent_wallet_id), created_after: since, limit: 200 } } });
+  /** Finds the object the agent channel created with this record's Idempotency-Key (unknown outcome). */
+  async lookup(rec) {
+    const query = { query: { idempotency_key: rec.idempotencyKey } };
+    const first = (r: { data?: { data?: unknown[] }; response: Response }) => {
       if (!r.response.ok) throw new Error("lookup failed");
-      return match(r.data?.data);
-    }
-    if (rec.kind === "BILL_PAYMENT") {
-      const r = await biller.GET("/v1/bill-payments", { params: { query: {
-        payer_wallet_id: String(p.request.payer_wallet_id), created_after: since, limit: 200 } } });
-      if (!r.response.ok) throw new Error("lookup failed");
-      return match(r.data?.data);
-    }
-    if (rec.kind === "AIRTIME") {
-      const r = await biller.GET("/v1/airtime-topups", { params: { query: {
-        payer_wallet_id: String(p.request.payer_wallet_id), created_after: since, limit: 200 } } });
-      if (!r.response.ok) throw new Error("lookup failed");
-      return match(r.data?.data);
+      return r.data?.data?.[0] ?? null;
+    };
+    switch (rec.kind) {
+      case "CASH_IN": return first(await api.GET("/v1/agent/transactions", { params: query }));
+      case "BILL_PAYMENT": return first(await api.GET("/v1/agent/bill-payments", { params: query }));
+      case "AIRTIME": return first(await api.GET("/v1/agent/airtime-topups", { params: query }));
+      case "FLOAT_REQUEST": return first(await api.GET("/v1/agent/float-requests", { params: query }));
+      case "ONBOARDING": return first(await api.GET("/v1/agent/offline-batches", { params: query }));
     }
     return null;
   },
 };
 
 /**
- * Builds the inline offline-batch body for one onboarding captured offline (payload_uri is a gzip data: URI; the
- * contract limits it to 500 characters, so only a compact record fits).
+ * Builds the offline-batch body for one onboarding captured offline, signed with the device key over the canonical
+ * batch text (tenant, agent, device, the record's Idempotency-Key, capture window, count and the SHA-256 of the
+ * payload). Called at capture, once the record's key is known, so every replay sends the same signed body.
+ * payload_uri is a gzip data: URI; the contract limits it to 500 characters, so only a compact record fits.
  */
-export async function buildOfflineBatch(clientRef: string, agentId: string, deviceFingerprint: string,
-  capturedAt: string, application: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const payload = JSON.stringify({ applications: [{ client_ref: clientRef, captured_at: capturedAt, channel: "AGENT", ...application }] });
+export async function buildOfflineBatch(o: { clientRef: string; tenantId: string; agentId: string; deviceId: string;
+  capturedAt: string; idempotencyKey: string; application: Record<string, unknown> }): Promise<Record<string, unknown>> {
+  const payload = JSON.stringify({ applications: [{ client_ref: o.clientRef, captured_at: o.capturedAt, channel: "AGENT", ...o.application }] });
   const gz = await new Response(new Blob([payload]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
   const uri = `data:application/gzip;base64,${toB64(gz)}`;
   if (uri.length > 500) {
     throw new Error("Too much data to queue offline (the offline batch payload is limited to 500 characters)");
   }
+  const signature = await sign(await batchPayload({
+    tenant: o.tenantId, agent: o.agentId, device: o.deviceId, idempotencyKey: o.idempotencyKey,
+    capturedFrom: o.capturedAt, capturedTo: o.capturedAt, applicationCount: 1, payloadUri: uri,
+  }));
   return {
-    agent_id: agentId,
-    device_fingerprint: deviceFingerprint,
-    captured_from: capturedAt,
-    captured_to: capturedAt,
+    agent_device_id: o.deviceId,
+    captured_from: o.capturedAt,
+    captured_to: o.capturedAt,
     application_count: 1,
     payload_uri: uri,
-    // The contract has no device signing key yet; the SHA-256 digest of the payload stands in (see API gaps).
-    payload_signature: `sha256:${await sha256Hex(payload)}`,
+    signature,
   };
 }

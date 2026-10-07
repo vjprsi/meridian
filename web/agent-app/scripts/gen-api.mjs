@@ -1,12 +1,12 @@
-// Regenerates the typed API clients from the owning services' contracts (generated/openapi/services).
-// Only the services the agent app calls are generated; types only, so nothing here reaches the bundle.
+// Regenerates the typed API client from the agent channel contract (generated/openapi/services). The app calls only
+// /v1/agent/* (agent-channel-service): never the domain services. Types only, so nothing here reaches the bundle.
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const specs = join(root, "..", "..", "generated", "openapi", "services");
-const services = ["wallet", "agent-network", "commission", "biller", "onboarding", "document"];
+const services = ["agent-channel"];
 const bin = join(root, "node_modules", "openapi-typescript", "bin", "cli.js");
 
 for (const s of services) {

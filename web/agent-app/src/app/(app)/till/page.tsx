@@ -2,8 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { agents, idem, problemOf, unwrap, type AgentTill } from "@/api/client";
-import { useSession } from "@/components/providers";
+import { api, idem, problemOf, unwrap, type AgentTill } from "@/api/client";
 import { Badge, Button, Card, DateTime, Field, Input, Money, Notice, PageTitle, ProblemBox, Row, Spinner } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
 import { useT } from "@/lib/i18n";
@@ -47,7 +46,7 @@ function denominationsOf(counts: Record<string, string>): Record<string, number>
 /**
  * Till / cash count: open the outlet's till for the shift with an opening count, close it with a declared count;
  * the server computes expected cash from the shift's cash-in / cash-out and reports the variance
- * (agentTillsList, agentTillsCreate, agentTillsOpen, agentTillsClose). Online only.
+ * (agentMeTillsList, agentMeTillsCreate, agentMeTillsOpen, agentMeTillsClose). Online only.
  */
 export default function TillPage() {
   const t = useT();
@@ -56,7 +55,7 @@ export default function TillPage() {
   const tills = useQuery({
     queryKey: ["tills", p?.outletId],
     enabled: live && !!p?.outletId,
-    queryFn: async () => unwrap(await agents.GET("/v1/agent-tills", { params: { query: { agent_outlet_id: p!.outletId! } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/tills", { params: { query: { agent_outlet_id: p!.outletId! } } })).data,
   });
   const [tillNo, setTillNo] = useState("T1");
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -67,7 +66,7 @@ export default function TillPage() {
   async function create(e: FormEvent) {
     e.preventDefault();
     try {
-      unwrap(await agents.POST("/v1/agent-tills", { params: { header: idem() }, body: { agent_outlet_id: p!.outletId!, till_number: tillNo, currency: p!.currency } }));
+      unwrap(await api.POST("/v1/agent/tills", { params: { header: idem() }, body: { agent_outlet_id: p!.outletId!, till_number: tillNo } }));
       void tills.refetch();
     } catch (x) {
       setProblem(problemOf(x));
@@ -96,7 +95,6 @@ export default function TillPage() {
 
 function TillCard({ till, onChange }: { till: AgentTill; onChange: () => void }) {
   const t = useT();
-  const { session } = useSession();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -110,12 +108,12 @@ function TillCard({ till, onChange }: { till: AgentTill; onChange: () => void })
     setProblem(null);
     try {
       if (isOpen) {
-        setClosed(unwrap(await agents.POST("/v1/agent-tills/{id}/close", { params: { path: { id: till.id }, header: idem() },
+        setClosed(unwrap(await api.POST("/v1/agent/tills/{till_id}/close", { params: { path: { till_id: till.id }, header: idem() },
           body: { declared_cash: total, denominations: denominationsOf(counts) } })));
       } else {
-        if (!session?.userId) throw new Error("No operator user id in this session");
-        unwrap(await agents.POST("/v1/agent-tills/{id}/open", { params: { path: { id: till.id }, header: idem() },
-          body: { operator_user_id: session.userId, opening_cash: total, denominations: denominationsOf(counts) } }));
+        // the operator is the signed-in user: the agent channel takes it from the token
+        unwrap(await api.POST("/v1/agent/tills/{till_id}/open", { params: { path: { till_id: till.id }, header: idem() },
+          body: { opening_cash: total, denominations: denominationsOf(counts) } }));
       }
       setCounts({});
       onChange();

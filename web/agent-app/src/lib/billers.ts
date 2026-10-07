@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { biller, unwrap, type Biller } from "@/api/client";
+import { api, unwrap, type Biller } from "@/api/client";
 
 /**
  * Biller catalogue and products: reference data, fetched whenever possible and served from the service worker's
@@ -11,7 +11,7 @@ export function useBillers() {
   return useQuery({
     queryKey: ["billers"],
     staleTime: 10 * 60_000,
-    queryFn: async () => unwrap(await biller.GET("/v1/billers", { params: { query: { status: "ACTIVE", limit: 200 } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/billers", { params: { query: { limit: 200 } } })).data,
   });
 }
 
@@ -20,7 +20,7 @@ export function useBillerProducts(billerId: string | undefined) {
     queryKey: ["biller-products", billerId],
     enabled: !!billerId,
     staleTime: 10 * 60_000,
-    queryFn: async () => unwrap(await biller.GET("/v1/billers/{id}/products", { params: { path: { id: billerId! } } })).data,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/billers/{biller_id}/products", { params: { path: { biller_id: billerId! } } })).data,
   });
 }
 

@@ -3,12 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { agents, problemOf, unwrap } from "@/api/client";
+import { api, problemOf, unwrap } from "@/api/client";
 import { useSession } from "@/components/providers";
 import { Badge, Button, Card, DateTime, Field, PageTitle, ProblemBox, Row, Select } from "@/components/ui";
 import { signOut } from "@/lib/auth";
-import { useProfile } from "@/lib/agent-context";
+import { updateProfile, useProfile } from "@/lib/agent-context";
 import { config } from "@/lib/config";
+import { registerDevice } from "@/lib/devices";
 import { isForcedOffline, setForcedOffline } from "@/lib/connectivity";
 import { geoEnabled, lastHeartbeat, sendHeartbeat, setGeoEnabled } from "@/lib/heartbeat";
 import { setLang, useLang, useT } from "@/lib/i18n";
@@ -42,10 +43,29 @@ export default function SettingsPage() {
   const device = useQuery({
     queryKey: ["device", p?.deviceId],
     enabled: live && !!p?.deviceId,
-    queryFn: async () => unwrap(await agents.GET("/v1/agent-devices/{id}", { params: { path: { id: p!.deviceId! } } })),
+    queryFn: async () => unwrap(await api.GET("/v1/agent/devices/{device_id}", { params: { path: { device_id: p!.deviceId! } } })),
+  });
+  const keys = useQuery({
+    queryKey: ["device-keys", p?.deviceId],
+    enabled: live && !!p?.deviceId,
+    queryFn: async () => unwrap(await api.GET("/v1/agent/devices/{device_id}/keys", { params: { path: { device_id: p!.deviceId! } } })).data,
   });
 
   if (!p) return null;
+  const activeKey = keys.data?.find((k) => k.status === "ACTIVE");
+
+  /** New device key pair and registration (the previous key is revoked by the server); needs a recent sign-in. */
+  async function reRegister() {
+    setProblem(null);
+    try {
+      const deviceId = await registerDevice(p!.outletId!, true);
+      updateProfile({ deviceId });
+      void keys.refetch();
+      void device.refetch();
+    } catch (x) {
+      setProblem(problemOf(x));
+    }
+  }
 
   async function heartbeat() {
     setProblem(null);
@@ -73,8 +93,14 @@ export default function SettingsPage() {
           <Row label={t("device")}>{device.data ? <>{device.data.serial_number} <Badge value={device.data.status} /></> : (p.deviceId ?? "—")}</Row>
           {device.data?.last_seen_at && <Row label={t("heartbeat")}><DateTime value={device.data.last_seen_at} /></Row>}
           {!device.data && beat && <Row label={t("heartbeat")}><DateTime value={beat} /></Row>}
+          <Row label={t("deviceKey")}>
+            {activeKey ? <><span className="font-mono">{activeKey.key_algorithm} {activeKey.key_fingerprint.slice(0, 16)}</span> <Badge value={activeKey.status} /></>
+              : keys.data ? <Badge value="REVOKED" /> : "—"}
+          </Row>
           <Row label="App">{config.appVersion}</Row>
         </dl>
+        {keys.data && !activeKey && <p className="mt-2 text-sm text-muted">{t("deviceNotRegistered")}</p>}
+        <Button variant="secondary" block className="mt-2" disabled={!live || !p.outletId} onClick={reRegister}>{t("registerDevice")}</Button>
         <label className="mt-3 flex min-h-12 items-center gap-3">
           <input type="checkbox" className="h-6 w-6" checked={geo} onChange={(e) => { setGeo(e.target.checked); setGeoEnabled(e.target.checked); }} />
           {t("shareLocation")}

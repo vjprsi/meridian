@@ -229,17 +229,24 @@ export class Outbox {
     }
   }
 
-  /** Captures an operation: allocates its order, id and Idempotency-Key, encrypts the payload and persists it. */
-  async enqueue(kind: OpKind, payload: OpPayload, opts: EnqueueOptions): Promise<OutboxRecord> {
+  /**
+   * Captures an operation: allocates its order, id and Idempotency-Key, encrypts the payload and persists it.
+   * `prepare` may complete the payload once the Idempotency-Key is known (e.g. a device signature that covers the
+   * key), so every replay re-sends exactly the same, already signed, body.
+   */
+  async enqueue(kind: OpKind, payload: OpPayload, opts: EnqueueOptions,
+    prepare?: (idempotencyKey: string) => Promise<OpPayload>): Promise<OutboxRecord> {
     const key = this.requireKey();
     await this.checkPolicy(kind, payload.amount, opts);
-    if ("pin" in payload.request) throw new Error("PINs must never be stored in the outbox");
     const id = this.uuid();
+    const idempotencyKey = `agentapp-${id}`;
+    const final = prepare ? await prepare(idempotencyKey) : payload;
+    if ("pin" in final.request) throw new Error("PINs must never be stored in the outbox");
     const seq = await this.store.nextSeq();
     const ts = this.now().toISOString();
     const rec: OutboxRecord = {
-      id, seq, kind, status: "PENDING", idempotencyKey: `agentapp-${id}`, createdAt: ts, updatedAt: ts,
-      createdOffline: opts.offline, attempts: 0, payload: await seal(key, payload, id),
+      id, seq, kind, status: "PENDING", idempotencyKey, createdAt: ts, updatedAt: ts,
+      createdOffline: opts.offline, attempts: 0, payload: await seal(key, final, id),
     };
     await this.store.put(rec);
     return rec;

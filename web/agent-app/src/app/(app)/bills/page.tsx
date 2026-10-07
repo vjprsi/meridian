@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { biller as billerApi, idem, problemOf, unwrap, type BillInquiry } from "@/api/client";
+import { api, idem, problemOf, unwrap, type BillInquiry } from "@/api/client";
 import { OpOutcome } from "@/components/receipt";
 import { Button, Field, Input, Money, Notice, PageTitle, PinInput, ProblemBox, Row, Select, Spinner } from "@/components/ui";
 import { useProfile } from "@/lib/agent-context";
@@ -51,8 +51,8 @@ export default function BillsPage() {
     setBusy(true);
     setProblem(null);
     try {
-      const inq = unwrap(await billerApi.POST("/v1/billers/{id}/validate-reference", {
-        params: { path: { id: b.id }, header: idem() }, body: { account_reference: ref.trim() } }));
+      const inq = unwrap(await api.POST("/v1/agent/billers/{biller_id}/validate-reference", {
+        params: { path: { biller_id: b.id }, header: idem() }, body: { account_reference: ref.trim() } }));
       setInquiry(inq);
       if (inq.customer_name) setName(inq.customer_name);
       if (inq.amount_due && !amount) setAmount(inq.amount_due);
@@ -80,9 +80,9 @@ export default function BillsPage() {
     setBusy(true);
     try {
       const view = await submit("BILL_PAYMENT", {
+        // paid from the agent's float wallet; payer, currency and channel are set by the agent channel
         request: { biller_id: b.id, biller_product_id: productId || undefined, bill_inquiry_id: inquiry?.id,
-          payer_wallet_id: p!.floatWalletId, channel: "AGENT_APP", account_reference: ref.trim(),
-          customer_name: name || undefined, amount, currency: p!.currency },
+          account_reference: ref.trim(), customer_name: name || undefined, amount },
         amount, currency: p!.currency,
         display: { Biller: b.name, Account: ref.trim(), ...(name ? { Customer: name } : {}) },
       }, { pin: pin || undefined, offline });
