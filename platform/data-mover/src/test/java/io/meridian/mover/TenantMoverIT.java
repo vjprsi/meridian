@@ -107,7 +107,7 @@ class TenantMoverIT {
                 UUID.randomUUID().toString(), null,
                 Map.of("cell-a", new MoverProperties.Cell(cellA.servicesUrlTemplate(), cellA.s3()),
                         "cell-b", new MoverProperties.Cell(cellB.servicesUrlTemplate(), cellB.s3())),
-                List.of(), List.of("ledger-service", "document-service"), pageSize, 0, 0, null, null, null, true, null);
+                List.of(), List.of("ledger-service", "document-service"), pageSize, 0, 0, null, null, null, true, null, null);
         MoverHttp http = new MoverHttp(JSON, props.auth());
         return new TenantMover(store, new Cells(props, JSON), http, props, "test-" + UUID.randomUUID());
     }

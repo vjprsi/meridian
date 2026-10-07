@@ -23,12 +23,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param resumeInterval   how often unfinished runs are picked up (crash / restart / transient failure)
  * @param confirm          call /confirm-copy when verified (false: stop at VERIFIED for a dry run)
  * @param events           Kafka listener
+ * @param s3Credentials    access key pair used for every cell whose s3 block has none (Helm: one Secret)
  */
 @ConfigurationProperties("meridian.mover")
 public record MoverProperties(String registryUrl, String operatorTenant, Auth auth, Map<String, Cell> cells,
                               List<String> skipServices, List<String> services, Integer pageSize, Integer rowsPerSecond,
                               Integer objectsPerSecond, List<Rewrite> rewrites, Duration lease, Duration resumeInterval,
-                              Boolean confirm, Events events) {
+                              Boolean confirm, Events events, S3Credentials s3Credentials) {
 
     public MoverProperties {
         auth = auth == null ? new Auth(null, null, null, null) : auth;
@@ -44,6 +45,7 @@ public record MoverProperties(String registryUrl, String operatorTenant, Auth au
         resumeInterval = resumeInterval == null ? Duration.ofSeconds(30) : resumeInterval;
         confirm = confirm == null || confirm;
         events = events == null ? new Events(true, "meridian.platform.v1") : events;
+        s3Credentials = s3Credentials == null ? new S3Credentials(null, null) : s3Credentials;
     }
 
     public record Auth(String tokenUri, String clientId, String clientSecret, String scope) {}
@@ -57,4 +59,6 @@ public record MoverProperties(String registryUrl, String operatorTenant, Auth au
     public record Rewrite(String service, String table, String column, String from, String to) {}
 
     public record Events(boolean enabled, String topic) {}
+
+    public record S3Credentials(String accessKey, String secretKey) {}
 }

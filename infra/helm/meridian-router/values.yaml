@@ -60,3 +60,25 @@ router:
     enabled: true
     topic: meridian.platform.v1
   cellOverrides: {}              # break-glass when the control plane is unreachable, e.g. {aws-euw1-c01: OFFLINE}
+
+# MR-GAME-DAY: data mover for live tenant moves (consumes platform.tenant_move.copy_requested; docs/MULTI_REGION.md)
+dataMover:
+  enabled: false
+  replicas: 2                    # any instance resumes a run whose lease expired
+  image: {digest: ""}            # default: global.image.digests.data-mover
+  resources: {cpu: 500m, memory: 768Mi}
+  database:
+    url: ""                      # its own small progress database, e.g. jdbc:postgresql://<aurora>:5432/mover_db
+    secret: "meridian-data-mover-db"     # username / password
+  auth:
+    tokenUri: ""                 # OIDC token endpoint
+    clientSecret: "meridian-data-mover-client"   # client-id / client-secret of svc-data-mover (meridian:internal, platform:operator)
+  s3Secret: "meridian-data-mover-s3"    # optional access-key / secret-key used for the cells' document buckets
+  registryUrl: ""                # default: router.registryUrl (confirm-copy)
+  operatorTenant: ""             # default: router.operatorTenant
+  rowsPerSecond: 5000            # throttle per instance (copy and verification reads)
+  objectsPerSecond: 50
+  pageSize: 1000
+  skipServices: [tenant-service]
+  cells: {}                      # per cell code, e.g. aws-euw1-c01: {servicesUrlTemplate: "http://{name}.meridian.svc.cluster.local",
+                                 #   s3: {endpoint: "https://s3.eu-west-1.amazonaws.com", bucket: "...", region: eu-west-1}}

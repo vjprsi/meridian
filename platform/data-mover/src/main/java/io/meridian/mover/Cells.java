@@ -79,6 +79,10 @@ public class Cells {
             s3 = new MoverProperties.S3(ep.get("s3_endpoint").asString(), ep.path("s3_bucket").asString(null),
                     ep.path("s3_region").asString("us-east-1"), null, null);
         }
+        if (s3 != null && (s3.accessKey() == null || s3.accessKey().isBlank())) {
+            s3 = new MoverProperties.S3(s3.endpoint(), s3.bucket(), s3.region(), props.s3Credentials().accessKey(),
+                    props.s3Credentials().secretKey());
+        }
         return new Cell(code, template.endsWith("/") ? template.substring(0, template.length() - 1) : template, s3);
     }
 }

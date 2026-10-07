@@ -397,7 +397,10 @@ public class TenantMoveService {
     private ObjectNode cellRef(JsonNode cellId) {
         ObjectNode cell = store.require("cell", UUID.fromString(cellId.asString()));
         ObjectNode c = json.createObjectNode();
-        for (String f : new String[] {"id", "code", "region", "gateway_url", "ledger_db_cluster", "kafka_cluster"}) {
+        // endpoints: the data mover reads services_url_template / s3_endpoint / s3_bucket / s3_region from it
+        // (credentials never: those live in the mover's own configuration)
+        for (String f : new String[] {"id", "code", "region", "gateway_url", "ledger_db_cluster", "kafka_cluster",
+                "endpoints"}) {
             if (cell.hasNonNull(f)) {
                 c.set(f, cell.get(f));
             }
