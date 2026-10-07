@@ -103,6 +103,28 @@ npm run gen:api      # regenerate typed clients for identity-service and webhook
   test events, delivery log with retry, event replays, and a sandbox try-it console calling the gateway as the user.
 - `/v1/*` is proxied to the edge gateway (`MERIDIAN_GATEWAY_URL`, default `http://localhost:18000`).
 
+## Customer web banking
+
+`web/customer-web` (same stack as the ops console) is the retail customer app on http://localhost:13300: mobile-first,
+installable PWA (app-shell caching only, never account data), WCAG 2.2 AA, English and Kiswahili, light/dark.
+
+```bash
+cd web/customer-web
+npm install
+npm run dev          # or: npm run build && npm start
+npm run gen:api      # regenerate typed clients for the 14 services it calls
+npm run test:e2e     # Playwright smoke with a mocked/absent backend (uses the local Chrome)
+```
+
+- Sign in with Keycloak (client `NEXT_PUBLIC_OIDC_CLIENT_ID`, token must carry `customer_id`) or in dev mode by
+  picking a tenant and customer on `/login`. Every call is filtered to that customer.
+- Screens: sign-up (journey-driven onboarding, document upload, KYC status), home, account detail with transactions and
+  statements, transfers / payees / domestic payments (validate, step-up, Idempotency-Key, receipt), standing orders,
+  cards (freeze, channel controls, limits, lost/stolen), loans (schedule, repay), insights and budgets, rewards, secure
+  inbox, profile & security (contacts with OTP, notification preferences, devices).
+- The platform has no customer-scoped ("me") API or customer identity yet; scoping is client-side only. The precise
+  gap list is in `web/customer-web/README.md`.
+
 ## Deploying to Kubernetes
 
 One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gateway
