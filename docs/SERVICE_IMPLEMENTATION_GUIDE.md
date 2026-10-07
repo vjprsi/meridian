@@ -74,8 +74,15 @@ Lessons from the rollout (all 63 services):
   submission marker in the idempotency key too, so resubmitting identical content after a rejection opens a new
   request instead of returning the decided one.
 - Resubmission: open the new request, then `cancelOpenExcept(type, id, null, newRequestId, "superseded")`.
-- No local rejected state: map REJECTED to the closest existing transition (cancel, back to DRAFT, archive) or
-  leave it pending and log; say which in the handler Javadoc. CHANGES_REQUESTED may map to a "request info" step.
+- Every REJECTED must land somewhere: a REJECTED status, a return to DRAFT, or recorded rejection columns
+  (`rejected_by`, `rejection_reason`); for append-only tables a separate append-only rejection record (e.g.
+  `gl_journal_rejection`). Never leave a rejected item looking pending, and never make a rework impossible
+  (merchant onboarding returns to the maker instead of terminating). Pair it with a direct `reject` endpoint under
+  the same four-eyes rule. CHANGES_REQUESTED maps to the same rework path (or a "request info" step).
+- Live resources whose status must not change while a change is pending (fraud/limit rules, scenario versions, FTP
+  curves, USSD menus): add `POST /{id}/submit` recording `submitted_by` / `submitted_at` (plus what is requested,
+  e.g. `submitted_mode`), keep the status, and let the existing activate/publish be the approval; an edit withdraws
+  the submission; `reject` clears it and records the rejection.
 - Where the request id has a home (`approval_request_id` column) store it and match decisions on it.
 - Multi-level approvals: one request per level (fingerprint = approvals received so far); open the next level
   outside the transaction that cancels the previous one.
@@ -198,8 +205,10 @@ per service (`Rows.today()` or the service's support class) wrapping the old clo
 `today(legalEntityId)` / `today(record)` overload where the record has a legal entity (loan-service, treasury-deal);
 SQL validity filters bind the date (`valid_from <= :today`) instead of using `current_date`. Tests that stub
 business-day-service clear the cache with `BusinessDates.invalidate()`; a test without a mocked `ServiceClient` sets
-`meridian.business-date.source=clock`. Adopted in payment, deposit, loan, wallet, billing, collections, treasury-deal,
-statement, fx, routing, rewards, insights and campaign services.
+`meridian.business-date.source=clock`. Calendar-period counters (daily/weekly/monthly limits) follow the business
+date; rolling windows stay on the clock. Adopted in payment, deposit, loan, wallet, billing, collections,
+treasury-deal, statement, fx, routing, rewards, insights, campaign, agent-network, commission, crm, disbursement,
+limits, sanctions and product-catalog services.
 
 ## Tests (required per service)
 

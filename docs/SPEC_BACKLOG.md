@@ -78,11 +78,21 @@ central-only platform flows (tenant modules, identity, config activation, docume
 exports).
 
 Spec gaps (flows still local or with no place to record a rejection):
-- Submit-for-approval actions missing: fraud rules, limit rules, TM scenario versions, FTP curve publish, onboarding
-  journey publish, USSD menu publish, card fee waiver (needs a waiver request), program/agent/merchant reactivation.
-- Rejected states missing: SAR (MLRO return-to-draft), gl_journal (REJECTED or rejection record), biller/merchant
-  settlements, alm assumptions, liquidity LCR/NSFR, report definition versions, KPIs.
-- Decide: merchant onboarding rejection currently terminates (irreversible); alternative is leaving it ONBOARDING.
+- Done (2026-10-07): submit + reject actions for fraud rules (`submitted_mode`), limit rules, TM scenario versions
+  (`/scenario-versions/{id}/submit|reject`), FTP curves (payload checksum over the points) and USSD menus (checksum
+  over menu + nodes); decisions match on `approval_request_id` where the table has one. The rule keeps its status
+  while submitted; an edit withdraws the submission; direct activate/publish still works (local mode unchanged).
+- Done (2026-10-07): rejected / return states: SAR `return-to-draft` (MLRO; inbox rejection returns to DRAFT),
+  `gl_journal_rejection` (append-only; a rejected journal never posts and no longer blocks the period close),
+  biller/merchant settlements REJECTED (biller releases its payments; the merchant period can be settled again),
+  ALM assumption rejection (PATCH rework clears it and resubmits), LCR/NSFR REJECTED (recalculation resubmits),
+  report definition versions REJECTED (final; maker adds a version), KPI `reject-certification` (definition change
+  clears it and resubmits).
+- Done (2026-10-07): merchant onboarding rejection no longer terminates: the merchant stays ONBOARDING with the
+  reason in `status_reason` (`onboarding_rejected_by`), activation is refused until a PATCH reworks it, which
+  resubmits (row_version fingerprint). Direct `POST /merchants/{id}/reject-onboarding`.
+- Still open: onboarding journey publish (onboarding-service, other worker), card fee waiver (needs a waiver
+  request), program/agent/merchant reactivation submit actions.
 - Library follow-ups: decision comment in `ApprovalDecision`; `diff` on `ApprovalSpec`; `Approvals.get(id)`;
   re-open a request after an approved decision fails a business check (e.g. insufficient funding).
 - Known limitation: a late redelivered tenant-module enable after a later disable re-enables the module.
@@ -119,15 +129,21 @@ batch payloads, typed quote/balance responses, a gateway health endpoint.
   entity type CUSTOMER_CONTACT); starter pack `for_each` repetition and placeholder object keys, fx-service routing per
   `fx_currencies` in GENERIC and KE; tenant-wide ledger EOD (`POST /v1/ledgers/end-of-day`).
 - Done: tenant starter packs (tenant-service; generic + KE); service-on-behalf principal is the human (four-eyes safe in JWT mode).
+- Done (2026-10-07): BusinessDates in agent-network (KYB expiry, contract end), commission (clawback due date, plan
+  retirement), crm ({{today}}, knowledge review due), disbursement (program period, batch reference), limits
+  (calendar counter windows follow the business date; rolling windows stay on the clock), sanctions (delisting date,
+  active-entry filters), product-catalog (default as-of dates, past/future checks); customer contact-search backfill
+  (`POST /v1/customers/contact-search-backfill`, batched and resumable, `rehash_all` after a lookup key rotation).
 - Next: run e2e setup S live with the starter pack (untested live); starter pack gaps (retire removed items, stale RUNNING
-  runs, approver roles); search gaps (source backfill action incl. re-publishing contacts verified before lookup_hash
-  existed, dead-letter store, journal erasure, spec says OpenSearch but service uses PostgreSQL FTS); BusinessDates in the
-  remaining services (agent-network, commission, crm, customer, disbursement, limits, sanctions, product-catalog, ...).
+  runs, approver roles); search gaps (generic source backfill action, dead-letter store, journal erasure, spec says
+  OpenSearch but service uses PostgreSQL FTS); BusinessDates in the remaining services (customer-service validity
+  filters still use `current_date`: addresses, relationships, groups, segments, identifiers; then check the rest).
 - Generator defect found: two actions on one resource with the same last path segment (`POST /{id}/eod` and
   `POST /eod`) generate the same `<Resource><Action>Request` schema and the second silently overwrites the first; the
   generator should reject it (worked around by naming the tenant-wide action `/end-of-day`).
-- Contact lookup key rotation (`MERIDIAN_CONTACT_LOOKUP_KEY`, shared by customer-service and search-service) needs a
-  re-publish of verified contacts; national-format phone queries (0712...) do not match E.164 contacts.
+- Contact lookup key rotation (`MERIDIAN_CONTACT_LOOKUP_KEY`, shared by customer-service and search-service): rotate
+  both, then run `POST /v1/customers/contact-search-backfill {"rehash_all":true}` per tenant until `done`;
+  national-format phone queries (0712...) do not match E.164 contacts.
 - E2E: `python tools/e2e/journeys.py` (all 8 journeys passed on a fresh tenant with the full stack up).
 
 ## Connection budget
