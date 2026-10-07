@@ -10,11 +10,13 @@ import io.meridian.customer.api.generated.model.CustomerRelationshipPage;
 import io.meridian.customer.api.generated.model.CustomerUpdate;
 import io.meridian.customer.api.generated.model.CustomersChangeTierRequest;
 import io.meridian.customer.api.generated.model.CustomersCloseRequest;
+import io.meridian.customer.api.generated.model.CustomersContactSearchBackfillRequest;
 import io.meridian.customer.api.generated.model.CustomersDuplicatesCheckRequest;
 import io.meridian.customer.api.generated.model.CustomersMarkDeceasedRequest;
 import io.meridian.customer.api.generated.model.CustomersMergeRequest;
 import io.meridian.customer.api.generated.model.CustomersReactivateRequest;
 import io.meridian.customer.api.generated.model.CustomersSuspendRequest;
+import io.meridian.customer.application.ContactService;
 import io.meridian.customer.application.CustomerQueryService;
 import io.meridian.customer.application.CustomerService;
 import java.time.LocalDate;
@@ -34,11 +36,13 @@ import tools.jackson.databind.node.ObjectNode;
 public class CustomersController implements CustomersApi {
     private final CustomerService customers;
     private final CustomerQueryService queries;
+    private final ContactService contacts;
     private final Http http;
 
-    public CustomersController(CustomerService customers, CustomerQueryService queries, Http http) {
+    public CustomersController(CustomerService customers, CustomerQueryService queries, ContactService contacts, Http http) {
         this.customers = customers;
         this.queries = queries;
+        this.contacts = contacts;
         this.http = http;
     }
 
@@ -127,6 +131,17 @@ public class CustomersController implements CustomersApi {
         TenantContext.require();
         JsonNode req = http.tree(body);
         return ResponseEntity.ok(http.map(queries.duplicates(req, null)));
+    }
+
+    /** Operator batch: fills contact search fields and republishes verified contacts (idempotent, resumable). */
+    @Override
+    public ResponseEntity<Map<String, Object>> customersContactSearchBackfill(String idempotencyKey,
+                                                                              CustomersContactSearchBackfillRequest body) {
+        TenantContext.require();
+        JsonNode req = http.tree(body);
+        Integer size = req.hasNonNull("batch_size") ? req.get("batch_size").asInt() : null;
+        UUID after = req.hasNonNull("after_id") ? UUID.fromString(req.get("after_id").asString()) : null;
+        return ResponseEntity.ok(contacts.backfillSearch(size, after, req.path("rehash_all").asBoolean(false)));
     }
 
     @Override

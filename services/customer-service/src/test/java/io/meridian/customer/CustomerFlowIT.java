@@ -662,6 +662,59 @@ class CustomerFlowIT {
                 {"customer_id":"%s","contact_type":"EMAIL","email":"late@example.com"}""".formatted(alice), 409))).isEqualTo("customer_closed");
     }
 
+    @Test
+    @Order(10)
+    void contactSearchBackfillRepublishesLegacyVerifiedContacts() throws Exception {
+        String carol = post("/v1/customers", individual("CUS-BF01", "Carol", "Backfill", "1985-02-03"), 201).get("id").asString();
+        String phone = post("/v1/customers/" + carol + "/contacts", """
+                {"customer_id":"%s","contact_type":"MOBILE","phone":"+254712000111"}""".formatted(carol), 201).get("id").asString();
+        String mail = post("/v1/customers/" + carol + "/contacts", """
+                {"customer_id":"%s","contact_type":"EMAIL","email":"carol@example.com"}""".formatted(carol), 201).get("id").asString();
+        String unverified = post("/v1/customers/" + carol + "/contacts", """
+                {"customer_id":"%s","contact_type":"EMAIL","email":"carol.other@example.com"}""".formatted(carol), 201)
+                .get("id").asString();
+        // as verified before the hashed contact search existed: no masked value, no lookup hash
+        int legacy = io.meridian.common.tenancy.TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "update customer_contact set is_verified = true, masked_value = null, lookup_hash = null where id in (?::uuid, ?::uuid)")
+                .params(phone, mail).update()
+                + jdbc.sql("update customer_contact set masked_value = null, lookup_hash = null where id = ?::uuid")
+                .param(unverified).update());
+        assertThat(legacy).isEqualTo(3);
+
+        assertThat(code(post("/v1/customers/contact-search-backfill", "{\"batch_size\":0}", 422))).isEqualTo("invalid_batch_size");
+        JsonNode first = post("/v1/customers/contact-search-backfill", "{\"batch_size\":1}", 200);
+        assertThat(first.get("processed").asInt()).isEqualTo(1);
+        assertThat(first.get("done").asBoolean()).isFalse();
+        JsonNode rest = post("/v1/customers/contact-search-backfill",
+                "{\"batch_size\":100,\"after_id\":\"" + first.get("next_after_id").asString() + "\"}", 200);
+        assertThat(rest.get("done").asBoolean()).isTrue();
+        assertThat(first.get("updated").asInt() + rest.get("updated").asInt()).isEqualTo(2);
+
+        JsonNode p = get("/v1/customers/" + carol + "/contacts/" + phone, TENANT);
+        assertThat(p.get("masked_value").asString()).isEqualTo("+25*******111");
+        assertThat(p.get("lookup_hash").asString()).hasSize(64);
+        assertThat(get("/v1/customers/" + carol + "/contacts/" + mail, TENANT).get("lookup_hash").asString()).hasSize(64);
+        assertThat(get("/v1/customers/" + carol + "/contacts/" + unverified, TENANT).hasNonNull("lookup_hash")).isFalse();
+        assertThat(outbox("party.customer_contact.verified", phone)).isEqualTo(1);
+        assertThat(outbox("party.customer_contact.verified", mail)).isEqualTo(1);
+        assertThat(outbox("party.customer_contact.verified", unverified)).isZero();
+        JsonNode event = outboxPayload("party.customer_contact.verified", phone);
+        assertThat(event.has("phone")).isFalse();
+        assertThat(event.get("lookup_hash").asString()).isEqualTo(p.get("lookup_hash").asString());
+
+        // idempotent: nothing left to do
+        JsonNode again = post("/v1/customers/contact-search-backfill", "{}", 200);
+        assertThat(again.get("processed").asInt()).isZero();
+        assertThat(again.get("done").asBoolean()).isTrue();
+        assertThat(outbox("party.customer_contact.verified", phone)).isEqualTo(1);
+
+        // after a key rotation every verified contact is recomputed and announced again
+        JsonNode all = post("/v1/customers/contact-search-backfill", "{\"rehash_all\":true,\"batch_size\":5000}", 200);
+        assertThat(all.get("processed").asInt()).isGreaterThanOrEqualTo(2);
+        assertThat(all.get("updated").asInt()).isZero(); // same key: hashes unchanged
+        assertThat(outbox("party.customer_contact.verified", phone)).isEqualTo(2);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static boolean luhnValid(String digits) {
