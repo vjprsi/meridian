@@ -14,15 +14,20 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Block / allow / watch lists: values are stored hashed (SHA-256 of the normalised value) with a masked copy. */
+/**
+ * Block / allow / watch lists: values are stored as tenant-keyed pseudonyms ({@code h1:} HMAC of the normalised
+ * value's digest, see {@link Pseudonymizer}) with a masked copy for display.
+ */
 @Service
 public class FraudListService {
     private final Db db;
     private final OutboxWriter outbox;
     private final FraudConfigCache cache;
     private final JsonMapper json;
+    private final Pseudonymizer pseudonyms;
 
-    public FraudListService(Db db, OutboxWriter outbox, FraudConfigCache cache, JsonMapper json) {
+    public FraudListService(Db db, OutboxWriter outbox, FraudConfigCache cache, JsonMapper json, Pseudonymizer pseudonyms) {
+        this.pseudonyms = pseudonyms;
         this.db = db;
         this.outbox = outbox;
         this.cache = cache;
@@ -47,7 +52,7 @@ public class FraudListService {
                 on conflict (fraud_list_id, value_hash) do update set reason = excluded.reason, source = excluded.source,
                     expires_at = excluded.expires_at, updated_by = excluded.updated_by
                 returning row_to_json(e)::text""",
-                TenantContext.principal(), TenantContext.principal(), listId, ListValues.hash(type, value),
+                TenantContext.principal(), TenantContext.principal(), listId, hash(type, value),
                 ListValues.mask(type, value), reason, source, expiresAt)
                 .map(db::text).orElseThrow();
         JsonNode n = json.readTree(row);
@@ -61,7 +66,7 @@ public class FraudListService {
         var entry = db.one("""
                 select row_to_json(e)::text from fraud_list_entry e
                 where fraud_list_id = ? and value_hash = ? and (expires_at is null or expires_at > now())""",
-                listId, ListValues.hash(type, value));
+                listId, hash(type, value));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("list_id", listId.toString());
         out.put("list_code", list.get("code").asString());
@@ -87,6 +92,11 @@ public class FraudListService {
         db.update("delete from fraud_list_entry where fraud_list_id = ?", listId);
         db.update("delete from fraud_list where id = ?", listId);
         cache.invalidate();
+    }
+
+    /** Keyed hash a list stores for a value. */
+    String hash(String type, String value) {
+        return pseudonyms.current().listHash(ListValues.hash(type, value));
     }
 
     public void changed() {

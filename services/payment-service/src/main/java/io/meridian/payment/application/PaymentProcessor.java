@@ -198,9 +198,16 @@ public class PaymentProcessor {
                 "transaction_id", "clearing_system_ref", "settlement_amount", "settlement_currency", "fx_rate",
                 "fee_amount", "fee_currency", "value_date", "rail_id", "rail_code", "hold_id", "journal_entry_id",
                 "screening_result_id", "limit_check_id", "fraud_score", "fraud_score_id", "fraud_decision",
-                "fraud_alert_id", "fraud_degraded", "hold_reason", "rejection_code", "rejection_reason",
+                "fraud_alert_id", "fraud_degraded", "fraud_rescore_attempts", "fraud_next_rescore_at",
+                "upstream_fraud_score_id", "hold_reason", "rejection_code", "rejection_reason",
                 "initiated_by", "submitted_at", "accepted_at", "settled_at", "idempotency_key")) {
             v.remove(ro);
+        }
+        // Server-to-server only: the originating service's own evaluation (wallet payouts), honoured from an
+        // allow-listed calling service over an internal token, never from a channel, user or customer token.
+        UUID upstreamScore = uuid(request, "upstream_fraud_score_id");
+        if (upstreamScore != null && trustedCaller(props.fraud().upstream().services())) {
+            v.put("upstream_fraud_score_id", upstreamScore.toString());
         }
         String type = required(v, "payment_type");
         String direction = required(v, "direction");
@@ -227,8 +234,11 @@ public class PaymentProcessor {
                     "Inbound payments are booked by the rail through POST /v1/payments/inbound");
         }
         if (v.hasNonNull("debtor_wallet_id") && !v.hasNonNull("debtor_account_id")) {
-            throw ApiException.unprocessable("wallet_not_supported",
-                    "Wallet-funded payments are initiated through wallet-service");
+            if (!trustedCaller(props.walletFundingServices())) {
+                throw ApiException.unprocessable("wallet_not_supported",
+                        "Wallet-funded payments are initiated through wallet-service");
+            }
+            return walletPayout(request, v, direction, options);
         }
         UUID debtorAccountId = uuid(v, "debtor_account_id");
         if (debtorAccountId == null) {
@@ -299,25 +309,67 @@ public class PaymentProcessor {
                         .orElse("Account holder"));
             }
         } else {
-            if (!v.hasNonNull("creditor_name") || !v.hasNonNull("creditor_account_id_type")
-                    || !v.hasNonNull("creditor_account_number")) {
-                throw ApiException.unprocessable("missing_creditor_details",
-                        "Outbound payments need creditor_name, creditor_account_id_type and creditor_account_number (or payee_id)");
-            }
-            if ("IBAN".equals(str(v, "creditor_account_id_type"))) {
-                String iban = Iban.normalise(str(v, "creditor_account_number"));
-                Iban.validate(iban).ifPresent(code -> {
-                    throw ApiException.unprocessable(code, "creditor_account_number is not a valid IBAN");
-                });
-                v.put("creditor_account_number", iban);
-                if (!v.hasNonNull("creditor_country")) {
-                    v.put("creditor_country", Iban.country(iban));
-                }
-            }
-            if (v.hasNonNull("creditor_agent_bic")) {
-                v.put("creditor_agent_bic", Bic.normalise(str(v, "creditor_agent_bic")));
+            validateOutboundCreditor(v);
+        }
+        return finish(v, type, currency, options);
+    }
+
+    /**
+     * A wallet-funded payout (wallet-to-bank transfer to another bank) initiated by wallet-service: the wallet
+     * transaction already moved the money to {@code debtor_clearing_ledger_account_id}, which the payment debits instead
+     * of a deposit account. Outbound only; no payee book, FX quote or deposit account.
+     */
+    private ObjectNode walletPayout(ObjectNode request, ObjectNode v, String direction, Options options) {
+        if (!"OUTBOUND".equals(direction)) {
+            throw ApiException.unprocessable("wallet_payout_outbound_only", "Wallet-funded payments are outbound transfers");
+        }
+        UUID clearing = uuid(request, "debtor_clearing_ledger_account_id");
+        if (clearing == null) {
+            throw ApiException.unprocessable("debtor_clearing_account_required",
+                    "A wallet-funded payout needs debtor_clearing_ledger_account_id");
+        }
+        if (v.hasNonNull("payee_id") || v.hasNonNull("fx_quote_id")) {
+            throw ApiException.unprocessable("wallet_payout_unsupported",
+                    "Wallet-funded payouts take creditor details directly (no payee_id or fx_quote_id)");
+        }
+        v.put("debtor_ledger_account_id", clearing.toString());
+        v.put("debtor_agent_bic", props.bankBic());
+        if (!v.hasNonNull("debtor_name")) {
+            v.put("debtor_name", truncate(props.bankName(), 140));
+        }
+        validateOutboundCreditor(v);
+        return finish(v, str(v, "payment_type"), str(v, "currency"), options);
+    }
+
+    /** True when the call comes from one of these Meridian services over an internal token (never a channel token). */
+    private static boolean trustedCaller(List<String> services) {
+        return TenantContext.callingService().filter(services::contains).isPresent()
+                && io.meridian.web.security.CustomerContext.current().isEmpty();
+    }
+
+    private void validateOutboundCreditor(ObjectNode v) {
+        if (!v.hasNonNull("creditor_name") || !v.hasNonNull("creditor_account_id_type")
+                || !v.hasNonNull("creditor_account_number")) {
+            throw ApiException.unprocessable("missing_creditor_details",
+                    "Outbound payments need creditor_name, creditor_account_id_type and creditor_account_number (or payee_id)");
+        }
+        if ("IBAN".equals(str(v, "creditor_account_id_type"))) {
+            String iban = Iban.normalise(str(v, "creditor_account_number"));
+            Iban.validate(iban).ifPresent(code -> {
+                throw ApiException.unprocessable(code, "creditor_account_number is not a valid IBAN");
+            });
+            v.put("creditor_account_number", iban);
+            if (!v.hasNonNull("creditor_country")) {
+                v.put("creditor_country", Iban.country(iban));
             }
         }
+        if (v.hasNonNull("creditor_agent_bic")) {
+            v.put("creditor_agent_bic", Bic.normalise(str(v, "creditor_agent_bic")));
+        }
+    }
+
+    /** Charges, fees and server-generated references of a new payment. */
+    private ObjectNode finish(ObjectNode v, String type, String currency, Options options) {
         if (!v.hasNonNull("charge_bearer")) {
             v.put("charge_bearer", "SHAR");
         }
@@ -633,8 +685,81 @@ public class PaymentProcessor {
      */
     private ObjectNode fraudCheck(UUID id) {
         ObjectNode p = records.get(id);
+        UUID upstream = uuid(p, "upstream_fraud_score_id");
+        if (upstream != null) {
+            Optional<JsonNode> score = fraud.score(upstream);
+            String refused = score.isEmpty() ? "not found" : upstreamRefusal(p, score.get());
+            if (refused == null) {
+                JsonNode s = score.get();
+                ObjectNode reused = inTx(() -> applyUpstream(records.lock(id), s));
+                if (reused != null) {
+                    return reused;
+                }
+                refused = "already used by another payment";
+            }
+            String why = refused;
+            inTx(() -> {
+                records.history(id, str(p, "status"), str(p, "status"), null, truncate("Upstream fraud evaluation "
+                        + upstream + " not reused (" + why + "); scoring the payment", 255), null);
+                return null;
+            });
+        }
         FraudClient.Result r = fraud.evaluate(fraudRequest(p), fraudKey(id), props.fraud().timeoutMs());
         return inTx(() -> applyFraud(records.lock(id), r));
+    }
+
+    /**
+     * Why an evaluation of the originating service cannot stand in for scoring this payment (null = it can): it must be
+     * an ALLOW of a WALLET_TRANSACTION for the same amount and currency (and customer, when both name one), at most
+     * {@code upstream.max-age-seconds} old.
+     */
+    String upstreamRefusal(ObjectNode p, JsonNode s) {
+        if (!"ALLOW".equals(s.path("decision").asString(null))) {
+            return "decision " + s.path("decision").asString("?");
+        }
+        if (!"WALLET_TRANSACTION".equals(s.path("subject_type").asString(null))) {
+            return "subject " + s.path("subject_type").asString("?");
+        }
+        BigDecimal amount = s.hasNonNull("amount") ? new BigDecimal(s.get("amount").asString()) : null;
+        if (amount == null || amount.compareTo(dec(p, "amount")) != 0
+                || !str(p, "currency").equals(s.path("currency").asString(null))) {
+            return "amount or currency differs";
+        }
+        String customer = s.path("customer_id").asString(null);
+        if (customer != null && p.hasNonNull("customer_id") && !customer.equals(str(p, "customer_id"))) {
+            return "customer differs";
+        }
+        String created = s.path("created_at").asString(null);
+        if (created == null || java.time.OffsetDateTime.parse(created)
+                .plusSeconds(props.fraud().upstream().maxAgeSeconds()).isBefore(rows.now())) {
+            return "older than " + props.fraud().upstream().maxAgeSeconds() + " s";
+        }
+        return null;
+    }
+
+    /** Records the reused ALLOW (one payment per evaluation); null when another payment already used it. */
+    private ObjectNode applyUpstream(ObjectNode locked, JsonNode s) {
+        UUID id = UUID.fromString(str(locked, "id"));
+        if (!Set.of("INITIATED", "SCREENING").contains(str(locked, "status"))) {
+            return locked.put("_fraud", "STOP");
+        }
+        String scoreId = s.get("id").asString();
+        if (rows.scalar("select count(*) from payment where fraud_score_id = ?::uuid and id <> ?", Long.class, scoreId, id)
+                .orElse(0L) > 0) {
+            return null;
+        }
+        ObjectNode changes = rows.object()
+                .put("fraud_score_id", scoreId)
+                .put("fraud_decision", "ALLOW")
+                .put("fraud_degraded", false);
+        if (s.hasNonNull("score")) {
+            changes.put("fraud_score", BigDecimal.valueOf(s.get("score").asInt()).movePointLeft(3).toPlainString());
+        }
+        ObjectNode out = records.update(id, changes);
+        records.history(id, str(locked, "status"), str(locked, "status"), null, truncate("Fraud evaluation " + scoreId
+                + " of the originating service reused (ALLOW, score " + s.path("score").asString("?")
+                + "); not scored again", 255), null);
+        return out.put("_fraud", "CONTINUE");
     }
 
     static String fraudKey(UUID id) {
@@ -672,7 +797,9 @@ public class PaymentProcessor {
         c.put("payment_channel", str(p, "channel"));
         putIf(c, "debtor_account_id", str(p, "debtor_account_id"));
         putIf(c, "payee_id", str(p, "payee_id"));
-        putIf(c, "beneficiary_account", str(p, "creditor_account_number"));
+        // minimised: the account number only as its canonical digest (fraud-service pseudonymises it with the
+        // tenant's key for its beneficiary key and BENEFICIARY_ACCOUNT lists; never the number in clear)
+        putIf(c, "beneficiary_account_digest", accountDigest(str(p, "creditor_account_number")));
         putIf(c, "beneficiary_bic", str(p, "creditor_agent_bic"));
         putIf(c, "creditor_account_id", str(p, "creditor_account_id"));
         putIf(c, "merchant_id", str(p, "creditor_merchant_id"));
@@ -683,6 +810,23 @@ public class PaymentProcessor {
         putIf(c, "requested_execution_date", str(p, "requested_execution_date"));
         putIf(c, "user_agent", truncate(session.path("user_agent").asString(null), 255));
         return b;
+    }
+
+    /**
+     * fraud-service's canonical digest of a beneficiary account number: {@code sha256("BENEFICIARY_ACCOUNT:" + number
+     * without spaces and dashes, upper case)} as lowercase hex (see fraud-service ListValues / docs/ML_FRAUD_TRAINING.md).
+     */
+    public static String accountDigest(String account) {
+        if (account == null || account.isBlank()) {
+            return null;
+        }
+        String norm = account.trim().replaceAll("[\\s-]", "").toUpperCase(java.util.Locale.ROOT);
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(("BENEFICIARY_ACCOUNT:" + norm).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static void putIf(ObjectNode n, String f, String v) {
@@ -712,6 +856,11 @@ public class PaymentProcessor {
             boolean closed = cfg.failClosed(str(locked, "channel"), dec(locked, "amount"));
             decision = closed ? "REVIEW" : "ALLOW";
             changes.put("fraud_degraded", true);
+            if (closed) {
+                // held because scoring was unavailable: re-scored automatically with backoff (FraudRescoreJob)
+                changes.put("fraud_rescore_attempts", 0);
+                changes.put("fraud_next_rescore_at", rows.now().plus(cfg.autoRescore().backoff(0)).toString());
+            }
             detail = "Fraud scoring unavailable (" + r.degradedReason() + "); " + (closed
                     ? "failed closed, held for review (amount at or above " + threshold(cfg, locked) + ")"
                     : "failed open (amount below " + threshold(cfg, locked) + ")");
@@ -722,6 +871,7 @@ public class PaymentProcessor {
                 default -> "REVIEW";
             };
             changes.put("fraud_degraded", false);
+            changes.putNull("fraud_next_rescore_at");
             detail = "Fraud score " + (r.score() == null ? "?" : r.score()) + " " + r.decision()
                     + (r.reasonCodes() == null || r.reasonCodes().isEmpty() ? "" : " (" + r.reasonCodes() + ")");
             if (r.score() != null) {
@@ -831,11 +981,22 @@ public class PaymentProcessor {
             ObjectNode locked = records.lock(id);
             requireFraudHold(locked);
             if (!r.available()) {
-                // still unavailable: keep the hold whatever the amount (it was held fail-closed)
+                // still unavailable: keep the hold whatever the amount (it was held fail-closed); the next automatic
+                // attempt backs off exponentially, none after max-attempts (an analyst decides)
+                PaymentProperties.Fraud.AutoRescore auto = props.fraud().autoRescore();
+                int attempts = io.meridian.payment.infrastructure.Rows.integer(locked, "fraud_rescore_attempts") + 1;
+                ObjectNode backoff = rows.object().put("fraud_rescore_attempts", attempts);
+                if (attempts >= auto.maxAttempts()) {
+                    backoff.putNull("fraud_next_rescore_at");
+                } else {
+                    backoff.put("fraud_next_rescore_at", rows.now().plus(auto.backoff(attempts)).toString());
+                }
+                ObjectNode kept = records.update(id, backoff);
                 records.history(id, "ON_HOLD", "ON_HOLD", Reason.FRAUD, truncate("Fraud re-scoring unavailable ("
-                        + r.degradedReason() + "); payment stays on hold", 255), null);
-                events.publish("payments.payment.fraud_degraded", PaymentRecords.TABLE, locked);
-                return locked.put("_fraud", "HOLD");
+                        + r.degradedReason() + "); payment stays on hold" + (attempts >= auto.maxAttempts()
+                        ? "; automatic re-scoring stopped after " + attempts + " attempts" : ""), 255), null);
+                events.publish("payments.payment.fraud_degraded", PaymentRecords.TABLE, kept);
+                return kept.put("_fraud", "HOLD");
             }
             return applyFraud(locked, r);
         });

@@ -389,9 +389,11 @@ public class TransactionEngine {
             try {
                 ObjectNode link = rows.get("wallet_bank_link", Rows.uuid(row, "wallet_bank_link_id"));
                 ObjectNode payer = rows.get("wallet", Rows.uuid(row, "payer_wallet_id"));
+                // the wallet's ALLOW evaluation travels with the payout so payment-service does not score it again
+                UUID allowScore = "ALLOW".equals(Rows.str(row, "fraud_decision")) ? Rows.uuid(row, "fraud_score_id") : null;
                 paymentId = downstream.outboundPayment("wtx-" + id + "-payment", link, dec(row, "amount"),
                         Rows.str(row, "currency"), Rows.str(row, "reference"), Rows.uuid(payer, "id"),
-                        Rows.str(payer, "display_name"));
+                        Rows.str(payer, "display_name"), allowScore);
             } catch (ApiException e) {
                 // the bank transfer was refused: compensate the posting and fail the transaction
                 ledger.post("wtx-" + id + "-compensate", "REVERSAL", "Bank transfer refused: " + e.getMessage(),

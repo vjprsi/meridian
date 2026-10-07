@@ -87,6 +87,8 @@ class WalletFlowIT {
     FakeLedger ledger;
     final List<JsonNode> sms = Collections.synchronizedList(new ArrayList<>());
     final List<JsonNode> payments = Collections.synchronizedList(new ArrayList<>());
+    /** Whether each payment-service call was made with wallet-service's own identity (ServiceClient.asService). */
+    final List<Boolean> paymentsAsService = Collections.synchronizedList(new ArrayList<>());
     final List<String> limitCalls = Collections.synchronizedList(new ArrayList<>());
 
     String alice;
@@ -120,7 +122,7 @@ class WalletFlowIT {
                 }
                 case "fraud-service" -> {
                     boolean block = new BigDecimal(body.get("amount").asString()).compareTo(new BigDecimal("666")) == 0;
-                    yield json.createObjectNode().put("id", UUID.randomUUID().toString())
+                    yield json.createObjectNode().put("fraud_score_id", UUID.randomUUID().toString())  // fraud-service's shape
                             .put("decision", block ? "BLOCK" : "ALLOW").put("score", block ? 950 : 120);
                 }
                 case "notification-service" -> {
@@ -129,6 +131,7 @@ class WalletFlowIT {
                 }
                 case "payment-service" -> {
                     payments.add(body);
+                    paymentsAsService.add(io.meridian.web.client.ServiceClient.asServiceActive());
                     yield json.createObjectNode().put("id", UUID.randomUUID().toString()).put("status", "PENDING");
                 }
                 default -> throw new IllegalArgumentException("unexpected POST " + service + path);
@@ -503,6 +506,13 @@ class WalletFlowIT {
         assertThat(ledger.glNet(CLEARING_GL)).isEqualByComparingTo("250");
         assertThat(payments).hasSize(1);
         assertThat(payments.getFirst().get("creditor_account_number").asString()).isEqualTo("1100223344");
+        // the wallet's ALLOW travels with the payout (server-to-server) so payment-service does not score it twice
+        assertThat(ext2.get("fraud_decision").asString()).isEqualTo("ALLOW");
+        assertThat(payments.getFirst().get("upstream_fraud_score_id").asString())
+                .isEqualTo(ext2.get("fraud_score_id").asString());
+        assertThat(payments.getFirst().get("debtor_clearing_ledger_account_id").asString()).isEqualTo(CLEARING_GL.toString());
+        assertThat(payments.getFirst().has("debtor_ledger_account_id")).isFalse();
+        assertThat(paymentsAsService.getFirst()).isTrue();
         post("/v1/wallet-transactions/bank-to-wallet", """
                 {"payee_wallet_id":"%s","wallet_bank_link_id":"%s","amount":"20","currency":"KES"}""".formatted(alice, ext.get("id").asString()),
                 "alice", 422, "mandate_required");

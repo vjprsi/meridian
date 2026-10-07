@@ -39,6 +39,7 @@ SERVICE_SECRETS = {
                          "MERIDIAN_DOCUMENTS_S3_ACCESS_KEY": "s3-access-key",
                          "MERIDIAN_DOCUMENTS_S3_SECRET_KEY": "s3-secret-key"},
     "file-gateway-service": {"MERIDIAN_FILES_SIGNING_KEY": "signing-key"},
+    "fraud-service": {"MERIDIAN_FRAUD_PSEUDONYM_KEY": "pseudonym-key"},
     "identity-service": {"MERIDIAN_IDENTITY_MFA_SEED_KEY": "mfa-seed-key"},
     "loan-origination-service": {"MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET": "callback-secret"},
     "onboarding-service": {"MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET": "otp-secret",

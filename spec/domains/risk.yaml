@@ -89,7 +89,7 @@ services:
           - "model_version string(32) | Model version used"
           - "decision enum:FraudDecision nn | Decision returned to the caller"
           - "reason_codes json[] nn | Ordered reason codes explaining the decision"
-          - "features json | Feature values used (for audit, explainability and rule backtesting)"
+          - "features json | Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers, IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw"
           - "shadow_decision enum:FraudDecision | Decision of the shadow / challenger model"
           - "latency_ms int nn | Evaluation time in milliseconds"
           - "correlation_id string(128) idx | Trace / saga correlation id"
@@ -251,7 +251,7 @@ services:
         fr: [FRM-01]
         columns:
           - "fraud_list_id uuid nn fk=fraud_list idx | List"
-          - "value_hash string(128) nn | SHA-256 of the normalised value"
+          - "value_hash string(128) nn | Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant's pseudonymisation key)"
           - "value_masked string(64) | Masked value for display"
           - "reason string(255) | Why it was added"
           - "source string(40) | ANALYST, CONSORTIUM, CHARGEBACK, AUTOMATED"
@@ -315,7 +315,7 @@ services:
         fr: [FRM-01]
         columns:
           - "entity_type string(24) nn | CUSTOMER, CARD, ACCOUNT, DEVICE, MERCHANT, BENEFICIARY, CUSTOMER_LOGIN"
-          - "entity_key string(128) nn | Entity id or hash"
+          - "entity_key string(128) nn | Entity id or tenant-keyed pseudonym (acct:h1:..., msisdn:h1:...)"
           - "granularity string(4) nn | M5 or H1"
           - "bucket_start ts nn | Bucket start (UTC)"
           - "currency currency nn | Amount currency (XXX = no amount)"
@@ -330,7 +330,7 @@ services:
         fr: [FRM-01]
         columns:
           - "entity_type string(24) nn | CUSTOMER, CARD, ACCOUNT, MERCHANT, BENEFICIARY, DEVICE"
-          - "entity_key string(128) nn | Entity id or hash"
+          - "entity_key string(128) nn | Entity id or tenant-keyed pseudonym (acct:h1:..., msisdn:h1:...)"
           - "currency currency nn | Currency of the amount statistics (XXX = none)"
           - "first_seen_at ts nn | First event"
           - "last_seen_at ts nn | Last event"
@@ -369,6 +369,9 @@ services:
           - "GET /{id}/rule-hits | Rules that fired for this evaluation | | fraud_rule_hit[]"
           - "GET /{id}/explanation | Feature contributions and reason codes in plain language | | object"
           - "POST /{id}/feedback | Label the outcome for model training | label enum:FraudLabel nn, typology enum:FraudTypology, source string(32) nn, loss_amount amount, currency currency | fraud_feedback"
+          - "POST /pseudonymise-stored | One-off operator migration of the tenant: re-pseudonymise raw identifiers stored before keyed pseudonymisation (fraud_score.features context, list entries) and drop unkeyed feature-store keys; idempotent, resumable in batches | dry_run bool, batch_size int | object"
+        scopes:
+          "POST /pseudonymise-stored": ["risk:*"]   # operator-grade: the risk domain superuser or meridian:admin
 
       - resource: fraud-rules
         path: /v1/risk/fraud/rules

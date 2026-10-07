@@ -49,7 +49,8 @@ import tools.jackson.databind.json.JsonMapper;
         "meridian.payment.gl.fee-income=0199b000-0000-7000-8000-0000000000c2",
         "meridian.payment.gl.direct-debit-clearing=0199b000-0000-7000-8000-0000000000c3",
         "meridian.payment.fees.DOMESTIC=1.50", "meridian.payment.fraud.timeout-ms=1000",
-        "meridian.payment.fraud.channel-fail-closed-amount.MOBILE=0"})
+        "meridian.payment.fraud.channel-fail-closed-amount.MOBILE=0",
+        "meridian.payment.fraud.auto-rescore.enabled=false"})   // the re-scoring job is driven by the tests
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -75,6 +76,9 @@ class PaymentFlowIT {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    io.meridian.payment.application.FraudRescoreJob fraudRescoreJob;
 
     @MockitoBean
     ServiceClient serviceClient;
@@ -134,7 +138,11 @@ class PaymentFlowIT {
         assertThat(scored.body().get("channel").asString()).isEqualTo("WEB");
         assertThat(scored.body().get("customer_id").asString()).isEqualTo(ALICE.toString());
         assertThat(scored.body().get("account_id").asString()).isEqualTo(bank.ledgerAccount(a).toString());
-        assertThat(scored.body().get("context").get("beneficiary_account").asString()).isEqualTo(B_IBAN);
+        // minimised: the beneficiary account only as fraud-service's canonical digest, never in clear
+        assertThat(scored.body().get("context").get("beneficiary_account_digest").asString())
+                .isEqualTo(io.meridian.payment.application.PaymentProcessor.accountDigest(B_IBAN));
+        assertThat(scored.body().get("context").has("beneficiary_account")).isFalse();
+        assertThat(scored.body().toString()).doesNotContain(B_IBAN);
         assertThat(scored.body().get("context").get("debtor_account_id").asString()).isEqualTo(a.toString());
         assertThat(scored.body().toString()).doesNotContain("Bob Jones");
         assertThat(p.get("fraud_decision").asString()).isEqualTo("ALLOW");
@@ -1084,6 +1092,138 @@ class PaymentFlowIT {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    @Test
+    @Order(26)
+    void degradedFraudHoldsAreRescoredAutomaticallyWithBackoffAndTheSameKey() throws Exception {
+        bank.fraudDown = true;
+        String id;
+        try {
+            JsonNode held = post("/v1/payments", outbound("1800.00", "Zed Backoff", EXT_IBAN), "maker", 201);
+            id = held.get("id").asString();
+            assertThat(held.get("status").asString()).isEqualTo("ON_HOLD");
+            assertThat(held.get("fraud_degraded").asBoolean()).isTrue();
+            assertThat(held.get("fraud_rescore_attempts").asInt()).isZero();
+            OffsetDateTime first = OffsetDateTime.parse(held.get("fraud_next_rescore_at").asString());
+            assertThat(first).isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(30));   // initial backoff 1 min
+
+            // not due yet: execute-due leaves it alone
+            post("/v1/payments/execute-due", null, "eod", 200);
+            assertThat(fraudCalls(id)).hasSize(1);
+
+            // due while fraud-service is still down: one more attempt, then the next one backs off (2 min)
+            makeRescoreDue(id);
+            JsonNode run = post("/v1/payments/execute-due", null, "eod", 200).get("fraud_rescore");
+            assertThat(run.get("rescored").asInt()).isGreaterThanOrEqualTo(1);
+            JsonNode after = get("/v1/payments/" + id);
+            assertThat(after.get("status").asString()).isEqualTo("ON_HOLD");
+            assertThat(after.get("fraud_rescore_attempts").asInt()).isEqualTo(1);
+            assertThat(OffsetDateTime.parse(after.get("fraud_next_rescore_at").asString()))
+                    .isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(90));
+            assertThat(fraudCalls(id)).hasSize(2);
+            fraudRescoreJob.runAllTenants();                       // backing off: no call
+            assertThat(fraudCalls(id)).hasSize(2);
+        } finally {
+            bank.fraudDown = false;
+        }
+        // fraud-service is back: the internal scheduler's pass over every tenant releases the hold
+        makeRescoreDue(id);
+        fraudRescoreJob.runAllTenants();
+        JsonNode released = get("/v1/payments/" + id);
+        assertThat(released.get("status").asString()).isEqualTo("SUBMITTED");
+        assertThat(released.get("fraud_degraded").asBoolean()).isFalse();
+        assertThat(released.get("fraud_decision").asString()).isEqualTo("ALLOW");
+        assertThat(released.hasNonNull("fraud_next_rescore_at")).isFalse();
+        String key = "pay-fraud:" + id;
+        assertThat(fraudCalls(id)).hasSize(3).allMatch(cl -> cl.key().equals(key));
+        // idempotent: nothing left to re-score for it
+        fraudRescoreJob.runAllTenants();
+        post("/v1/payments/execute-due", null, "eod", 200);
+        assertThat(fraudCalls(id)).hasSize(3);
+        assertThat(get("/v1/payments/" + id + "/status-history").toString()).contains("Fraud re-scoring unavailable");
+    }
+
+    @Test
+    @Order(27)
+    void walletPayoutReusesTheWalletsRecentAllowAndIsNotScoredTwice() throws Exception {
+        UUID clearingDeposit = bank.openAccount(CAROL, "GBP", Iban.of("GB", "MERI00000100000099"), "10000.00");
+        String clearing = bank.ledgerAccount(clearingDeposit).toString();
+        String walletScore = upstreamScore("ALLOW", "75.00", OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1));
+
+        // wallet-service (internal token + X-Meridian-Service): the wallet's ALLOW stands, no second evaluation
+        HttpResponse<String> r = sendAs(walletPayout("75.00", walletScore, clearing), "wallet-service");
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(201);
+        JsonNode p = json.readTree(r.body());
+        String id = p.get("id").asString();
+        assertThat(p.get("status").asString()).isEqualTo("SUBMITTED");
+        assertThat(p.get("upstream_fraud_score_id").asString()).isEqualTo(walletScore);
+        assertThat(p.get("fraud_score_id").asString()).isEqualTo(walletScore);
+        assertThat(p.get("fraud_decision").asString()).isEqualTo("ALLOW");
+        assertThat(new BigDecimal(p.get("fraud_score").asString())).isEqualByComparingTo("0.08");
+        assertThat(fraudCalls(id)).isEmpty();
+        assertThat(get("/v1/payments/" + id + "/status-history").toString()).contains("not scored again");
+
+        // the same evaluation never covers a second payment
+        JsonNode second = json.readTree(sendAs(walletPayout("75.00", walletScore, clearing), "wallet-service").body());
+        assertThat(fraudCalls(second.get("id").asString())).hasSize(1);
+        assertThat(second.get("fraud_score_id").asString()).isNotEqualTo(walletScore);
+        // a REVIEW, another amount or a stale evaluation is not reused either
+        for (String other : List.of(upstreamScore("REVIEW", "75.00", OffsetDateTime.now(ZoneOffset.UTC)),
+                upstreamScore("ALLOW", "74.99", OffsetDateTime.now(ZoneOffset.UTC)),
+                upstreamScore("ALLOW", "75.00", OffsetDateTime.now(ZoneOffset.UTC).minusHours(2)))) {
+            JsonNode scored = json.readTree(sendAs(walletPayout("75.00", other, clearing), "wallet-service").body());
+            assertThat(fraudCalls(scored.get("id").asString())).as(other).hasSize(1);
+        }
+
+        // never from a channel or user token: no wallet funding, and the upstream id is ignored on a normal payment
+        HttpResponse<String> channel = sendAs(walletPayout("75.00", walletScore, clearing), null);
+        assertThat(channel.statusCode()).isEqualTo(422);
+        assertThat(json.readTree(channel.body()).get("code").asString()).isEqualTo("wallet_not_supported");
+        String fresh = upstreamScore("ALLOW", "60.00", OffsetDateTime.now(ZoneOffset.UTC));
+        String userBody = outbound("60.00", "Una User", EXT_IBAN).replace("\"remittance_unstructured\"",
+                "\"upstream_fraud_score_id\":\"" + fresh + "\",\"remittance_unstructured\"");
+        JsonNode user = post("/v1/payments", userBody, "maker", 201);
+        assertThat(user.hasNonNull("upstream_fraud_score_id")).isFalse();
+        assertThat(fraudCalls(user.get("id").asString())).hasSize(1);
+    }
+
+    private List<FakeBank.Call> fraudCalls(String paymentId) {
+        return bank.calls("fraud-service", "/v1/risk/fraud/scores/evaluate").stream()
+                .filter(cl -> cl.body() != null && cl.body().path("subject_id").asString("").equals(paymentId)).toList();
+    }
+
+    private void makeRescoreDue(String paymentId) throws Exception {
+        TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "update payment set fraud_next_rescore_at = now() - interval '1 second' where id = ?")
+                .param(UUID.fromString(paymentId)).update());
+    }
+
+    private String upstreamScore(String decision, String amount, OffsetDateTime at) {
+        String id = UUID.randomUUID().toString();
+        bank.fraudScores.put(id, json.createObjectNode().put("id", id).put("subject_type", "WALLET_TRANSACTION")
+                .put("subject_id", UUID.randomUUID().toString()).put("decision", decision).put("score", 80)
+                .put("amount", amount).put("currency", "GBP").put("created_at", at.toString()));
+        return id;
+    }
+
+    private String walletPayout(String amount, String upstreamScore, String clearing) {
+        return """
+                {"payment_type":"DOMESTIC","direction":"OUTBOUND","channel":"API","debtor_wallet_id":"%s",
+                 "creditor_name":"Wanda Wallet","creditor_account_id_type":"IBAN","creditor_account_number":"%s",
+                 "amount":"%s","currency":"GBP","debtor_clearing_ledger_account_id":"%s",
+                 "upstream_fraud_score_id":"%s"}""".formatted(UUID.randomUUID(), EXT_IBAN, amount, clearing, upstreamScore);
+    }
+
+    private HttpResponse<String> sendAs(String body, String service) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url("/v1/payments")))
+                .header("X-Tenant-Id", TENANT).header("X-User", "svc-wallet").header("Content-Type", "application/json")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (service != null) {
+            b.header("X-Meridian-Service", service);
+        }
+        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    }
 
     private String outbound(String amount, String name, String iban) {
         return """

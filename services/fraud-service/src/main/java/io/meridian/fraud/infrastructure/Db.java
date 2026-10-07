@@ -74,12 +74,12 @@ public class Db {
         return n != null && n.hasNonNull(f) && n.get(f).asBoolean();
     }
 
-    /** PostgreSQL array literal for safe tokens (uuids, hex hashes). */
+    /** PostgreSQL array literal for safe tokens (uuids, hex hashes, h1:-prefixed keyed hashes). */
     public static String array(java.util.Collection<?> values) {
         StringBuilder sb = new StringBuilder("{");
         for (Object v : values) {
             String s = v.toString();
-            if (!s.matches("[0-9A-Za-z_-]+")) {
+            if (!s.matches("[0-9A-Za-z_:-]+")) {
                 throw new IllegalArgumentException("unsafe array token");
             }
             if (sb.length() > 1) {

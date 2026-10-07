@@ -50,9 +50,10 @@ public final class FeatureCatalog {
                 "ACCOUNT", "context.wallet_id, else context.debtor_account_id, else account_id (request) = debtor_account_id / debtor_wallet_id (payment), payer_wallet_id (wallet)",
                 "DEVICE", "device_fingerprint (request) -> device_fingerprint.id = device_fingerprint_id (risk.fraud_score.evaluated)",
                 "MERCHANT", "context.merchant_id (request) = merchant_id (card, wallet) / creditor_merchant_id (payment)",
-                "BENEFICIARY", "payee:<payee_id>, else acct:<sha256(account without spaces/dashes, upper | BIC)[0..40]>, else "
-                        + "wallet:<wallet id>, else msisdn:<sha256(digits)[0..40]>; request: context.payee_id, "
-                        + "beneficiary_account + beneficiary_bic, payee_wallet_id, payee_msisdn",
+                "BENEFICIARY", "payee:<payee_id>, else acct:h1:<HMAC-SHA256(tenant key, 'acct|' + sha256('BENEFICIARY_ACCOUNT:' + "
+                        + "account without spaces/dashes, upper) + '|' + BIC)[0..40]>, else wallet:<wallet id>, else "
+                        + "msisdn:h1:<HMAC-SHA256(tenant key, 'msisdn|' + digits)[0..40]>; request: context.payee_id, "
+                        + "beneficiary_account (or beneficiary_account_digest) + beneficiary_bic, payee_wallet_id, payee_msisdn",
                 "CUSTOMER_LOGIN", "customer_id of LOGIN evaluations");
         for (StoreFeatures.Velocity v : StoreFeatures.VELOCITY) {
             boolean login = v.entityType().equals("CUSTOMER_LOGIN");

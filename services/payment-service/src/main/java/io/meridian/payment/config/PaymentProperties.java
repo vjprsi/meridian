@@ -25,12 +25,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param limitsEnabled   reserve limits for customer payments
  * @param refundDays      debtor's right-to-refund window for direct debits (SEPA Core: 8 weeks)
  * @param fraud           fraud scoring of outbound and internal payments before release (fraud-service)
+ * @param walletFundingServices calling services (internal token + X-Meridian-Service) that may initiate wallet-funded
+ *                        payouts (debtor_wallet_id + debtor_clearing_ledger_account_id, no deposit account)
  */
 @ConfigurationProperties(prefix = "meridian.payment")
 public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, String bankName, Gl gl,
                                 Map<String, BigDecimal> fees, Approval approval, Cop cop, Otp otp,
                                 Integer payeeCoolingOffHours, String linkBaseUrl, String qrGuid,
-                                Boolean screeningEnabled, Boolean limitsEnabled, Integer refundDays, Fraud fraud) {
+                                Boolean screeningEnabled, Boolean limitsEnabled, Integer refundDays, Fraud fraud,
+                                List<String> walletFundingServices) {
 
     public PaymentProperties {
         bankBic = bankBic == null ? "MERIGB2LXXX" : bankBic;
@@ -47,7 +50,8 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         screeningEnabled = screeningEnabled == null || screeningEnabled;
         limitsEnabled = limitsEnabled == null || limitsEnabled;
         refundDays = refundDays == null ? 56 : refundDays;
-        fraud = fraud == null ? new Fraud(null, null, null, null, null, null) : fraud;
+        fraud = fraud == null ? new Fraud(null, null, null, null, null, null, null, null) : fraud;
+        walletFundingServices = walletFundingServices == null ? List.of("wallet-service") : List.copyOf(walletFundingServices);
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -112,9 +116,12 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
      * @param stepUpAction       what a STEP_UP decision does to a payment that cannot step up any more: REVIEW (hold,
      *                           default) or ALLOW
      * @param alertConsumerEnabled apply {@code risk.fraud_alert.resolved} of PAYMENT alerts to held payments
+     * @param autoRescore        automatic re-scoring of payments held because scoring was unavailable
+     * @param upstream           reuse of an evaluation made by the originating service (wallet payouts)
      */
     public record Fraud(Boolean enabled, Integer timeoutMs, BigDecimal failClosedAmount,
-                        Map<String, BigDecimal> channelFailClosedAmount, String stepUpAction, Boolean alertConsumerEnabled) {
+                        Map<String, BigDecimal> channelFailClosedAmount, String stepUpAction, Boolean alertConsumerEnabled,
+                        AutoRescore autoRescore, Upstream upstream) {
         public Fraud {
             enabled = enabled == null || enabled;
             timeoutMs = timeoutMs == null ? 2000 : timeoutMs;
@@ -122,6 +129,52 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
             channelFailClosedAmount = channelFailClosedAmount == null ? Map.of() : Map.copyOf(channelFailClosedAmount);
             stepUpAction = stepUpAction == null ? "REVIEW" : stepUpAction;
             alertConsumerEnabled = alertConsumerEnabled == null || alertConsumerEnabled;
+            autoRescore = autoRescore == null ? new AutoRescore(null, null, null, null, null, null) : autoRescore;
+            upstream = upstream == null ? new Upstream(null, null) : upstream;
+        }
+
+        /**
+         * Re-scoring of degraded fraud holds (same idempotency key {@code pay-fraud:<id>}) by the internal scheduler
+         * (every tenant with activity) and by {@code POST /v1/payments/execute-due}, with exponential backoff.
+         *
+         * @param enabled        run the internal scheduler (execute-due always rescores due holds)
+         * @param intervalMs     scheduler period
+         * @param initialBackoff delay before the first automatic attempt after the hold
+         * @param maxBackoff     cap of the doubling delay
+         * @param maxAttempts    automatic attempts before the hold is left to an analyst (fraud-rescore / review)
+         * @param batchSize      holds re-scored per tenant and run
+         */
+        public record AutoRescore(Boolean enabled, Long intervalMs, java.time.Duration initialBackoff,
+                                  java.time.Duration maxBackoff, Integer maxAttempts, Integer batchSize) {
+            public AutoRescore {
+                enabled = enabled == null || enabled;
+                intervalMs = intervalMs == null ? 60_000L : intervalMs;
+                initialBackoff = initialBackoff == null ? java.time.Duration.ofMinutes(1) : initialBackoff;
+                maxBackoff = maxBackoff == null ? java.time.Duration.ofHours(1) : maxBackoff;
+                maxAttempts = maxAttempts == null ? 12 : maxAttempts;
+                batchSize = batchSize == null ? 100 : batchSize;
+            }
+
+            /** Delay before attempt {@code attempt + 1} (attempt 0 = the first automatic one). */
+            public java.time.Duration backoff(int attempt) {
+                java.time.Duration d = initialBackoff.multipliedBy(1L << Math.min(Math.max(attempt, 0), 20));
+                return d.compareTo(maxBackoff) > 0 ? maxBackoff : d;
+            }
+        }
+
+        /**
+         * Evaluations of the originating service reused instead of scoring again: accepted only from these calling
+         * services (internal token + X-Meridian-Service, never a channel or user token), only a recent ALLOW of the
+         * same customer, amount and currency, used by one payment at most.
+         *
+         * @param services    calling services whose evaluation may be reused (default wallet-service)
+         * @param maxAgeSeconds how old the reused evaluation may be
+         */
+        public record Upstream(java.util.List<String> services, Integer maxAgeSeconds) {
+            public Upstream {
+                services = services == null ? java.util.List.of("wallet-service") : java.util.List.copyOf(services);
+                maxAgeSeconds = maxAgeSeconds == null ? 900 : maxAgeSeconds;
+            }
         }
 
         /** Fail-closed (hold for review) when scoring is unavailable for this channel and amount. */

@@ -31,6 +31,7 @@ are tenant-wide, not per legal entity; the generator cannot express operator-onl
 | G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | Done: libs/meridian-approvals in all services (see G11 notes) |
 | G12 | Read-style operations declared 204 (view, ownership-tree, exposure, evaluate, simulate, test-connection, registration-options) | Same as G2: response schemas | Done (same as G2) |
 | G13 | Search endpoints lack `q` parameter | Add `?q:string!` to search actions | Open |
+| G14 | One scope per domain access level cannot express a narrow client (cell router) or an operator-grade action | Api `scopes:` map: `{list|get|create|update|delete|"METHOD /path": [required, accepted...]}` -> `x-required-scope`, `x-accepted-scopes`, `@RequiredScope(value, anyOf)` | Done (tenant routing / cells: `platform:routing-read` + `platform:operator`; fraud `pseudonymise-stored`: `risk:*`) |
 
 Domain hardening status: product ✔, ledger/gl/recon ✔ (merged); platform, party, accounts, operations in progress.
 
@@ -175,6 +176,26 @@ web/merchant-app (PWA) on /v1/merchant only. Remaining:
   payout changes is not wired.
 - Sale status is polled (`GET /sales/{id}`); a push channel (SSE / web push from `wallets.merchant_qr.paid`) is not
   built.
+
+## Fraud and routing follow-ups (2026-10-07)
+
+- Done: fraud PII. fraud-service pseudonymises identifiers (account numbers / IBANs, card numbers or fragments, phone,
+  e-mail, device ids, national ids) with a tenant-keyed HMAC (required secret `meridian.fraud.pseudonym-key`) before
+  rules, features and storage: `fraud_score.features` context (`psn:`), list entries (`h1:`), feature-store beneficiary
+  keys (`acct:h1:` / `msisdn:h1:`); payment-service sends `beneficiary_account_digest` only; one-off operator migration
+  `POST /v1/risk/fraud/scores/pseudonymise-stored` (scope `risk:*`). See ML_FRAUD_TRAINING.md section 7. Open: the
+  device registry keeps the SDK fingerprint as sent; events already published with clear values age out with
+  retention.
+- Done: degraded fraud holds are re-scored automatically with exponential backoff (`FraudRescoreJob`: internal
+  scheduler over tenants with activity + `execute-due`), same key `pay-fraud:<id>`.
+- Done: wallet payouts are no longer scored twice: wallet-service creates them with its own identity, with the wallet
+  transaction's ALLOW (`upstream_fraud_score_id`, request-only) and the clearing account
+  (`debtor_clearing_ledger_account_id`); payment-service reuses a recent ALLOW of the same amount / currency / customer
+  once, only from `wallet-service` over an internal token. Wallet-funded payouts were refused by payment-service before
+  (`wallet_not_supported`); they are accepted from wallet-service now. Open: limits are still reserved by both
+  services for the same payout.
+- Done: the cell router has its own Keycloak client `meridian-cell-router` (scope `platform:routing-read` only,
+  platform-operator tenant), Helm `router.auth.clientSecret` `meridian-cell-router-client` (G14).
 
 ## Business channel (S19 business banking portal)
 
