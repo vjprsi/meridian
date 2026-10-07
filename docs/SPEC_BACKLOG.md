@@ -168,12 +168,16 @@ web/merchant-app (PWA) on /v1/merchant only. Remaining:
   only. A `merchant_store_id` on wallet transactions would make scoping exact and history queries cheaper.
 - Transaction history reads merchant-service pages whole and filters them in the channel (at most
   `meridian.merchant.max-transaction-pages` per request); a page may hold fewer rows than asked.
-- merchant-service refunds also open a central approval request (workflow-service) when created; the channel approves
-  them directly right away (the central request is cancelled by merchant-service), so bank checkers never see them.
+- Done (2026-10-07): merchant refunds no longer bypass the bank's checkers. Refunds requested in the app open no
+  central request at creation; after the merchant's four-eyes, merchant-service sends them to the bank's central inbox
+  (`PENDING_BANK_APPROVAL`) when `meridian.merchant.refund-bank-review` applies (above the threshold, default 1000, or a
+  HIGH-risk merchant); only bank checkers decide them; the channel never approves the bank-side request and syncs the
+  outcome on read (a push from `wallets.merchant_refund.*` would avoid the read-time call).
 - The first owner is bootstrapped on first sign-in (trust in the IdP's admin-only attributes); a bank-side
   "provision merchant owner" operation would remove that reliance. Merchant onboarding stays on the staff APIs.
-- Payout account changes are approved inside the merchant (another OWNER or MANAGER); a bank-side callback / review of
-  payout changes is not wired.
+- Done (2026-10-07): payout account changes approved inside the merchant wait for the bank's review in central
+  approvals (`merchant_payout_change`, central only, `meridian.merchant.payout-bank-review` default true) and are
+  applied as the deciding bank checker after eligibility is checked again.
 - Sale status is polled (`GET /sales/{id}`); a push channel (SSE / web push from `wallets.merchant_qr.paid`) is not
   built.
 

@@ -38,9 +38,9 @@ enums:
   MerchantUserRole: [OWNER, MANAGER, CASHIER, VIEWER]
   MerchantUserStatus: [ACTIVE, SUSPENDED, REMOVED]
   MerchantSaleStatus: [PENDING, PAID, EXPIRED, CANCELLED]
-  MerchantRefundRequestStatus: [PENDING_APPROVAL, COMPLETED, REJECTED, CANCELLED, FAILED]
+  MerchantRefundRequestStatus: [PENDING_APPROVAL, PENDING_BANK_APPROVAL, COMPLETED, REJECTED, CANCELLED, FAILED]
   MerchantChangeType: [PAYOUT_ACCOUNT]
-  MerchantChangeStatus: [PENDING_APPROVAL, APPLIED, REJECTED, CANCELLED, FAILED]
+  MerchantChangeStatus: [PENDING_APPROVAL, PENDING_BANK_APPROVAL, APPLIED, REJECTED, CANCELLED, FAILED]
   MerchantObjectType: [API_CLIENT, WEBHOOK_ENDPOINT]
   MerchantActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
 
@@ -1047,7 +1047,8 @@ services:
           - "amount amount nn | Refund amount"
           - "currency currency nn ro | Currency of the payment"
           - "reason string(255) nn | Reason"
-          - "status enum:MerchantRefundRequestStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED"
+          - "status enum:MerchantRefundRequestStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED"
+          - "bank_decided_by string(64) ro | Bank checker who decided a refund the bank reviewed"
           - "requested_by uuid nn fk=merchant_user ro | User that requested the refund"
           - "decided_by uuid ro | Approver or rejecter"
           - "decided_at ts ro | Decision time"
@@ -1069,7 +1070,9 @@ services:
           - "account_number_masked string(40) ro | New account number, masked"
           - "previous_settlement_account_id uuid ro | Payout account before the change"
           - "reason string(255) | Why the account changes"
-          - "status enum:MerchantChangeStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED"
+          - "status enum:MerchantChangeStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review) -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED"
+          - "approval_request_id uuid ref=approval_request ro | Central approval request of the bank's review"
+          - "bank_decided_by string(64) ro | Bank checker who decided the change"
           - "requested_by uuid nn fk=merchant_user ro | OWNER that requested the change"
           - "decided_by uuid ro | Approver or rejecter"
           - "decided_at ts ro | Decision time"
@@ -1177,7 +1180,7 @@ services:
           - "GET /?status:enum:MerchantRefundRequestStatus&store_id:uuid | Refund requests of the stores the user may work in, newest first | | merchant_refund_request[]"
           - "POST / | Request a refund of a completed payment of a store the user works in (OWNER, MANAGER or CASHIER); the amount may not exceed what remains of the payment after completed and pending refunds | original_transaction_id uuid nn, amount amount nn, reason string(255) nn | merchant_refund_request"
           - "GET /{refund_id} | One refund request | | merchant_refund_request"
-          - "POST /{refund_id}/approve | Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created in merchant-service as the requester and approved there as the approver | comment string(500) | merchant_refund_request"
+          - "POST /{refund_id}/approve | Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created in merchant-service as the requester and approved there as the approver; when the bank reviews it (amount threshold, merchant risk) it waits as PENDING_BANK_APPROVAL for the bank's checkers | comment string(500) | merchant_refund_request"
           - "POST /{refund_id}/reject | Reject a refund request (OWNER or MANAGER of the store, never the requester) | reason string(255) nn | merchant_refund_request"
           - "POST /{refund_id}/cancel | Withdraw a pending refund request (requester, OWNER or MANAGER) | | merchant_refund_request"
 
@@ -1218,7 +1221,7 @@ services:
           - "GET /?status:enum:MerchantChangeStatus | Payout account changes, newest first (OWNER or MANAGER) | | merchant_change_request[]"
           - "POST / | Request a new payout account (OWNER; step-up; one pending change at a time; an active account of the merchant's business customer in the merchant's currency) | settlement_account_id uuid nn, reason string(255) | merchant_change_request"
           - "GET /{change_id} | One payout account change | | merchant_change_request"
-          - "POST /{change_id}/approve | Approve and apply a payout account change (another OWNER or MANAGER; step-up) | comment string(500) | merchant_change_request"
+          - "POST /{change_id}/approve | Approve a payout account change (another OWNER or MANAGER; step-up): applied at once, or PENDING_BANK_APPROVAL until the bank's checkers decide in central approvals (meridian.merchant.payout-bank-review) | comment string(500) | merchant_change_request"
           - "POST /{change_id}/reject | Reject a payout account change (another OWNER or MANAGER) | reason string(255) nn | merchant_change_request"
           - "POST /{change_id}/cancel | Withdraw a pending payout account change (its requester) | | merchant_change_request"
 
@@ -1287,3 +1290,5 @@ services:
       - "channels.merchant_change_request.requested | merchant_change_request | A payout account change was requested"
       - "channels.merchant_change_request.applied | merchant_change_request | A payout account change was approved and applied"
       - "channels.merchant_change_request.rejected | merchant_change_request | A payout account change was rejected"
+      - "channels.merchant_refund_request.pending_bank_approval | merchant_refund_request | A refund approved in the merchant app waits for the bank's checkers"
+      - "channels.merchant_change_request.pending_bank_approval | merchant_change_request | A payout account change approved in the merchant app waits for the bank's review"

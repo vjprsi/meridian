@@ -14,7 +14,8 @@ public class Events {
             "wallets.merchant.onboarded", "wallets.merchant.status_changed", "wallets.merchant.onboarding_rejected",
             "wallets.merchant_qr.paid", "wallets.merchant_payment_link.paid", "wallets.merchant_settlement.approved",
             "wallets.merchant_settlement.rejected",
-            "wallets.merchant_settlement.paid", "wallets.merchant_refund.completed", "wallets.merchant_refund.rejected");
+            "wallets.merchant_settlement.paid", "wallets.merchant_refund.completed", "wallets.merchant_refund.rejected",
+            "wallets.merchant_refund.pending_bank_approval");
 
     private final OutboxWriter outbox;
 

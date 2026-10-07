@@ -138,7 +138,14 @@ claims `merchant_id` and `merchant_user_id`) is bound as `io.meridian.web.securi
 (`MerchantContext.merchantId()`, `merchantUserId()`, `require().authTime()`; dev mode: `X-Merchant-Id` /
 `X-Merchant-User-Id` / `X-Auth-Time`; never for internal, customer, agent or business tokens). ServiceClient never
 forwards it (service token, `X-User: merchant-user:<id>`). Approved refunds are created in merchant-service as the
-requester and approved as the approver (`TenantContext.callAs`), so its four-eyes rule compares real people.
+requester and approved as the approver (`TenantContext.callAs`), so its four-eyes rule compares real people. The
+merchant's four-eyes does not replace the bank's: merchant-service opens no central request for a refund requested by a
+merchant user; when the merchant user's approval meets `meridian.merchant.refund-bank-review` (above `threshold`, per
+currency `currency-thresholds`, or a merchant `risk_rating` in `risk-ratings`) the refund becomes
+`PENDING_BANK_APPROVAL` and a request opens in the bank's central inbox, which only bank checkers decide (a merchant
+user gets 409 `awaiting_bank_approval`); the channel request follows it on read. Payout account changes approved in
+the app go to the bank too (`meridian.merchant.payout-bank-review`, default true): central-only request
+`merchant_payout_change` (owner merchant-channel-service), applied to merchant-service as the deciding bank checker.
 `channels:merchant` is exact like the other channel scopes; never add it to a domain operation.
 
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares

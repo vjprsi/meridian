@@ -188,6 +188,81 @@ class MerchantWorkflowApprovalIT {
         verify(serviceClient, atLeastOnce()).get(eq("workflow-service"), contains("resource_id=" + other));
     }
 
+    /**
+     * Refunds from the merchant app (merchant-user principals relayed by merchant-channel-service): the merchant's own
+     * four-eyes first; the bank's central inbox only when the policy requires it (above 1000, or a HIGH-risk
+     * merchant), and then only a bank checker decides - never a merchant user, never the channel.
+     */
+    @Test
+    void merchantAppRefundsReachTheBanksCheckersOnlyWhenThePolicyRequires() throws Exception {
+        String merchant = activeMerchant();
+        String payment = pay(merchant, "3000");
+        String requester = "merchant-user:" + UUID.randomUUID();
+        String approver = "merchant-user:" + UUID.randomUUID();
+        String another = "merchant-user:" + UUID.randomUUID();
+
+        // below the threshold: merchant four-eyes is enough, no request in the bank's inbox
+        int before = requests("merchant_refund");
+        String small = post("/v1/merchant-refunds", refundBody(merchant, payment, "200"), 201, requester).get("id").asString();
+        assertThat(post("/v1/merchant-refunds/" + small + "/approve", "{}", 422, requester).get("code").asString())
+                .isEqualTo("four_eyes_violation");
+        assertThat(post("/v1/merchant-refunds/" + small + "/approve", "{}", 200, approver).get("status").asString())
+                .isEqualTo("COMPLETED");
+        assertThat(requests("merchant_refund")).isEqualTo(before);
+
+        // above it: the merchant's approval moves it to the bank's checkers
+        String big = post("/v1/merchant-refunds", refundBody(merchant, payment, "1500"), 201, requester).get("id").asString();
+        assertThat(requests("merchant_refund")).isEqualTo(before);                     // nothing at create
+        JsonNode pending = post("/v1/merchant-refunds/" + big + "/approve", "{}", 200, approver);
+        assertThat(pending.get("status").asString()).isEqualTo("PENDING_BANK_APPROVAL");
+        assertThat(pending.get("merchant_approved_by").asString()).isEqualTo(approver);
+        assertThat(pending.get("bank_review_reason").asString()).isEqualTo("AMOUNT_THRESHOLD");
+        assertThat(pending.hasNonNull("wallet_transaction_id")).isFalse();
+        Map<String, Object> req = last("merchant_refund");
+        assertThat(req).containsEntry("resource_id", big).containsEntry("amount", "1500.00");
+        Map<?, ?> payload = (Map<?, ?>) req.get("payload");
+        assertThat(payload.get("bank_review_reason")).isEqualTo("AMOUNT_THRESHOLD");
+        assertThat(payload.get("merchant_approved_by")).isEqualTo(approver);
+        // merchant users cannot decide the bank's part, directly or through the inbox
+        assertThat(post("/v1/merchant-refunds/" + big + "/approve", "{}", 409, another).get("code").asString())
+                .isEqualTo("awaiting_bank_approval");
+        assertThat(post("/v1/merchant-refunds/" + big + "/reject", "{\"reason\":\"x\"}", 409, another).get("code").asString())
+                .isEqualTo("awaiting_bank_approval");
+        dispatch("merchant_refund", big, "approve", payload, another, Outcome.APPROVED);
+        assertThat(get("/v1/merchant-refunds/" + big).get("status").asString()).isEqualTo("PENDING_BANK_APPROVAL");
+        dispatch("merchant_refund", big, "approve", payload, "checker", Outcome.APPROVED);
+        JsonNode done = get("/v1/merchant-refunds/" + big);
+        assertThat(done.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(done.get("approved_by").asString()).isEqualTo("checker");
+        assertThat(done.get("merchant_approved_by").asString()).isEqualTo(approver);
+
+        // a HIGH-risk merchant: every app refund goes to the bank; a bank checker rejects it directly
+        String risky = activeMerchant();
+        patchRisk(risky, "HIGH");
+        String riskyPayment = pay(risky, "500");
+        String r = post("/v1/merchant-refunds", refundBody(risky, riskyPayment, "100"), 201, requester).get("id").asString();
+        JsonNode reviewed = post("/v1/merchant-refunds/" + r + "/approve", "{}", 200, approver);
+        assertThat(reviewed.get("status").asString()).isEqualTo("PENDING_BANK_APPROVAL");
+        assertThat(reviewed.get("bank_review_reason").asString()).isEqualTo("MERCHANT_RISK");
+        assertThat(post("/v1/merchant-refunds/" + r + "/reject", "{\"reason\":\"suspicious\"}", 200, "checker")
+                .get("status").asString()).isEqualTo("REJECTED");
+    }
+
+    private int requests(String type) {
+        return (int) approvalRequests.stream().filter(m -> type.equals(m.get("resource_type"))).count();
+    }
+
+    private void patchRisk(String merchant, String rating) throws Exception {
+        JsonNode m = get("/v1/merchants/" + merchant);
+        HttpResponse<String> patched = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/v1/merchants/" + merchant))
+                .header("X-Tenant-Id", TENANT).header("X-User", "maker").header("Content-Type", "application/json")
+                .header("If-Match", "\"" + m.get("row_version").asString() + "\"")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"risk_rating\":\"" + rating + "\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(patched.statusCode()).as(patched.body()).isEqualTo(200);
+    }
+
     @Test
     void settlementApprovedFromWorkflowAndRejectionFreesThePeriod() throws Exception {
         String merchant = activeMerchant();

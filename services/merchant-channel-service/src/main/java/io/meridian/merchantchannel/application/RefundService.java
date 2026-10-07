@@ -30,7 +30,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       then the refund is created in merchant-service <em>as the requester</em> ({@code mrq-create:<id>}) and approved
  *       there <em>as the approver</em> ({@code mrq-approve:<id>:<approver>}), so merchant-service's own four-eyes rule
  *       compares the same two people and a retry never refunds twice. A refusal downstream marks the request FAILED; an
- *       outage leaves it pending for a retry.</li>
+ *       outage leaves it pending for a retry. When merchant-service's bank-review policy applies (amount threshold,
+ *       merchant risk) the refund waits as PENDING_BANK_APPROVAL in the bank's central approval inbox: the request
+ *       follows it (COMPLETED / REJECTED / FAILED, synced on read); the channel never decides the bank's part.</li>
  *   <li>Reject (OWNER or MANAGER of the store, never the requester) and cancel (requester, OWNER or MANAGER).</li>
  * </ul>
  */
@@ -63,6 +65,7 @@ public class RefundService {
     // ------------------------------------------------------------------ reads
 
     public JsonNode list(String status, UUID storeId, Integer limit, String cursor) {
+        syncBankDecisions();
         int n = Rows.limit(limit);
         UUID after = Rows.cursor(cursor);
         if (storeId != null) {
@@ -79,7 +82,61 @@ public class RefundService {
     }
 
     public JsonNode get(UUID id) {
-        return request(id, "merchantAppRefundsGet");
+        ObjectNode r = request(id, "merchantAppRefundsGet");
+        return "PENDING_BANK_APPROVAL".equals(r.path("status").asString()) ? syncBankDecision(r) : r;
+    }
+
+    /** Brings the merchant's requests waiting for the bank up to date (oldest first, bounded per call). */
+    void syncBankDecisions() {
+        for (ObjectNode r : rows.list("select row_to_json(t)::text from merchant_refund_request t where t.merchant_id = ? "
+                + "and t.status = 'PENDING_BANK_APPROVAL' order by t.id limit 20", merchant())) {
+            syncBankDecision(r);
+        }
+    }
+
+    /**
+     * A request waiting for the bank's checkers follows its refund in merchant-service: COMPLETED (refund executed),
+     * REJECTED by the bank, or FAILED. The bank's decision is never taken here.
+     */
+    ObjectNode syncBankDecision(ObjectNode r) {
+        String refundId = r.path("merchant_refund_id").asString(null);
+        if (refundId == null) {
+            return r;
+        }
+        JsonNode refund;
+        try {
+            refund = down.get(MERCHANTS, "/v1/merchant-refunds/" + refundId);
+        } catch (ApiException e) {
+            return r; // stays as it is; the next read tries again
+        }
+        String status = refund.path("status").asString("");
+        if (!java.util.Set.of("COMPLETED", "REJECTED", "FAILED").contains(status)) {
+            return r;
+        }
+        UUID id = Req.rowUuid(r, "id");
+        return tx.execute(s -> {
+            ObjectNode locked = rows.lock(TABLE, merchant(), id).orElseThrow(() -> Access.notFound("REFUND", id));
+            if (!"PENDING_BANK_APPROVAL".equals(locked.path("status").asString())) {
+                return locked;
+            }
+            ObjectNode v = rows.object().put("status", status)
+                    .put("bank_decided_by", refund.path("approved_by").asString(null));
+            switch (status) {
+                case "COMPLETED" -> v.put("refund_transaction_id", refund.path("wallet_transaction_id").asString(null));
+                case "REJECTED" -> v.put("failure_reason", truncate("Rejected by the bank: "
+                        + refund.path("rejection_reason").asString(""), 255));
+                default -> v.put("failure_reason", truncate(refund.path("failure_reason").asString("failed"), 255));
+            }
+            ObjectNode a = rows.update(TABLE, id, v);
+            if (!"FAILED".equals(status)) {
+                outbox.publish("channels.merchant_refund_request." + status.toLowerCase(java.util.Locale.ROOT), TABLE, id, a);
+            }
+            return a;
+        });
+    }
+
+    private static String truncate(String s, int max) {
+        return s == null || s.length() <= max ? s : s.substring(0, max);
     }
 
     /**
@@ -101,7 +158,7 @@ public class RefundService {
             }
             switch (r.path("status").asString("")) {
                 case "COMPLETED" -> refunded = refunded.add(Req.rowDecimal(r, "amount"));
-                case "REQUESTED", "APPROVED" -> pending = pending.add(Req.rowDecimal(r, "amount"));
+                case "REQUESTED", "PENDING_BANK_APPROVAL", "APPROVED" -> pending = pending.add(Req.rowDecimal(r, "amount"));
                 default -> { }
             }
         }
@@ -215,6 +272,25 @@ public class RefundService {
             } else {
                 throw e;
             }
+        }
+        if ("PENDING_BANK_APPROVAL".equals(done.path("status").asString(""))) {
+            // the bank reviews it (amount threshold / merchant risk): its checkers decide in the central inbox; the
+            // channel never approves the bank-side request
+            ObjectNode waiting = tx.execute(s -> {
+                rows.lock(TABLE, merchant(), id);
+                ObjectNode v = rows.object().put("status", "PENDING_BANK_APPROVAL")
+                        .put("decided_by", approver.toString())
+                        .put("decided_at", Clocks.now().toString())
+                        .put("decision_comment", comment);
+                if (authAge != null) {
+                    v.put("approver_auth_age_seconds", authAge);
+                }
+                ObjectNode a = rows.update(TABLE, id, v);
+                outbox.publish("channels.merchant_refund_request.pending_bank_approval", TABLE, id, a);
+                return a;
+            });
+            audit.succeeded(action, "REFUND", id, Req.rowUuid(waiting, "merchant_refund_id"));
+            return waiting;
         }
         if (!"COMPLETED".equals(done.path("status").asString(""))) {
             ApiException e = new ApiException(422, "refund_not_completed", "merchant-service reports the refund "

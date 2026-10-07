@@ -2,6 +2,8 @@ package io.meridian.merchantchannel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.meridian.approvals.ApprovalDecision.Outcome;
+import io.meridian.approvals.ApprovalEventsDispatcher;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
@@ -28,6 +30,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * merchant-channel-service over HTTP (dev security mode: X-Tenant-Id, X-Merchant-Id, X-Merchant-User-Id, X-Auth-Time)
@@ -69,6 +72,9 @@ class MerchantChannelFlowIT {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    ApprovalEventsDispatcher approvalEvents;
 
     @MockitoBean
     ServiceClient serviceClient;
@@ -467,18 +473,43 @@ class MerchantChannelFlowIT {
         assertProblem(call(manager, "POST", "/v1/merchant/payout-changes/" + id(change) + "/approve", "{}", false), 401,
                 "step_up_required");
         assertThat(bank.writes(MS, "/v1/merchants/")).isEmpty();
-        JsonNode applied = ok(call(manager, "POST", "/v1/merchant/payout-changes/" + id(change) + "/approve",
+        // the merchant's approval hands the change to the bank's checkers (central approvals); nothing applied yet
+        JsonNode waiting = ok(call(manager, "POST", "/v1/merchant/payout-changes/" + id(change) + "/approve",
                 "{\"comment\":\"verified by phone\"}"));
+        assertThat(waiting.path("status").asString()).isEqualTo("PENDING_BANK_APPROVAL");
+        assertThat(waiting.path("decided_by").asString()).isEqualTo(manager.user());
+        assertThat(bank.writes(MS, "/v1/merchants/")).isEmpty();
+        FakeMerchantBank.Call request = bank.writes("workflow-service", "/v1/approval-requests").getLast();
+        assertThat(request.body().path("resource_type").asString()).isEqualTo("merchant_payout_change");
+        assertThat(request.body().path("resource_id").asString()).isEqualTo(id(change));
+        assertThat(request.body().path("payload").path("account_number_masked").asString()).isEqualTo("****5566");
+        assertThat(request.body().path("payload").path("merchant_approved_by").asString())
+                .isEqualTo("merchant-user:" + manager.user());
+        assertThat(waiting.path("approval_request_id").asString()).isNotBlank();
+        assertThat(ok(call(manager, "GET", "/v1/merchant/payout-account", null)).path("pending_change").path("id")
+                .asString()).isEqualTo(id(change));
+        assertProblem(call(ownerA, "POST", "/v1/merchant/payout-changes", body.formatted(accA2)), 409, "change_pending");
+        assertProblem(call(ownerA, "POST", "/v1/merchant/payout-changes/" + id(change) + "/cancel", null), 409,
+                "invalid_transition");
+        // a merchant user can never be the bank's checker
+        bankDecision(waiting, "merchant-user:" + manager.user(), Outcome.APPROVED);
+        assertThat(ok(call(manager, "GET", "/v1/merchant/payout-changes/" + id(change), null)).path("status").asString())
+                .isEqualTo("PENDING_BANK_APPROVAL");
+        bankDecision(waiting, "bank.checker", Outcome.APPROVED);
+        JsonNode applied = ok(call(manager, "GET", "/v1/merchant/payout-changes/" + id(change), null));
         assertThat(applied.path("status").asString()).isEqualTo("APPLIED");
+        assertThat(applied.path("bank_decided_by").asString()).isEqualTo("bank.checker");
         FakeMerchantBank.Call patch = bank.writes(MS, "/v1/merchants/").getLast();
         assertThat(patch.method()).isEqualTo("PATCH");
         assertThat(patch.path()).isEqualTo("/v1/merchants/" + MA);
         assertThat(patch.body().path("settlement_account_id").asString()).isEqualTo(accA2);
         assertThat(patch.body().size()).isEqualTo(1);                                // nothing else is changed
         assertThat(patch.key()).isEqualTo("1");                                     // If-Match
-        assertThat(patch.principal()).isEqualTo("merchant-user:" + manager.user());
+        assertThat(patch.principal()).isEqualTo("bank.checker");                    // applied as the bank's checker
         assertThat(bank.row(MS, "/v1/merchants", MA).path("settlement_account_id").asString()).isEqualTo(accA2);
         assertThat(ok(call(manager, "GET", "/v1/merchant/payout-account", null)).path("pending_change").isNull()).isTrue();
+        bankDecision(waiting, "bank.checker", Outcome.APPROVED);                    // redelivery: nothing more
+        assertThat(bank.writes(MS, "/v1/merchants/")).hasSize(1);
 
         // a second change: rejected by another user, withdrawn by its requester
         JsonNode back = ok(call(ownerA, "POST", "/v1/merchant/payout-changes", body.formatted(accA1)));
@@ -490,6 +521,77 @@ class MerchantChannelFlowIT {
                 .asString()).isEqualTo("CANCELLED");
         assertThat(ids(ok(call(manager, "GET", "/v1/merchant/payout-changes", null)))).hasSize(2);
         assertThat(events("channels.merchant_change_request.applied")).isEqualTo(1);
+
+        // the bank's checker rejects a change the merchant approved: the old account stays
+        JsonNode third = ok(call(ownerA, "POST", "/v1/merchant/payout-changes", body.formatted(accA1)));
+        JsonNode pendingBank = ok(call(manager, "POST", "/v1/merchant/payout-changes/" + id(third) + "/approve", "{}"));
+        bankDecision(pendingBank, "bank.checker", Outcome.REJECTED);
+        JsonNode refused = ok(call(manager, "GET", "/v1/merchant/payout-changes/" + id(third), null));
+        assertThat(refused.path("status").asString()).isEqualTo("REJECTED");
+        assertThat(refused.path("bank_decided_by").asString()).isEqualTo("bank.checker");
+        assertThat(bank.row(MS, "/v1/merchants", MA).path("settlement_account_id").asString()).isEqualTo(accA2);
+        assertThat(events("channels.merchant_change_request.pending_bank_approval")).isEqualTo(2);
+    }
+
+    /** The bank's decision on a payout change as workflow-service delivers it (central approvals). */
+    private void bankDecision(JsonNode change, String checker, Outcome outcome) throws Exception {
+        ObjectNode row = json.createObjectNode()
+                .put("id", change.path("approval_request_id").asString())
+                .put("resource_type", "merchant_payout_change").put("resource_id", change.path("id").asString())
+                .put("action", "apply").put("maker", "merchant-user:" + change.path("decided_by").asString())
+                .put("updated_by", checker).put("owner_service", "merchant-channel-service");
+        row.putObject("payload");
+        approvalEvents.dispatch(UUID.fromString(TENANT), row, outcome);
+    }
+
+    @Test
+    @Order(50)
+    void refundsAboveThePolicyWaitForTheBanksCheckersAndTheChannelNeverDecidesThem() throws Exception {
+        bank.refundBankReviewAbove = new java.math.BigDecimal("40.00");
+        try {
+            String req = "{\"original_transaction_id\":\"%s\",\"amount\":\"%s\",\"reason\":\"returned\"}";
+            String pay = id(bank.payQr(ok(call(cashier1, "POST", "/v1/merchant/sales",
+                    "{\"store_id\":\"%s\",\"amount\":\"80.00\"}".formatted(s1))).path("merchant_qr_id").asString()));
+            JsonNode r = ok(call(cashier1, "POST", "/v1/merchant/refunds", req.formatted(pay, "60.00")));
+            long approvalsBefore = bank.writes("workflow-service", "/").size();
+            JsonNode waiting = ok(call(manager, "POST", "/v1/merchant/refunds/" + id(r) + "/approve", "{\"comment\":\"ok\"}"));
+            assertThat(waiting.path("status").asString()).isEqualTo("PENDING_BANK_APPROVAL");
+            assertThat(waiting.path("decided_by").asString()).isEqualTo(manager.user());
+            assertThat(waiting.hasNonNull("refund_transaction_id")).isFalse();
+            // the channel made the merchant's approval only: nothing towards the bank's request
+            assertThat(bank.writes("workflow-service", "/")).hasSize((int) approvalsBefore);
+            assertThat(bank.writes(MS, "/v1/merchant-refunds/").stream()
+                    .filter(c -> c.path().endsWith("/approve") && c.path().contains(waiting.path("merchant_refund_id").asString())))
+                    .hasSize(1);
+            // waiting for the bank: not withdrawable, not decidable in the app, still counted against the cap
+            assertProblem(call(cashier1, "POST", "/v1/merchant/refunds/" + id(r) + "/cancel", null), 409, "invalid_transition");
+            assertProblem(call(ownerA, "POST", "/v1/merchant/refunds/" + id(r) + "/approve", "{}"), 409, "invalid_transition");
+            assertThat(ok(call(cashier1, "GET", "/v1/merchant/transactions/" + pay + "/refundable", null))
+                    .path("refundable").asString()).isEqualTo("20.00");
+            // the bank's checker approves it in merchant-service: the request follows on read
+            bank.bankDecidesRefund(waiting.path("merchant_refund_id").asString(), true, "bank.checker");
+            JsonNode done = ok(call(manager, "GET", "/v1/merchant/refunds/" + id(r), null));
+            assertThat(done.path("status").asString()).isEqualTo("COMPLETED");
+            assertThat(done.path("bank_decided_by").asString()).isEqualTo("bank.checker");
+            assertThat(done.hasNonNull("refund_transaction_id")).isTrue();
+
+            // rejected by the bank: the list brings it up to date
+            String pay2 = id(bank.payQr(ok(call(cashier1, "POST", "/v1/merchant/sales",
+                    "{\"store_id\":\"%s\",\"amount\":\"70.00\"}".formatted(s1))).path("merchant_qr_id").asString()));
+            JsonNode r2 = ok(call(cashier1, "POST", "/v1/merchant/refunds", req.formatted(pay2, "50.00")));
+            JsonNode w2 = ok(call(manager, "POST", "/v1/merchant/refunds/" + id(r2) + "/approve", "{}"));
+            bank.bankDecidesRefund(w2.path("merchant_refund_id").asString(), false, "bank.checker");
+            assertThat(ids(ok(call(manager, "GET", "/v1/merchant/refunds?status=REJECTED", null)))).contains(id(r2));
+            assertThat(ok(call(manager, "GET", "/v1/merchant/refunds/" + id(r2), null)).path("failure_reason").asString())
+                    .startsWith("Rejected by the bank");
+            // at or below the threshold: the merchant's four-eyes is enough
+            JsonNode r3 = ok(call(cashier1, "POST", "/v1/merchant/refunds", req.formatted(pay2, "20.00")));
+            assertThat(ok(call(manager, "POST", "/v1/merchant/refunds/" + id(r3) + "/approve", "{}")).path("status")
+                    .asString()).isEqualTo("COMPLETED");
+            assertThat(events("channels.merchant_refund_request.pending_bank_approval")).isEqualTo(2);
+        } finally {
+            bank.refundBankReviewAbove = null;
+        }
     }
 
     // ------------------------------------------------------------------ settlements, fees, links, integrations

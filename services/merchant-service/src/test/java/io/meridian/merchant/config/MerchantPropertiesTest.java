@@ -38,12 +38,12 @@ class MerchantPropertiesTest {
             }
         };
         new TenantSettings(config, 30_000).install();
-        MerchantProperties props = new MerchantProperties(null, DEPLOYED, null);
+        MerchantProperties props = new MerchantProperties(null, DEPLOYED, null, null);
 
         TenantContext.set(TENANT, "u");
         assertThat(props.feeIncomeAccountId()).isEqualTo(TENANT_VALUE);
         TenantContext.set(OTHER, "u");
         assertThat(props.feeIncomeAccountId()).isEqualTo(DEPLOYED);
-        assertThat(new MerchantProperties(null, null, null).feeIncomeAccountId()).isNull();
+        assertThat(new MerchantProperties(null, null, null, null).feeIncomeAccountId()).isNull();
     }
 }

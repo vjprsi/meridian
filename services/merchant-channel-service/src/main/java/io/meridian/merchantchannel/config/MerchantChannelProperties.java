@@ -20,12 +20,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param apiClientScopes     scopes an API client created for a merchant may hold (default {@code channels:merchant})
  * @param webhookEventTypes   event types (or {@code <prefix>.*} wildcards) a merchant endpoint may subscribe to; every
  *                            subscription is filtered to the merchant's own events ({@code merchant_id} of the payload)
+ * @param payoutBankReview    after the merchant's own approval, a payout account change waits for the bank's checkers in
+ *                            central approvals (PENDING_BANK_APPROVAL) before it is applied (default true)
  */
 @ConfigurationProperties(prefix = "meridian.merchant")
 public record MerchantChannelProperties(Duration stepUpMaxAge, List<String> stepUpAcr, Boolean bootstrapFirstOwner,
                                         List<String> payoutApproverRoles, Integer maxTransactionPages,
-                                        List<String> apiClientScopes, List<String> webhookEventTypes) {
+                                        List<String> apiClientScopes, List<String> webhookEventTypes,
+                                        Boolean payoutBankReview) {
     public MerchantChannelProperties {
+        payoutBankReview = payoutBankReview == null || payoutBankReview;
         stepUpMaxAge = stepUpMaxAge == null ? Duration.ofMinutes(5) : stepUpMaxAge;
         stepUpAcr = stepUpAcr == null ? List.of() : List.copyOf(stepUpAcr);
         bootstrapFirstOwner = bootstrapFirstOwner == null || bootstrapFirstOwner;

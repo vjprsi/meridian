@@ -32,6 +32,8 @@ public class PayoutService {
     static final String TABLE = "merchant_change_request";
     static final String MERCHANTS = Access.MERCHANTS;
     static final String DEPOSITS = "deposit-service";
+    /** Central approval resource of the bank's review of payout account changes (owner merchant-channel-service). */
+    public static final String APPROVAL_RESOURCE = "merchant_payout_change";
 
     private final Access access;
     private final Rows rows;
@@ -41,9 +43,11 @@ public class PayoutService {
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final MerchantChannelProperties props;
+    private final io.meridian.approvals.Approvals approvals;
 
     public PayoutService(Access access, Rows rows, Downstream down, StepUp stepUp, ActionAudit audit, OutboxWriter outbox,
-                         TransactionTemplate tx, MerchantChannelProperties props) {
+                         TransactionTemplate tx, MerchantChannelProperties props, io.meridian.approvals.Approvals approvals) {
+        this.approvals = approvals;
         this.access = access;
         this.rows = rows;
         this.down = down;
@@ -79,7 +83,7 @@ public class PayoutService {
         }
         out.put("settlement_frequency", m.path("settlement_frequency").asString(null));
         rows.one("select row_to_json(t)::text from merchant_change_request t where t.merchant_id = ? "
-                + "and t.status = 'PENDING_APPROVAL' order by t.id desc limit 1", merchant())
+                + "and t.status in ('PENDING_APPROVAL', 'PENDING_BANK_APPROVAL') order by t.id desc limit 1", merchant())
                 .ifPresentOrElse(c -> out.set("pending_change", c), () -> out.putNull("pending_change"));
         return out;
     }
@@ -131,7 +135,7 @@ public class PayoutService {
         ObjectNode saved = tx.execute(s -> {
             rows.lockKey("merchant-payout:" + merchant());
             long open = rows.scalar("select count(*) from merchant_change_request where merchant_id = ? "
-                    + "and status = 'PENDING_APPROVAL'", Long.class, merchant()).orElse(0L);
+                    + "and status in ('PENDING_APPROVAL', 'PENDING_BANK_APPROVAL')", Long.class, merchant()).orElse(0L);
             if (open > 0) {
                 throw ApiException.conflict("change_pending", "A payout account change is already waiting for approval");
             }
@@ -172,6 +176,9 @@ public class PayoutService {
             ObjectNode locked = rows.lock(TABLE, merchant(), id).orElseThrow(() -> Access.notFound("PAYOUT_CHANGE", id));
             pending(locked);
         });
+        if (props.payoutBankReview()) {
+            return toBankReview(c, m, approver, comment, action);
+        }
         try {
             ObjectNode patch = rows.object().put("settlement_account_id", accountId.toString());
             Downstream.as(approver, () -> down.patch(MERCHANTS, "/v1/merchants/" + merchant(), patch,
@@ -193,6 +200,140 @@ public class PayoutService {
         });
         audit.succeeded(action, "PAYOUT_CHANGE", id, accountId);
         return after;
+    }
+
+    /**
+     * The merchant approved: the change waits for the bank's checkers (central approval request
+     * {@value #APPROVAL_RESOURCE}, decided in workflow-service only; {@link PayoutChangeApprovalHandler} applies it).
+     * The request is opened first (idempotent key), so a retry never opens a second one.
+     */
+    private JsonNode toBankReview(ObjectNode c, JsonNode m, UUID approver, String comment, String action) {
+        UUID id = Req.rowUuid(c, "id");
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("merchant_id", merchant().toString());
+        payload.put("merchant_code", m.path("merchant_code").asString(null));
+        payload.put("trading_name", m.path("trading_name").asString(null));
+        payload.put("merchant_risk_rating", m.path("risk_rating").asString(null));
+        payload.put("settlement_account_id", c.path("settlement_account_id").asString(null));
+        payload.put("account_number_masked", c.path("account_number_masked").asString(null));
+        payload.put("previous_settlement_account_id", m.path("settlement_account_id").asString(null));
+        payload.put("reason", c.path("reason").asString(null));
+        payload.put("requested_by", MerchantPrincipal.principalName(Req.rowUuid(c, "requested_by")));
+        payload.put("merchant_approved_by", MerchantPrincipal.principalName(approver));
+        JsonNode request = approvals.requestCentral(io.meridian.approvals.ApprovalSpec.of(APPROVAL_RESOURCE, id, "apply",
+                "Payout account change of merchant " + m.path("trading_name").asString("") + " to "
+                        + c.path("account_number_masked").asString(""), payload), "payout-bank:" + id);
+        UUID requestId = io.meridian.approvals.Approvals.idOf(request);
+        ObjectNode after = tx.execute(s -> {
+            ObjectNode locked = rows.lock(TABLE, merchant(), id).orElseThrow(() -> Access.notFound("PAYOUT_CHANGE", id));
+            pending(locked);
+            ObjectNode v = rows.object().put("status", "PENDING_BANK_APPROVAL")
+                    .put("decided_by", approver.toString()).put("decided_at", Clocks.now().toString())
+                    .put("decision_comment", comment);
+            if (requestId != null) {
+                v.put("approval_request_id", requestId.toString());
+            }
+            ObjectNode a = rows.update(TABLE, id, v);
+            outbox.publish("channels.merchant_change_request.pending_bank_approval", TABLE, id, a);
+            return a;
+        });
+        audit.succeeded(action, "PAYOUT_CHANGE", id, Req.rowUuid(c, "settlement_account_id"));
+        return after;
+    }
+
+    /**
+     * A bank checker approved the change in central approvals (principal = the checker): eligibility is checked again
+     * and the account is applied to merchant-service as the checker. Idempotent: anything but the change waiting for
+     * this request is left alone.
+     */
+    public void bankApproved(UUID id, UUID approvalRequestId, String checker) {
+        ObjectNode c = waitingForBank(id, approvalRequestId);
+        if (c == null) {
+            return;
+        }
+        if (checker == null || checker.startsWith("merchant-user:")) {
+            throw ApiException.unprocessable("bank_checker_required", "Only the bank's checkers decide the bank review");
+        }
+        UUID merchantId = Req.rowUuid(c, "merchant_id");
+        UUID accountId = Req.rowUuid(c, "settlement_account_id");
+        JsonNode m = down.get(MERCHANTS, "/v1/merchants/" + merchantId);
+        JsonNode account;
+        try {
+            account = down.get(DEPOSITS, "/v1/deposit-accounts/" + accountId);
+        } catch (ApiException e) {
+            if (e.status() >= 500) {
+                throw e;
+            }
+            bankFailed(c, checker, "account_not_found: " + e.getMessage());
+            return;
+        }
+        if (!eligible(account, m)) {
+            bankFailed(c, checker, "account_not_eligible: the account is no longer an active account of the merchant's "
+                    + "customer in " + m.path("currency").asString(""));
+            return;
+        }
+        try {
+            down.patch(MERCHANTS, "/v1/merchants/" + merchantId,
+                    rows.object().put("settlement_account_id", accountId.toString()), m.path("row_version").asInt(1));
+        } catch (ApiException e) {
+            if (Downstream.rejected(e)) {
+                bankFailed(c, checker, e.code() + ": " + e.getMessage());
+                return;
+            }
+            throw e;
+        }
+        tx.executeWithoutResult(s -> {
+            ObjectNode locked = rows.lock(TABLE, merchantId, id).orElseThrow();
+            if (!"PENDING_BANK_APPROVAL".equals(locked.path("status").asString())) {
+                return;
+            }
+            ObjectNode a = rows.update(TABLE, id, rows.object().put("status", "APPLIED")
+                    .put("previous_settlement_account_id", m.path("settlement_account_id").asString(null))
+                    .put("bank_decided_by", truncate(checker, 64)));
+            outbox.publish("channels.merchant_change_request.applied", TABLE, id, a);
+        });
+    }
+
+    /** A bank checker rejected (or asked for changes): the change is REJECTED and the old account stays. */
+    public void bankRejected(UUID id, UUID approvalRequestId, String checker) {
+        ObjectNode c = waitingForBank(id, approvalRequestId);
+        if (c == null) {
+            return;
+        }
+        UUID merchantId = Req.rowUuid(c, "merchant_id");
+        tx.executeWithoutResult(s -> {
+            ObjectNode locked = rows.lock(TABLE, merchantId, id).orElseThrow();
+            if (!"PENDING_BANK_APPROVAL".equals(locked.path("status").asString())) {
+                return;
+            }
+            ObjectNode a = rows.update(TABLE, id, rows.object().put("status", "REJECTED")
+                    .put("bank_decided_by", truncate(checker, 64))
+                    .put("failure_reason", "Rejected by the bank's review (approval request " + approvalRequestId + ")"));
+            outbox.publish("channels.merchant_change_request.rejected", TABLE, id, a);
+        });
+    }
+
+    private ObjectNode waitingForBank(UUID id, UUID approvalRequestId) {
+        return rows.one("select row_to_json(t)::text from merchant_change_request t where t.id = ?", id)
+                .filter(c -> "PENDING_BANK_APPROVAL".equals(c.path("status").asString()))
+                .filter(c -> approvalRequestId == null || !c.hasNonNull("approval_request_id")
+                        || approvalRequestId.toString().equals(c.path("approval_request_id").asString()))
+                .orElse(null);
+    }
+
+    private void bankFailed(ObjectNode c, String checker, String reason) {
+        UUID id = Req.rowUuid(c, "id");
+        tx.executeWithoutResult(s -> {
+            ObjectNode locked = rows.lock(TABLE, Req.rowUuid(c, "merchant_id"), id).orElseThrow();
+            if ("PENDING_BANK_APPROVAL".equals(locked.path("status").asString())) {
+                rows.update(TABLE, id, rows.object().put("status", "FAILED").put("bank_decided_by", truncate(checker, 64))
+                        .put("failure_reason", truncate(reason, 255)));
+            }
+        });
+    }
+
+    private static String truncate(String s, int max) {
+        return s == null || s.length() <= max ? s : s.substring(0, max);
     }
 
     public JsonNode reject(UUID id, JsonNode req) {

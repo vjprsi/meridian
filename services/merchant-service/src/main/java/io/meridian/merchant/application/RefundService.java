@@ -21,6 +21,12 @@ import tools.jackson.databind.node.ObjectNode;
  * Merchant refunds: REQUESTED against a completed merchant payment (cumulative refunds never exceed the payment),
  * APPROVED by a checker and executed as a REFUND wallet transaction from the merchant's collection wallet back to the
  * original payer (plus the plan's refund fee), or REJECTED. A wallet rejection marks the refund FAILED.
+ *
+ * <p>Requested by bank staff: a bank checker decides (central approval request opened on create). Requested in the
+ * merchant app (merchant-channel-service relays {@code merchant-user:<id>}): another merchant app user approves first
+ * (the merchant's four-eyes); when the bank-review policy applies ({@code meridian.merchant.refund-bank-review}: above
+ * the threshold, or a listed merchant risk rating) the refund then moves to PENDING_BANK_APPROVAL and a request opens
+ * in the bank's central approval inbox, which only bank checkers decide; otherwise it executes at once.
  */
 @Service
 public class RefundService {
@@ -35,6 +41,8 @@ public class RefundService {
 
     /** Approval resource type for merchant refunds in workflow-service (G11); the action is {@code approve}. */
     public static final String APPROVAL_RESOURCE = "merchant_refund";
+    /** Statuses waiting for a decision. */
+    static final java.util.Set<String> PENDING = java.util.Set.of("REQUESTED", "PENDING_BANK_APPROVAL");
 
     public RefundService(Rows rows, WalletClient wallets, Events events, TransactionTemplate tx, MerchantProperties props,
                          Approvals approvals) {
@@ -83,7 +91,7 @@ public class RefundService {
             rows.lock("merchant", merchantId);
             BigDecimal already = rows.scalar("""
                     select coalesce(sum(amount), 0) from merchant_refund
-                    where original_transaction_id = ? and status in ('REQUESTED', 'APPROVED', 'COMPLETED')""",
+                    where original_transaction_id = ? and status in ('REQUESTED', 'PENDING_BANK_APPROVAL', 'APPROVED', 'COMPLETED')""",
                     BigDecimal.class, original).orElse(BigDecimal.ZERO);
             if (already.add(amount).compareTo(paid) > 0) {
                 throw ApiException.unprocessable("refund_exceeds_amount", "Refunds would exceed the payment of "
@@ -92,47 +100,116 @@ public class RefundService {
             v.put("status", "REQUESTED");
             v.put("idempotency_key", key);
             ObjectNode row = rows.insert(TABLE, v);
-            // Central maker-checker: the checker decides in the workflow inbox; RefundApprovalHandler applies it.
-            UUID id = Rows.uuid(row, "id");
-            BigDecimal amt = amount.setScale(2, RoundingMode.UNNECESSARY);
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("merchant_id", merchantId.toString());
-            payload.put("merchant_code", Rows.str(m, "merchant_code"));
-            payload.put("trading_name", Rows.str(m, "trading_name"));
-            payload.put("original_transaction_id", original.toString());
-            payload.put("original_reference", o.path("reference").asString(null));
-            payload.put("original_amount", paid.toPlainString());
-            payload.put("already_refunded_or_pending", already.toPlainString());
-            payload.put("amount", amt.toPlainString());
-            payload.put("currency", Rows.str(row, "currency"));
-            payload.put("reason", Rows.str(row, "reason"));
-            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
-                            "Refund " + amt.toPlainString() + " " + Rows.str(row, "currency") + " by merchant "
-                                    + Rows.str(m, "trading_name"), payload)
-                    .withAmount(amt, Rows.str(row, "currency")), "approve:" + id);
+            // Requested in the merchant app: the merchant's own four-eyes comes first (another app user approves);
+            // the bank's checkers see it afterwards only when the policy requires it (approve -> PENDING_BANK_APPROVAL).
+            if (!merchantUser(TenantContext.principal())) {
+                // Central maker-checker: the bank's checker decides in the workflow inbox; RefundApprovalHandler applies it.
+                openCentralRequest(row, m, o, paid, already, "approve:" + Rows.uuid(row, "id"), null);
+            }
             return row;
         });
     }
 
-    /** True while the refund is REQUESTED for the submitted amount and payment (the submission's fingerprint). */
+    /** Opens the bank-side approval request of a refund (workflow inbox); the payload carries what a checker needs. */
+    private void openCentralRequest(ObjectNode row, ObjectNode m, JsonNode original, BigDecimal paid, BigDecimal already,
+                                    String key, String bankReviewReason) {
+        UUID id = Rows.uuid(row, "id");
+        BigDecimal amt = Rows.dec(row, "amount").setScale(2, RoundingMode.UNNECESSARY);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("merchant_id", Rows.str(m, "id"));
+        payload.put("merchant_code", Rows.str(m, "merchant_code"));
+        payload.put("trading_name", Rows.str(m, "trading_name"));
+        payload.put("merchant_risk_rating", Rows.str(m, "risk_rating"));
+        payload.put("original_transaction_id", Rows.str(row, "original_transaction_id"));
+        payload.put("original_reference", original == null ? null : original.path("reference").asString(null));
+        payload.put("original_amount", paid == null ? null : paid.toPlainString());
+        payload.put("already_refunded_or_pending", already == null ? null : already.toPlainString());
+        payload.put("amount", amt.toPlainString());
+        payload.put("currency", Rows.str(row, "currency"));
+        payload.put("reason", Rows.str(row, "reason"));
+        if (bankReviewReason != null) {
+            payload.put("bank_review_reason", bankReviewReason);
+            payload.put("merchant_requested_by", Rows.str(row, "created_by"));
+            payload.put("merchant_approved_by", TenantContext.principal());
+        }
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Refund " + amt.toPlainString() + " " + Rows.str(row, "currency") + " by merchant "
+                                + Rows.str(m, "trading_name") + (bankReviewReason == null ? "" : " (merchant-approved)"),
+                        payload)
+                .withAmount(amt, Rows.str(row, "currency")), key);
+    }
+
+    /** A merchant app user relayed by merchant-channel-service ({@code merchant-user:<id>}), not bank staff. */
+    static boolean merchantUser(String principal) {
+        return principal != null && principal.startsWith("merchant-user:");
+    }
+
+    /**
+     * True while the refund waits for a decision (REQUESTED, or PENDING_BANK_APPROVAL after the merchant's own approval)
+     * for the submitted amount and payment (the submission's fingerprint).
+     */
     public boolean awaitsApproval(UUID id, String amount, String originalTransactionId) {
         return rows.find(TABLE, id)
-                .filter(r -> "REQUESTED".equals(Rows.str(r, "status")))
+                .filter(r -> PENDING.contains(Rows.str(r, "status")))
                 .filter(r -> amount == null || new BigDecimal(amount).compareTo(Rows.dec(r, "amount")) == 0)
                 .filter(r -> originalTransactionId == null
                         || originalTransactionId.equals(Rows.str(r, "original_transaction_id")))
                 .isPresent();
     }
 
+    /**
+     * Approves a refund. Bank staff (or a central approval) execute it. A merchant app user (the merchant's own
+     * four-eyes, relayed by merchant-channel-service) executes it only when the bank-review policy does not apply;
+     * otherwise the refund moves to PENDING_BANK_APPROVAL and a request opens in the bank's central approval inbox,
+     * where a bank checker (never a merchant user) decides.
+     */
     public ObjectNode approve(UUID id, String comment) {
         ObjectNode r = rows.get(TABLE, id);
-        if (!"REQUESTED".equals(Rows.str(r, "status"))) {
-            throw ApiException.conflict("invalid_transition", "The refund is " + Rows.str(r, "status"));
+        String status = Rows.str(r, "status");
+        if (!PENDING.contains(status)) {
+            throw ApiException.conflict("invalid_transition", "The refund is " + status);
         }
-        if (TenantContext.principal().equals(Rows.str(r, "created_by"))) {
+        String principal = TenantContext.principal();
+        if (merchantUser(principal) && "PENDING_BANK_APPROVAL".equals(status)) {
+            // also what a retried merchant approval sees: the merchant's part is done
+            throw ApiException.conflict("awaiting_bank_approval",
+                    "The refund was approved by the merchant and waits for the bank's checkers");
+        }
+        if (principal.equals(Rows.str(r, "created_by")) || principal.equals(Rows.str(r, "merchant_approved_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "A refund must be approved by a different user than its requester");
         }
         ObjectNode m = rows.get("merchant", Rows.uuid(r, "merchant_id"));
+        if (merchantUser(principal)) {
+            String reason = props.refundBankReview().reason(Rows.dec(r, "amount"), Rows.str(r, "currency"),
+                    Rows.str(m, "risk_rating"));
+            if (reason != null) {
+                return toBankReview(id, m, reason);
+            }
+        }
+        return execute(id, r, m);
+    }
+
+    /** The merchant approved it; the bank's checkers decide next (central approval inbox). */
+    private ObjectNode toBankReview(UUID id, ObjectNode m, String reason) {
+        return tx.execute(s -> {
+            ObjectNode locked = rows.lock(TABLE, id);
+            if (!"REQUESTED".equals(Rows.str(locked, "status"))) {
+                throw ApiException.conflict("invalid_transition", "The refund is " + Rows.str(locked, "status"));
+            }
+            ObjectNode v = rows.object();
+            v.put("status", "PENDING_BANK_APPROVAL");
+            v.put("merchant_approved_by", TenantContext.principal());
+            v.put("bank_review_reason", reason);
+            rows.update(TABLE, id, v);
+            rows.execute("update merchant_refund set merchant_approved_at = now() where id = ?", id);
+            ObjectNode after = rows.get(TABLE, id);
+            openCentralRequest(after, m, null, null, null, "bank-approve:" + id, reason);
+            events.publish("wallets.merchant_refund.pending_bank_approval", TABLE, after);
+            return after;
+        });
+    }
+
+    private ObjectNode execute(UUID id, ObjectNode r, ObjectNode m) {
         JsonNode original = wallets.transaction(Rows.uuid(r, "original_transaction_id"));
         BigDecimal amount = Rows.dec(r, "amount");
         String currency = Rows.str(r, "currency");
@@ -196,8 +273,13 @@ public class RefundService {
     public ObjectNode reject(UUID id, String reason) {
         return tx.execute(s -> {
             ObjectNode r = rows.lock(TABLE, id);
-            if (!"REQUESTED".equals(Rows.str(r, "status"))) {
-                throw ApiException.conflict("invalid_transition", "The refund is " + Rows.str(r, "status"));
+            String status = Rows.str(r, "status");
+            if (!PENDING.contains(status)) {
+                throw ApiException.conflict("invalid_transition", "The refund is " + status);
+            }
+            if ("PENDING_BANK_APPROVAL".equals(status) && merchantUser(TenantContext.principal())) {
+                throw ApiException.conflict("awaiting_bank_approval",
+                        "The refund was approved by the merchant and waits for the bank's checkers");
             }
             ObjectNode v = rows.object();
             v.put("status", "REJECTED");
