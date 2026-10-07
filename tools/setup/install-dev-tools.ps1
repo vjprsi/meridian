@@ -1,8 +1,12 @@
 # Installs the Meridian Core developer toolchain as portable copies under D:\DevTools (no admin needed).
 # Re-runnable: tools that already exist are skipped. Usage:
-#   powershell -ExecutionPolicy Bypass -File tools\setup\install-dev-tools.ps1
+#   powershell -ExecutionPolicy Bypass -File tools\setup\install-dev-tools.ps1 [-WithFlutter]
+# -WithFlutter also installs the Flutter SDK (stable) into D:\DevTools\flutter for mobile/* (about 1.9 GB download;
+# the archive's SHA-256 is checked against the official releases JSON; not added to PATH, see docs/DEV_TOOLS.md).
 # JDK 25 is NOT put first on PATH and JAVA_HOME is NOT changed, so other projects keep their JDK.
 # The build selects JDK 25 through Gradle toolchains (see gradle.properties).
+
+param([switch]$WithFlutter)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -82,6 +86,22 @@ if (-not (Test-Path (Join-Path $Bin 'k9s.exe'))) {
 # --- DBeaver Community (database GUI) ---------------------------------------------------------
 Get-Zip 'dbeaver' 'https://dbeaver.io/files/dbeaver-ce-latest-win32.win32.x86_64.zip' (Join-Path $Root 'dbeaver')
 
+# --- Flutter SDK (optional: -WithFlutter; mobile/customer_app, mobile/agent_app) ------------------------
+if ($WithFlutter -and -not (Test-Path (Join-Path $Root 'flutter\bin\flutter.bat'))) {
+    $base = 'https://storage.googleapis.com/flutter_infra_release/releases'
+    $rel = Invoke-RestMethod "$base/releases_windows.json"
+    $cur = $rel.releases | Where-Object { $_.hash -eq $rel.current_release.stable } | Select-Object -First 1
+    $zip = Join-Path $Tmp 'flutter.zip'
+    Log "Downloading Flutter $($cur.version) (stable)"
+    Invoke-WebRequest -Uri "$base/$($cur.archive)" -OutFile $zip -Headers $Headers
+    $sha = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+    if ($sha -ne $cur.sha256) { Remove-Item $zip -Force; throw "Flutter archive SHA-256 mismatch: $sha <> $($cur.sha256)" }
+    Expand-Archive -Path $zip -DestinationPath $Root -Force   # the archive's top folder is flutter\
+    Remove-Item $zip -Force
+    & (Join-Path $Root 'flutter\bin\flutter.bat') --disable-analytics | Out-Null
+    Log "Flutter $($cur.version) installed at $(Join-Path $Root 'flutter') (not on PATH; call it by full path)"
+}
+
 # --- User PATH (append only; never ahead of existing entries) ---------------------------------
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 foreach ($p in @($Bin, (Join-Path $Root 'gradle\bin'))) {
@@ -99,4 +119,5 @@ Log 'Versions:'
 & (Join-Path $Bin 'tofu.exe') version 2>&1 | Select-Object -First 1
 & (Join-Path $Bin 'temporal.exe') --version
 & (Join-Path $Bin 'k9s.exe') version --short 2>&1 | Select-Object -First 1
+if (Test-Path (Join-Path $Root 'flutter\bin\flutter.bat')) { & (Join-Path $Root 'flutter\bin\flutter.bat') --version 2>&1 | Select-Object -First 1 }
 Log 'Done.'
