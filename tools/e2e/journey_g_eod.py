@@ -55,9 +55,18 @@ def journey_g(j: Journey):
                headers={"If-Match": str(ledger_job.get("row_version", ""))} if ledger_job.get("row_version") else None)
 
     j.step("business-day: validate job graph", api.post, "/v1/operations/eod-jobs/validate", {}, optional=True)
-    j.step("business-day: EOD trigger policy (cut-off 18:00 Africa/Nairobi, no auto-roll)", api.post,
-           "/v1/operations/eod-trigger-policies", {"legal_entity_id": le, "is_enabled": True, "cut_off_time": "18:00",
-                                                    "time_zone": "Africa/Nairobi", "auto_roll": False})
+    def trigger_policy():
+        """One policy per legal entity: the tenant starter pack (setup S) already created a manual-start default."""
+        want = {"is_enabled": True, "cut_off_time": "18:00", "time_zone": "Africa/Nairobi", "auto_roll": False}
+        existing = _rows(api.get(f"/v1/operations/eod-trigger-policies?legal_entity_id={le}"))
+        if existing:
+            p = existing[0]
+            api.patch(f"/v1/operations/eod-trigger-policies/{p['id']}", want,
+                      headers={"If-Match": str(p.get("row_version", ""))})
+            return "starter pack policy enabled"
+        api.post("/v1/operations/eod-trigger-policies", {"legal_entity_id": le, **want})
+        return "created"
+    j.step("business-day: EOD trigger policy (cut-off 18:00 Africa/Nairobi, no auto-roll)", trigger_policy)
     j.step("business-day: trigger policy evaluation", api.get, "/v1/operations/eod-trigger-policies/evaluation",
            optional=True)
 

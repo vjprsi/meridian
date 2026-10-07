@@ -133,6 +133,30 @@ the accessor of the service's `@ConfigurationProperties` record, e.g.
 | `agent-network-service.treasury_wallet_id` | agent-network-service | Treasury wallet funding bank-funded float top-ups |
 | `channel-service.airtime_biller_id` | channel-service | Biller used by the USSD AIRTIME action when the menu gives none |
 
+## Tenant starter packs (tenant-service)
+
+A fresh tenant has no legal entity, book, routing, products, tariffs, limits, templates or EOD jobs. A starter pack
+creates them through the owning services' public APIs. Packs live in `services/tenant-service/src/main/resources/starter-packs/`
+(one YAML file per pack version; `GENERIC` plus `KE`, which `extends` it). Every value in them is a default to review.
+
+- Apply: `POST /v1/starter-pack-runs/apply` (the caller's tenant), `POST /v1/platform/tenants/{id}/apply-starter-pack`
+  (operator, `meridian:admin`), or `starter_pack` on provisioning (applied after commit). `GET /v1/starter-pack-runs/catalog`
+  lists the packs, their parameters and steps. `dry_run` predicts the outcomes and makes no calls.
+- Runs execute on a background thread with the target tenant bound. ServiceClient therefore uses the service token
+  (`meridian.service-auth.*` must be set in JWT mode) and sends `X-Tenant-Id`. The acting user travels as `X-User` and is the
+  maker of every approval request, so that user cannot approve them.
+- Idempotent: each item is recorded in `starter_pack_item` with the checksum of its definition. Keys are deterministic.
+  Before a create, the body and the Idempotency-Key are stored, so a resume replays them unchanged. Re-running skips
+  applied items. A resource that already exists (found by the item's `lookup`) is recorded as EXISTING and never changed.
+- Upgrade: in a newer pack version, a pack-owned item whose definition changed is updated as its `update` field says:
+  `PATCH` (If-Match), `RECREATE` (new version plus resubmit, used for config entries) or `NONE` (reported as UPGRADE_SKIPPED).
+- Maker-checker: follow-up actions depend on the resource status (`skip_status`, `requires_status`, `after`). Submissions
+  open approval requests, and the run lists their ids. Checker-only steps (`manual`, e.g. limit rule activation) are
+  reported as AWAITING_ACTIVATION. A later run publishes or activates what was approved. The first failure stops the
+  run; `POST /v1/starter-pack-runs/{id}/resume` continues it.
+- A new pack item must pass `StarterPackDefinitionTest`: the route must exist in `generated/routes.json` and the
+  rendered body must match the request schema in `generated/openapi`.
+
 ## Time
 
 - Validity windows, expiries and "is it effective now" checks must use one clock. When SQL compares with `now()`,

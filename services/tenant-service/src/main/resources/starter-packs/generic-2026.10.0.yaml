@@ -1,0 +1,1009 @@
+# Meridian tenant starter pack: GENERIC (market-neutral defaults).
+#
+# Everything below is a DEFAULT chosen so that a freshly provisioned tenant can open accounts, move money, alert
+# customers and run end of day. None of it is advice: product, risk, finance and compliance must review every rate,
+# tariff, limit, threshold and approval policy before go-live. Amounts are in the tenant's currency (parameter
+# `currency`) and are scaled for a hard currency (USD/EUR/GBP); use a market pack (e.g. KE) or override items for
+# other currencies.
+#
+# Format (see docs/SERVICE_IMPLEMENTATION_GUIDE.md "Tenant starter packs"):
+#   steps[].items[]  key, service, path (collection), body (create request), optional lookup (pre-existing check),
+#                    update (NONE | PATCH | RECREATE), actions (status-driven follow-ups), ready_status,
+#                    pending_status, children (created after the parent, before the parent's actions)
+#   placeholders     ${param.x}, ${ref.<item key>} (resource id), ${parent}, ${today}, ${tenant_id}
+code: GENERIC
+version: 2026.10.0
+title: Generic bank starter pack
+market: GENERIC
+description: >
+  Market-neutral defaults: one legal entity and ledger book with a standard chart of internal accounts, per-tenant
+  ledger routing for every posting service, treasury and commission-pool wallets, savings/current/wallet products,
+  wallet tariffs and KYC tier limits, payment limits, an agent commission plan, notification providers, templates
+  and payment alert rules, the standard EOD job pack with a trigger policy, and maker-checker approval policies.
+notice: >
+  DEFAULT VALUES. Review every rate, tariff, limit, threshold, role and policy before go-live. Items that need a
+  checker (ledger routing, products, commission plan, templates, limit activation) are submitted, never approved,
+  by the pack.
+
+parameters:
+  currency: {type: string, default: USD, tenant_fact: default_currency, description: "Base currency (ISO 4217)"}
+  country: {type: string, default: US, tenant_fact: default_country, description: "Country of the legal entity (ISO 3166)"}
+  legal_name: {type: string, default: "Demo Bank Ltd (DEFAULT)", tenant_fact: legal_name, description: "Registered name of the main legal entity"}
+  timezone: {type: string, default: UTC, description: "IANA time zone for business dates and EOD cut-off"}
+  language: {type: string, default: en, description: "Locale of the notification templates"}
+  legal_entity_code: {type: string, default: MAIN, description: "Code of the main legal entity"}
+  license_type: {type: string, default: BANK, description: "Licence type, e.g. BANK, EMI, MFI"}
+  regulator: {type: string, default: "UNSPECIFIED (DEFAULT)", description: "Primary regulator"}
+  ledger_code: {type: string, default: MAIN, description: "Code of the main ledger book"}
+  savings_rate: {type: number, default: "0.02", description: "DEFAULT annual credit interest of the standard savings product (fraction)"}
+  payment_second_level_amount: {type: number, default: "100000", description: "DEFAULT amount from which payments need a second approval level"}
+  high_value_approver_roles: {type: array, default: [], description: "Roles allowed to approve the second level (empty = any user other than the maker)"}
+  alert_channels: {type: array, default: [SMS, EMAIL, IN_APP], description: "Channels of payment alerts, in preference order"}
+  sms_sender_id: {type: string, default: MERIDIAN, description: "Alphanumeric SMS sender id"}
+  email_sender: {type: string, default: "no-reply@bank.example", description: "From address of e-mails"}
+  smtp_host: {type: string, default: localhost, description: "SMTP host of the DEFAULT e-mail provider (sandbox/Mailpit)"}
+  smtp_port: {type: integer, default: 1025, description: "SMTP port of the DEFAULT e-mail provider"}
+  email_sandbox: {type: boolean, default: true, description: "DEFAULT true: e-mails are accepted but not sent; false sends through smtp_host"}
+  provider_status: {type: string, default: ACTIVE, description: "Status of the DEFAULT sandbox notification providers (ACTIVE or TESTING)"}
+  eod_cut_off_time: {type: string, default: "18:00", description: "Local EOD cut-off time HH:mm"}
+  eod_auto_trigger: {type: boolean, default: false, description: "Start EOD automatically at the cut-off (off by default)"}
+  # DEFAULT prices and limits in units of `currency` (hard-currency scale)
+  fee_statement_copy: {type: number, default: "2.00", description: "DEFAULT paper statement copy fee"}
+  fee_monthly_maintenance: {type: number, default: "3.00", description: "DEFAULT monthly current account fee"}
+  fee_transfer_out: {type: number, default: "0.50", description: "DEFAULT outgoing domestic transfer fee (after the free allowance)"}
+  fee_transfer_out_free_count: {type: integer, default: 10, description: "DEFAULT free outgoing transfers per month"}
+  fee_international_flat: {type: number, default: "10.00", description: "DEFAULT international transfer flat fee"}
+  fee_international_max: {type: number, default: "50.00", description: "DEFAULT international transfer fee cap"}
+  limit_payment_per_txn: {type: number, default: "50000", description: "DEFAULT single payment amount above which a payment goes to review"}
+  limit_payment_daily: {type: number, default: "100000", description: "DEFAULT daily outgoing payment amount per customer"}
+  limit_payment_daily_count: {type: integer, default: 100, description: "DEFAULT daily number of payments per customer (step-up above)"}
+  limit_tier0_daily: {type: number, default: "500", description: "DEFAULT daily payments of KYC tier 0 customers"}
+  limit_tier1_daily: {type: number, default: "2000", description: "DEFAULT daily payments of KYC tier 1 customers"}
+  wallet_tier0_max_balance: {type: number, default: "500", description: "DEFAULT maximum wallet balance, KYC tier 0"}
+  wallet_tier1_max_balance: {type: number, default: "2000", description: "DEFAULT maximum wallet balance, KYC tier 1"}
+  wallet_tier2_max_balance: {type: number, default: "10000", description: "DEFAULT maximum wallet balance, KYC tier 2"}
+  commission_cash_in_cap: {type: number, default: "5.00", description: "DEFAULT maximum agent commission per cash-in"}
+
+steps:
+  # ------------------------------------------------------------------------------------------------ organisation
+  - code: organisation
+    title: Main legal entity and base currency
+    items:
+      - key: legal_entity
+        title: Main legal entity
+        service: tenant-service
+        path: /v1/legal-entities
+        lookup: {match: {code: "${param.legal_entity_code}"}}
+        body:
+          code: "${param.legal_entity_code}"
+          legal_name: "${param.legal_name}"
+          country: "${param.country}"
+          base_currency: "${param.currency}"
+          timezone: "${param.timezone}"
+          fiscal_year_start_month: 1
+          license_type: "${param.license_type}"
+          regulator: "${param.regulator}"
+          status: ACTIVE
+
+  # ------------------------------------------------------------------------------------------------ approvals
+  # Created before anything that opens approval requests, so the pack's own submissions are routed by them.
+  - code: approvals
+    title: Maker-checker approval policies (workflow-service)
+    items:
+      - key: payment_approve
+        title: Payments above the payment-service threshold
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: payment, action: approve}, match: {resource_type: payment, action: approve}}
+        body:
+          code: AP-PAYMENT
+          name: Payment approval (DEFAULT)
+          resource_type: payment
+          action: approve
+          required_approvals: 1
+          approval_levels:
+            - {level: 1, approver_roles: [], required_approvals: 1}
+            - {level: 2, approver_roles: "${param.high_value_approver_roles}", min_amount: "${param.payment_second_level_amount}", required_approvals: 1}
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: bulk_payment_approve
+        title: Bulk payments
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: bulk_payment, action: approve}, match: {resource_type: bulk_payment, action: approve}}
+        body:
+          code: AP-BULK-PAYMENT
+          name: Bulk payment approval (DEFAULT)
+          resource_type: bulk_payment
+          action: approve
+          required_approvals: 1
+          approval_levels:
+            - {level: 1, approver_roles: [], required_approvals: 1}
+            - {level: 2, approver_roles: "${param.high_value_approver_roles}", min_amount: "${param.payment_second_level_amount}", required_approvals: 1}
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: config_entry_activate
+        title: Configuration changes (incl. ledger routing)
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: config_entry, action: activate}, match: {resource_type: config_entry, action: activate}}
+        body:
+          code: AP-CONFIG
+          name: Configuration change approval (DEFAULT)
+          resource_type: config_entry
+          action: activate
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 72
+          is_active: true
+      - key: product_version_approve
+        title: Product versions
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: product_version, action: approve}, match: {resource_type: product_version, action: approve}}
+        body:
+          code: AP-PRODUCT-VERSION
+          name: Product version approval (DEFAULT)
+          resource_type: product_version
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+      - key: notification_template_publish
+        title: Customer-facing notification templates
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: notification_template, action: publish}, match: {resource_type: notification_template, action: publish}}
+        body:
+          code: AP-NOTIFICATION-TEMPLATE
+          name: Notification template approval (DEFAULT)
+          resource_type: notification_template
+          action: publish
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+      - key: commission_plan_approve
+        title: Commission plans
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: commission_plan, action: approve}, match: {resource_type: commission_plan, action: approve}}
+        body:
+          code: AP-COMMISSION-PLAN
+          name: Commission plan approval (DEFAULT)
+          resource_type: commission_plan
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+      - key: deposit_account_approve
+        title: Deposit account opening (when the product requires approval)
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: deposit_account, action: approve}, match: {resource_type: deposit_account, action: approve}}
+        body:
+          code: AP-DEPOSIT-ACCOUNT
+          name: Account opening approval (DEFAULT)
+          resource_type: deposit_account
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 48
+          is_active: true
+      - key: customer_kyc_tier_change
+        title: Customer KYC tier changes
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: customer_kyc_tier, action: change_tier}, match: {resource_type: customer_kyc_tier, action: change_tier}}
+        body:
+          code: AP-KYC-TIER
+          name: KYC tier change approval (DEFAULT)
+          resource_type: customer_kyc_tier
+          action: change_tier
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 48
+          is_active: true
+      - key: agent_float_request_approve
+        title: Agent float top-ups and withdrawals
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: agent_float_request, action: approve}, match: {resource_type: agent_float_request, action: approve}}
+        body:
+          code: AP-AGENT-FLOAT
+          name: Agent float request approval (DEFAULT)
+          resource_type: agent_float_request
+          action: approve
+          required_approvals: 1
+          approval_levels:
+            - {level: 1, approver_roles: [], required_approvals: 1}
+            - {level: 2, approver_roles: "${param.high_value_approver_roles}", min_amount: "${param.payment_second_level_amount}", required_approvals: 1}
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: loan_write_off_approve
+        title: Loan write-offs
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: loan_write_off, action: approve}, match: {resource_type: loan_write_off, action: approve}}
+        body:
+          code: AP-LOAN-WRITE-OFF
+          name: Loan write-off approval (DEFAULT)
+          resource_type: loan_write_off
+          action: approve
+          required_approvals: 1
+          approval_levels:
+            - {level: 1, approver_roles: [], required_approvals: 1}
+            - {level: 2, approver_roles: "${param.high_value_approver_roles}", required_approvals: 1}
+          allow_self_approval: false
+          expires_after_hours: 72
+          is_active: true
+      - key: wallet_transaction_reverse
+        title: Wallet transaction reversals
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: wallet_transaction, action: reverse}, match: {resource_type: wallet_transaction, action: reverse}}
+        body:
+          code: AP-WALLET-REVERSAL
+          name: Wallet reversal approval (DEFAULT)
+          resource_type: wallet_transaction
+          action: reverse
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: tenant_module_enable
+        title: Enabling platform modules
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: tenant_module, action: enable}, match: {resource_type: tenant_module, action: enable}}
+        body:
+          code: AP-MODULE-ENABLE
+          name: Module enablement approval (DEFAULT)
+          resource_type: tenant_module
+          action: enable
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 72
+          is_active: true
+
+  # ------------------------------------------------------------------------------------------------ ledger
+  - code: ledger
+    title: Ledger book and chart of internal accounts
+    items:
+      - key: ledger_book
+        title: Main ledger book
+        service: ledger-service
+        path: /v1/ledgers
+        adopt_children: true
+        lookup: {query: {legal_entity_id: "${ref.legal_entity}"}, match: {code: "${param.ledger_code}"}}
+        body:
+          code: "${param.ledger_code}"
+          name: "${param.legal_name} main book"
+          legal_entity_id: "${ref.legal_entity}"
+          base_currency: "${param.currency}"
+          description: Main book created by the starter pack
+        children:
+          - {key: cash, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1000"}},
+             body: {ledger_id: "${parent}", code: "1000", name: Vault cash, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: nostro, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1010"}},
+             body: {ledger_id: "${parent}", code: "1010", name: Nostro / central bank settlement, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: treasury_funding, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1020"}},
+             body: {ledger_id: "${parent}", code: "1020", name: Treasury funding, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: clearing, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1100"}},
+             body: {ledger_id: "${parent}", code: "1100", name: Bank clearing / settlement, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: direct_debit_clearing, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1110"}},
+             body: {ledger_id: "${parent}", code: "1110", name: Direct debit clearing, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: wallet_bank_clearing, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1150"}},
+             body: {ledger_id: "${parent}", code: "1150", name: E-money trust / bank clearing, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: biller_settlement_clearing, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1160"}},
+             body: {ledger_id: "${parent}", code: "1160", name: Biller settlement clearing, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: card_settlement, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1200"}},
+             body: {ledger_id: "${parent}", code: "1200", name: Card scheme settlement, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: interest_receivable, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1300"}},
+             body: {ledger_id: "${parent}", code: "1300", name: Loan interest receivable, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: fee_receivable, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1310"}},
+             body: {ledger_id: "${parent}", code: "1310", name: Loan fee receivable, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: penalty_receivable, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1320"}},
+             body: {ledger_id: "${parent}", code: "1320", name: Loan penalty receivable, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: chargeback_receivable, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "1330"}},
+             body: {ledger_id: "${parent}", code: "1330", name: Chargeback receivable, account_type: ASSET, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: dispute_suspense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "2300"}},
+             body: {ledger_id: "${parent}", code: "2300", name: Provisional credit suspense, account_type: LIABILITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: interest_suspense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "2400"}},
+             body: {ledger_id: "${parent}", code: "2400", name: Interest in suspense, account_type: LIABILITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: tax_payable, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "2500"}},
+             body: {ledger_id: "${parent}", code: "2500", name: Tax payable, account_type: LIABILITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: overpayment, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "2600"}},
+             body: {ledger_id: "${parent}", code: "2600", name: Loan overpayments, account_type: LIABILITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: share_capital, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "3000"}},
+             body: {ledger_id: "${parent}", code: "3000", name: Share capital, account_type: EQUITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: retained_earnings, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "3100"}},
+             body: {ledger_id: "${parent}", code: "3100", name: Retained earnings, account_type: EQUITY, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: interest_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4000"}},
+             body: {ledger_id: "${parent}", code: "4000", name: Interest income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: fee_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4100"}},
+             body: {ledger_id: "${parent}", code: "4100", name: Fee income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: penalty_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4200"}},
+             body: {ledger_id: "${parent}", code: "4200", name: Penalty income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: recovery_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4300"}},
+             body: {ledger_id: "${parent}", code: "4300", name: Recovery income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: interchange_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4400"}},
+             body: {ledger_id: "${parent}", code: "4400", name: Interchange income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: merchant_fee_income, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "4500"}},
+             body: {ledger_id: "${parent}", code: "4500", name: Merchant service fee income, account_type: INCOME, normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: interest_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5000"}},
+             body: {ledger_id: "${parent}", code: "5000", name: Interest expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: write_off_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5100"}},
+             body: {ledger_id: "${parent}", code: "5100", name: Write-off expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: waiver_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5200"}},
+             body: {ledger_id: "${parent}", code: "5200", name: Waiver expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: agency_commission, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5300"}},
+             body: {ledger_id: "${parent}", code: "5300", name: Agency commission expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: dispute_loss_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5400"}},
+             body: {ledger_id: "${parent}", code: "5400", name: Card dispute loss expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: rewards_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5500"}},
+             body: {ledger_id: "${parent}", code: "5500", name: Rewards and cashback expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+          - {key: redress_expense, service: ledger-service, path: /v1/ledger-accounts, lookup: {query: {ledger_id: "${parent}"}, match: {code: "5600"}},
+             body: {ledger_id: "${parent}", code: "5600", name: Customer redress expense, account_type: EXPENSE, normal_balance: DEBIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}}
+
+  # ------------------------------------------------------------------------------------------------ ledger routing
+  # config-service namespace "ledger" (docs/SERVICE_IMPLEMENTATION_GUIDE.md "Per-tenant ledger settings"). Each entry is
+  # a DRAFT submitted for approval; it becomes ACTIVE when a checker approves it. A newer pack version creates a new
+  # version of the entry (RECREATE) and submits it again. An entry the tenant already activated is left alone.
+  - code: ledger_routing
+    title: Per-tenant ledger routing (config-service, maker-checker)
+    items:
+      - key: routing_default
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: default, status: ACTIVE}, match: {config_key: default}}
+        body: {namespace: ledger, config_key: default, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {ledger_id: "${ref.ledger_book}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_deposit_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: deposit-service, status: ACTIVE}, match: {config_key: deposit-service}}
+        body: {namespace: ledger, config_key: deposit-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", fee_income: "${ref.ledger_book/fee_income}",
+                            interest_expense: "${ref.ledger_book/interest_expense}", interest_income: "${ref.ledger_book/interest_income}",
+                            tax_payable: "${ref.ledger_book/tax_payable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_payment_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: payment-service, status: ACTIVE}, match: {config_key: payment-service}}
+        body: {namespace: ledger, config_key: payment-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", fee_income: "${ref.ledger_book/fee_income}",
+                            direct_debit_clearing: "${ref.ledger_book/direct_debit_clearing}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_wallet_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: wallet-service, status: ACTIVE}, match: {config_key: wallet-service}}
+        body: {namespace: ledger, config_key: wallet-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {bank_clearing: "${ref.ledger_book/wallet_bank_clearing}", fee_income: "${ref.ledger_book/fee_income}",
+                            tax_payable: "${ref.ledger_book/tax_payable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_loan_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: loan-service, status: ACTIVE}, match: {config_key: loan-service}}
+        body: {namespace: ledger, config_key: loan-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", interest_income: "${ref.ledger_book/interest_income}",
+                            interest_receivable: "${ref.ledger_book/interest_receivable}", interest_suspense: "${ref.ledger_book/interest_suspense}",
+                            fee_income: "${ref.ledger_book/fee_income}", fee_receivable: "${ref.ledger_book/fee_receivable}",
+                            penalty_income: "${ref.ledger_book/penalty_income}", penalty_receivable: "${ref.ledger_book/penalty_receivable}",
+                            overpayment: "${ref.ledger_book/overpayment}", waiver_expense: "${ref.ledger_book/waiver_expense}",
+                            write_off_expense: "${ref.ledger_book/write_off_expense}", recovery_income: "${ref.ledger_book/recovery_income}",
+                            agency_commission: "${ref.ledger_book/agency_commission}", tax_payable: "${ref.ledger_book/tax_payable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_card_clearing_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: card-clearing-service, status: ACTIVE}, match: {config_key: card-clearing-service}}
+        body: {namespace: ledger, config_key: card-clearing-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {clearing: {settlement_accounts: {VISA: "${ref.ledger_book/card_settlement}", MASTERCARD: "${ref.ledger_book/card_settlement}",
+                                                        LOCAL: "${ref.ledger_book/card_settlement}"},
+                                  fee_income_account: "${ref.ledger_book/fee_income}", interchange_income_account: "${ref.ledger_book/interchange_income}",
+                                  nostro_account: "${ref.ledger_book/nostro}", tax_account: "${ref.ledger_book/tax_payable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_card_dispute_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: card-dispute-service, status: ACTIVE}, match: {config_key: card-dispute-service}}
+        body: {namespace: ledger, config_key: card-dispute-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {dispute: {suspense_account: "${ref.ledger_book/dispute_suspense}", loss_expense_account: "${ref.ledger_book/dispute_loss_expense}",
+                                 scheme_receivable_account: "${ref.ledger_book/chargeback_receivable}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_routing_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: routing-service, status: ACTIVE}, match: {config_key: routing-service}}
+        body: {namespace: ledger, config_key: routing-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {treasury_funding: "${ref.ledger_book/treasury_funding}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_rewards_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: rewards-service, status: ACTIVE}, match: {config_key: rewards-service}}
+        body: {namespace: ledger, config_key: rewards-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {funding_account_id: "${ref.ledger_book/rewards_expense}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_crm_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: crm-service, status: ACTIVE}, match: {config_key: crm-service}}
+        body: {namespace: ledger, config_key: crm-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {redress: {funding_account_id: "${ref.ledger_book/redress_expense}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_merchant_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: merchant-service, status: ACTIVE}, match: {config_key: merchant-service}}
+        body: {namespace: ledger, config_key: merchant-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {fee_income_account_id: "${ref.ledger_book/merchant_fee_income}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      - key: routing_biller_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: biller-service, status: ACTIVE}, match: {config_key: biller-service}}
+        body: {namespace: ledger, config_key: biller-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {settlement_clearing_account_id: "${ref.ledger_book/biller_settlement_clearing}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+
+  # ------------------------------------------------------------------------------------------------ wallets
+  # Platform wallets: created PENDING; activated (which opens their ledger account in the tenant's book) once the
+  # ledger routing they post with is approved. The routing entries that point at them are their children.
+  - code: wallets
+    title: Treasury and commission-pool wallets
+    items:
+      - key: treasury_wallet
+        title: E-money treasury wallet (funds agent float)
+        service: wallet-service
+        path: /v1/wallets
+        body: {wallet_type: TREASURY, display_name: "${param.legal_name} treasury", currency: "${param.currency}",
+               opened_channel: SYSTEM, alias: treasury, metadata: {created_by: "starter pack ${pack.code}"}}
+        children:
+          - key: routing
+            title: agent-network-service treasury wallet (config-service)
+            service: config-service
+            path: /v1/config/entries
+            update: RECREATE
+            lookup: {query: {namespace: ledger, config_key: agent-network-service, status: ACTIVE}, match: {config_key: agent-network-service}}
+            body: {namespace: ledger, config_key: agent-network-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+                   value: {treasury_wallet_id: "${parent}"}}
+            actions:
+              - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+                 skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+            ready_status: [ACTIVE, SUPERSEDED]
+            pending_status: [PENDING_APPROVAL]
+        actions:
+          - {name: activate, path: "/{id}/activate", body: {reason: "Tenant starter pack ${pack.code}"}, skip_status: [ACTIVE],
+             requires_status: [PENDING], after: [routing_default, routing_wallet_service]}
+        ready_status: [ACTIVE]
+      - key: commission_pool_wallet
+        title: Commission pool wallet (funds agent commission payouts)
+        service: wallet-service
+        path: /v1/wallets
+        body: {wallet_type: TREASURY, display_name: "${param.legal_name} commission pool", currency: "${param.currency}",
+               opened_channel: SYSTEM, alias: commission-pool, metadata: {created_by: "starter pack ${pack.code}"}}
+        children:
+          - key: routing
+            title: commission-service payout source wallet (config-service)
+            service: config-service
+            path: /v1/config/entries
+            update: RECREATE
+            lookup: {query: {namespace: ledger, config_key: commission-service, status: ACTIVE}, match: {config_key: commission-service}}
+            body: {namespace: ledger, config_key: commission-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+                   value: {payout_source_wallet_id: "${parent}"}}
+            actions:
+              - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+                 skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+            ready_status: [ACTIVE, SUPERSEDED]
+            pending_status: [PENDING_APPROVAL]
+        actions:
+          - {name: activate, path: "/{id}/activate", body: {reason: "Tenant starter pack ${pack.code}"}, skip_status: [ACTIVE],
+             requires_status: [PENDING], after: [routing_default, routing_wallet_service]}
+        ready_status: [ACTIVE]
+
+  # ------------------------------------------------------------------------------------------------ products
+  # Product + version (with rates, fees, limits as children); the version is submitted for approval and published
+  # by a later run once approved.
+  - code: products
+    title: Default products (savings, current, wallet) and fee schedules
+    items:
+      - key: savings
+        title: Standard savings account
+        service: product-catalog-service
+        path: /v1/products
+        lookup: {query: {legal_entity_id: "${ref.legal_entity}", family: SAVINGS}, match: {code: SAV-STD}}
+        body: {code: SAV-STD, name: Standard Savings, family: SAVINGS, segment: RETAIL, legal_entity_id: "${ref.legal_entity}",
+               currency: "${param.currency}", short_description: "Instant-access savings with monthly interest (DEFAULT terms)",
+               available_channels: [MOBILE, WEB, BRANCH, AGENT, API], available_countries: ["${param.country}"], is_sellable: true}
+        children:
+          - key: version
+            service: product-catalog-service
+            path: /v1/product-versions
+            body: {product_id: "${parent}", change_summary: "Starter pack ${pack.code} ${pack.version} (DEFAULT terms)", migration_policy: PIN,
+                   definition: {account_type: SAVINGS, min_opening_balance: "0", overdraft_allowed: false, dormancy_days: 365}}
+            children:
+              - key: credit_interest
+                service: product-catalog-service
+                path: /v1/interest-rate-configs
+                body: {product_version_id: "${parent}", rate_kind: CREDIT_INTEREST, rate_type: FIXED, fixed_rate: "${param.savings_rate}",
+                       day_count: ACT_365, balance_basis: END_OF_DAY, accrual_frequency: DAILY, capitalisation_frequency: MONTHLY,
+                       capitalisation_day: 31, rounding: HALF_EVEN, rounding_scale: 2, currency: "${param.currency}", effective_from: "${today}"}
+              - key: fee_statement_copy
+                service: product-catalog-service
+                path: /v1/fee-definitions
+                body: {product_version_id: "${parent}", code: STATEMENT_COPY, name: Paper statement copy, trigger: STATEMENT_COPY,
+                       calculation_method: FLAT, flat_amount: "${param.fee_statement_copy}", currency: "${param.currency}", is_refundable: true}
+            actions:
+              - {name: submit, path: "/{id}/submit", body: {comment: "Starter pack ${pack.code} ${pack.version}"},
+                 skip_status: [PENDING_APPROVAL, APPROVED, PUBLISHED, SUPERSEDED, RETIRED], requires_status: [DRAFT], approval: product_version}
+              - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PUBLISHED, SUPERSEDED, RETIRED], requires_status: [APPROVED]}
+            ready_status: [PUBLISHED, SUPERSEDED]
+            pending_status: [PENDING_APPROVAL]
+      - key: current
+        title: Standard current account
+        service: product-catalog-service
+        path: /v1/products
+        lookup: {query: {legal_entity_id: "${ref.legal_entity}", family: CURRENT_ACCOUNT}, match: {code: CUR-STD}}
+        body: {code: CUR-STD, name: Standard Current Account, family: CURRENT_ACCOUNT, segment: RETAIL, legal_entity_id: "${ref.legal_entity}",
+               currency: "${param.currency}", short_description: "Everyday current account (DEFAULT terms)",
+               available_channels: [MOBILE, WEB, BRANCH, AGENT, API], available_countries: ["${param.country}"], is_sellable: true}
+        children:
+          - key: version
+            service: product-catalog-service
+            path: /v1/product-versions
+            body: {product_id: "${parent}", change_summary: "Starter pack ${pack.code} ${pack.version} (DEFAULT terms)", migration_policy: PIN,
+                   definition: {account_type: CURRENT, min_opening_balance: "0", overdraft_allowed: false, dormancy_days: 365}}
+            children:
+              - key: fee_monthly
+                service: product-catalog-service
+                path: /v1/fee-definitions
+                body: {product_version_id: "${parent}", code: MONTHLY_MAINTENANCE, name: Monthly account fee, trigger: MONTHLY_MAINTENANCE,
+                       frequency: MONTHLY, calculation_method: FLAT, flat_amount: "${param.fee_monthly_maintenance}", currency: "${param.currency}",
+                       allow_negative_balance: false, is_refundable: true}
+              - key: fee_transfer_out
+                service: product-catalog-service
+                path: /v1/fee-definitions
+                body: {product_version_id: "${parent}", code: TRANSFER_OUT, name: Outgoing domestic transfer, trigger: TRANSFER_OUT,
+                       calculation_method: FLAT, flat_amount: "${param.fee_transfer_out}", free_count: "${param.fee_transfer_out_free_count}", cap_period: MONTHLY, currency: "${param.currency}",
+                       is_refundable: true}
+              - key: fee_international
+                service: product-catalog-service
+                path: /v1/fee-definitions
+                body: {product_version_id: "${parent}", code: INTERNATIONAL_TRANSFER, name: International transfer, trigger: INTERNATIONAL_TRANSFER,
+                       calculation_method: FLAT_PLUS_PERCENTAGE, flat_amount: "${param.fee_international_flat}", percentage: "0.002", max_amount: "${param.fee_international_max}",
+                       currency: "${param.currency}", is_refundable: true}
+              - key: fee_statement_copy
+                service: product-catalog-service
+                path: /v1/fee-definitions
+                body: {product_version_id: "${parent}", code: STATEMENT_COPY, name: Paper statement copy, trigger: STATEMENT_COPY,
+                       calculation_method: FLAT, flat_amount: "${param.fee_statement_copy}", currency: "${param.currency}", is_refundable: true}
+            actions:
+              - {name: submit, path: "/{id}/submit", body: {comment: "Starter pack ${pack.code} ${pack.version}"},
+                 skip_status: [PENDING_APPROVAL, APPROVED, PUBLISHED, SUPERSEDED, RETIRED], requires_status: [DRAFT], approval: product_version}
+              - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PUBLISHED, SUPERSEDED, RETIRED], requires_status: [APPROVED]}
+            ready_status: [PUBLISHED, SUPERSEDED]
+            pending_status: [PENDING_APPROVAL]
+      - key: wallet
+        title: Standard mobile wallet
+        service: product-catalog-service
+        path: /v1/products
+        lookup: {query: {legal_entity_id: "${ref.legal_entity}", family: WALLET}, match: {code: WAL-STD}}
+        body: {code: WAL-STD, name: Mobile Wallet, family: WALLET, segment: RETAIL, legal_entity_id: "${ref.legal_entity}",
+               currency: "${param.currency}", short_description: "Mobile money wallet with KYC tiers (DEFAULT terms)",
+               available_channels: [MOBILE, USSD, AGENT, API], available_countries: ["${param.country}"], is_sellable: true}
+        children:
+          - key: version
+            service: product-catalog-service
+            path: /v1/product-versions
+            body: {product_id: "${parent}", change_summary: "Starter pack ${pack.code} ${pack.version} (DEFAULT terms)", migration_policy: PIN,
+                   definition: {wallet_type: CUSTOMER, kyc_tiers: [0, 1, 2, 3], dormancy_days: 180}}
+            children:
+              - {key: limit_tier0_balance, service: product-catalog-service, path: /v1/product-limit-templates,
+                 body: {product_version_id: "${parent}", limit_code: WALLET_MAX_BALANCE, period: LIFETIME, metric: BALANCE, kyc_tier: 0, max_value: "${param.wallet_tier0_max_balance}", currency: "${param.currency}"}}
+              - {key: limit_tier1_balance, service: product-catalog-service, path: /v1/product-limit-templates,
+                 body: {product_version_id: "${parent}", limit_code: WALLET_MAX_BALANCE, period: LIFETIME, metric: BALANCE, kyc_tier: 1, max_value: "${param.wallet_tier1_max_balance}", currency: "${param.currency}"}}
+              - {key: limit_tier2_balance, service: product-catalog-service, path: /v1/product-limit-templates,
+                 body: {product_version_id: "${parent}", limit_code: WALLET_MAX_BALANCE, period: LIFETIME, metric: BALANCE, kyc_tier: 2, max_value: "${param.wallet_tier2_max_balance}", currency: "${param.currency}"}}
+            actions:
+              - {name: submit, path: "/{id}/submit", body: {comment: "Starter pack ${pack.code} ${pack.version}"},
+                 skip_status: [PENDING_APPROVAL, APPROVED, PUBLISHED, SUPERSEDED, RETIRED], requires_status: [DRAFT], approval: product_version}
+              - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PUBLISHED, SUPERSEDED, RETIRED], requires_status: [APPROVED]}
+            ready_status: [PUBLISHED, SUPERSEDED]
+            pending_status: [PENDING_APPROVAL]
+
+  # ------------------------------------------------------------------------------------------------ wallet pricing
+  - code: wallet_pricing
+    title: Wallet fee rules and KYC tier limits (wallet-service)
+    items:
+      - {key: fee_p2p, title: P2P transfer fee, service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-P2P}, match: {code: SP-P2P}},
+         body: {code: SP-P2P, txn_type: P2P, wallet_type: CUSTOMER, currency: "${param.currency}", basis: PERCENTAGE, percentage: "0.005",
+                min_fee: "0.10", max_fee: "5.00", priority: 100, valid_from: "${today}", is_active: true}}
+      - {key: fee_cash_in, title: Cash-in (free), service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-CASH-IN}, match: {code: SP-CASH-IN}},
+         body: {code: SP-CASH-IN, txn_type: CASH_IN, currency: "${param.currency}", basis: FLAT, flat_fee: "0", priority: 100,
+                valid_from: "${today}", is_active: true}}
+      - {key: fee_cash_out, title: Agent cash-out fee, service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-CASH-OUT}, match: {code: SP-CASH-OUT}},
+         body: {code: SP-CASH-OUT, txn_type: CASH_OUT, wallet_type: CUSTOMER, currency: "${param.currency}", basis: PERCENTAGE,
+                percentage: "0.01", min_fee: "0.50", max_fee: "10.00", priority: 100, valid_from: "${today}", is_active: true}}
+      - {key: fee_wallet_to_bank, title: Wallet to bank transfer fee, service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-W2B}, match: {code: SP-W2B}},
+         body: {code: SP-W2B, txn_type: WALLET_TO_BANK, wallet_type: CUSTOMER, currency: "${param.currency}", basis: FLAT_PLUS_PERCENTAGE,
+                flat_fee: "0.50", percentage: "0.005", max_fee: "10.00", priority: 100, valid_from: "${today}", is_active: true}}
+      - {key: fee_bill_payment, title: Bill payment fee, service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-BILL}, match: {code: SP-BILL}},
+         body: {code: SP-BILL, txn_type: BILL_PAYMENT, wallet_type: CUSTOMER, currency: "${param.currency}", basis: FLAT, flat_fee: "0.25",
+                priority: 100, valid_from: "${today}", is_active: true}}
+      - {key: fee_merchant_payment, title: Merchant payment (free for the payer), service: wallet-service, path: /v1/wallet-fee-rules, update: PATCH, update_exclude: [code],
+         lookup: {query: {code: SP-MERCHANT}, match: {code: SP-MERCHANT}},
+         body: {code: SP-MERCHANT, txn_type: MERCHANT_PAYMENT, wallet_type: CUSTOMER, currency: "${param.currency}", basis: FLAT, flat_fee: "0",
+                priority: 100, valid_from: "${today}", is_active: true}}
+      - {key: tier0_limits, title: KYC tier 0 (phone only) limits, service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 0, wallet_type: CUSTOMER, currency: "${param.currency}"}, match: {kyc_tier: 0, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 0, wallet_type: CUSTOMER, currency: "${param.currency}", max_balance: "${param.wallet_tier0_max_balance}", per_txn_min: "0.10", per_txn_max: "200",
+                daily_amount: "500", daily_count: 20, monthly_amount: "2000", monthly_count: 200, valid_from: "${today}"}}
+      - {key: tier1_limits, title: KYC tier 1 limits, service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 1, wallet_type: CUSTOMER, currency: "${param.currency}"}, match: {kyc_tier: 1, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 1, wallet_type: CUSTOMER, currency: "${param.currency}", max_balance: "${param.wallet_tier1_max_balance}", per_txn_min: "0.10", per_txn_max: "1000",
+                daily_amount: "2000", daily_count: 30, monthly_amount: "10000", monthly_count: 300, valid_from: "${today}"}}
+      - {key: tier2_limits, title: KYC tier 2 limits, service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 2, wallet_type: CUSTOMER, currency: "${param.currency}"}, match: {kyc_tier: 2, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 2, wallet_type: CUSTOMER, currency: "${param.currency}", max_balance: "${param.wallet_tier2_max_balance}", per_txn_min: "0.10", per_txn_max: "5000",
+                daily_amount: "10000", daily_count: 50, monthly_amount: "50000", monthly_count: 500, valid_from: "${today}"}}
+      - {key: tier3_limits, title: KYC tier 3 limits, service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 3, wallet_type: CUSTOMER, currency: "${param.currency}"}, match: {kyc_tier: 3, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 3, wallet_type: CUSTOMER, currency: "${param.currency}", max_balance: "50000", per_txn_min: "0.10", per_txn_max: "20000",
+                daily_amount: "50000", daily_count: 100, monthly_amount: "200000", monthly_count: 1000, valid_from: "${today}"}}
+
+  # ------------------------------------------------------------------------------------------------ limits
+  # limits-service has no submit step: a rule is activated by a different user (the checker). The pack creates the
+  # rules as DRAFT and reports the activation as pending; it never activates them itself.
+  - code: limits
+    title: Payment limit rules (limits-service, checker activation)
+    items:
+      - key: payment_per_txn
+        service: limits-service
+        path: /v1/risk/limits/rules
+        lookup: {query: {scope: TENANT}, match: {code: SP-PAY-TXN-MAX}}
+        body: {code: SP-PAY-TXN-MAX, name: Maximum payment amount (DEFAULT), scope: TENANT, period: PER_TRANSACTION, measure: AMOUNT,
+               currency: "${param.currency}", max_amount: "${param.limit_payment_per_txn}", breach_action: REVIEW, priority: 100, is_regulatory: false}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: payment_daily_amount
+        service: limits-service
+        path: /v1/risk/limits/rules
+        lookup: {query: {scope: TENANT}, match: {code: SP-PAY-DAILY}}
+        body: {code: SP-PAY-DAILY, name: Daily outgoing payments (DEFAULT), scope: TENANT, period: DAILY, measure: AMOUNT,
+               currency: "${param.currency}", max_amount: "${param.limit_payment_daily}", breach_action: REJECT, priority: 100, is_regulatory: false}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: payment_daily_count
+        service: limits-service
+        path: /v1/risk/limits/rules
+        lookup: {query: {scope: TENANT}, match: {code: SP-PAY-DAILY-COUNT}}
+        body: {code: SP-PAY-DAILY-COUNT, name: Daily number of payments (DEFAULT), scope: TENANT, period: DAILY, measure: COUNT,
+               max_count: "${param.limit_payment_daily_count}", breach_action: STEP_UP, priority: 100, is_regulatory: false}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: tier0_daily
+        service: limits-service
+        path: /v1/risk/limits/rules
+        lookup: {query: {scope: KYC_TIER, scope_ref: TIER_0}, match: {code: SP-KYC-T0-DAILY}}
+        body: {code: SP-KYC-T0-DAILY, name: KYC tier 0 daily payments (DEFAULT), scope: KYC_TIER, scope_ref: TIER_0, period: DAILY,
+               measure: AMOUNT, currency: "${param.currency}", max_amount: "${param.limit_tier0_daily}", breach_action: REJECT, priority: 100, is_regulatory: true}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: tier1_daily
+        service: limits-service
+        path: /v1/risk/limits/rules
+        lookup: {query: {scope: KYC_TIER, scope_ref: TIER_1}, match: {code: SP-KYC-T1-DAILY}}
+        body: {code: SP-KYC-T1-DAILY, name: KYC tier 1 daily payments (DEFAULT), scope: KYC_TIER, scope_ref: TIER_1, period: DAILY,
+               measure: AMOUNT, currency: "${param.currency}", max_amount: "${param.limit_tier1_daily}", breach_action: REJECT, priority: 100, is_regulatory: true}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+
+  # ------------------------------------------------------------------------------------------------ commissions
+  - code: commissions
+    title: Agent commission plan (commission-service, maker-checker)
+    items:
+      - key: agent_plan
+        title: Standard agent commission plan
+        service: commission-service
+        path: /v1/commission-plans
+        lookup: {query: {code: SP-AGENT-STD}, match: {code: SP-AGENT-STD}}
+        body: {code: SP-AGENT-STD, name: Standard agent commissions (DEFAULT), description: "Created by starter pack ${pack.code} ${pack.version}",
+               applies_to: AGENT, currency: "${param.currency}", payout_frequency: MONTHLY, valid_from: "${today}"}
+        children:
+          - {key: cash_in_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Cash-in commission (agent), txn_type: CASH_IN, basis: PERCENTAGE, percentage: "0.002",
+                    base: AMOUNT, cap_amount: "${param.commission_cash_in_cap}", beneficiary: AGENT, funded_by: PLATFORM, priority: 100, is_active: true}}
+          - {key: cash_out_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Cash-out commission (agent share of the fee), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.40", base: FEE, beneficiary: AGENT, funded_by: FEE, priority: 100, is_active: true}}
+          - {key: cash_out_super_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Cash-out override (super-agent share of the fee), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.10", base: FEE, beneficiary: SUPER_AGENT, funded_by: FEE, priority: 100, is_active: true}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT],
+             approval: commission_plan}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+
+  # ------------------------------------------------------------------------------------------------ notifications
+  - code: notifications
+    title: Notification providers, templates (maker-checker) and payment alert rules
+    items:
+      - {key: provider_email, title: E-mail provider (SMTP sandbox, DEFAULT), service: notification-service, path: /v1/notification-providers,
+         update: PATCH, lookup: {query: {channel: EMAIL}, match: {channel: EMAIL}},
+         body: {channel: EMAIL, provider_name: SMTP, priority: 1, sender_id: "${param.email_sender}", status: "${param.provider_status}",
+                config: {smtp_host: "${param.smtp_host}", smtp_port: "${param.smtp_port}", sandbox: "${param.email_sandbox}"}}}
+      - {key: provider_sms, title: SMS provider (sandbox, DEFAULT), service: notification-service, path: /v1/notification-providers,
+         update: PATCH, lookup: {query: {channel: SMS}, match: {channel: SMS}},
+         body: {channel: SMS, provider_name: SANDBOX, priority: 1, sender_id: "${param.sms_sender_id}", status: "${param.provider_status}",
+                config: {sandbox: true}}}
+      - {key: provider_push, title: Push provider (sandbox, DEFAULT), service: notification-service, path: /v1/notification-providers,
+         update: PATCH, lookup: {query: {channel: PUSH}, match: {channel: PUSH}},
+         body: {channel: PUSH, provider_name: SANDBOX, priority: 1, status: "${param.provider_status}", config: {sandbox: true}}}
+      - key: tpl_payment_settled_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: EMAIL}}
+        body: {code: PAYMENT_SETTLED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Payment {{status}}",
+               body: "Your payment of {{amount}} {{currency}} is {{status}} (ref {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_settled_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: SMS}}
+        body: {code: PAYMENT_SETTLED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "Payment of {{amount}} {{currency}} {{status}}. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_settled_in_app
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: IN_APP, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: IN_APP}}
+        body: {code: PAYMENT_SETTLED, channel: IN_APP, locale: "${param.language}", category: TRANSACTIONAL, subject: "Payment {{status}}",
+               body: "Your payment of {{amount}} {{currency}} is {{status}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_received_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_RECEIVED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_RECEIVED, channel: SMS}}
+        body: {code: PAYMENT_RECEIVED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "You have received {{amount}} {{currency}}. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_received_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_RECEIVED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_RECEIVED, channel: EMAIL}}
+        body: {code: PAYMENT_RECEIVED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Money received",
+               body: "You have received {{amount}} {{currency}} (ref {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_failed_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_FAILED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_FAILED, channel: SMS}}
+        body: {code: PAYMENT_FAILED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "Your payment of {{amount}} {{currency}} could not be completed. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_failed_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_FAILED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_FAILED, channel: EMAIL}}
+        body: {code: PAYMENT_FAILED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Payment not completed",
+               body: "Your payment of {{amount}} {{currency}} could not be completed (ref {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payee_alias_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYEE_ALIAS_OTP, channel: SMS, locale: "${param.language}"}, match: {code: PAYEE_ALIAS_OTP, channel: SMS}}
+        body: {code: PAYEE_ALIAS_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} is your code to register {{alias}}. It expires in {{expires_in_minutes}} minutes. Never share it."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payee_alias_otp_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYEE_ALIAS_OTP, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYEE_ALIAS_OTP, channel: EMAIL}}
+        body: {code: PAYEE_ALIAS_OTP, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "Your verification code",
+               body: "{{otp}} is your code to register {{alias}}. It expires in {{expires_in_minutes}} minutes. Never share it."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_3ds_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_3DS_OTP, channel: SMS, locale: "${param.language}"}, match: {code: CARD_3DS_OTP, channel: SMS}}
+        body: {code: CARD_3DS_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} is your code to approve {{amount}} {{currency}} at {{merchant_name}}. Never share it."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_3ds_otp_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_3DS_OTP, channel: EMAIL, locale: "${param.language}"}, match: {code: CARD_3DS_OTP, channel: EMAIL}}
+        body: {code: CARD_3DS_OTP, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "Approve your online payment",
+               body: "{{otp}} is your code to approve {{amount}} {{currency}} at {{merchant_name}}. Never share it."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_token_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS, locale: "${param.language}"}, match: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS}}
+        body: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} is your code to add your card to {{token_requestor}}. Never share it."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - {key: rule_payment_settled, title: Alert on settled payments, service: notification-service, path: /v1/notification-rules, update: PATCH,
+         update_exclude: [event_type, template_code],
+         lookup: {query: {event_type: payments.payment.settled}, match: {template_code: PAYMENT_SETTLED}},
+         body: {event_type: payments.payment.settled, template_code: PAYMENT_SETTLED, channels: "${param.alert_channels}",
+                recipient_expression: "CUSTOMER:customer_id", category: TRANSACTIONAL, is_active: true}}
+      - {key: rule_payment_received, title: Alert on incoming payments, service: notification-service, path: /v1/notification-rules, update: PATCH,
+         update_exclude: [event_type, template_code],
+         lookup: {query: {event_type: payments.payment.received}, match: {template_code: PAYMENT_RECEIVED}},
+         body: {event_type: payments.payment.received, template_code: PAYMENT_RECEIVED, channels: "${param.alert_channels}",
+                recipient_expression: "CUSTOMER:customer_id", category: TRANSACTIONAL, is_active: true}}
+      - {key: rule_payment_failed, title: Alert on failed payments, service: notification-service, path: /v1/notification-rules, update: PATCH,
+         update_exclude: [event_type, template_code],
+         lookup: {query: {event_type: payments.payment.failed}, match: {template_code: PAYMENT_FAILED}},
+         body: {event_type: payments.payment.failed, template_code: PAYMENT_FAILED, channels: "${param.alert_channels}",
+                recipient_expression: "CUSTOMER:customer_id", category: TRANSACTIONAL, is_active: true}}
+
+  # ------------------------------------------------------------------------------------------------ end of day
+  - code: end_of_day
+    title: Standard EOD job pack and trigger policy (business-day-service)
+    items:
+      - {key: standard_pack, title: Install the standard EOD job pack, kind: CALL, service: business-day-service,
+         path: /v1/operations/eod-jobs/install-standard-pack, body: {}}
+      - {key: ledger_eod_job, title: Point LEDGER_EOD at the main book and activate it, kind: PATCH_EXISTING, service: business-day-service,
+         path: /v1/operations/eod-jobs, lookup: {query: {owning_service: ledger-service}, match: {code: LEDGER_EOD}},
+         body: {parameters: {ledger_id: "${ref.ledger_book}"}, is_active: true}}
+      - {key: trigger_policy, title: EOD trigger policy (manual start by default), service: business-day-service,
+         path: /v1/operations/eod-trigger-policies, update: PATCH, update_exclude: [legal_entity_id],
+         lookup: {query: {legal_entity_id: "${ref.legal_entity}"}, match: {legal_entity_id: "${ref.legal_entity}"}},
+         body: {legal_entity_id: "${ref.legal_entity}", is_enabled: "${param.eod_auto_trigger}", cut_off_time: "${param.eod_cut_off_time}",
+                time_zone: "${param.timezone}", auto_roll: false, notes: "DEFAULT policy from starter pack ${pack.code} ${pack.version}"}}

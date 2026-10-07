@@ -8,9 +8,13 @@ script is idempotent across reruns. Every POST carries an Idempotency-Key.
     python tools/e2e/journeys.py            # all journeys
     python tools/e2e/journeys.py A B        # selected journeys
     python tools/e2e/journeys.py --tenant <uuid> D   # reuse a tenant (re-running is safe: new codes per run)
+    python tools/e2e/journeys.py --manual-setup      # setup S by hand instead of the tenant starter pack
 
 Journeys: A customer & account, B money movement, C maker-checker, D wallet, E lending, F cards, G end of day.
-S (setup: legal entity, ledger book, internal accounts, ledger routing, notification providers) always runs first.
+S (setup) always runs first: it applies the tenant starter pack (default KE, override with MERIDIAN_E2E_STARTER_PACK)
+through tenant-service, approves its maker-checker items in the workflow inbox as the checker, activates its limit
+rules, resumes the run until it completes, and reads the legal entity, ledger book and internal accounts from the
+pack's item registry. --manual-setup creates the legal entity, book, accounts, routing and notification setup by hand.
 A..C live in this file; D..G in tools/e2e/journey_<x>_*.py modules (registered with @journey). Stdlib only.
 """
 from __future__ import annotations
@@ -288,8 +292,107 @@ def activate_config(api: Api, namespace: str, key: str, value: dict) -> dict:
         return wait_for(f"config entry {namespace}/{key} ACTIVE", active, timeout=10)
 
 
-@journey("S", "Setup: legal entity, ledger book, internal accounts, per-tenant ledger routing (config-service)")
+STARTER_PACK = os.environ.get("MERIDIAN_E2E_STARTER_PACK", "KE")
+MANUAL_SETUP = False
+
+
+def starter_pack_parameters() -> dict:
+    """Overrides of the pack defaults for the local stack: real e-mail through Mailpit, alerts by e-mail / in-app."""
+    smtp = os.environ.get("MERIDIAN_SMTP", "localhost:11025").split(":")
+    return {"currency": CCY, "country": COUNTRY, "legal_name": "E2E Demo Bank Ltd", "alert_channels": ["EMAIL", "IN_APP"],
+            "smtp_host": smtp[0], "smtp_port": int(smtp[1]), "email_sandbox": False,
+            "email_sender": "no-reply@e2e.meridian.example", "sms_sender_id": "MERIDIAN"}
+
+
+def approve_request(api: Api, rid: str) -> dict:
+    """Checker approves one approval request (every level)."""
+    levels = 0
+    while True:
+        levels += 1
+        out = api.post(f"/v1/approval-requests/{rid}/approve", {"comment": "e2e checker approves starter pack item"},
+                       user=CHECKER if levels == 1 else f"{CHECKER}{levels}", roles=CHECKER_ROLES)
+        status = out.get("status")
+        if status in ("APPROVED", "EXECUTED") or levels > 4:
+            return out
+        if status != "PENDING":
+            raise StepFailed(f"approval request {rid} ended {status}: {_short(out)}")
+
+
+def _run_summary(run: dict) -> str:
+    bad = [f"{i['key']}: {i.get('outcome')}/{i.get('status')} {i.get('message', '')}"
+           for s in run.get("results", []) for i in s.get("items", [])
+           if i.get("outcome") in ("FAILED", "BLOCKED") or i.get("status") in ("FAILED", "BLOCKED")]
+    return (f"{run.get('status')}: created {run.get('created_count')}, unchanged {run.get('unchanged_count')}, "
+            f"awaiting {run.get('awaiting_approval_count')}, failed {run.get('failed_count')}"
+            + (f"; {'; '.join(bad[:5])}" if bad else "") + (f"; error {run.get('error')}" if run.get("error") else ""))
+
+
+@journey("S", "Setup: tenant starter pack (legal entity, ledger, routing, products, tariffs, limits, alerts, EOD)")
 def journey_setup(j: Journey):
+    if MANUAL_SETUP:
+        return journey_setup_manual(j)
+    api, sh = j.api, j.shared
+    pack = STARTER_PACK
+
+    def apply():
+        run = api.post("/v1/starter-pack-runs/apply", {"pack_code": pack, "parameters": starter_pack_parameters()})
+        if run["status"] == "RUNNING":  # longer than tenant-service's synchronous wait
+            run = wait_for("starter pack run finished", lambda: (lambda r: r if r["status"] != "RUNNING" else None)(
+                api.get(f"/v1/starter-pack-runs/{run['id']}")), timeout=300, interval=2)
+        if run["status"] not in ("AWAITING_APPROVAL", "COMPLETED"):
+            fail(_run_summary(run))
+        sh["starter_pack_run"] = run
+        return _run_summary(run) + f", {len(run.get('approval_request_ids') or [])} approval requests"
+    j.step(f"starter pack: apply {pack} as the maker (maker-checker items submitted, not approved)", apply)
+    pending = sh["starter_pack_run"].get("approval_request_ids") or []
+    if pending:
+        j.step("workflow: maker cannot approve the pack's own requests (four-eyes)", api.post,
+               f"/v1/approval-requests/{pending[0]}/approve", {"comment": "self approval"}, user=MAKER,
+               roles=CHECKER_ROLES, expect=(403, 409, 422))
+
+        def approve_all():
+            for rid in pending:
+                approve_request(api, rid)
+            return f"{len(pending)} requests approved"
+        j.step("workflow: checker approves the pack's routing, products, plan and templates in the inbox", approve_all)
+
+    def activate_limits():
+        items = api.get(f"/v1/starter-pack-items?pack_code={pack}&status=AWAITING_ACTIVATION&limit=200").get("data", [])
+        for i in items:
+            api.post(f"{i['resource_path']}/{i['resource_id']}/activate", {"comment": "e2e checker activates"}, user=CHECKER)
+        return f"{len(items)} rules activated by the checker"
+    j.step("limits-service: checker activates the pack's limit rules (four-eyes)", activate_limits)
+
+    def resume():
+        cur = sh["starter_pack_run"]
+        if cur["status"] == "COMPLETED":
+            return cur
+        nxt = api.post(f"/v1/starter-pack-runs/{cur['id']}/resume", {})
+        sh["starter_pack_run"] = nxt
+        return nxt if nxt["status"] == "COMPLETED" else None
+    done = j.step("starter pack: resume until COMPLETED (publishes products, activates wallets once routing is live)",
+                  lambda: _run_summary(wait_for("starter pack run COMPLETED", resume, timeout=120, interval=3)))
+
+    def registry():
+        items = {i["item_key"]: i for i in api.get(f"/v1/starter-pack-items?pack_code={pack}&limit=200").get("data", [])}
+        le, book = items["legal_entity"]["resource_id"], items["ledger_book"]["resource_id"]
+        gl = {k.split("/", 1)[1]: i["resource_id"] for k, i in items.items() if k.startswith("ledger_book/")}
+        missing = [k for k, *_ in INTERNAL_ACCOUNTS if k not in gl]
+        if missing:
+            fail(f"pack chart lacks {missing}")
+        sh["legal_entity_id"] = api.shared_le = le
+        sh["ledger_id"] = book
+        sh["gl"] = gl
+        return f"legal entity {le}, book {book}, {len(gl)} internal accounts"
+    j.step("starter pack: legal entity, ledger book and internal accounts from the item registry", registry)
+    j.step("notification: payment alert e-mail template ACTIVE", lambda: "ACTIVE" if any(
+        t["channel"] == "EMAIL" for t in api.get("/v1/notification-templates?code=PAYMENT_SETTLED&status=ACTIVE").get("data", []))
+        else fail("PAYMENT_SETTLED e-mail template not active"))
+    j.final = {"legal_entity": sh["legal_entity_id"], "ledger": sh["ledger_id"], "starter_pack": f"{pack} {done}"}
+
+
+def journey_setup_manual(j: Journey):
+    """The original hand-made setup S (kept for comparison and as a fallback: --manual-setup)."""
     api, sh = j.api, j.shared
     le = j.step("tenant: create legal entity", api.post, "/v1/legal-entities", {
         "code": f"LE{run_id()}", "legal_name": "E2E Demo Bank Ltd", "country": COUNTRY, "base_currency": CCY})
@@ -343,7 +446,11 @@ def journey_setup(j: Journey):
 
 
 def main(argv: list[str]) -> int:
+    global MANUAL_SETUP
     tenant = None
+    if "--manual-setup" in argv:
+        MANUAL_SETUP = True
+        argv.remove("--manual-setup")
     if "--tenant" in argv:
         i = argv.index("--tenant")
         tenant = argv[i + 1]

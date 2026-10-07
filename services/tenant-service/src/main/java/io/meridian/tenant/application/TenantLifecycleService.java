@@ -34,17 +34,23 @@ public class TenantLifecycleService {
     private final CrudEngine crud;
     private final Events events;
     private final JsonMapper json;
+    private final StarterPackService starterPacks;
 
-    public TenantLifecycleService(TenantStore store, CrudEngine crud, Events events, JsonMapper json) {
+    public TenantLifecycleService(TenantStore store, CrudEngine crud, Events events, JsonMapper json,
+                                  StarterPackService starterPacks) {
         this.store = store;
         this.crud = crud;
         this.events = events;
         this.json = json;
+        this.starterPacks = starterPacks;
     }
 
     // ------------------------------------------------------------------ tenants
 
-    /** Generic create with business rules: starts PROVISIONING, optional initial placement, module catalogue seeded. */
+    /**
+     * Generic create with business rules: starts PROVISIONING, optional initial placement, module catalogue seeded;
+     * a {@code starter_pack_code} is applied after commit (service identity acting for the new tenant).
+     */
     @Transactional
     public JsonNode create(Object body) {
         ObjectNode values = crud.toColumns("tenant", body);
@@ -65,6 +71,9 @@ public class TenantLifecycleService {
         }
         seedTenant(tenantId, null, values.path("default_currency").asString());
         events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
+        if (tenant.hasNonNull("starter_pack_code")) {
+            starterPacks.applyAfterProvisioning(tenantId, tenant, tenant.get("starter_pack_code").asString(), null);
+        }
         return tenant;
     }
 
@@ -98,10 +107,18 @@ public class TenantLifecycleService {
         values.put("cell_id", cellId.toString());
         values.put("home_region", cell.get("region").asString());
         values.put("template_code", template.code());
+        String starterPack = req.path("starter_pack").asString(null);
+        if (starterPack != null && !starterPack.isBlank()) {
+            values.put("starter_pack_code", starterPacks.catalog().require(starterPack, null).code());
+        }
         ObjectNode tenant = store.insert("tenant", values);
         placement(tenantId, cellId, null, "ACTIVE", io.meridian.common.time.Clocks.now(), "initial placement (template " + template.code() + ")");
         seedTenant(tenantId, template, req.get("default_currency").asString());
         events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
+        if (tenant.hasNonNull("starter_pack_code")) {
+            starterPacks.applyAfterProvisioning(tenantId, tenant, tenant.get("starter_pack_code").asString(),
+                    req.get("starter_pack_parameters"));
+        }
         return tenant;
     }
 

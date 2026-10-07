@@ -1,0 +1,210 @@
+# Meridian tenant starter pack: KE (Kenya, mobile-money-led retail bank). Extends GENERIC.
+#
+# DEFAULT VALUES for a Kenyan tenant in KES: tiered wallet tariffs and KYC tier limits in the shape common in the
+# Kenyan mobile money market, KES-scale product fees and payment limits, an agent commission plan with tiered cash-in
+# commissions, Swahili SMS alerts, EOD cut-off in Africa/Nairobi. The figures are illustrative defaults, not CBK
+# rules or any provider's tariff: confirm them with product, risk, finance and compliance before go-live. Excise
+# duty on fees is not configured here (tax rules come from the KE country pack in config-service).
+code: KE
+version: 2026.10.0
+extends: GENERIC@2026.10.0
+title: Kenya retail and mobile money starter pack
+market: KE
+description: >
+  GENERIC pack localised for Kenya: KES amounts, Africa/Nairobi business dates, tiered (banded) wallet tariffs,
+  KYC tier wallet limits, KES payment limits, tiered agent cash-in commissions and Swahili SMS alerts.
+notice: >
+  DEFAULT VALUES for Kenya (KES). Illustrative, not regulatory or provider tariffs: review every tariff, limit and
+  policy before go-live. Excise duty on fees is configured through the KE country pack (config-service tax rules).
+
+parameters:
+  currency: {default: KES}
+  country: {default: KE}
+  legal_name: {default: "Demo Bank Kenya Ltd (DEFAULT)"}
+  timezone: {default: Africa/Nairobi}
+  regulator: {default: Central Bank of Kenya}
+  savings_rate: {default: "0.04"}
+  payment_second_level_amount: {default: "1000000"}
+  sms_sender_id: {default: MERIDIANKE}
+  fee_statement_copy: {default: "200.00"}
+  fee_monthly_maintenance: {default: "250.00"}
+  fee_transfer_out: {default: "50.00"}
+  fee_international_flat: {default: "1500.00"}
+  fee_international_max: {default: "5000.00"}
+  limit_payment_per_txn: {default: "1000000"}
+  limit_payment_daily: {default: "2000000"}
+  limit_tier0_daily: {default: "50000"}
+  limit_tier1_daily: {default: "150000"}
+  wallet_tier0_max_balance: {default: "100000"}
+  wallet_tier1_max_balance: {default: "300000"}
+  wallet_tier2_max_balance: {default: "500000"}
+  commission_cash_in_cap: {default: "200.00"}
+
+steps:
+  # Banded tariffs (fee per amount band) replace the GENERIC percentage fees with the same keys.
+  - code: wallet_pricing
+    items:
+      - key: fee_p2p
+        title: P2P transfer fee (banded, KES DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-P2P}, match: {code: SP-P2P}}
+        body:
+          code: SP-P2P
+          txn_type: P2P
+          wallet_type: CUSTOMER
+          currency: KES
+          basis: TIERED
+          tiers:
+            - {from: "1", to: "100", flat: "0"}
+            - {from: "100.01", to: "500", flat: "7"}
+            - {from: "500.01", to: "1000", flat: "13"}
+            - {from: "1000.01", to: "1500", flat: "23"}
+            - {from: "1500.01", to: "2500", flat: "33"}
+            - {from: "2500.01", to: "3500", flat: "53"}
+            - {from: "3500.01", to: "5000", flat: "57"}
+            - {from: "5000.01", to: "7500", flat: "78"}
+            - {from: "7500.01", to: "10000", flat: "90"}
+            - {from: "10000.01", to: "15000", flat: "100"}
+            - {from: "15000.01", to: "20000", flat: "105"}
+            - {from: "20000.01", flat: "108"}
+          priority: 100
+          valid_from: "${today}"
+          is_active: true
+      - key: fee_cash_out
+        title: Agent cash-out fee (banded, KES DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-CASH-OUT}, match: {code: SP-CASH-OUT}}
+        body:
+          code: SP-CASH-OUT
+          txn_type: CASH_OUT
+          wallet_type: CUSTOMER
+          currency: KES
+          basis: TIERED
+          tiers:
+            - {from: "50", to: "100", flat: "11"}
+            - {from: "100.01", to: "2500", flat: "29"}
+            - {from: "2500.01", to: "3500", flat: "52"}
+            - {from: "3500.01", to: "5000", flat: "69"}
+            - {from: "5000.01", to: "7500", flat: "87"}
+            - {from: "7500.01", to: "10000", flat: "115"}
+            - {from: "10000.01", to: "15000", flat: "167"}
+            - {from: "15000.01", to: "20000", flat: "185"}
+            - {from: "20000.01", to: "35000", flat: "197"}
+            - {from: "35000.01", to: "50000", flat: "278"}
+            - {from: "50000.01", flat: "309"}
+          priority: 100
+          valid_from: "${today}"
+          is_active: true
+      - key: fee_wallet_to_bank
+        title: Wallet to bank transfer fee (KES DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-W2B}, match: {code: SP-W2B}}
+        body: {code: SP-W2B, txn_type: WALLET_TO_BANK, wallet_type: CUSTOMER, currency: KES, basis: TIERED,
+               tiers: [{from: "1", to: "1000", flat: "15"}, {from: "1000.01", to: "10000", flat: "50"}, {from: "10000.01", flat: "100"}],
+               priority: 100, valid_from: "${today}", is_active: true}
+      - key: fee_bill_payment
+        title: Bill payment fee (KES DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-BILL}, match: {code: SP-BILL}}
+        body: {code: SP-BILL, txn_type: BILL_PAYMENT, wallet_type: CUSTOMER, currency: KES, basis: TIERED,
+               tiers: [{from: "1", to: "1000", flat: "5"}, {from: "1000.01", to: "10000", flat: "25"}, {from: "10000.01", flat: "50"}],
+               priority: 100, valid_from: "${today}", is_active: true}
+      - {key: tier0_limits, title: KYC tier 0 (phone only) limits (KES DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 0, wallet_type: CUSTOMER, currency: KES}, match: {kyc_tier: 0, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 0, wallet_type: CUSTOMER, currency: KES, max_balance: "100000", per_txn_min: "10", per_txn_max: "20000",
+                daily_amount: "50000", daily_count: 30, monthly_amount: "300000", monthly_count: 300, valid_from: "${today}"}}
+      - {key: tier1_limits, title: KYC tier 1 limits (KES DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 1, wallet_type: CUSTOMER, currency: KES}, match: {kyc_tier: 1, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 1, wallet_type: CUSTOMER, currency: KES, max_balance: "300000", per_txn_min: "10", per_txn_max: "70000",
+                daily_amount: "150000", daily_count: 50, monthly_amount: "1000000", monthly_count: 500, valid_from: "${today}"}}
+      - {key: tier2_limits, title: KYC tier 2 limits (KES DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 2, wallet_type: CUSTOMER, currency: KES}, match: {kyc_tier: 2, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 2, wallet_type: CUSTOMER, currency: KES, max_balance: "500000", per_txn_min: "10", per_txn_max: "250000",
+                daily_amount: "500000", daily_count: 100, monthly_amount: "3000000", monthly_count: 1000, valid_from: "${today}"}}
+      - {key: tier3_limits, title: KYC tier 3 limits (KES DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 3, wallet_type: CUSTOMER, currency: KES}, match: {kyc_tier: 3, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 3, wallet_type: CUSTOMER, currency: KES, max_balance: "1000000", per_txn_min: "10", per_txn_max: "250000",
+                daily_amount: "1000000", daily_count: 150, monthly_amount: "6000000", monthly_count: 1500, valid_from: "${today}"}}
+
+  # Tiered cash-in commissions (flat per band) replace the GENERIC percentage.
+  - code: commissions
+    items:
+      - key: agent_plan
+        title: Standard agent commission plan (KES DEFAULT)
+        service: commission-service
+        path: /v1/commission-plans
+        lookup: {query: {code: SP-AGENT-STD}, match: {code: SP-AGENT-STD}}
+        body: {code: SP-AGENT-STD, name: Standard agent commissions (KES DEFAULT), description: "Created by starter pack ${pack.code} ${pack.version}",
+               applies_to: AGENT, currency: KES, payout_frequency: MONTHLY, valid_from: "${today}"}
+        children:
+          - key: cash_in_agent
+            service: commission-service
+            path: /v1/commission-rules
+            body:
+              commission_plan_id: "${parent}"
+              name: Cash-in commission (agent, banded)
+              txn_type: CASH_IN
+              basis: TIERED
+              base: AMOUNT
+              tiers:
+                - {from: "50", to: "2500", flat: "10"}
+                - {from: "2500.01", to: "10000", flat: "25"}
+                - {from: "10000.01", to: "35000", flat: "60"}
+                - {from: "35000.01", flat: "100"}
+              cap_amount: "${param.commission_cash_in_cap}"
+              beneficiary: AGENT
+              funded_by: PLATFORM
+              tax_withholding_rate: "0.10"
+              priority: 100
+              is_active: true
+          - {key: cash_out_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Cash-out commission (agent share of the fee), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.40", base: FEE, beneficiary: AGENT, funded_by: FEE, tax_withholding_rate: "0.10", priority: 100, is_active: true}}
+          - {key: cash_out_super_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Cash-out override (super-agent share of the fee), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.10", base: FEE, beneficiary: SUPER_AGENT, funded_by: FEE, tax_withholding_rate: "0.10", priority: 100, is_active: true}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT],
+             approval: commission_plan}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+
+  # Swahili SMS variants next to the default-language templates.
+  - code: notifications
+    items:
+      - key: tpl_payment_received_sms_sw
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_RECEIVED, channel: SMS, locale: sw}, match: {code: PAYMENT_RECEIVED, channel: SMS}}
+        body: {code: PAYMENT_RECEIVED, channel: SMS, locale: sw, category: TRANSACTIONAL,
+               body: "Umepokea {{currency}} {{amount}}. Kumbukumbu {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_settled_sms_sw
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: SMS, locale: sw}, match: {code: PAYMENT_SETTLED, channel: SMS}}
+        body: {code: PAYMENT_SETTLED, channel: SMS, locale: sw, category: TRANSACTIONAL,
+               body: "Malipo yako ya {{currency}} {{amount}} yamekamilika. Kumbukumbu {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]

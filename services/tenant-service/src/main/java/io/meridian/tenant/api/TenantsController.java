@@ -2,15 +2,18 @@ package io.meridian.tenant.api;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.tenant.api.generated.TenantsApi;
+import io.meridian.tenant.api.generated.model.StarterPackRun;
 import io.meridian.tenant.api.generated.model.Tenant;
 import io.meridian.tenant.api.generated.model.TenantCreate;
 import io.meridian.tenant.api.generated.model.TenantPlacement;
 import io.meridian.tenant.api.generated.model.TenantPlacementPage;
 import io.meridian.tenant.api.generated.model.TenantUpdate;
+import io.meridian.tenant.api.generated.model.TenantsApplyStarterPackRequest;
 import io.meridian.tenant.api.generated.model.TenantsMigrateRequest;
 import io.meridian.tenant.api.generated.model.TenantsProvisionFromTemplateRequest;
 import io.meridian.tenant.api.generated.model.TenantsReinstateRequest;
 import io.meridian.tenant.api.generated.model.TenantsSuspendRequest;
+import io.meridian.tenant.application.StarterPackService;
 import io.meridian.tenant.application.TenantLifecycleService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
@@ -19,10 +22,12 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Tenants API (platform operator): lifecycle actions, placement and migration between cells, template provisioning.
+ * Tenants API (platform operator): lifecycle actions, placement and migration between cells, template provisioning,
+ * starter packs applied to a tenant.
  * Contract: generated/openapi/services/tenant-service.openapi.yaml
  */
 @RestController
@@ -31,12 +36,26 @@ public class TenantsController implements TenantsApi {
     private final Idempotency idempotency;
     private final CrudEngine crud;
     private final JsonMapper json;
+    private final StarterPackService starterPacks;
 
-    public TenantsController(TenantLifecycleService tenants, Idempotency idempotency, CrudEngine crud, JsonMapper json) {
+    public TenantsController(TenantLifecycleService tenants, Idempotency idempotency, CrudEngine crud, JsonMapper json,
+                             StarterPackService starterPacks) {
         this.tenants = tenants;
         this.idempotency = idempotency;
         this.crud = crud;
         this.json = json;
+        this.starterPacks = starterPacks;
+    }
+
+    @Override
+    public ResponseEntity<StarterPackRun> tenantsApplyStarterPack(UUID id, String idempotencyKey,
+                                                                  TenantsApplyStarterPackRequest body) {
+        TenantContext.require();
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, body, StarterPackRun.class, () -> Responses.of(HttpStatus.OK,
+                starterPacks.applyToTenant(id, req.path("pack_code").asString(), req.path("version").asString(null),
+                        req.get("parameters"), req.path("dry_run").asBoolean(false)),
+                StarterPackRun.class, json));
     }
 
     @Override

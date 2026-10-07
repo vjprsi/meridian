@@ -1,0 +1,48 @@
+# Test-only: TEST_MINI 2026.2.0 = 2026.1.0 with a cheaper P2P fee (PATCH), a higher limit (not updatable: reported),
+# a stricter approval policy (pre-existing in the test: never touched), new routing (new config version) and a new
+# cash-in fee rule; the tier limit is unchanged.
+code: TEST_MINI
+version: 2026.2.0
+extends: TEST_MINI@2026.1.0
+parameters:
+  p2p_percentage: {default: "0.004"}
+steps:
+  - code: approvals
+    items:
+      - key: policy_config
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: config_entry, action: activate}, match: {resource_type: config_entry, action: activate}}
+        body: {code: AP-CONFIG, name: Config approval, resource_type: config_entry, action: activate, required_approvals: 1,
+               approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}], allow_self_approval: false,
+               expires_after_hours: 24, is_active: true}
+  - code: pricing
+    items:
+      - key: daily_limit
+        service: limits-service
+        path: /v1/risk/limits/rules
+        body: {code: MINI-DAILY, name: Daily, scope: TENANT, period: DAILY, measure: AMOUNT, currency: "${param.currency}", max_amount: "2000"}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE]}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: fee_cash_in
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        body: {code: MINI-CASH-IN, txn_type: CASH_IN, currency: "${param.currency}", basis: FLAT, flat_fee: "0", valid_from: "${today}", is_active: true}
+  - code: routing
+    items:
+      - key: routing_default
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        body: {namespace: ledger, config_key: default, change_reason: "test pack ${pack.version}",
+               value: {ledger_id: "${ref.legal_entity}", note: v2}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "test pack ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]

@@ -1,0 +1,68 @@
+# Test-only pack (StarterPackFlowIT): a small pack whose 2026.2.0 version changes some items, to prove that upgrades
+# touch only pack-owned items that changed.
+code: TEST_MINI
+version: 2026.1.0
+title: Test mini pack
+market: TEST
+notice: DEFAULT test values
+parameters:
+  currency: {type: string, default: EUR, tenant_fact: default_currency}
+  p2p_percentage: {type: number, default: "0.005"}
+steps:
+  - code: organisation
+    title: Legal entity
+    items:
+      - key: legal_entity
+        service: tenant-service
+        path: /v1/legal-entities
+        lookup: {match: {code: MINI}}
+        body: {code: MINI, legal_name: Mini Bank (DEFAULT), country: IE, base_currency: "${param.currency}"}
+  - code: approvals
+    title: Approval policy
+    items:
+      - key: policy_config
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: config_entry, action: activate}, match: {resource_type: config_entry, action: activate}}
+        body: {code: AP-CONFIG, name: Config approval, resource_type: config_entry, action: activate, required_approvals: 1,
+               approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}], allow_self_approval: false,
+               expires_after_hours: 72, is_active: true}
+  - code: pricing
+    title: Wallet pricing and limits
+    items:
+      - key: fee_p2p
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: MINI-P2P}, match: {code: MINI-P2P}}
+        body: {code: MINI-P2P, txn_type: P2P, currency: "${param.currency}", basis: PERCENTAGE, percentage: "${param.p2p_percentage}",
+               valid_from: "${today}", is_active: true}
+      - key: tier0
+        service: wallet-service
+        path: /v1/wallet-tier-limits
+        update: PATCH
+        update_exclude: [kyc_tier, wallet_type, currency]
+        body: {kyc_tier: 0, wallet_type: CUSTOMER, currency: "${param.currency}", max_balance: "500", valid_from: "${today}"}
+      - key: daily_limit
+        service: limits-service
+        path: /v1/risk/limits/rules
+        body: {code: MINI-DAILY, name: Daily, scope: TENANT, period: DAILY, measure: AMOUNT, currency: "${param.currency}", max_amount: "1000"}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE]}
+        ready_status: [ACTIVE, INACTIVE]
+  - code: routing
+    title: Ledger routing
+    items:
+      - key: routing_default
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        body: {namespace: ledger, config_key: default, change_reason: "test pack ${pack.version}", value: {ledger_id: "${ref.legal_entity}"}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "test pack ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]

@@ -20,6 +20,9 @@ enums:
   SettingValueType: [STRING, NUMBER, BOOLEAN, JSON, DURATION, AMOUNT]
   BrandingChannel: [ALL, MOBILE, WEB, CONSOLE, EMAIL, SMS, USSD]
   PlatformModule: [LEDGER, DEPOSITS, PAYMENTS, WALLETS, CARDS, LENDING, RISK, REPORTING, OPEN_BANKING, AI, ANALYTICS]
+  StarterPackRunStatus: [RUNNING, COMPLETED, AWAITING_APPROVAL, NEEDS_ATTENTION, FAILED]
+  StarterPackItemStatus: [PENDING, DONE, AWAITING_APPROVAL, AWAITING_ACTIVATION, BLOCKED, FAILED, EXISTING]
+  StarterPackTrigger: [PROVISIONING, OPERATOR, SELF_SERVICE, RESUME]
   StaffUserStatus: [INVITED, ACTIVE, LOCKED, SUSPENDED, DEACTIVATED]
   StaffUserType: [STAFF, PLATFORM_OPERATOR, AGENT_STAFF, AUDITOR, SERVICE_ACCOUNT]
   RoleType: [SYSTEM, CUSTOM]
@@ -134,6 +137,8 @@ services:
           - "reinstatement_reason string(255) ro | Reason given on the last /reinstate"
           - "reinstated_at ts ro | Last reinstatement time"
           - "template_code string(64) ro | Template the tenant was provisioned from"
+          - "starter_pack_code string(64) | Starter pack applied right after provisioning (empty = none)"
+          - "starter_pack_run_id uuid ro | Starter pack run started by provisioning"
           - "metadata json | Operator metadata"
 
       - name: tenant_placement
@@ -269,6 +274,57 @@ services:
           - "sms_sender_id string(11) | Alphanumeric SMS sender id"
         unique: [[tenant_id, legal_entity_id, channel]]
 
+      - name: starter_pack_run
+        prefix: spr
+        description: >
+          One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and
+          routing, products, tariffs, limits, commissions, notifications, EOD, approval policies) with per-step results
+        fr: [ADM-01]
+        columns:
+          - "pack_code string(64) nn idx | Starter pack applied"
+          - "pack_version string(32) nn | Pack version applied"
+          - "status enum:StarterPackRunStatus nn default=RUNNING ro | Run status"
+          - "trigger enum:StarterPackTrigger nn default=OPERATOR ro | What started the run"
+          - "parameters json | Resolved pack parameters (pack defaults, tenant facts, request overrides)"
+          - "dry_run bool nn default=false | Plan only: nothing is called, outcomes are predicted"
+          - "resumed_from_id uuid fk=starter_pack_run | Run this one resumes"
+          - "started_at ts ro | Start time"
+          - "finished_at ts ro | End time"
+          - "created_count int nn default=0 ro | Items created"
+          - "updated_count int nn default=0 ro | Pack-owned items upgraded"
+          - "unchanged_count int nn default=0 ro | Items already applied (skipped)"
+          - "existing_count int nn default=0 ro | Items that already existed and are not pack-owned (skipped, never changed)"
+          - "awaiting_approval_count int nn default=0 ro | Items waiting for a checker (approval request or checker activation)"
+          - "failed_count int nn default=0 ro | Items that failed or need attention"
+          - "approval_request_ids uuid[] ro | Approval requests (workflow-service) the run's items are waiting for"
+          - "results json[] ro | Per step: {step, title, status, items: [{key, service, outcome, resource_id, approval_request_ids, pending_action, message}]}"
+          - "error text ro | First failure"
+
+      - name: starter_pack_item
+        prefix: spi
+        description: >
+          Registry of what a starter pack created (pack-owned, upgradable) or found (existing, never changed) in the
+          owning services; drives idempotent re-runs, resume after failure and version upgrades
+        fr: [ADM-01]
+        columns:
+          - "pack_code string(64) nn | Pack"
+          - "item_key string(160) nn | Item key inside the pack"
+          - "step_code string(64) nn idx | Step of the pack"
+          - "target_service string(64) nn | Owning service"
+          - "resource_path string(160) nn | Collection path of the resource in the owning service"
+          - "resource_id uuid | Resource id in the owning service"
+          - "is_pack_owned bool nn default=true | Created by the pack (upgraded by newer pack versions); false = pre-existing, never modified"
+          - "status enum:StarterPackItemStatus nn default=PENDING | Item state"
+          - "checksum string(64) nn | Checksum of the item definition last applied"
+          - "pack_version string(32) nn | Pack version that last applied the item"
+          - "request_body json | Create body of an unconfirmed attempt, replayed verbatim with its Idempotency-Key on resume"
+          - "idempotency_key string(128) | Idempotency-Key of the unconfirmed attempt"
+          - "approval_request_ids uuid[] | Approval requests the item waits for"
+          - "pending_action string(255) | Step a checker (different user) must perform"
+          - "last_run_id uuid fk=starter_pack_run | Run that last touched the item"
+          - "last_error text | Last failure"
+        unique: [[tenant_id, pack_code, item_key]]
+
     apis:
       - resource: cells
         path: /v1/platform/cells
@@ -290,7 +346,24 @@ services:
           - "POST /{id}/reinstate | Lift a suspension | reason string(255) nn"
           - "POST /{id}/migrate | Move the tenant to another cell | cell_id uuid nn, scheduled_at ts | tenant_placement"
           - "GET /{id}/placements | Placement history | | tenant_placement[]"
-          - "POST /provision-from-template | Provision a tenant from a template bank in minutes | template_code string(64) nn, code string(32) nn, name string(160) nn, legal_name string(255) nn, tenant_type enum:TenantType nn, default_currency currency nn, default_country country nn, primary_contact_email email nn"
+          - "POST /provision-from-template | Provision a tenant from a template bank in minutes; with starter_pack the pack is applied right after commit (service identity acting for the new tenant) | template_code string(64) nn, code string(32) nn, name string(160) nn, legal_name string(255) nn, tenant_type enum:TenantType nn, default_currency currency nn, default_country country nn, primary_contact_email email nn, starter_pack string(64), starter_pack_parameters json"
+          - "POST /{id}/apply-starter-pack | Apply, resume or upgrade a starter pack for this tenant (platform operator; calls run with service identity acting for the tenant; maker-checker items are submitted, never approved) | pack_code string(64) nn, version string(32), parameters json, dry_run bool | starter_pack_run"
+      - resource: starter-pack-runs
+        path: /v1/starter-pack-runs
+        table: starter_pack_run
+        description: Tenant starter packs (bootstrap defaults) applied to the caller's tenant
+        ops: [list, get]
+        filters: [pack_code, status, trigger]
+        actions:
+          - "GET /catalog?pack_code:string | Available starter packs (code, versions, market, parameters, steps); with pack_code the full latest definition | | object"
+          - "POST /apply | Apply, re-apply or upgrade a starter pack to the caller's tenant (idempotent; maker-checker items are submitted for approval, never approved) | pack_code string(64) nn, version string(32), parameters json, dry_run bool | starter_pack_run"
+          - "POST /{id}/resume | Resume a FAILED or AWAITING_APPROVAL run with its pack version and parameters | | starter_pack_run"
+      - resource: starter-pack-items
+        path: /v1/starter-pack-items
+        table: starter_pack_item
+        description: What starter packs created or found in the owning services
+        ops: [list, get]
+        filters: [pack_code, step_code, status, target_service, item_key, is_pack_owned]
       - resource: modules
         path: /v1/modules
         table: tenant_module
@@ -336,6 +409,7 @@ services:
       - "platform.tenant.activated | tenant | A tenant was activated"
       - "platform.tenant.suspended | tenant | A tenant was suspended"
       - "platform.tenant.reinstated | tenant | A suspended tenant was reinstated"
+      - "platform.starter_pack_run.completed | starter_pack_run | A starter pack run finished (completed, awaiting approval, needs attention or failed)"
       - "platform.cell.drain_started | cell | A cell stopped accepting new tenants"
       - "platform.tenant.migrated | tenant_placement | A tenant moved to another cell"
       - "platform.tenant_module.changed | tenant_module | A module was enabled or disabled"
