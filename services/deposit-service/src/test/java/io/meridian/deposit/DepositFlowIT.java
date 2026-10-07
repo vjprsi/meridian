@@ -961,6 +961,46 @@ class DepositFlowIT {
         throw new AssertionError("no cheque " + no);
     }
 
+    @Test
+    @Order(25)
+    void rateOverridesNeedAFourEyesApprovalAndAreBounded() throws Exception {
+        String base = """
+                {"deposit_account_id":"%s","rate_kind":"CREDIT_INTEREST",%s,"reason":"relationship pricing",
+                 "valid_from":"2026-11-01"}""";
+        assertThat(post("/v1/account-rate-overrides", base.formatted(a, "\"rate_adjustment\":\"0.9\""), "maker", 422)
+                .get("code").asString()).isEqualTo("invalid_rate_adjustment");
+        JsonNode o = post("/v1/account-rate-overrides", base.formatted(a, "\"override_rate\":\"0.05\""), "maker", 201);
+        String id = o.get("id").asString();
+        assertThat(o.get("status").asString()).as("not applied before approval").isEqualTo("PENDING_APPROVAL");
+        // PATCH runs the create validation (no unbounded adjustment through the back door)
+        assertThat(patchOverride(id, "{\"override_rate\":\"5\"}", "maker").statusCode()).isEqualTo(422);
+        assertThat(post("/v1/account-rate-overrides/" + id + "/approve", "{}", "maker", 422).get("code").asString())
+                .isEqualTo("four_eyes_violation");
+        JsonNode approved = post("/v1/account-rate-overrides/" + id + "/approve", "{\"comment\":\"ok\"}", "pricing-checker", 200);
+        assertThat(approved.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(approved.get("approved_by").asString()).isEqualTo("pricing-checker");
+        // approved: the rate is immutable, only an earlier end is allowed, no delete
+        HttpResponse<String> change = patchOverride(id, "{\"override_rate\":\"0.9\"}", "maker");
+        assertThat(change.statusCode()).isEqualTo(409);
+        assertThat(change.body()).contains("override_immutable");
+        assertThat(patchOverride(id, "{\"valid_to\":\"2026-12-31\"}", "maker").statusCode()).isEqualTo(200);
+        assertThat(send("DELETE", "/v1/account-rate-overrides/" + id, null, null, "maker", TENANT).statusCode()).isEqualTo(409);
+
+        JsonNode second = post("/v1/account-rate-overrides", base.formatted(a, "\"rate_adjustment\":\"0.01\""), "maker", 201);
+        JsonNode rejected = post("/v1/account-rate-overrides/" + second.get("id").asString() + "/reject",
+                "{\"reason\":\"not justified\"}", "pricing-checker", 200);
+        assertThat(rejected.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(rejected.get("rejection_reason").asString()).isEqualTo("not justified");
+    }
+
+    private HttpResponse<String> patchOverride(String id, String body, String user) throws Exception {
+        JsonNode cur = get("/v1/account-rate-overrides/" + id);
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/account-rate-overrides/" + id))
+                .header("X-Tenant-Id", TENANT).header("X-User", user).header("Content-Type", "application/json")
+                .header("If-Match", "\"" + cur.get("row_version").asInt() + "\"")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private static void assertLeg(FakeLedger.Call posting, String account, String direction, String amount) {
         boolean found = false;
         for (JsonNode e : posting.body().get("entries")) {

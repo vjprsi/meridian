@@ -90,7 +90,8 @@ public class InterestService {
         String shortKind = rateKind.replace("_INTEREST", "");
         Optional<ObjectNode> override = rows.queryOne("""
                 select row_to_json(o)::text from account_rate_override o
-                where deposit_account_id = ? and rate_kind in (?, ?) and valid_from <= ? and (valid_to is null or valid_to >= ?)
+                where deposit_account_id = ? and rate_kind in (?, ?) and status = 'ACTIVE'
+                  and valid_from <= ? and (valid_to is null or valid_to >= ?)
                 order by valid_from desc, created_at desc limit 1""", uuid(acc, "id"), rateKind, shortKind, day, day);
         RateConfig cfg = base.get();
         return Optional.of(override.map(o -> cfg.withOverride(dec(o, "override_rate"), dec(o, "rate_adjustment"))).orElse(cfg));

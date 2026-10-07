@@ -21,6 +21,7 @@ enums:
   AccountBlockStatus: [ACTIVE, LIFTED, EXPIRED]
   OverdraftType: [ARRANGED, UNARRANGED, TEMPORARY, SALARY_ADVANCE]
   OverdraftFacilityStatus: [PENDING_APPROVAL, ACTIVE, SUSPENDED, EXPIRED, CANCELLED]
+  RateOverrideStatus: [PENDING_APPROVAL, ACTIVE, REJECTED]
   InterestAccrualKind: [CREDIT, DEBIT, OVERDRAFT, UNARRANGED_OVERDRAFT, PENALTY, BONUS]
   TermDepositStatus: [PENDING_FUNDING, ACTIVE, MATURED, ROLLED_OVER, BROKEN, CLOSED, CANCELLED]
   RolloverInstruction: [ROLL_PRINCIPAL_AND_INTEREST, ROLL_PRINCIPAL_PAY_INTEREST, PAY_OUT_ALL]
@@ -202,7 +203,12 @@ services:
           - "reason string(500) nn | Justification"
           - "valid_from date nn | Start"
           - "valid_to date | End"
-          - "approval_request_id uuid ref=approval_request | Approval"
+          - "status enum:RateOverrideStatus nn default=PENDING_APPROVAL ro | Only ACTIVE (approved) overrides apply to interest"
+          - "approved_by string(64) ro | Checker who approved (four-eyes: never the maker)"
+          - "approved_at ts ro | Approval time"
+          - "rejected_by string(64) ro | Checker who rejected"
+          - "rejection_reason string(500) ro | Why the override was rejected"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
 
       - name: interest_accrual
         prefix: iac
@@ -585,7 +591,10 @@ services:
         path: /v1/account-rate-overrides
         table: account_rate_override
         ops: [list, get, create, update, delete]
-        filters: [deposit_account_id, rate_kind]
+        filters: [deposit_account_id, rate_kind, status]
+        actions:
+          - "POST /{id}/approve | Approve the rate override (a checker other than the maker) | comment string(500)"
+          - "POST /{id}/reject | Reject the rate override | reason string(500) nn"
       - resource: interest-accruals
         path: /v1/interest-accruals
         table: interest_accrual
