@@ -47,6 +47,9 @@ class LedgerPostingIT {
     @Autowired
     JsonMapper json;
 
+    @Autowired
+    org.springframework.jdbc.core.simple.JdbcClient jdbc;
+
     final HttpClient http = HttpClient.newHttpClient();
     String ledger;
     String cash;
@@ -407,6 +410,93 @@ class LedgerPostingIT {
         assertThat(ids).hasSize(4);
         assertThat(new java.util.HashSet<>(ids)).hasSize(1);
         assertBalance(erin, "0", "0");
+    }
+
+    @Test
+    @Order(19)
+    void paymentRefsAreStoredCopiedPseudonymisedAndPublished() throws Exception {
+        String nostro = account("1100-N", "Nostro USD", "ASSET", "DEBIT", true);
+        String gina = account("2900-G", "Gina deposits", "LIABILITY", "CREDIT", false);
+        String uetr = UUID.randomUUID().toString();
+        JsonNode je = post("/v1/journal-entries", """
+                {"ledger_id":"%s","entry_type":"TRANSFER","description":"Incoming payment","reference":"E2E-PAY-77",
+                 "value_date":"2026-03-02","entries":[%s,%s],
+                 "external_refs":{"uetr":"%s","end_to_end_id":"E2E-PAY-77","instruction_id":"INS-77",
+                   "bank_reference":"CLR-0077","scheme_reference":"RAIL-TX-77","batch_id":"BLK-1",
+                   "counterparty_name":"Acme Supplies Ltd","counterparty_account":"de89 3704-0044 0532 0130 00",
+                   "purpose_code":"SUPP"}}""".formatted(ledger, line(nostro, "DEBIT", "42.00"), line(gina, "CREDIT", "42.00"),
+                uetr.toUpperCase()), 201);
+        String expectedHash = new io.meridian.common.refs.CounterpartyAccounts(
+                io.meridian.common.refs.CounterpartyAccounts.DEV_KEY).pseudonym(UUID.fromString(TENANT), "DE89370400440532013000");
+        assertThat(je.get("uetr").asString()).as("stored lower-case").isEqualTo(uetr);
+        assertThat(je.get("end_to_end_id").asString()).isEqualTo("E2E-PAY-77");
+        assertThat(je.get("bank_reference").asString()).isEqualTo("CLR-0077");
+        assertThat(je.get("scheme_reference").asString()).isEqualTo("RAIL-TX-77");
+        assertThat(je.get("batch_id").asString()).isEqualTo("BLK-1");
+        assertThat(je.get("purpose_code").asString()).isEqualTo("SUPP");
+        assertThat(je.get("counterparty_account_hash").asString()).startsWith("h1:").isEqualTo(expectedHash);
+        assertThat(je.get("counterparty_account_last4").asString()).isEqualTo("3000");
+        assertThat(je.toString()).as("the account itself is never stored or returned")
+                .doesNotContain("0532013000").doesNotContain("0532 0130").doesNotContain("external_refs");
+        for (JsonNode line : je.get("entries")) {
+            assertThat(line.get("uetr").asString()).isEqualTo(uetr);
+            assertThat(line.get("instruction_id").asString()).isEqualTo("INS-77");
+            assertThat(line.get("counterparty_name").asString()).isEqualTo("Acme Supplies Ltd");
+            assertThat(line.get("counterparty_account_hash").asString()).isEqualTo(expectedHash);
+            assertThat(line.get("entry_type").asString()).isEqualTo("TRANSFER");
+        }
+        // the ledger-entries list (reconciliation's internal side) carries the references
+        JsonNode listed = get("/v1/ledger-entries?ledger_account_id=" + nostro, TENANT).get("data").get(0);
+        assertThat(listed.get("end_to_end_id").asString()).isEqualTo("E2E-PAY-77");
+        assertThat(listed.get("batch_id").asString()).isEqualTo("BLK-1");
+        assertThat(listed.get("counterparty_account_last4").asString()).isEqualTo("3000");
+        // indexed lookups
+        assertThat(get("/v1/journal-entries?uetr=" + uetr, TENANT).get("data")).hasSize(1);
+        assertThat(get("/v1/journal-entries?end_to_end_id=E2E-PAY-77", TENANT).get("data")).hasSize(1);
+        assertThat(get("/v1/journal-entries?batch_id=BLK-1", TENANT).get("data")).hasSize(1);
+        assertThat(get("/v1/journal-entries?counterparty_account_hash=" + expectedHash, TENANT).get("data")).hasSize(1);
+        assertThat(get("/v1/journal-entries?uetr=" + uetr, OTHER_TENANT).get("data")).isEmpty();
+
+        // the posted event carries them (consumers such as GL and reconciliation need no extra read)
+        String payload = io.meridian.common.tenancy.TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql(
+                "select payload::text from outbox where event_type = 'ledger.journal_entry.posted' and aggregate_id = ?::uuid")
+                .param(je.get("id").asString()).query(String.class).single());
+        assertThat(json.readTree(payload).get("uetr").asString()).isEqualTo(uetr);
+        assertThat(json.readTree(payload).get("entries").get(0).get("bank_reference").asString()).isEqualTo("CLR-0077");
+
+        // captures carry them too (outbound payments settle by capturing their hold)
+        String holdId = post("/v1/holds", """
+                {"ledger_account_id":"%s","hold_type":"PAYMENT","amount":"10.00","currency":"USD"}""".formatted(alice), 201)
+                .get("id").asString();
+        post("/v1/holds/" + holdId + "/capture", """
+                {"amount":"10.00","counter_account_id":"%s","reference":"E2E-OUT-1",
+                 "external_refs":{"end_to_end_id":"E2E-OUT-1","counterparty_account":"GB29NWBK60161331926819"}}"""
+                .formatted(nostro), 200);
+        String captureJe = get("/v1/holds/" + holdId + "/events", TENANT).get("data").get(0).get("journal_entry_id").asString();
+        JsonNode capture = get("/v1/journal-entries/" + captureJe, TENANT);
+        assertThat(capture.get("reference").asString()).isEqualTo("E2E-OUT-1");
+        assertThat(capture.get("end_to_end_id").asString()).isEqualTo("E2E-OUT-1");
+        assertThat(capture.get("counterparty_account_last4").asString()).isEqualTo("6819");
+        assertThat(capture.get("entries").get(1).get("end_to_end_id").asString()).isEqualTo("E2E-OUT-1");
+
+        // a reversal keeps the references of the entry it reverses (reconciliation pairs the two)
+        JsonNode rev = post("/v1/journal-entries/" + je.get("id").asString() + "/reverse", "{\"reason\":\"recalled\"}", 201);
+        assertThat(rev.get("uetr").asString()).isEqualTo(uetr);
+        assertThat(rev.get("counterparty_account_hash").asString()).isEqualTo(expectedHash);
+        assertThat(rev.get("entries").get(0).get("entry_type").asString()).isEqualTo("REVERSAL");
+
+        // validation: unknown keys, malformed UETR, non-string values
+        for (String bad : List.of("{\"iban\":\"DE89\"}", "{\"uetr\":\"not-a-uuid\"}", "{\"batch_id\":7}", "[\"x\"]")) {
+            HttpResponse<String> r = send("POST", "/v1/journal-entries", """
+                    {"ledger_id":"%s","entries":[%s,%s],"external_refs":%s}""".formatted(ledger,
+                    line(nostro, "DEBIT", "1.00"), line(gina, "CREDIT", "1.00"), bad), UUID.randomUUID().toString(), TENANT);
+            assertThat(r.statusCode()).as(bad + " -> " + r.body()).isIn(400, 422);
+        }
+        // immutable: the journal and its lines are append-only
+        String sql = "update journal_entry set uetr = null where id = ?::uuid";
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> io.meridian.common.tenancy.TenantContext.callAs(
+                UUID.fromString(TENANT), "test", () -> jdbc.sql(sql).param(je.get("id").asString()).update()))
+                .hasMessageContaining("append-only");
     }
 
     @Test

@@ -2,10 +2,12 @@ package io.meridian.ledger.application;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
+import io.meridian.common.refs.CounterpartyAccounts;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.ledger.domain.AccountState;
 import io.meridian.ledger.domain.EntryHasher;
+import io.meridian.ledger.domain.PaymentRefs;
 import io.meridian.ledger.domain.PostingLine;
 import io.meridian.ledger.domain.PostingRules;
 import io.meridian.ledger.infrastructure.LedgerStore;
@@ -37,7 +39,7 @@ public class PostingService {
     public record Posting(UUID ledgerId, String idempotencyKey, String entryType, String description,
                           OffsetDateTime effectiveAt, LocalDate valueDate, String sourceService, String sourceType,
                           UUID sourceId, String correlationId, String reference, UUID reversalOfId, JsonNode metadata,
-                          JsonNode customFields, List<PostingLine> lines) {}
+                          JsonNode customFields, PaymentRefs refs, List<PostingLine> lines) {}
 
     /** Result: the entry JSON (JournalEntry API shape) and whether it was a replay. */
     public record Posted(String json, boolean replayed) {}
@@ -46,12 +48,15 @@ public class PostingService {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final CounterpartyAccounts counterpartyAccounts;
 
-    public PostingService(LedgerStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public PostingService(LedgerStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json,
+                          CounterpartyAccounts counterpartyAccounts) {
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
         this.json = json;
+        this.counterpartyAccounts = counterpartyAccounts;
     }
 
     @Transactional
@@ -84,6 +89,10 @@ public class PostingService {
         OffsetDateTime effectiveAt = EntryHasher.normalize(p.effectiveAt() != null ? p.effectiveAt() : io.meridian.common.time.Clocks.now());
         LocalDate valueDate = p.valueDate() != null ? p.valueDate() : effectiveAt.toLocalDate();
         BigDecimal totalDebitsBase = BigDecimal.ZERO;
+        String entryType = p.entryType() == null ? "STANDARD" : p.entryType();
+        // Payment references: in-memory only (the clear counterparty account becomes a keyed pseudonym here), written
+        // with the same journal / line inserts, so a posting with references costs no extra round trip.
+        Map<String, String> refColumns = pseudonymised(p.refs()).columns();
         List<EntryHasher.Line> hashLines = new java.util.ArrayList<>();
 
         List<ObjectNode> lineRows = new java.util.ArrayList<>();
@@ -110,6 +119,8 @@ public class PostingService {
             if (p.reference() != null) {
                 row.put("reference", p.reference());
             }
+            row.put("entry_type", entryType);
+            refColumns.forEach(row::put);
             row.put("account_version", account.version);
             row.put("balance_after", balanceAfter.toPlainString());
             if (line.description() != null) {
@@ -124,7 +135,7 @@ public class PostingService {
         entry.put("id", entryId.toString());
         entry.put("ledger_id", ledger.id().toString());
         entry.put("idempotency_key", p.idempotencyKey());
-        entry.put("entry_type", p.entryType() == null ? "STANDARD" : p.entryType());
+        entry.put("entry_type", entryType);
         entry.put("effective_at", effectiveAt.toString());
         entry.put("value_date", valueDate.toString());
         entry.put("source_service", p.sourceService());
@@ -137,6 +148,7 @@ public class PostingService {
         putIfPresent(entry, "correlation_id", p.correlationId());
         putIfPresent(entry, "reference", p.reference());
         putIfPresent(entry, "reversal_of_id", p.reversalOfId());
+        refColumns.forEach(entry::put);
         if (p.metadata() != null && !p.metadata().isNull()) {
             entry.set("metadata", p.metadata());
         }
@@ -205,7 +217,19 @@ public class PostingService {
         return post(new Posting(ledgerId, idempotencyKey, "REVERSAL", "Reversal of " + journalEntryId + ": " + reason,
                 effectiveAt, null, TenantContext.principal(), "JOURNAL_ENTRY", journalEntryId, null,
                 original.hasNonNull("reference") ? original.get("reference").asString() : null, journalEntryId,
-                null, null, lines));
+                null, null, PaymentRefs.ofStored(original), lines));
+    }
+
+    /** The references to store: the clear counterparty account is replaced by its tenant-keyed pseudonym. */
+    private PaymentRefs pseudonymised(PaymentRefs refs) {
+        if (refs == null) {
+            return PaymentRefs.NONE;
+        }
+        if (refs.counterpartyAccount() == null) {
+            return refs;
+        }
+        return refs.pseudonymised(counterpartyAccounts.pseudonym(TenantContext.require(), refs.counterpartyAccount()),
+                CounterpartyAccounts.last4(refs.counterpartyAccount()));
     }
 
     private static BigDecimal fxRate(PostingLine line, String baseCurrency) {

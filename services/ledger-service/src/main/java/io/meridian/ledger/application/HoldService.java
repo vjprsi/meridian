@@ -5,6 +5,7 @@ import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.ledger.domain.AccountState;
+import io.meridian.ledger.domain.PaymentRefs;
 import io.meridian.ledger.domain.PostingLine;
 import io.meridian.ledger.infrastructure.LedgerStore;
 import io.meridian.web.crud.CrudEngine;
@@ -107,6 +108,14 @@ public class HoldService {
     @Transactional
     public String capture(UUID holdId, BigDecimal amount, UUID counterAccountId, String description,
                           boolean releaseRemainder, String idempotencyKey) {
+        return capture(holdId, amount, counterAccountId, description, releaseRemainder, idempotencyKey, null,
+                PaymentRefs.NONE);
+    }
+
+    /** Capture whose journal entry carries a reference and payment references (reconciliation of the counter account). */
+    @Transactional
+    public String capture(UUID holdId, BigDecimal amount, UUID counterAccountId, String description,
+                          boolean releaseRemainder, String idempotencyKey, String reference, PaymentRefs refs) {
         HoldRow h = lock(holdId);
         AccountState account = store.lockAccounts(List.of(h.accountId())).get(h.accountId());
         String postingKey = ("hc:" + holdId + ":" + idempotencyKey);
@@ -128,7 +137,7 @@ public class HoldService {
         PostingService.Posted posted = posting.post(new PostingService.Posting(
                 account.ledgerId, postingKey, "STANDARD",
                 description == null ? "Capture of hold " + holdId : description, null, null,
-                TenantContext.principal(), "HOLD", holdId, null, null, null, null, null,
+                TenantContext.principal(), "HOLD", holdId, null, reference, null, null, null, refs,
                 List.of(new PostingLine(h.accountId(), out, amount, h.currency(), null, description),
                         new PostingLine(counterAccountId, in, amount, h.currency(), null, description))));
         UUID journalEntryId = UUID.fromString(json.readTree(posted.json()).get("id").asString());
