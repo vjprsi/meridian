@@ -206,7 +206,8 @@ public class FakeBank {
                 return bal;
             }
             case "fx-service" -> {
-                return json.createObjectNode().put("id", p[4]).put("status", "ACTIVE");
+                ObjectNode fq = fxQuotes.get(p[4]);
+                return fq != null ? fq.deepCopy() : json.createObjectNode().put("id", p[4]).put("status", "ACTIVE");
             }
             default -> throw new IllegalArgumentException("unexpected GET " + service + " " + path);
         }
@@ -300,7 +301,51 @@ public class FakeBank {
         return r;
     }
 
+    private final Map<String, ObjectNode> fxQuotes = new HashMap<>();
+
+    /** An ACTIVE fx-service quote (expires in 10 minutes); customer may be null (unbound quote). */
+    public synchronized String fxQuote(UUID customer, String sell, String sellAmount, String buy, String buyAmount) {
+        ObjectNode q = json.createObjectNode();
+        String id = UUID.randomUUID().toString();
+        q.put("id", id);
+        q.put("status", "ACTIVE");
+        if (customer != null) {
+            q.put("customer_id", customer.toString());
+        }
+        q.put("sell_currency", sell);
+        q.put("sell_amount", sellAmount);
+        q.put("buy_currency", buy);
+        q.put("buy_amount", buyAmount);
+        q.put("customer_rate", new BigDecimal(buyAmount).divide(new BigDecimal(sellAmount), 10, java.math.RoundingMode.HALF_EVEN)
+                .toPlainString());
+        q.put("expires_at", java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).plusMinutes(10).toString());
+        fxQuotes.put(id, q);
+        return id;
+    }
+
     private JsonNode fxAccept(String path, JsonNode b) {
+        ObjectNode q = fxQuotes.get(path.split("/")[4]);
+        if (q != null) { // like fx-service: single use, bound to the payment's currencies and amount
+            if (!"ACTIVE".equals(q.path("status").asString())) {
+                throw ApiException.conflict("quote_already_accepted", "The quote was already accepted");
+            }
+            if (!q.get("sell_currency").asString().equals(b.path("sell_currency").asString())
+                    || new BigDecimal(q.get("sell_amount").asString()).compareTo(new BigDecimal(b.path("sell_amount").asString("0"))) != 0) {
+                throw ApiException.unprocessable("fx_quote_amount_mismatch", "quote/payment mismatch");
+            }
+            q.put("status", "ACCEPTED");
+            ObjectNode d = json.createObjectNode();
+            d.put("id", UUID.randomUUID().toString());
+            d.put("fx_quote_id", q.get("id").asString());
+            d.put("payment_id", b.path("payment_id").asString());
+            d.put("rate", q.get("customer_rate").asString());
+            d.put("sell_amount", q.get("sell_amount").asString());
+            d.put("sell_currency", q.get("sell_currency").asString());
+            d.put("buy_amount", q.get("buy_amount").asString());
+            d.put("buy_currency", q.get("buy_currency").asString());
+            d.put("status", "BOOKED");
+            return d;
+        }
         ObjectNode d = json.createObjectNode();
         d.put("id", UUID.randomUUID().toString());
         d.put("fx_quote_id", path.split("/")[4]);

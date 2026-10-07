@@ -45,9 +45,23 @@ public class RiskClient {
     }
 
     /** Accepts an FX quote for a payment; returns the booked deal ({@code rate, buy_amount, ...}). */
-    public JsonNode acceptFxQuote(UUID quoteId, UUID paymentId, String key) {
+    /**
+     * Accepts the quote for this payment. The binding (customer, currency pair, sold amount, bought amount when the
+     * payment fixes it) is re-checked by fx-service under the quote's row lock (SEC-04); a replay for the same payment
+     * returns the same deal.
+     */
+    public JsonNode acceptFxQuote(UUID quoteId, UUID paymentId, String key, JsonNode payment) {
         ObjectNode body = json.createObjectNode();
         body.put("payment_id", paymentId.toString());
+        if (payment.hasNonNull("customer_id")) {
+            body.put("customer_id", payment.get("customer_id").asString());
+        }
+        body.put("sell_currency", payment.path("currency").asString());
+        body.put("sell_amount", payment.path("amount").asString());
+        body.put("buy_currency", payment.path("instructed_currency").asString());
+        if (payment.hasNonNull("instructed_amount")) {
+            body.put("buy_amount", payment.get("instructed_amount").asString());
+        }
         return client.post("fx-service", "/v1/fx/quotes/" + quoteId + "/accept", body, LedgerClient.key(key));
     }
 

@@ -1039,7 +1039,7 @@ services:
         ops: [list, get, create]
         filters: [customer_id, sell_currency, buy_currency, status]
         actions:
-          - "POST /{id}/accept | Accept the quote and book the deal | payment_id uuid | fx_deal"
+          - "POST /{id}/accept | Accept the quote and book the deal. Single use (row lock; a replay for the same payment_id returns its deal). With payment_id the binding is mandatory and checked atomically: customer_id must match the quote customer, sell/buy currencies must match, sell_amount (and buy_amount when given) must equal the quote within meridian.fx.accept-amount-tolerance (default 0) | payment_id uuid, customer_id uuid, sell_currency currency, sell_amount amount, buy_currency currency, buy_amount amount | fx_deal"
           - "POST /{id}/cancel | Cancel an unused quote"
       - resource: fx-deals
         path: /v1/fx/deals

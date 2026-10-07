@@ -39,9 +39,12 @@ public class QuoteService {
     private final Clock clock;
     private final TransactionTemplate tx;
     private final io.meridian.web.time.BusinessDates businessDates;
+    private final BigDecimal acceptTolerance;
 
     public QuoteService(Rows rows, ReferenceDataClient refdata, Events events, FxProperties props, Clock clock,
-                        TransactionTemplate tx, io.meridian.web.time.BusinessDates businessDates) {
+                        TransactionTemplate tx, io.meridian.web.time.BusinessDates businessDates,
+                        @org.springframework.beans.factory.annotation.Value("${meridian.fx.accept-amount-tolerance:0}") BigDecimal acceptTolerance) {
+        this.acceptTolerance = acceptTolerance.abs();
         this.businessDates = businessDates;
         this.rows = rows;
         this.refdata = refdata;
@@ -109,14 +112,40 @@ public class QuoteService {
 
     /** Accepts an ACTIVE, unexpired quote and books the deal. An expired quote is marked EXPIRED (committed). */
     public ObjectNode accept(UUID id, UUID paymentId) {
+        ObjectNode req = rows.object();
+        if (paymentId != null) {
+            req.put("payment_id", paymentId.toString());
+        }
+        return accept(id, req);
+    }
+
+    /**
+     * Accepts a quote, single use under its row lock. SEC-04: when the deal funds a payment ({@code payment_id}), the
+     * caller must state what the payment needs and it must match the quote: customer, currency pair, sold amount and,
+     * if given, bought amount (tolerance {@code meridian.fx.accept-amount-tolerance}, default 0). A replay for the
+     * same payment returns its deal; any other use of an accepted quote is 409.
+     */
+    public ObjectNode accept(UUID id, JsonNode req) {
+        UUID paymentId = req == null ? null : uuid(req, "payment_id");
         Object result = tx.execute(s -> {
             ObjectNode q = rows.lock(QUOTE, id);
             String status = str(q, "status");
             if ("ACCEPTED".equals(status)) {
+                if (paymentId != null) {
+                    Optional<ObjectNode> mine = rows.queryOne("""
+                            select row_to_json(d)::text from fx_deal d where fx_quote_id = ? and payment_id = ? limit 1""",
+                            id, paymentId);
+                    if (mine.isPresent()) {
+                        return mine.get();
+                    }
+                }
                 throw ApiException.conflict("quote_already_accepted", "The quote was already accepted");
             }
             if (!"ACTIVE".equals(status)) {
                 throw ApiException.conflict("quote_not_active", "The quote is " + status);
+            }
+            if (paymentId != null) {
+                requireBinding(q, req);
             }
             boolean expired = rows.scalar("select expires_at <= now() from fx_quote where id = ?", Boolean.class, id)
                     .orElse(true);
@@ -147,6 +176,35 @@ public class QuoteService {
             throw ApiException.conflict("quote_expired", "The quote expired; request a new quote");
         }
         return (ObjectNode) result;
+    }
+
+    private void requireBinding(ObjectNode q, JsonNode req) {
+        String sell = str(req, "sell_currency");
+        String buy = str(req, "buy_currency");
+        BigDecimal sellAmount = req.hasNonNull("sell_amount") ? new BigDecimal(req.get("sell_amount").asString()) : null;
+        if (sell == null || buy == null || sellAmount == null) {
+            throw ApiException.unprocessable("fx_binding_required",
+                    "Accepting a quote for a payment needs sell_currency, sell_amount and buy_currency of the payment");
+        }
+        UUID customer = uuid(req, "customer_id");
+        UUID quoteCustomer = uuid(q, "customer_id");
+        if (quoteCustomer != null && !quoteCustomer.equals(customer)) {
+            throw ApiException.unprocessable("fx_quote_customer_mismatch", "The quote was priced for another customer");
+        }
+        if (!sell.equals(str(q, "sell_currency")) || !buy.equals(str(q, "buy_currency"))) {
+            throw ApiException.unprocessable("fx_quote_mismatch", "The quote sells " + str(q, "sell_currency") + " for "
+                    + str(q, "buy_currency") + ", not " + sell + " for " + buy);
+        }
+        BigDecimal tolerance = acceptTolerance;
+        if (dec(q, "sell_amount").subtract(sellAmount).abs().compareTo(tolerance) > 0) {
+            throw ApiException.unprocessable("fx_quote_amount_mismatch", "The quote sells " + dec(q, "sell_amount").toPlainString()
+                    + " " + sell + "; the payment debits " + sellAmount.toPlainString());
+        }
+        if (req.hasNonNull("buy_amount")
+                && dec(q, "buy_amount").subtract(new BigDecimal(req.get("buy_amount").asString())).abs().compareTo(tolerance) > 0) {
+            throw ApiException.unprocessable("fx_quote_amount_mismatch", "The quote buys " + dec(q, "buy_amount").toPlainString()
+                    + " " + buy + ", not " + req.get("buy_amount").asString());
+        }
     }
 
     // ------------------------------------------------------------------ remittance

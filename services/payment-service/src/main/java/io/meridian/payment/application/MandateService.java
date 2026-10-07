@@ -380,6 +380,15 @@ public class MandateService {
         ObjectNode p = records.get(paymentId);
         UUID je = ledger.reverse(uuid(p, "journal_entry_id"), "Direct debit refund " + reasonCode, "ddc-refund:" + collectionId);
         return tx.execute(s -> {
+            // SEC-06: a concurrent refund of the same collection got the same ledger reversal (deterministic key, one
+            // reversal per entry); only the first records it, the other returns that record
+            ObjectNode cur = rows.lock(COLLECTION, collectionId);
+            if (!"COLLECTED".equals(str(cur, "status"))) {
+                return rows.queryOne("""
+                        select row_to_json(t)::text from payment_return t where payment_id = ? and journal_entry_id = ?
+                        limit 1""", paymentId, je).orElseThrow(() -> ApiException.conflict("invalid_transition",
+                        "Only COLLECTED direct debits can be refunded"));
+            }
             ObjectNode r = rows.object();
             r.put("payment_id", paymentId.toString());
             r.put("direction", "INBOUND".equals(str(m, "direction")) ? "OUTBOUND" : "INBOUND");

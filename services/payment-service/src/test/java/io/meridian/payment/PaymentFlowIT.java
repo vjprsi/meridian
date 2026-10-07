@@ -734,6 +734,102 @@ class PaymentFlowIT {
         assertThat(aliasEvents).doesNotContain("otp_hash");
     }
 
+    // ------------------------------------------------------------------ SEC-04 FX quote bound to the payment
+
+    @Test
+    @Order(20)
+    void fxQuoteMustMatchThePaymentAndIsUsedOnce() throws Exception {
+        String quote = bank.fxQuote(ALICE, "GBP", "100.00", "USD", "127.00");
+        // a 1.00 payment cannot ride on a 100.00 quote (the debit, approvals and deal would disagree)
+        assertThat(postRaw("/v1/payments", fx("1.00", quote, "USD"), "maker", 422).get("code").asString())
+                .isEqualTo("fx_quote_amount_mismatch");
+        assertThat(postRaw("/v1/payments", fx("100.00", quote, "EUR"), "maker", 422).get("code").asString())
+                .isEqualTo("fx_quote_mismatch");
+        String bobs = bank.fxQuote(BOB, "GBP", "100.00", "USD", "127.00");
+        assertThat(postRaw("/v1/payments", fx("100.00", bobs, "USD"), "maker", 422).get("code").asString())
+                .isEqualTo("fx_quote_customer_mismatch");
+        assertThat(postRaw("/v1/payments", fx("100.00", quote, "USD").replace("\"instructed_currency\"",
+                "\"instructed_amount\":\"500.00\",\"instructed_currency\""), "maker", 422).get("code").asString())
+                .isEqualTo("fx_quote_amount_mismatch");
+
+        JsonNode p = post("/v1/payments", fx("100.00", quote, "USD"), "maker", 201);
+        assertThat(p.get("status").asString()).as(p.toString()).isNotEqualTo("REJECTED");
+        FakeBank.Call accept = bank.calls("fx-service", "/v1/fx/quotes/" + quote + "/accept").getLast();
+        assertThat(new BigDecimal(accept.body().get("sell_amount").asString())).isEqualByComparingTo("100.00");
+        assertThat(accept.body().get("sell_currency").asString()).isEqualTo("GBP");
+        assertThat(accept.body().get("buy_currency").asString()).isEqualTo("USD");
+        assertThat(accept.body().get("customer_id").asString()).isEqualTo(ALICE.toString());
+        assertThat(new BigDecimal(p.get("instructed_amount").asString())).isEqualByComparingTo("127.00");
+        // the quote is consumed: a second payment cannot use it
+        assertThat(postRaw("/v1/payments", fx("100.00", quote, "USD"), "maker", 422).get("code").asString())
+                .isEqualTo("fx_quote_not_active");
+    }
+
+    private String fx(String amount, String quote, String instructedCurrency) {
+        return """
+                {"payment_type":"DOMESTIC","direction":"OUTBOUND","channel":"WEB","debtor_account_id":"%s",
+                 "creditor_name":"Hans Meier","creditor_account_id_type":"IBAN","creditor_account_number":"%s",
+                 "amount":"%s","currency":"GBP","fx_quote_id":"%s",
+                 "instructed_currency":"%s","charge_bearer":"SHAR","remittance_unstructured":"Invoice 7"}"""
+                .formatted(a, EXT_IBAN, amount, quote, instructedCurrency);
+    }
+
+    // ------------------------------------------------------------------ SEC-06 concurrent returns / refunds
+
+    @Test
+    @Order(19)
+    void concurrentReturnsAndRefundsMoveMoneyAtMostOnce() throws Exception {
+        BigDecimal before = bank.balance(b);
+        JsonNode in = post("/v1/payments/inbound", inbound("INB-RACE-1", "75.00", B_IBAN), "rail:FPS", 200);
+        String id = in.get("id").asString();
+        assertThat(bank.balance(b)).isEqualByComparingTo(before.add(new BigDecimal("75.00")));
+        List<Integer> codes = race(6, i -> send("POST", "/v1/payments/" + id + "/return",
+                "{\"reason_code\":\"MD06\"}", UUID.randomUUID().toString(), "ops", TENANT).statusCode());
+        assertThat(codes).filteredOn(c -> c == 200).hasSize(1);
+        assertThat(codes).filteredOn(c -> c == 409).hasSize(5);
+        assertThat(bank.balance(b)).isEqualByComparingTo(before);
+        assertThat(get("/v1/payment-returns?payment_id=" + id).get("data")).hasSize(1);
+
+        JsonNode in2 = post("/v1/payments/inbound", inbound("INB-RACE-2", "60.00", B_IBAN), "rail:FPS", 200);
+        String id2 = in2.get("id").asString();
+        List<Integer> refunds = race(6, i -> send("POST", "/v1/payments/" + id2 + "/refund", "{\"amount\":\"20.00\"}",
+                UUID.randomUUID().toString(), "bob", TENANT).statusCode());
+        assertThat(refunds).filteredOn(c -> c == 200).hasSize(3);
+        assertThat(refunds).filteredOn(c -> c == 422).hasSize(3);
+        BigDecimal refunded = TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql("""
+                select coalesce(sum(amount), 0) from payment where original_payment_id = ?::uuid and payment_type = 'REFUND'
+                and status not in ('REJECTED', 'FAILED', 'CANCELLED')""").param(id2).query(BigDecimal.class).single());
+        assertThat(refunded).isEqualByComparingTo("60.00");
+        // the refunded amount cannot be returned on top
+        assertThat(postRaw("/v1/payments/" + id2 + "/return", "{\"reason_code\":\"MD06\"}", "ops", 422).get("code")
+                .asString()).isEqualTo("invalid_return_amount");
+    }
+
+    interface RaceCall {
+        int run(int i) throws Exception;
+    }
+
+    private List<Integer> race(int n, RaceCall call) throws Exception {
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<Integer> codes = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            List<java.util.concurrent.Future<?>> fs = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                int k = i;
+                fs.add(pool.submit(() -> {
+                    start.await();
+                    codes.add(call.run(k));
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var f : fs) {
+                f.get();
+            }
+        }
+        return codes;
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String outbound(String amount, String name, String iban) {
