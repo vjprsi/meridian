@@ -233,6 +233,58 @@ Business users never call the domain services. `business-channel-service` (domai
   channel's ownership table): another business's object answers 404, audited (`business_action`) and published
   (`channels.business_action.denied`). Webhook subscriptions always carry `customer_id == "<business>"`.
 
+## Merchant app (PWA)
+
+`web/merchant-app` is the merchant app for owners, managers and cashiers (Next.js / React Query / openapi-fetch /
+oidc-client-ts; installable PWA that caches the app shell only, never API data; mobile-first; English and Kiswahili;
+SEC-22 security headers) on http://localhost:13600:
+
+```bash
+cd web/merchant-app
+npm install
+npm run dev            # or: npm run build && npm start
+npm run gen:api        # typed client for the merchant channel (/v1/merchant, merchant-channel-service) only
+npm run test:e2e       # Playwright smoke with the API mocked (sale -> QR -> paid, cashier cannot approve, foreign store)
+```
+
+- Sign in with Keycloak (realm `meridian`, public PKCE client `meridian-merchant-app`, no password grant) or dev mode
+  (`X-Tenant-Id` / `X-Merchant-Id` / `X-Merchant-User-Id` / `X-Auth-Time`). Demo users `demo.merchant.owner` /
+  `Meridian#Merchant2026` and `demo.merchant.cashier` / `Meridian#Cashier2026`: set their admin-only `merchant_id`
+  attribute to an ACTIVE merchant of the demo tenant. The first user who signs in for a merchant without app users
+  becomes its OWNER; the owner adds the cashier (Staff, role CASHIER, stores) and an IdP administrator sets the returned
+  id as the cashier's `merchant_user_id` attribute.
+- Screens: sign-in and store picker, new sale (dynamic EMVCo QR with live status), payment links, sales and
+  transactions, refunds (request / approve with step-up), settlements, reports and fee statement, staff and roles
+  (owner), settings (payout account change with approval), developers (API keys, webhooks), security log.
+
+## Merchant channel (/v1/merchant)
+
+Merchant users never call the domain services. `merchant-channel-service` (domain `channels`, service scope
+`channels:merchant`) is the experience API behind `/v1/merchant/*`, built like the business channel.
+
+- Identity: a merchant token carries scope `channels:merchant` and the claims `merchant_id` (a merchant of
+  merchant-service) and `merchant_user_id` (Keycloak client `meridian-merchant-app`: admin-only user attributes, plus
+  `auth_time` / `acr`). `libs/meridian-web` binds it as `MerchantContext` (dev mode: `X-Merchant-Id`,
+  `X-Merchant-User-Id`, `X-Auth-Time`; never for internal, customer, agent or business tokens; the edge gateway drops
+  these headers in jwt mode). The channel's own `merchant_user` record is authoritative (ACTIVE, same merchant); the
+  first user of an ACTIVE merchant without users becomes its OWNER.
+- Merchant-user model: roles OWNER (staff, payout account, integrations), MANAGER (runs stores, approves refunds),
+  CASHIER (sells, requests refunds), VIEWER (reads); store scoping (`merchant_user_store`; OWNER and `all_stores` users
+  work in every store). Objects of a store outside the scope answer 404 like another merchant's.
+- Sales: one dynamic EMVCo QR per sale issued by merchant-service (body rebuilt server-side: merchant, store,
+  terminal, currency, DYNAMIC); `GET /sales/{id}` refreshes PENDING sales from the QR (paid, expired).
+- Refunds: requested by a cashier (or manager / owner) of the payment's store, approved by a MANAGER or OWNER other
+  than the requester with step-up; executed in merchant-service as the requester (create, `mrq-create:<id>`) and the
+  approver (approve), so its four-eyes rule compares the same people; the cumulative refunds (completed + pending here
+  and in merchant-service) never exceed the payment.
+- Payout account: an OWNER requests a new settlement account (an ACTIVE account of the merchant's own business
+  customer in its currency) with step-up; another OWNER or MANAGER approves with step-up; then the merchant is patched
+  in merchant-service as the approver.
+- Object-level authorization on every reference (stores, terminals, sales, transactions, refunds, payment links,
+  settlements, payout changes, users; API clients and webhook endpoints through `merchant_object`): 404, audited
+  (`merchant_action`) and published (`channels.merchant_action.denied`). Webhook subscriptions always carry
+  `merchant_id == "<merchant>"`.
+
 ## Agent channel (/v1/agent)
 
 Agents never call the domain services. `agent-channel-service` (domain `channels`, service scope `channels:agent`) is

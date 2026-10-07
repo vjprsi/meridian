@@ -133,6 +133,14 @@ claims `business_customer_id` and `business_user_id`) is bound as `io.meridian.w
 of a payment it releases, its approvers) with `TenantContext.callAs`, so downstream four-eyes compares real people.
 `channels:business` is exact like the other channel scopes; never add it to a domain operation.
 
+Merchant requests (`merchant-channel-service`, `/v1/merchant/*`): a merchant app token (scope `channels:merchant`,
+claims `merchant_id` and `merchant_user_id`) is bound as `io.meridian.web.security.MerchantContext`
+(`MerchantContext.merchantId()`, `merchantUserId()`, `require().authTime()`; dev mode: `X-Merchant-Id` /
+`X-Merchant-User-Id` / `X-Auth-Time`; never for internal, customer, agent or business tokens). ServiceClient never
+forwards it (service token, `X-User: merchant-user:<id>`). Approved refunds are created in merchant-service as the
+requester and approved as the approver (`TenantContext.callAs`), so its four-eyes rule compares real people.
+`channels:merchant` is exact like the other channel scopes; never add it to a domain operation.
+
 Acting on behalf of a user: with an internal token plus `X-User`, the principal is that user (so four-eyes compares
 people) and `TenantContext.via()` names the relaying service client. Without `X-User` the principal is
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed
@@ -381,7 +389,7 @@ limits, sanctions and product-catalog services.
   service set it too (a test can still pick `jwt` in `@SpringBootTest(properties=...)`). Dev mode refuses to start in a
   Kubernetes pod unless `meridian.security.allow-dev-mode-in-cluster=true`. In jwt mode the edge gateway strips the
   internal identity headers (`X-Tenant-Id`, `X-User`, `X-Roles`, `X-MFA-Verified`, `X-Customer-Id`, `X-Agent-Id`,
-  `X-Business-Customer-Id`, `X-Business-User-Id`,
+  `X-Business-Customer-Id`, `X-Business-User-Id`, `X-Merchant-Id`, `X-Merchant-User-Id`,
   `X-Auth-Time`, `X-Acr`, `X-On-Behalf-Of-Customer`, `X-Meridian-Service`, ...) and owns `X-Forwarded-For`.
 - **Tokens.** Every access token must carry the audience `meridian-api` (or the service name):
   `meridian.security.audiences`; restrict clients per service with `meridian.security.allowed-clients`.

@@ -24,6 +24,10 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
                              openid/profile; tokens carry business_customer_id, business_user_id and tenant_id from
                              admin-only user attributes and auth_time / acr (approvals and administration need a recent
                              authentication); no password grant
+  meridian-merchant-app      public, authorization code + PKCE (merchant app PWA); only channels:merchant plus
+                             openid/profile; tokens carry merchant_id, merchant_user_id and tenant_id from admin-only
+                             user attributes and auth_time / acr (refund approvals, payout account changes and
+                             administration need a recent authentication); no password grant
   meridian-service           confidential, client credentials, every staff scope + meridian:internal + platform:operator
                              (service-to-service)
   meridian-readonly          confidential, client credentials, read scopes only (authorisation tests)
@@ -43,6 +47,12 @@ Users:
   demo.business.approver  business portal approver (Meridian#Approver2026), same business. The admin adds the user in
                           the portal (Users, role APPROVER) and an IdP administrator sets the returned id as this
                           user's business_user_id attribute (the preset value is a placeholder until then).
+  demo.merchant.owner     merchant app owner (Meridian#Merchant2026); merchant_id = an ACTIVE merchant of the demo
+                          tenant. The first user who signs in for a merchant with no app users becomes its OWNER
+                          (meridian.merchant.bootstrap-first-owner).
+  demo.merchant.cashier   merchant app cashier (Meridian#Cashier2026), same merchant. The owner adds the user in the
+                          app (Staff, role CASHIER, stores) and an IdP administrator sets the returned id as this
+                          user's merchant_user_id attribute (the preset value is a placeholder until then).
 Staff web-app tokens take tenant_id from the user's admin-managed tenant_id attribute; service-account tokens carry the
 demo tenant (internal tokens name their tenant in X-Tenant-Id). Run after tools/generate.py.
 """
@@ -70,9 +80,17 @@ DEMO_BUSINESS = "0199a000-0000-7000-8000-0000000b0001"
 DEMO_BUSINESS_ADMIN = "0199a000-0000-7000-8000-0000000b0a01"
 DEMO_BUSINESS_APPROVER = "0199a000-0000-7000-8000-0000000b0a02"
 BUSINESS_PORTAL_ORIGINS = ["http://localhost:13500"]
+# Demo merchant (an ACTIVE merchant of merchant-service in the demo tenant) and its two app users
+# (merchant-channel-service merchant_user ids). Change the attributes (Users -> demo.merchant.* -> Attributes;
+# admin-only) to real values.
+DEMO_MERCHANT = "0199a000-0000-7000-8000-0000000d0001"
+DEMO_MERCHANT_OWNER = "0199a000-0000-7000-8000-0000000d0a01"
+DEMO_MERCHANT_CASHIER = "0199a000-0000-7000-8000-0000000d0a02"
+MERCHANT_APP_ORIGINS = ["http://localhost:13600"]
 CUSTOMER_SCOPE = "channels:customer"
 AGENT_SCOPE = "channels:agent"
 BUSINESS_SCOPE = "channels:business"
+MERCHANT_SCOPE = "channels:merchant"
 
 
 def attribute_mapper(name: str, attribute: str) -> dict:
@@ -109,6 +127,8 @@ def user_profile() -> dict:
             admin_only_attribute("agent_id", "Agent id"),
             admin_only_attribute("business_customer_id", "Business customer id"),
             admin_only_attribute("business_user_id", "Business portal user id"),
+            admin_only_attribute("merchant_id", "Merchant id"),
+            admin_only_attribute("merchant_user_id", "Merchant app user id"),
             admin_only_attribute("tenant_id", "Tenant id"),
         ],
         "groups": [{"name": "user-metadata", "displayHeader": "User metadata",
@@ -142,7 +162,8 @@ def main():
     customer_scopes = [s for s in channel_scopes if s == CUSTOMER_SCOPE]
     agent_scopes = [s for s in channel_scopes if s == AGENT_SCOPE]
     business_scopes = [s for s in channel_scopes if s == BUSINESS_SCOPE]
-    unknown = [s for s in channel_scopes if s not in (CUSTOMER_SCOPE, AGENT_SCOPE, BUSINESS_SCOPE)]
+    merchant_scopes = [s for s in channel_scopes if s == MERCHANT_SCOPE]
+    unknown = [s for s in channel_scopes if s not in (CUSTOMER_SCOPE, AGENT_SCOPE, BUSINESS_SCOPE, MERCHANT_SCOPE)]
     if unknown:
         raise SystemExit(f"channel scope(s) {unknown} have no client; add one in tools/keycloak_realm.py")
     customer_domains = {s["domain"] for s in manifest if s.get("scope")}
@@ -183,6 +204,11 @@ def main():
     # user), the tenant, and auth_time / acr / sub / preferred_username for step-up and audit.
     business_mappers = [attribute_mapper("business_customer_id", "business_customer_id"),
                         attribute_mapper("business_user_id", "business_user_id")] + [
+        m for m in customer_mappers if m["name"] != "customer_id"]
+    # Merchant app tokens: the merchant and the app user from admin-managed attributes (never editable by the user),
+    # the tenant, and auth_time / acr / sub / preferred_username for step-up and audit.
+    merchant_mappers = [attribute_mapper("merchant_id", "merchant_id"),
+                        attribute_mapper("merchant_user_id", "merchant_user_id")] + [
         m for m in customer_mappers if m["name"] != "customer_id"]
     read_scopes = [n for n in scope_names if n.endswith(":read")]
     console_scopes = scope_names
@@ -244,6 +270,14 @@ def main():
              "protocolMappers": business_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + business_scopes,
              "optionalClientScopes": []},
+            {"clientId": "meridian-merchant-app", "name": "Meridian merchant app", "publicClient": True,
+             "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
+             "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "redirectUris": [o + "/*" for o in MERCHANT_APP_ORIGINS], "webOrigins": MERCHANT_APP_ORIGINS,
+             "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
+             "protocolMappers": merchant_mappers + [audience_mapper()],
+             "defaultClientScopes": ["profile", "email", "web-origins"] + merchant_scopes,
+             "optionalClientScopes": []},
         ],
         "users": [
             {"username": "ops.admin", "enabled": True, "email": "ops.admin@meridian.local", "emailVerified": True,
@@ -274,6 +308,16 @@ def main():
              "attributes": {"business_customer_id": [DEMO_BUSINESS], "business_user_id": [DEMO_BUSINESS_APPROVER],
                             "tenant_id": [DEMO_TENANT]},
              "credentials": [{"type": "password", "value": "Meridian#Approver2026", "temporary": False}]},
+            {"username": "demo.merchant.owner", "enabled": True, "email": "demo.merchant.owner@meridian.local",
+             "emailVerified": True, "firstName": "Demo", "lastName": "Merchant Owner",
+             "attributes": {"merchant_id": [DEMO_MERCHANT], "merchant_user_id": [DEMO_MERCHANT_OWNER],
+                            "tenant_id": [DEMO_TENANT]},
+             "credentials": [{"type": "password", "value": "Meridian#Merchant2026", "temporary": False}]},
+            {"username": "demo.merchant.cashier", "enabled": True, "email": "demo.merchant.cashier@meridian.local",
+             "emailVerified": True, "firstName": "Demo", "lastName": "Merchant Cashier",
+             "attributes": {"merchant_id": [DEMO_MERCHANT], "merchant_user_id": [DEMO_MERCHANT_CASHIER],
+                            "tenant_id": [DEMO_TENANT]},
+             "credentials": [{"type": "password", "value": "Meridian#Cashier2026", "temporary": False}]},
         ],
     }
     out = ROOT / "infra" / "local" / "keycloak" / "meridian-realm.json"

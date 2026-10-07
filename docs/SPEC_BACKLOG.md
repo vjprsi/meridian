@@ -152,6 +152,30 @@ server-verifiable PIN-unlock proof, a reference filter on agent transactions, mi
 super-agents over their sub-agents (today read-only), Ed25519 in the app once WebCrypto support is universal, and
 gateway stripping of dev headers (X-Agent-Id, X-Auth-Time) in front of JWT-mode services.
 
+## Merchant channel (S19 merchant app)
+
+Done (2026-10-07): `merchant-channel-service` (/v1/merchant, scope channels:merchant, merchant_id + merchant_user_id
+claims, Keycloak client meridian-merchant-app), merchant-user model in the channel (OWNER / MANAGER / CASHIER / VIEWER,
+store scoping, first-owner bootstrap), sales with one dynamic EMVCo QR each and live status, payment links, transaction
+history scoped to stores, refunds with four-eyes and cumulative cap, payout account change with step-up and approval,
+settlements, reports and fee statement, API clients and webhooks, object-level authorization with denial audit/events,
+web/merchant-app (PWA) on /v1/merchant only. Remaining:
+- Disputes: the wallets domain has no merchant disputes (card-dispute-service is cardholder-side); a merchant dispute /
+  chargeback view needs a domain model first.
+- Wallet transactions carry no store: a payment is attributed to a store through its sale or the QR it paid
+  (`metadata.merchant_qr_id`); payment-link payments and static QRs without a store are visible to all-stores users
+  only. A `merchant_store_id` on wallet transactions would make scoping exact and history queries cheaper.
+- Transaction history reads merchant-service pages whole and filters them in the channel (at most
+  `meridian.merchant.max-transaction-pages` per request); a page may hold fewer rows than asked.
+- merchant-service refunds also open a central approval request (workflow-service) when created; the channel approves
+  them directly right away (the central request is cancelled by merchant-service), so bank checkers never see them.
+- The first owner is bootstrapped on first sign-in (trust in the IdP's admin-only attributes); a bank-side
+  "provision merchant owner" operation would remove that reliance. Merchant onboarding stays on the staff APIs.
+- Payout account changes are approved inside the merchant (another OWNER or MANAGER); a bank-side callback / review of
+  payout changes is not wired.
+- Sale status is polled (`GET /sales/{id}`); a push channel (SSE / web push from `wallets.merchant_qr.paid`) is not
+  built.
+
 ## Business channel (S19 business banking portal)
 
 Done (2026-10-07): `business-channel-service` (/v1/business, scope channels:business, business_customer_id +

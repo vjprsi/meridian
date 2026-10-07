@@ -1,0 +1,77 @@
+# merchant-channel-service (Customer, Agent, Business and Merchant Channels): merchant app BFF (/v1/merchant).
+# Defaults target the local stack in infra/local; override with env vars in
+# other environments (e.g. SPRING_DATASOURCE_URL). Security mode is jwt unless MERIDIAN_SECURITY_MODE=dev.
+server:
+  port: 9167
+  shutdown: graceful
+
+spring:
+  application:
+    name: merchant-channel-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:15432/merchant_channel_db?currentSchema=merchant_channel
+    username: meridian_app
+    password: meridian_app
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    user: meridian
+    password: meridian
+    schemas: merchant_channel
+    default-schema: merchant_channel
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:15180/realms/meridian
+
+meridian:
+  security-mode: jwt          # jwt = OAuth2 tokens (default, every environment); dev = X-Tenant-Id headers, only when set
+                              # explicitly (tools/dev.py and tests: MERIDIAN_SECURITY_MODE=dev); SEC-13
+  events:
+    topic: meridian.channels.v1
+  merchant:
+    step-up-max-age: PT5M     # refund approvals, payout account changes, terminal deactivation and administration need an
+                              # authentication at most this old
+    step-up-acr: []           # e.g. [gold] to also require a strong acr from the identity provider
+    bootstrap-first-owner: true   # the first app user of an ACTIVE merchant without users becomes its OWNER
+    payout-approver-roles: [OWNER, MANAGER]   # who may approve another user's payout account change
+    max-transaction-pages: 10
+    api-client-scopes: [channels:merchant]
+    webhook-event-types: [wallets.merchant_qr.*, wallets.merchant_payment_link.*, wallets.merchant_refund.*,
+                          wallets.merchant_settlement.*]
+  # JWT mode: the channel never forwards a merchant user's token; it calls the domain services with this service
+  # identity for the merchant's tenant (required, else merchant requests fail with 503 service_identity_not_configured).
+  # service-auth:
+  #   token-uri: http://localhost:15180/realms/meridian/protocol/openid-connect/token
+  #   client-id: meridian-service
+  #   client-secret: meridian-service-secret
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: merchant-channel-service
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:14318/v1/metrics
+  tracing:
+    sampling:
+      probability: 1.0

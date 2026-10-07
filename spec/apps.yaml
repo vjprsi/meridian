@@ -211,27 +211,45 @@ apps:
   # ======================================================================= merchant app
   - id: merchant-app
     name: Merchant App
-    platform: Android, iOS, web
+    platform: Web PWA (React + Next.js), mobile-first, port 13600
     users: Merchants and cashiers
     phase: 3
     screens:
       - name: Merchant onboarding
         priority: P0
         apis: [merchantsCreate, kycDocumentsCreate, merchantStoresCreate]
+      # signed-in screens use the merchant channel (/v1/merchant, merchant-channel-service) only
+      - name: Sign-in and store picker
+        priority: P0
+        apis: [merchantAppMeGet, merchantAppStoresList, merchantAppTerminalsList]
       - name: Collect payment (dynamic QR)
         priority: P0
-        apis: [merchantQrCodesCreate, merchantsTransactions]
+        apis: [merchantAppSalesCreate, merchantAppSalesGet, merchantAppSalesCancel]
       - name: Payment links
-        apis: [merchantPaymentLinksCreate, merchantPaymentLinksList, merchantPaymentLinksDeactivate]
+        apis: [merchantAppPaymentLinksCreate, merchantAppPaymentLinksList, merchantAppPaymentLinksCancel]
       - name: Sales and transactions
         priority: P0
-        apis: [merchantsTransactions, walletTransactionsGet]
+        apis: [merchantAppSalesList, merchantAppTransactionsList, merchantAppTransactionsGet]
       - name: Refunds
-        apis: [merchantRefundsCreate, merchantRefundsList]
-      - name: Settlements to bank
-        apis: [merchantsSettlements, merchantSettlementsGet, merchantSettlementsReport]
+        apis: [merchantAppTransactionsRefundable, merchantAppRefundsCreate, merchantAppRefundsList, merchantAppRefundsApprove,
+               merchantAppRefundsReject, merchantAppRefundsCancel]
+      - name: Settlements, reports and fees
+        apis: [merchantAppSettlementsList, merchantAppSettlementsGet, merchantAppSettlementsReport, merchantAppFeesGet,
+               merchantAppFeesStatement]
       - name: Stores, tills and terminals
-        apis: [merchantStoresList, merchantTerminalsList, merchantTerminalsCreate]
+        apis: [merchantAppStoresList, merchantAppTerminalsList, merchantAppTerminalsDeactivate]
+      - name: Staff and roles
+        apis: [merchantAppStaffList, merchantAppStaffCreate, merchantAppStaffUpdate, merchantAppStaffReplaceStores,
+               merchantAppStaffSuspend, merchantAppStaffReactivate, merchantAppStaffRemove]
+      - name: Payout account
+        apis: [merchantAppPayoutAccountGet, merchantAppPayoutAccountEligibleAccounts, merchantAppPayoutChangesList,
+               merchantAppPayoutChangesCreate, merchantAppPayoutChangesApprove, merchantAppPayoutChangesReject]
+      - name: Developers (API keys and webhooks)
+        apis: [merchantAppApiClientsList, merchantAppApiClientsCreate, merchantAppApiClientsAddKeys,
+               merchantAppApiClientsKeysRevoke, merchantAppWebhooksList, merchantAppWebhooksCreate,
+               merchantAppWebhooksAddSubscriptions, merchantAppWebhooksDeliveries]
+      - name: Security log
+        apis: [merchantAppActivityList]
 
   # ======================================================================= back-office console
   - id: console

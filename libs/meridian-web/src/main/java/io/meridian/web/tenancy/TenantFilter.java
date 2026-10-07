@@ -8,6 +8,8 @@ import io.meridian.web.security.BusinessContext;
 import io.meridian.web.security.BusinessContext.BusinessPrincipal;
 import io.meridian.web.security.CustomerContext;
 import io.meridian.web.security.CustomerContext.CustomerPrincipal;
+import io.meridian.web.security.MerchantContext;
+import io.meridian.web.security.MerchantContext.MerchantPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,8 +29,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * {@code customer_id} claim; dev mode: {@code X-Customer-Id}). The principal of a customer request is
  * {@code customer:<id>}. Likewise {@link AgentContext} (agent tokens) and {@link BusinessContext} (business portal tokens:
  * scope {@code channels:business} with business_customer_id and business_user_id claims; dev mode
- * {@code X-Business-Customer-Id} / {@code X-Business-User-Id}); at most one of the three is bound, never for an internal
- * token.
+ * {@code X-Business-Customer-Id} / {@code X-Business-User-Id}) and {@link MerchantContext} (merchant app tokens: scope
+ * {@code channels:merchant} with merchant_id and merchant_user_id claims; dev mode {@code X-Merchant-Id} /
+ * {@code X-Merchant-User-Id}); at most one of the four is bound, never for an internal token.
  */
 public class TenantFilter extends OncePerRequestFilter {
     public static final String TENANT_HEADER = "X-Tenant-Id";
@@ -111,6 +114,22 @@ public class TenantFilter extends OncePerRequestFilter {
         if (business != null) {
             principal = business.principalName();
         }
+        // Merchant channel: a merchant app token (scope channels:merchant + merchant_id + merchant_user_id; dev mode
+        // X-Merchant-Id / X-Merchant-User-Id), never together with another channel identity or an internal token.
+        MerchantPrincipal merchant = null;
+        if (customer == null && agent == null && business == null && via == null) {
+            if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+                merchant = MerchantContext.fromJwt(jwt).orElse(null);
+            } else if (props.devMode()) {
+                merchant = MerchantContext.fromDevHeaders(req.getHeader(MerchantContext.MERCHANT_HEADER),
+                        req.getHeader(MerchantContext.MERCHANT_USER_HEADER), req.getHeader(USER_HEADER),
+                        req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
+                        .orElse(null);
+            }
+        }
+        if (merchant != null) {
+            principal = merchant.principalName();
+        }
         try {
             if (tenant != null) {
                 TenantContext.set(tenant, principal, via);
@@ -125,12 +144,16 @@ public class TenantFilter extends OncePerRequestFilter {
             if (business != null) {
                 BusinessContext.set(business);
             }
+            if (merchant != null) {
+                MerchantContext.set(merchant);
+            }
             chain.doFilter(req, res);
         } finally {
             TenantContext.clear();
             CustomerContext.clear();
             AgentContext.clear();
             BusinessContext.clear();
+            MerchantContext.clear();
         }
     }
 

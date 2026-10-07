@@ -1,5 +1,5 @@
 domain: channels
-title: Customer, Agent and Business Channels
+title: Customer, Agent, Business and Merchant Channels
 phase: 3
 scope: channels:customer
 description: >
@@ -10,9 +10,11 @@ description: >
   thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds
   request bodies server-side and requires a recent authentication (step-up) for money movement and security
   changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see
-  agent-channel-service), and the business banking portal uses /v1/business (business_customer_id and
-  business_user_id claims, scope channels:business; see business-channel-service). Domain services keep their
-  operator APIs; customer, agent and business tokens carry no domain scope and are rejected there.
+  agent-channel-service), the business banking portal uses /v1/business (business_customer_id and
+  business_user_id claims, scope channels:business; see business-channel-service), and the merchant app uses
+  /v1/merchant (merchant_id and merchant_user_id claims, scope channels:merchant; see merchant-channel-service).
+  Domain services keep their operator APIs; customer, agent, business and merchant tokens carry no domain scope and
+  are rejected there.
 
 enums:
   CustomerActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
@@ -33,6 +35,14 @@ enums:
   BusinessActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
   BusinessObjectType: [API_CLIENT, WEBHOOK_ENDPOINT]
   BusinessExportFormat: [CSV, CAMT_053]
+  MerchantUserRole: [OWNER, MANAGER, CASHIER, VIEWER]
+  MerchantUserStatus: [ACTIVE, SUSPENDED, REMOVED]
+  MerchantSaleStatus: [PENDING, PAID, EXPIRED, CANCELLED]
+  MerchantRefundRequestStatus: [PENDING_APPROVAL, COMPLETED, REJECTED, CANCELLED, FAILED]
+  MerchantChangeType: [PAYOUT_ACCOUNT]
+  MerchantChangeStatus: [PENDING_APPROVAL, APPLIED, REJECTED, CANCELLED, FAILED]
+  MerchantObjectType: [API_CLIENT, WEBHOOK_ENDPOINT]
+  MerchantActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
 
 services:
   # ------------------------------------------------------------------ customer-channel-service
@@ -960,3 +970,320 @@ services:
       - "channels.business_payment.approved | business_payment | A business payment received its final approval"
       - "channels.business_payment.released | business_payment | A business payment was released to payment-service"
       - "channels.business_payment.rejected | business_payment | A business payment was rejected by an approver"
+
+  # ------------------------------------------------------------------ merchant-channel-service
+  - name: merchant-channel-service
+    database: merchant_channel_db
+    scope: channels:merchant
+    description: >
+      Merchant app BFF behind /v1/merchant. Every operation acts for the signed-in merchant user only: the merchant (a
+      merchant of merchant-service) and the user come from the access token (merchant_id and merchant_user_id claims,
+      scope channels:merchant), never from a path, query or body. Owns the merchant-user model: users with roles
+      (OWNER, MANAGER, CASHIER, VIEWER) and store scoping (OWNER and all-stores users work in every store, others only
+      in their assigned stores), sales started from the app (one dynamic EMVCo QR per sale, issued by merchant-service,
+      with live status), refund requests with four-eyes approval (a cashier requests, a manager or owner other than the
+      requester approves with a recent authentication; the cumulative refunds of a payment never exceed it) and payout
+      (settlement) account changes (owner request, approval by another owner or manager, both with step-up). Calls
+      the domain services with its own service identity and the merchant's tenant, checks that every referenced store,
+      terminal, sale, transaction, refund, payment link, settlement, payout account, API client and webhook endpoint
+      belongs to the merchant and to the user's stores (404 otherwise, audited and published), and rebuilds request
+      bodies server-side.
+    tables:
+      - name: merchant_user
+        prefix: mcu
+        description: A person using the merchant app for one merchant, with a role and a store scope
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant the user works for"
+          - "display_name string(160) nn | Name shown to colleagues"
+          - "email email | Contact e-mail (identity provider login is bound through the merchant_user_id attribute)"
+          - "role enum:MerchantUserRole nn | OWNER manages staff, payout account and integrations; MANAGER approves refunds and runs stores; CASHIER sells and requests refunds; VIEWER reads"
+          - "all_stores bool nn default=false | Works in every store of the merchant (always true in effect for OWNER)"
+          - "status enum:MerchantUserStatus nn default=ACTIVE ro | Changed by suspend, reactivate and remove"
+          - "last_login_at ts ro | Last time the user opened the app"
+          - "status_reason string(255) ro | Reason of the last suspension or removal"
+        indexes: [[merchant_id, status]]
+
+      - name: merchant_user_store
+        prefix: mcus
+        description: A store a merchant user may work in (store scope of users without all_stores)
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "merchant_user_id uuid nn fk=merchant_user idx | User"
+          - "merchant_store_id uuid nn ref=merchant_store | Store of the merchant"
+        unique: [[merchant_user_id, merchant_store_id]]
+
+      - name: merchant_sale
+        prefix: msl
+        description: A sale started in the merchant app, collected with one dynamic EMVCo QR code
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "merchant_store_id uuid nn ref=merchant_store | Store of the sale"
+          - "merchant_terminal_id uuid ref=merchant_terminal | Terminal (till) of the sale"
+          - "cashier_user_id uuid nn fk=merchant_user ro | User that started the sale"
+          - "amount amount nn | Amount to pay"
+          - "currency currency nn ro | Merchant acceptance currency"
+          - "reference string(25) | Bill / order reference embedded in the QR"
+          - "merchant_qr_id uuid ref=merchant_qr ro | Dynamic QR issued by merchant-service"
+          - "qr_payload text ro | EMVCo QR payload to display"
+          - "status enum:MerchantSaleStatus nn default=PENDING ro | PENDING until paid, expired or cancelled (refreshed from merchant-service)"
+          - "expires_at ts ro | Expiry of the QR"
+          - "paid_at ts ro | Payment time"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Payment received"
+          - "cancelled_by uuid ro | User that cancelled the sale"
+        indexes: [[merchant_id, merchant_store_id, created_at], [merchant_id, status], [merchant_qr_id], [wallet_transaction_id]]
+
+      - name: merchant_refund_request
+        prefix: mrq
+        description: A refund requested in the merchant app, executed in merchant-service only after a second user approved it
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "merchant_store_id uuid ref=merchant_store ro | Store of the refunded payment (empty = not attributable to a store)"
+          - "original_transaction_id uuid nn ref=wallet_transaction idx | Payment refunded"
+          - "merchant_sale_id uuid fk=merchant_sale ro | Sale of the payment, when it was started in the app"
+          - "amount amount nn | Refund amount"
+          - "currency currency nn ro | Currency of the payment"
+          - "reason string(255) nn | Reason"
+          - "status enum:MerchantRefundRequestStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED"
+          - "requested_by uuid nn fk=merchant_user ro | User that requested the refund"
+          - "decided_by uuid ro | Approver or rejecter"
+          - "decided_at ts ro | Decision time"
+          - "decision_comment string(500) ro | Approval comment or rejection reason"
+          - "approver_auth_age_seconds int ro | Seconds since the approver's last authentication"
+          - "merchant_refund_id uuid ref=merchant_refund ro | Refund created in merchant-service on approval"
+          - "refund_transaction_id uuid ref=wallet_transaction ro | Refund wallet transaction"
+          - "failure_reason string(255) ro | Problem when the refund failed"
+        indexes: [[merchant_id, status], [original_transaction_id, status]]
+
+      - name: merchant_change_request
+        prefix: mcr
+        description: A change of the merchant's payout (settlement) bank account, applied only after a second user approved it
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "change_type enum:MerchantChangeType nn default=PAYOUT_ACCOUNT ro | What is changed"
+          - "settlement_account_id uuid nn ref=deposit_account | New payout account (an account of the merchant's business customer)"
+          - "account_number_masked string(40) ro | New account number, masked"
+          - "previous_settlement_account_id uuid ro | Payout account before the change"
+          - "reason string(255) | Why the account changes"
+          - "status enum:MerchantChangeStatus nn default=PENDING_APPROVAL ro | PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED"
+          - "requested_by uuid nn fk=merchant_user ro | OWNER that requested the change"
+          - "decided_by uuid ro | Approver or rejecter"
+          - "decided_at ts ro | Decision time"
+          - "decision_comment string(500) ro | Approval comment or rejection reason"
+          - "failure_reason string(255) ro | Problem when applying the change failed"
+        indexes: [[merchant_id, status]]
+
+      - name: merchant_object
+        prefix: mco
+        description: Integration objects created through the merchant app (API clients, webhook endpoints) whose owning service does not record the merchant
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "object_type enum:MerchantObjectType nn | Kind of object"
+          - "object_id uuid nn uq | Object id in its owning service"
+          - "label string(160) | Name shown in the app"
+        indexes: [[merchant_id, object_type]]
+
+      - name: merchant_action
+        prefix: mca
+        description: Audit trail of merchant users' actions through the app, including object-level, store-scope and role denials and step-up refusals
+        immutable: true
+        ext: false
+        columns:
+          - "merchant_id uuid nn ref=merchant idx | Merchant (from the token)"
+          - "merchant_user_id uuid idx | Merchant user (from the token)"
+          - "action string(64) nn | Operation (operation id of the /v1/merchant endpoint)"
+          - "object_type string(40) | STORE, TERMINAL, SALE, TRANSACTION, REFUND, PAYMENT_LINK, SETTLEMENT, PAYOUT_CHANGE, ACCOUNT, USER, API_CLIENT, API_KEY, WEBHOOK_ENDPOINT"
+          - "object_id uuid | Object acted on, or the object id that was refused"
+          - "outcome enum:MerchantActionOutcome nn | Result"
+          - "error_code string(64) | Problem code when not SUCCEEDED"
+          - "result_id uuid | Id of the record created (sale, refund, change...)"
+          - "auth_age_seconds int | Seconds since the user's last authentication when the action ran"
+          - "acr string(64) | Authentication context class of the token"
+          - "ip_address inet | Client address (right-most X-Forwarded-For hop)"
+          - "user_agent string(255) | Client user agent"
+        indexes: [[merchant_id, created_at], [outcome, created_at]]
+
+    apis:
+      - resource: merchant-app-me
+        path: /v1/merchant/me
+        table: merchant_user
+        description: The signed-in merchant user
+        ops: []
+        actions:
+          - "GET / | The signed-in user, the merchant (code, trading name, currency, status) and the stores the user may work in: {user, merchant, stores[]} | | object"
+
+      - resource: merchant-app-stores
+        path: /v1/merchant/stores
+        table: merchant_user
+        description: Stores of the merchant the user may work in
+        ops: []
+        actions:
+          - "GET / | Stores the user may work in (OWNER and all-stores users: every store of the merchant) | | merchant_store[]"
+          - "GET /{store_id} | One store | | merchant_store"
+
+      - resource: merchant-app-terminals
+        path: /v1/merchant/terminals
+        table: merchant_user
+        description: Terminals (tills) of the stores the user may work in
+        ops: []
+        actions:
+          - "GET /?store_id:uuid | Terminals of the stores the user may work in | | merchant_terminal[]"
+          - "GET /{terminal_id} | One terminal | | merchant_terminal"
+          - "POST /{terminal_id}/deactivate | Deactivate a lost or retired terminal (OWNER or MANAGER of its store; step-up) | reason string(255) nn | merchant_terminal"
+
+      - resource: merchant-app-sales
+        path: /v1/merchant/sales
+        table: merchant_sale
+        description: Sales collected with a dynamic EMVCo QR code per sale
+        ops: []
+        actions:
+          - "GET /?store_id:uuid&status:enum:MerchantSaleStatus&from:ts&to:ts | Sales of the stores the user may work in, newest first | | merchant_sale[]"
+          - "POST / | Start a sale in a store the user works in (OWNER, MANAGER or CASHIER): merchant-service issues a dynamic EMVCo QR for exactly the amount, in the merchant's currency | store_id uuid nn, terminal_id uuid, amount amount nn, reference string(25) | merchant_sale"
+          - "GET /{sale_id} | One sale; while PENDING its status is refreshed from merchant-service (poll it to see the payment arrive) | | merchant_sale"
+          - "POST /{sale_id}/cancel | Cancel a pending sale (its QR is deactivated; a sale paid meanwhile is returned PAID) | | merchant_sale"
+
+      - resource: merchant-app-transactions
+        path: /v1/merchant/transactions
+        table: merchant_user
+        description: Payments received and other wallet transactions of the merchant
+        ops: []
+        actions:
+          - "GET /?from:ts&to:ts&store_id:uuid&txn_type:enum:WalletTxnType&status:enum:WalletTxnStatus | Wallet transactions of the merchant in the stores the user may work in (transactions not attributable to a store: OWNER and all-stores users only), newest first | | wallet_transaction[]"
+          - "GET /{transaction_id} | One transaction | | wallet_transaction"
+          - "GET /{transaction_id}/refundable | What can still be refunded on one payment: {transaction_id, currency, amount, refunded, pending, refundable} | | object"
+
+      - resource: merchant-app-payment-links
+        path: /v1/merchant/payment-links
+        table: merchant_user
+        description: Payment links of the merchant
+        ops: []
+        actions:
+          - "GET /?is_active:bool | Payment links of the merchant (OWNER, MANAGER or VIEWER) | | merchant_payment_link[]"
+          - "POST / | Create a payment link in the merchant's currency (OWNER or MANAGER) | amount amount, description string(255) nn, reference string(64), max_uses int, expires_at ts | merchant_payment_link"
+          - "GET /{link_id} | One payment link | | merchant_payment_link"
+          - "POST /{link_id}/cancel | Cancel (deactivate) a payment link (OWNER or MANAGER) | | merchant_payment_link"
+
+      - resource: merchant-app-refunds
+        path: /v1/merchant/refunds
+        table: merchant_refund_request
+        description: Refund requests with four-eyes approval
+        ops: []
+        actions:
+          - "GET /?status:enum:MerchantRefundRequestStatus&store_id:uuid | Refund requests of the stores the user may work in, newest first | | merchant_refund_request[]"
+          - "POST / | Request a refund of a completed payment of a store the user works in (OWNER, MANAGER or CASHIER); the amount may not exceed what remains of the payment after completed and pending refunds | original_transaction_id uuid nn, amount amount nn, reason string(255) nn | merchant_refund_request"
+          - "GET /{refund_id} | One refund request | | merchant_refund_request"
+          - "POST /{refund_id}/approve | Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created in merchant-service as the requester and approved there as the approver | comment string(500) | merchant_refund_request"
+          - "POST /{refund_id}/reject | Reject a refund request (OWNER or MANAGER of the store, never the requester) | reason string(255) nn | merchant_refund_request"
+          - "POST /{refund_id}/cancel | Withdraw a pending refund request (requester, OWNER or MANAGER) | | merchant_refund_request"
+
+      - resource: merchant-app-settlements
+        path: /v1/merchant/settlements
+        table: merchant_user
+        description: Settlements of the merchant's collections (OWNER, MANAGER or VIEWER)
+        ops: []
+        actions:
+          - "GET /?status:enum:WalletSettlementStatus | Settlements of the merchant, newest first | | merchant_settlement[]"
+          - "GET /{settlement_id} | One settlement | | merchant_settlement"
+          - "GET /{settlement_id}/report | Settlement report (CSV) | | text/csv"
+
+      - resource: merchant-app-fees
+        path: /v1/merchant/fees
+        table: merchant_user
+        description: Fee (MDR) statement of the merchant (OWNER, MANAGER or VIEWER)
+        ops: []
+        actions:
+          - "GET /?from:date&to:date | Fee statement: the fee plan and, per settlement whose period ends in the range, payments, gross, MDR fees, refunds and net, with totals: {fee_plan, from, to, currency, settlements[], totals} | | object"
+          - "GET /statement?from:date&to:date | Fee statement as CSV | | text/csv"
+
+      - resource: merchant-app-payout-account
+        path: /v1/merchant/payout-account
+        table: merchant_change_request
+        description: The merchant's payout (settlement) bank account (OWNER or MANAGER)
+        ops: []
+        actions:
+          - "GET / | Current payout account (masked number, currency, status), settlement frequency and the pending change if any: {settlement_account, settlement_frequency, pending_change} | | object"
+          - "GET /eligible-accounts | Active accounts of the merchant's business customer in the merchant's currency that can receive payouts (OWNER) | | deposit_account[]"
+
+      - resource: merchant-app-payout-changes
+        path: /v1/merchant/payout-changes
+        table: merchant_change_request
+        description: Payout account changes, requested by an OWNER and approved by another OWNER or MANAGER (both with step-up)
+        ops: []
+        actions:
+          - "GET /?status:enum:MerchantChangeStatus | Payout account changes, newest first (OWNER or MANAGER) | | merchant_change_request[]"
+          - "POST / | Request a new payout account (OWNER; step-up; one pending change at a time; an active account of the merchant's business customer in the merchant's currency) | settlement_account_id uuid nn, reason string(255) | merchant_change_request"
+          - "GET /{change_id} | One payout account change | | merchant_change_request"
+          - "POST /{change_id}/approve | Approve and apply a payout account change (another OWNER or MANAGER; step-up) | comment string(500) | merchant_change_request"
+          - "POST /{change_id}/reject | Reject a payout account change (another OWNER or MANAGER) | reason string(255) nn | merchant_change_request"
+          - "POST /{change_id}/cancel | Withdraw a pending payout account change (its requester) | | merchant_change_request"
+
+      - resource: merchant-app-staff
+        path: /v1/merchant/staff
+        table: merchant_user
+        description: Users of the merchant, their roles and store scopes (changes by OWNER users only)
+        ops: []
+        actions:
+          - "GET /?status:enum:MerchantUserStatus | Users of the merchant (OWNER and MANAGER) | | merchant_user[]"
+          - "POST / | Add a user (OWNER; step-up); the returned id is set as the person's merchant_user_id attribute in the identity provider | display_name string(160) nn, email email nn, role enum:MerchantUserRole nn, all_stores bool, store_ids uuid[] | merchant_user"
+          - "GET /{user_id} | One user of the merchant | | merchant_user"
+          - "PATCH /{user_id} | Change a user's name, role or all-stores scope (OWNER; step-up; owners cannot change their own role) | display_name string(160), role enum:MerchantUserRole, all_stores bool | merchant_user"
+          - "GET /{user_id}/stores | Stores assigned to a user | | merchant_user_store[]"
+          - "PUT /{user_id}/stores | Replace the stores assigned to a user (OWNER; step-up; stores of the merchant only) | store_ids uuid[] nn | merchant_user_store[]"
+          - "POST /{user_id}/suspend | Suspend a user (OWNER; step-up; not oneself) | reason string(255) | merchant_user"
+          - "POST /{user_id}/reactivate | Reactivate a suspended user (OWNER; step-up) | | merchant_user"
+          - "POST /{user_id}/remove | Remove a user for good (OWNER; step-up; not oneself; store assignments are deleted) | reason string(255) | merchant_user"
+
+      - resource: merchant-app-api-clients
+        path: /v1/merchant/api-clients
+        table: merchant_object
+        description: API clients and keys of the merchant (OWNER users only)
+        ops: []
+        actions:
+          - "GET / | API clients of the merchant | | api_client[]"
+          - "POST / | Create an API client for the merchant (OWNER; step-up); scopes are limited to the bank's allow-list for merchant integrations | name string(120) nn, description string(500), environment enum:ApiEnvironment, owner_email email | api_client"
+          - "GET /{client_id} | One API client of the merchant | | api_client"
+          - "POST /{client_id}/suspend | Suspend an API client (OWNER) | reason string(255) nn | api_client"
+          - "GET /{client_id}/keys | Keys of one API client | | api_key[]"
+          - "POST /{client_id}/keys | Create an API key (shown once; OWNER; step-up) | name string(120) nn, expires_at ts | api_key"
+          - "POST /{client_id}/keys/{key_id}/revoke | Revoke an API key (OWNER) | reason string(255) nn | api_key"
+
+      - resource: merchant-app-webhooks
+        path: /v1/merchant/webhook-endpoints
+        table: merchant_object
+        description: Webhook endpoints of the merchant; subscriptions only ever deliver the merchant's own events
+        ops: []
+        actions:
+          - "GET / | Webhook endpoints of the merchant | | webhook_endpoint[]"
+          - "POST / | Register an HTTPS endpoint for one of the merchant's API clients (OWNER; step-up) | url string(1000) nn, description string(500), api_client_id uuid nn, environment enum:ApiEnvironment | webhook_endpoint"
+          - "GET /{endpoint_id} | One endpoint of the merchant | | webhook_endpoint"
+          - "DELETE /{endpoint_id} | Delete an endpoint (OWNER) | | none"
+          - "POST /{endpoint_id}/disable | Disable an endpoint (OWNER) | reason string(255) | webhook_endpoint"
+          - "POST /{endpoint_id}/enable | Re-enable an endpoint (OWNER) | | webhook_endpoint"
+          - "GET /{endpoint_id}/subscriptions | Event subscriptions of one endpoint | | webhook_subscription[]"
+          - "POST /{endpoint_id}/subscriptions | Subscribe to an allowed event type; the filter merchant_id == <the merchant> is always added (OWNER) | event_type string(128) nn | webhook_subscription"
+          - "GET /{endpoint_id}/deliveries | Deliveries to one endpoint | | webhook_delivery[]"
+
+      - resource: merchant-app-activity
+        path: /v1/merchant/activity
+        table: merchant_action
+        description: The merchant's app activity (security log)
+        ops: []
+        actions:
+          - "GET / | What users of the merchant did or were refused, newest first (OWNER: every user; others: their own) | | merchant_action[]"
+
+    events:
+      - "channels.merchant_action.denied | merchant_action | A merchant user referenced an object of another merchant or outside their stores, lacked the role, or was refused step-up"
+      - "channels.merchant_user.changed | merchant_user | A merchant user was added, bootstrapped, changed, suspended, reactivated, removed or had their stores changed"
+      - "channels.merchant_sale.created | merchant_sale | A sale was started and its dynamic QR issued"
+      - "channels.merchant_sale.paid | merchant_sale | A sale's QR was paid"
+      - "channels.merchant_refund_request.requested | merchant_refund_request | A refund was requested in the merchant app"
+      - "channels.merchant_refund_request.completed | merchant_refund_request | A refund request was approved and the refund executed"
+      - "channels.merchant_refund_request.rejected | merchant_refund_request | A refund request was rejected"
+      - "channels.merchant_change_request.requested | merchant_change_request | A payout account change was requested"
+      - "channels.merchant_change_request.applied | merchant_change_request | A payout account change was approved and applied"
+      - "channels.merchant_change_request.rejected | merchant_change_request | A payout account change was rejected"

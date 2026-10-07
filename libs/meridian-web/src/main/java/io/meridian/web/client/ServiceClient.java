@@ -5,6 +5,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.security.AgentContext;
 import io.meridian.web.security.BusinessContext;
 import io.meridian.web.security.CustomerContext;
+import io.meridian.web.security.MerchantContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -151,10 +152,11 @@ public class ServiceClient {
                 throw new ApiException(503, "service_identity_not_configured",
                         "Calling " + service + " as this service needs meridian.service-auth.* (client credentials)");
             }
-        } else if (customer || AgentContext.current().isPresent() || BusinessContext.current().isPresent()) {
+        } else if (customer || AgentContext.current().isPresent() || BusinessContext.current().isPresent()
+                || MerchantContext.current().isPresent()) {
             // the customer the service acts for; receivers honour it only with an internal (service) token.
-            // An agent's or a business user's token is never forwarded either (agent / business channel): service
-            // identity, X-User agent:<id> / business-user:<id>.
+            // An agent's, a business user's or a merchant user's token is never forwarded either (agent / business /
+            // merchant channel): service identity, X-User agent:<id> / business-user:<id> / merchant-user:<id>.
             if (customer) {
                 b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
             }
@@ -165,7 +167,7 @@ public class ServiceClient {
                 b.header("Authorization", "Bearer " + serviceTokens.token());
             } else if (auth != null) {
                 throw new ApiException(503, "service_identity_not_configured",
-                        "Customer, agent and business requests need meridian.service-auth.* (client credentials) to call "
+                        "Customer, agent, business and merchant requests need meridian.service-auth.* (client credentials) to call "
                                 + service);
             }
         } else {
