@@ -5,11 +5,10 @@ import static io.meridian.routing.infrastructure.Rows.str;
 import io.meridian.common.error.ApiException;
 import io.meridian.routing.config.RoutingProperties;
 import io.meridian.routing.infrastructure.Rows;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import io.meridian.web.outbound.OutboundHttp;
+import io.meridian.web.outbound.OutboundUrlPolicy;
 import java.time.Duration;
+import java.util.Map;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -28,7 +27,12 @@ public class AdapterService {
     private final Events events;
     private final RoutingProperties props;
 
-    public AdapterService(Rows rows, Events events, RoutingProperties props) {
+    private final OutboundHttp http;
+
+    public AdapterService(Rows rows, Events events, RoutingProperties props, OutboundUrlPolicy policy) {
+        // SEC-18: tenant-configured endpoint_url only reaches public https endpoints (pinned, no redirects)
+        Duration t = Duration.ofMillis(props.testTimeoutMs());
+        this.http = new OutboundHttp(policy.with(policy.settings().withTimeouts(t, t, t).withMaxResponseBytes(1024)));
         this.rows = rows;
         this.events = events;
         this.props = props;
@@ -49,23 +53,21 @@ public class AdapterService {
         } else {
             long start = System.nanoTime();
             try {
-                HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(props.testTimeoutMs()))
-                        .followRedirects(HttpClient.Redirect.NEVER).build();
-                HttpResponse<Void> r = http.send(HttpRequest.newBuilder(URI.create(endpoint))
-                        .timeout(Duration.ofMillis(props.testTimeoutMs())).GET()
-                        .header("X-Meridian-Heartbeat", "1").build(), HttpResponse.BodyHandlers.discarding());
-                result.put("http_status", r.statusCode());
-                result.put("reachable", r.statusCode() < 500);
-                if (r.statusCode() >= 500) {
-                    result.put("error", "endpoint answered HTTP " + r.statusCode());
+                OutboundHttp.Response r = http.get(endpoint, Map.of("X-Meridian-Heartbeat", "1"));
+                result.put("http_status", r.status());
+                result.put("reachable", r.status() < 500);
+                if (r.status() >= 500) {
+                    result.put("error", "endpoint answered HTTP " + r.status());
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            } catch (OutboundUrlPolicy.RejectedException e) {
                 result.put("reachable", false);
-                result.put("error", "interrupted");
-            } catch (Exception e) {
+                result.put("error", "endpoint_url not allowed: " + e.getMessage());
+            } catch (OutboundHttp.Failure e) {
                 result.put("reachable", false);
-                result.put("error", e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()));
+                result.put("error", e.code()); // category only: no internal network detail (port-scan oracle)
+            } catch (RuntimeException e) {
+                result.put("reachable", false);
+                result.put("error", "io_error");
             }
             result.put("latency_ms", (System.nanoTime() - start) / 1_000_000);
         }

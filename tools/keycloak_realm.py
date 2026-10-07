@@ -76,9 +76,11 @@ def main():
     domains = sorted({s["domain"] for s in manifest} - customer_domains)
     scope_names = [f"{d}:{a}" for d in domains for a in ("read", "write", "*")] + ["meridian:admin"]
     # meridian:internal = service identity allowed to act for the tenant in X-Tenant-Id (jobs, callbacks).
+    # Privileged card-vault scopes (SEC-11) are optional: never in a default token, requested explicitly.
+    privileged = ["cards:pan_reveal", "cards:vault_admin"]
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
-              for n in scope_names + ["meridian:internal"] + customer_scopes]
+              for n in scope_names + ["meridian:internal"] + customer_scopes + privileged]
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
@@ -118,7 +120,8 @@ def main():
              "redirectUris": ["http://localhost:*"], "webOrigins": ["+"],
              "attributes": {"pkce.code.challenge.method": "S256"},
              "protocolMappers": [tenant_mapper],
-             "defaultClientScopes": ["profile", "email", "web-origins"] + scope_names},
+             "defaultClientScopes": ["profile", "email", "web-origins"] + scope_names,
+             "optionalClientScopes": privileged},
             {"clientId": "meridian-service", "name": "Meridian service account", "publicClient": False,
              "secret": "meridian-service-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,

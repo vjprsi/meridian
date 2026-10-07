@@ -18,6 +18,34 @@ HOT = {"ledger-service": (3, "1", "1Gi"), "payment-service": (3, "1", "1Gi"),
        "card-authorization-service": (3, "1", "1Gi"), "wallet-service": (3, "1", "1Gi"),
        "fraud-service": (2, "500m", "768Mi"), "limits-service": (2, "500m", "768Mi")}
 
+# SEC-01 / SEC-02: secrets each service needs, as {ENV_VAR: key in the service's Secret}. The Secret (default name
+# meridian-<service>-secrets, override per service with secretName) is created by the operator from the KMS / vault;
+# the chart only references it. The services refuse to start outside security-mode=dev when one is missing or a
+# committed development default (libs/meridian-web RequiredSecrets, card-vault MasterKeyProviders).
+SERVICE_SECRETS = {
+    "audit-service": {"MERIDIAN_AUDIT_DOWNLOAD_SIGNING_KEY": "download-signing-key"},
+    "card-authorization-service": {"MERIDIAN_CARDS_AUTH_JIT_SECRET": "jit-secret"},
+    "card-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret"},
+    "card-threeds-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret",
+                             "MERIDIAN_CARDS_THREEDS_CAVV_KEY": "cavv-key",
+                             "MERIDIAN_CARDS_THREEDS_OTP_KEY": "otp-key"},
+    "card-tokenization-service": {"MERIDIAN_CARDS_CALLBACK_SECRET": "callback-secret",
+                                  "MERIDIAN_CARDS_TOKENS_OTP_KEY": "otp-key",
+                                  "MERIDIAN_CARDS_TOKENS_PAYLOAD_KEY": "payload-key"},
+    "card-vault-service": {"MERIDIAN_CARDS_VAULT_MASTER_KEY": "master-key"},
+    "document-service": {"MERIDIAN_ESIGN_CALLBACK_SECRET": "esign-callback-secret",
+                         "MERIDIAN_DOCUMENTS_S3_ACCESS_KEY": "s3-access-key",
+                         "MERIDIAN_DOCUMENTS_S3_SECRET_KEY": "s3-secret-key"},
+    "file-gateway-service": {"MERIDIAN_FILES_SIGNING_KEY": "signing-key"},
+    "loan-origination-service": {"MERIDIAN_LOAN_ORIGINATION_CALLBACK_SECRET": "callback-secret"},
+    "onboarding-service": {"MERIDIAN_ONBOARDING_PUBLIC_OTP_SECRET": "otp-secret",
+                           "MERIDIAN_ONBOARDING_RESUME_TOKEN_SECRET": "resume-token-secret"},
+    "routing-service": {"MERIDIAN_ROUTING_CALLBACK_SECRET": "callback-secret"},
+    "search-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": "contact-lookup-key"},
+    "statement-service": {"MERIDIAN_STATEMENT_DOWNLOAD_SECRET": "download-secret"},
+    "webhook-service": {"MERIDIAN_WEBHOOKS_KEY": "encryption-key"},
+}
+
 HELPERS = r'''{{/* Common labels for a Meridian component. */}}
 {{- define "meridian.labels" -}}
 app.kubernetes.io/name: {{ .name }}
@@ -143,6 +171,10 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
+            {{- range $envName, $key := $svc.secretEnv }}
+            - name: {{ $envName }}
+              valueFrom: {secretKeyRef: {name: {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}, key: {{ $key }}}}
+            {{- end }}
             {{- range $k, $v := $svc.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}
@@ -308,6 +340,13 @@ Required secrets in the namespace (not created by this chart):
   {{ .Values.global.postgres.appSecret }}        username/password of the runtime role (RLS-bound, no DDL)
   {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner used by Flyway
   {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the service account (scope meridian:internal)
+{{- range $svc := .Values.services }}
+{{- if and $svc.enabled $svc.secretEnv }}
+  {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}  keys: {{ join ", " (values $svc.secretEnv | sortAlpha) }}
+{{- end }}
+{{- end }}
+Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
+KMS / vault: services refuse to start when one is missing or a committed development default.
 '''
 
 
@@ -319,6 +358,9 @@ def services_values(manifest):
         if s["name"] in HOT:
             rep, cpu, mem = HOT[s["name"]]
             r.update({"replicas": rep, "cpu": cpu, "memory": mem})
+        if s["name"] in SERVICE_SECRETS:
+            r["secretName"] = f"meridian-{s['name']}-secrets"
+            r["secretEnv"] = dict(sorted(SERVICE_SECRETS[s["name"]].items()))
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
                  "replicas": 3, "cpu": "500m", "memory": "512Mi"})
@@ -375,7 +417,8 @@ def values_yaml(rows, app_version):
         "  annotations: {}",
         "  tls: []",
         "",
-        "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env.",
+        "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,",
+        "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git).",
         "services:",
     ]
     for r in rows:
@@ -383,6 +426,11 @@ def values_yaml(rows, app_version):
         for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory"):
             if k in r:
                 lines.append(f"    {k}: {yaml_value(r[k])}")
+        if "secretEnv" in r:
+            lines.append(f"    secretName: {yaml_value(r['secretName'])}")
+            lines.append("    secretEnv:")
+            for env, key in r["secretEnv"].items():
+                lines.append(f"      {env}: {yaml_value(key)}")
     return "\n".join(lines) + "\n"
 
 

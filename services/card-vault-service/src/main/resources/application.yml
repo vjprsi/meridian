@@ -39,9 +39,16 @@ meridian:
     topic: meridian.cards.v1
   cards:
     vault:
-      # Software HSM master key (base64, 32 bytes). DEV ONLY: production injects it from the HSM / KMS
-      # (MERIDIAN_CARDS_VAULT_MASTER_KEY) or replaces the software HSM with a network HSM adapter.
-      master-key: bWVyaWRpYW4tZGV2LXZhdWx0LW1hc3Rlci1rZXktMDE=
+      # Software HSM master key (base64, 32 bytes): NEVER committed. Supply it from the secret store as
+      # MERIDIAN_CARDS_VAULT_MASTER_KEY or as a mounted file (MERIDIAN_CARDS_VAULT_MASTER_KEY_FILE), or replace the
+      # software HSM with a KMS / network HSM adapter bean. Without one the service refuses to start, except with
+      # security-mode=dev, where a clearly labelled local development key is used.
+      master-key: ${MERIDIAN_CARDS_VAULT_MASTER_KEY:}
+      master-key-file: ${MERIDIAN_CARDS_VAULT_MASTER_KEY_FILE:}
+      # SEC-11: dedicated scopes for clear-data reveal / vault administration plus recent step-up for user tokens
+      step-up-max-age-seconds: 300
+      step-up-acr-values: [ "2", "3", "mfa", "aal2", "aal3", "urn:meridian:acr:mfa" ]
+      step-up-amr-values: [ "mfa", "otp", "totp", "hwk", "swk", "webauthn", "sms" ]
 
 management:
   endpoints:

@@ -3,8 +3,10 @@ package io.meridian.notification.application;
 import io.meridian.common.error.ApiException;
 import io.meridian.events.OutboxWriter;
 import io.meridian.notification.domain.DeliveryPolicy;
+import io.meridian.notification.domain.SensitiveContent;
 import io.meridian.notification.infrastructure.ChannelAdapter;
 import io.meridian.notification.infrastructure.NotificationStore;
+import io.meridian.notification.infrastructure.SensitiveContentStore;
 import io.meridian.web.crud.CrudEngine;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,12 +38,14 @@ public class DeliveryService {
     private final int maxAttempts;
     private final Duration baseDelay;
     private final Duration maxDelay;
+    private final SensitiveContentStore sensitive;
 
     public DeliveryService(NotificationStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json,
-                           List<ChannelAdapter> adapters,
+                           List<ChannelAdapter> adapters, SensitiveContentStore sensitive,
                            @Value("${meridian.notifications.retry.max-attempts:5}") int maxAttempts,
                            @Value("${meridian.notifications.retry.base-delay-seconds:30}") long baseDelaySeconds,
                            @Value("${meridian.notifications.retry.max-delay-seconds:3600}") long maxDelaySeconds) {
+        this.sensitive = sensitive;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -67,6 +71,7 @@ public class DeliveryService {
         }
         if (n.hasNonNull("expires_at") && !OffsetDateTime.parse(n.get("expires_at").asString()).toInstant().isAfter(now)) {
             store.update(id, "EXPIRED", "failure_reason = ?", "expired before delivery");
+            sensitive.remove(id);
             return row(id);
         }
         if (forcedProviderId == null && n.hasNonNull("scheduled_at")
@@ -99,8 +104,18 @@ public class DeliveryService {
         int attemptNo = store.totalAttempts(id);
         boolean retryable = false;
         String lastError = null;
+        // SEC-10: the stored body may be redacted; the clear text (if any) exists only in memory until sent
+        String subject = text(n, "subject");
+        String body = n.get("body").asString();
+        var clear = sensitive.get(id);
+        if (clear.isPresent()) {
+            subject = clear.get().subject();
+            body = clear.get().body();
+        } else if (SensitiveContent.isRedacted(body) || SensitiveContent.isRedacted(subject)) {
+            return fail(id, "sensitive_content_unavailable: the one-time content is no longer available; request a new code");
+        }
         ChannelAdapter.Message message = new ChannelAdapter.Message(id, channel, n.get("destination").asString(),
-                text(n, "subject"), n.get("body").asString());
+                subject, body);
         for (ChannelAdapter.Provider provider : providers) {
             if (used >= maxAttempts) {
                 break;
@@ -112,6 +127,7 @@ public class DeliveryService {
             attemptNo++;
             recordAttempt(id, provider, attemptNo, cycle, result, latency);
             if (result.accepted()) {
+                sensitive.remove(id);
                 store.update(id, "SENT", "sent_at = now(), scheduled_at = null, failure_reason = null, provider_message_id = ?",
                         result.providerMessageId());
                 String row = row(id);

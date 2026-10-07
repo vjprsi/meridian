@@ -29,13 +29,22 @@ public class SoftwareHsm implements Hsm {
     private final Map<KeyRef, SecretKeySpec> keys = new ConcurrentHashMap<>();
 
     public SoftwareHsm(String masterKeyBase64) {
+        this(decode(masterKeyBase64));
+    }
+
+    /** @param masterKey 32-byte master key (copied; the caller may zeroise its array) */
+    public SoftwareHsm(byte[] masterKey) {
+        if (masterKey == null || masterKey.length != 32) {
+            throw new IllegalStateException("The card-vault master key must be 32 bytes");
+        }
+        this.master = masterKey.clone();
+    }
+
+    private static byte[] decode(String masterKeyBase64) {
         if (masterKeyBase64 == null || masterKeyBase64.isBlank()) {
             throw new IllegalStateException("meridian.cards.vault.master-key is not configured");
         }
-        this.master = Base64.getDecoder().decode(masterKeyBase64.trim());
-        if (master.length != 32) {
-            throw new IllegalStateException("meridian.cards.vault.master-key must be 32 bytes (base64)");
-        }
+        return Base64.getDecoder().decode(masterKeyBase64.trim());
     }
 
     /** Key derivation shared with tests and clients that wrap PIN blocks in the sandbox. */

@@ -35,6 +35,11 @@ spring:
 
 meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
+  # SEC-08/18 shared outbound URL policy for tenant-configured provider URLs. These relaxations (plain http,
+  # local / private simulators) apply ONLY with security-mode=dev; jwt mode is always https + public addresses.
+  outbound:
+    allow-http: true
+    allow-private-networks: true
   events:
     topic: meridian.party.v1
 
