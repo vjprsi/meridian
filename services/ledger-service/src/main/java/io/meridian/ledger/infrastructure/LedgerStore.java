@@ -108,6 +108,19 @@ public class LedgerStore {
                 .optional();
     }
 
+    /** SEC-19: the lines of a stored entry as "account|direction|amount|currency" (amount stripped of trailing zeros). */
+    public java.util.List<String> entryLineKeys(UUID journalEntryId) {
+        return jdbc.sql("""
+                select ledger_account_id, direction, amount, currency from ledger_entry where journal_entry_id = ?""")
+                .param(journalEntryId)
+                .query((rs, i) -> lineKey(rs.getObject(1, UUID.class), rs.getString(2), rs.getBigDecimal(3), rs.getString(4)))
+                .list().stream().sorted().toList();
+    }
+
+    public static String lineKey(UUID account, String direction, java.math.BigDecimal amount, String currency) {
+        return account + "|" + direction + "|" + amount.stripTrailingZeros().toPlainString() + "|" + currency;
+    }
+
     /** Row lock on a journal entry (reversal serialisation; entries themselves are never updated). */
     public void lockJournalEntry(UUID journalEntryId) {
         jdbc.sql("select id from journal_entry where id = ? for update").param(journalEntryId).query(UUID.class).optional();

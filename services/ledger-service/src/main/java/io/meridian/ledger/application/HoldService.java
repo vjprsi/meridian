@@ -54,10 +54,20 @@ public class HoldService {
         }
         var replay = jdbc.sql("select row_to_json(h)::text from hold h where idempotency_key = ?")
                 .param(idempotencyKey).query(String.class).optional();
+        ObjectNode values = crud.toColumns("hold", body);
         if (replay.isPresent()) {
+            // SEC-19: same key, same hold (account, amount, currency); anything else is refused, never replayed
+            tools.jackson.databind.JsonNode prior = json.readTree(replay.get());
+            boolean same = prior.path("ledger_account_id").asString("").equals(values.path("ledger_account_id").asString(""))
+                    && prior.path("currency").asString("").equals(values.path("currency").asString(""))
+                    && new BigDecimal(prior.path("amount").asString("0")).compareTo(
+                            new BigDecimal(values.path("amount").asString("0"))) == 0;
+            if (!same) {
+                throw ApiException.unprocessable("idempotency_key_reused",
+                        "Idempotency-Key was already used for a different hold");
+            }
             return replay.get();
         }
-        ObjectNode values = crud.toColumns("hold", body);
         UUID accountId = UUID.fromString(values.get("ledger_account_id").asString());
         BigDecimal amount = new BigDecimal(values.get("amount").asString());
         if (amount.signum() <= 0) {

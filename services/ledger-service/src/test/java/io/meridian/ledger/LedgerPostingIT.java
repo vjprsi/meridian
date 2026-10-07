@@ -409,6 +409,39 @@ class LedgerPostingIT {
         assertBalance(erin, "0", "0");
     }
 
+    @Test
+    @Order(99)
+    void reusedKeysNeverReplayADifferentRequest() throws Exception {
+        String dave = account("2900-D", "Dave deposits", "LIABILITY", "CREDIT", false);
+        String erik = account("2900-E", "Erik deposits", "LIABILITY", "CREDIT", false);
+        postEntry("sec19-fund", line(cash, "DEBIT", "100.00"), line(dave, "CREDIT", "100.00"));
+        // SEC-19 ledger: same key, other lines -> 422 instead of the first entry
+        assertThat(postEntry("sec19-fund", 422, line(cash, "DEBIT", "1.00"), line(dave, "CREDIT", "1.00"))
+                .get("code").asString()).isEqualTo("idempotency_key_reused");
+        assertThat(send("POST", "/v1/journal-entries", entryBody(line(dave, "CREDIT", "100.00"), line(cash, "DEBIT", "100")),
+                "sec19-fund", TENANT).statusCode()).as("same lines in another order and scale replay").isEqualTo(200);
+        // holds
+        String hold = "{\"ledger_account_id\":\"%s\",\"hold_type\":\"CARD_AUTHORIZATION\",\"amount\":\"%s\",\"currency\":\"USD\"}";
+        assertThat(send("POST", "/v1/holds", hold.formatted(dave, "10.00"), "sec19-hold", TENANT).statusCode()).isEqualTo(201);
+        assertThat(send("POST", "/v1/holds", hold.formatted(dave, "10.00"), "sec19-hold", TENANT).statusCode()).isEqualTo(201);
+        HttpResponse<String> other = send("POST", "/v1/holds", hold.formatted(dave, "90.00"), "sec19-hold", TENANT);
+        assertThat(other.statusCode()).isEqualTo(422);
+        assertThat(other.body()).contains("idempotency_key_reused");
+        // generic Idempotency: the same key and body from another caller is refused, never answered with the first result
+        String create = "{\"ledger_id\":\"%s\",\"code\":\"2900-F\",\"name\":\"F\",\"account_type\":\"LIABILITY\","
+                + "\"normal_balance\":\"CREDIT\",\"currency\":\"USD\"}";
+        HttpResponse<String> first = send("POST", "/v1/ledger-accounts", create.formatted(ledger), "sec19-acct", TENANT);
+        assertThat(first.statusCode()).as(first.body()).isEqualTo(201);
+        HttpResponse<String> otherUser = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/v1/ledger-accounts"))
+                .header("X-Tenant-Id", TENANT).header("X-User", "someone-else").header("Content-Type", "application/json")
+                .header("Idempotency-Key", "sec19-acct").POST(HttpRequest.BodyPublishers.ofString(create.formatted(ledger)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(otherUser.statusCode()).as(otherUser.body()).isEqualTo(422);
+        assertThat(otherUser.body()).contains("idempotency_key_reused").doesNotContain("2900-F");
+        assertThat(erik).isNotBlank();
+    }
+
     private HttpResponse<String> patch(String account, String body) throws Exception {
         JsonNode cur = get("/v1/ledger-accounts/" + account, TENANT);
         HttpRequest patch = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/ledger-accounts/" + account))

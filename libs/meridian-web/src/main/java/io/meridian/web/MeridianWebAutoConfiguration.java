@@ -133,8 +133,10 @@ public class MeridianWebAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    Idempotency idempotency(JdbcClient jdbc, JsonMapper json, TransactionTemplate tx) {
-        return new Idempotency(jdbc, json, tx);
+    Idempotency idempotency(JdbcClient jdbc, JsonMapper json, TransactionTemplate tx, Environment env) {
+        return new Idempotency(jdbc, json, tx,
+                env.getProperty("meridian.idempotency.stale-after", java.time.Duration.class, java.time.Duration.ofMinutes(10)),
+                env.getProperty("meridian.idempotency.retention", java.time.Duration.class, java.time.Duration.ofDays(30)));
     }
 
     /** Public provider callbacks: v2 signatures with timestamp, nonce and tenant binding (SEC-17). */
@@ -145,6 +147,13 @@ public class MeridianWebAutoConfiguration {
                 env.getProperty("meridian.callbacks.max-skew", java.time.Duration.class, java.time.Duration.ofMinutes(5)),
                 env.getProperty("meridian.callbacks.accept-legacy-signatures", Boolean.class, true),
                 java.time.Clock.systemUTC());
+    }
+
+    /** SEC-34: purges completed idempotency keys past their retention (every {@code meridian.idempotency.purge-interval}). */
+    @Bean(destroyMethod = "close")
+    io.meridian.web.idempotency.IdempotencyJanitor idempotencyJanitor(Idempotency idempotency, Environment env) {
+        return new io.meridian.web.idempotency.IdempotencyJanitor(idempotency, env.getProperty(
+                "meridian.idempotency.purge-interval", java.time.Duration.class, java.time.Duration.ofHours(6)));
     }
 
     @Bean
