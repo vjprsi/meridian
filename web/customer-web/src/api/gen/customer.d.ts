@@ -261,6 +261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customers/contact-search-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Operator batch for contact search: fills masked_value and lookup_hash of verified contacts missing them (or recomputes them for every verified contact with rehash_all, after a lookup key rotation) and republishes party.customer_contact.verified; idempotent, one batch per call (batch_size default 500, max 5000), resume with after_id = next_after_id: {processed, updated, published, next_after_id, done} */
+        post: operations["customersContactSearchBackfill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customers/{customer_id}/identifiers": {
         parameters: {
             query?: never;
@@ -1061,6 +1078,13 @@ export interface components {
             email?: string;
             identifier_value?: string;
             registration_number?: string;
+        };
+        CustomersContactSearchBackfillRequest: {
+            /** Format: int32 */
+            batch_size?: number;
+            /** Format: uuid */
+            after_id?: string;
+            rehash_all?: boolean;
         };
         /** @description One page of CustomerIdentifier results (newest first) */
         CustomerIdentifierPage: {
@@ -4303,6 +4327,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CustomersDuplicatesCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    customersContactSearchBackfill: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomersContactSearchBackfillRequest"];
             };
         };
         responses: {
