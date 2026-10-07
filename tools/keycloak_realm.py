@@ -21,6 +21,9 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
   meridian-agent-app         public, authorization code + PKCE (agent outlet app); only channels:agent plus
                              openid/profile; tokens carry agent_id and tenant_id from admin-only user attributes and
                              auth_time / acr (money movement needs a recent login or a device proof)
+  meridian-agent-mobile      public, authorization code + PKCE (native agent app, mobile/agent_app): same scope and
+                             claims as meridian-agent-app; redirect io.meridian.agent:/oauth2redirect (custom scheme),
+                             no web origins, no password grant
   meridian-business-portal   public, authorization code + PKCE (business banking portal); only channels:business plus
                              openid/profile; tokens carry business_customer_id, business_user_id and tenant_id from
                              admin-only user attributes and auth_time / acr (approvals and administration need a recent
@@ -64,6 +67,10 @@ listeners jboss-logging and metrics-listener (keycloak_user_events_total, needs 
                              when the level-2 authentication is older than CUSTOMER_LOA2_MAX_AGE. Enrolment through
                              application-initiated actions (kc_action=CONFIGURE_TOTP / webauthn-register /
                              webauthn-register-passwordless; removal kc_action=delete_credential:<id>)
+  meridian-customer-mobile   public, authorization code + PKCE (native customer app, mobile/customer_app): same scope,
+                             claims, LoA levels and browser flow as meridian-customer-web (step-up with acr_values=2 and
+                             max_age); redirect io.meridian.customer:/oauth2redirect (custom scheme), no web origins,
+                             no password grant; refresh tokens are kept in the platform keystore behind biometrics
   meridian-customer-sessions confidential, client credentials, used only by customer-channel-service to list and end a
                              customer's own Keycloak sessions and list their sign-in factors (admin REST API, always for
                              the sub of the customer's token). Service-account roles realm-management view-users and
@@ -113,6 +120,10 @@ CUSTOMER_WEB_ORIGINS = ["http://localhost:13300"]
 # (Users -> demo.agent -> Attributes; admin-only) to an ACTIVE agent of the demo tenant.
 DEMO_AGENT = "0199a000-0000-7000-8000-0000000a0001"
 AGENT_APP_ORIGINS = ["http://localhost:13400"]
+# Native mobile apps (mobile/customer_app, mobile/agent_app; Flutter + AppAuth): custom-scheme redirect URIs (RFC 8252
+# private-use URI scheme = reverse domain of the app id), no web origins, PKCE S256, no password grant.
+CUSTOMER_MOBILE_REDIRECTS = ["io.meridian.customer:/oauth2redirect"]
+AGENT_MOBILE_REDIRECTS = ["io.meridian.agent:/oauth2redirect"]
 # Demo business (a COMPANY customer of the demo tenant) and its two portal users (business-channel-service
 # business_user ids). Change the attributes (Users -> demo.business.* -> Attributes; admin-only) to real values.
 DEMO_BUSINESS = "0199a000-0000-7000-8000-0000000b0001"
@@ -635,6 +646,27 @@ def main():
              "fullScopeAllowed": False,
              "redirectUris": [o + "/*" for o in AGENT_APP_ORIGINS], "webOrigins": AGENT_APP_ORIGINS,
              "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
+             "protocolMappers": agent_mappers + [audience_mapper()],
+             "defaultClientScopes": ["profile", "email", "web-origins"] + agent_scopes,
+             "optionalClientScopes": []},
+            {"clientId": "meridian-customer-mobile", "name": "Meridian customer mobile app", "publicClient": True,
+             "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
+             "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "redirectUris": CUSTOMER_MOBILE_REDIRECTS, "webOrigins": [],
+             "attributes": {"pkce.code.challenge.method": "S256",
+                            "post.logout.redirect.uris": "##".join(CUSTOMER_MOBILE_REDIRECTS),
+                            "acr.loa.map": json.dumps(CUSTOMER_ACR_LOA_MAP, separators=(",", ":")),
+                            "default.acr.values": "1", "minimum.acr.value": "1"},
+             "authenticationFlowBindingOverrides": {"browser": CUSTOMER_BROWSER_FLOW_ID},
+             "protocolMappers": customer_mappers + [audience_mapper()],
+             "defaultClientScopes": ["profile", "email", "web-origins"] + customer_scopes,
+             "optionalClientScopes": []},
+            {"clientId": "meridian-agent-mobile", "name": "Meridian agent mobile app", "publicClient": True,
+             "standardFlowEnabled": True, "implicitFlowEnabled": False, "serviceAccountsEnabled": False,
+             "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "redirectUris": AGENT_MOBILE_REDIRECTS, "webOrigins": [],
+             "attributes": {"pkce.code.challenge.method": "S256",
+                            "post.logout.redirect.uris": "##".join(AGENT_MOBILE_REDIRECTS)},
              "protocolMappers": agent_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + agent_scopes,
              "optionalClientScopes": []},

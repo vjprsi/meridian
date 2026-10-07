@@ -22,6 +22,8 @@ wallets and mobile money, card issuing and processing, risk and compliance, with
 | `tracker/Meridian_Tracker.xlsx` | Project tracker (dashboard, roadmap, backlog, inventory, traceability) |
 | `deploy/` | Deployed environments (Argo CD), pinned releases, admission policies, change records (`tools/release.py`) |
 
+| `mobile/customer_app`, `mobile/agent_app` | Flutter iOS / Android apps (customer banking, agent outlet) |
+
 ## Commands
 
 ```bash
@@ -296,6 +298,33 @@ Merchant users never call the domain services. `merchant-channel-service` (domai
   settlements, payout changes, users; API clients and webhook endpoints through `merchant_object`): 404, audited
   (`merchant_action`) and published (`channels.merchant_action.denied`). Webhook subscriptions always carry
   `merchant_id == "<merchant>"`.
+
+## Mobile apps
+
+Native iOS / Android apps in Flutter (SDK in `D:\DevTools\flutter`, not on PATH; `docs/DEV_TOOLS.md`). Both are
+Material 3 (light / dark), English and Kiswahili, and sign in with Keycloak through the system browser
+(authorization code + PKCE, custom-scheme redirects; public clients `meridian-customer-mobile` and
+`meridian-agent-mobile` from `tools/keycloak_realm.py`).
+
+```bash
+cd mobile/customer_app        # or mobile/agent_app
+/d/DevTools/flutter/bin/flutter pub get
+/d/DevTools/flutter/bin/flutter analyze
+/d/DevTools/flutter/bin/flutter test
+/d/DevTools/flutter/bin/flutter build web --dart-define-from-file=env/dev.json   # smoke build, dev auth mode
+```
+
+- `mobile/customer_app`: `/v1/me` only. Home, accounts and wallets with transactions, transfers and payments
+  (validate, confirm, step-up with `acr_values=2` + `max_age`, one Idempotency-Key per confirmation), payees, cards
+  (freeze, channels, limits, lost / stolen), loans (schedule, repay), insights, inbox, security (devices, sign out
+  everywhere). Refresh token in the platform keystore behind biometrics; certificate pinning and root / jailbreak
+  detection hooks.
+- `mobile/agent_app`: `/v1/agent` only, offline-first like `web/agent-app`: AES-GCM encrypted SQLite outbox (key from
+  the app PIN via PBKDF2), Idempotency-Key per record, ordered replay, offline limits, ES256 device key (Android
+  Keystore / Secure Enclave, pure-Dart fallback) with `X-Agent-Device-Proof`; cash-in / cash-out, bill pay, float
+  requests, history, sync.
+- Native Android / iOS builds, signing and per-environment flavors: `mobile/README.md`; per-app details and gaps in
+  `mobile/*/README.md`.
 
 ## Agent channel (/v1/agent)
 

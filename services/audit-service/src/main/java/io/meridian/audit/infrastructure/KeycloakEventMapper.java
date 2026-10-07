@@ -33,7 +33,7 @@ public final class KeycloakEventMapper {
     private static final Map<String, String> ACTOR_TYPES = Map.of(
             "meridian-console", "STAFF_USER", "meridian-developer-portal", "STAFF_USER",
             "meridian-customer-web", "CUSTOMER", "meridian-business-portal", "CUSTOMER", "meridian-merchant-app", "CUSTOMER",
-            "meridian-agent-app", "AGENT");
+            "meridian-agent-app", "AGENT", "meridian-customer-mobile", "CUSTOMER", "meridian-agent-mobile", "AGENT");
 
     private final JsonMapper json;
 
