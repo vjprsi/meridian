@@ -18,7 +18,7 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- card_vault_key: Key metadata for HSM-held keys (no key material stored)
+-- card_vault_key: Key metadata (no clear key material); in envelope mode the data key wrapped by the KMS master key
 CREATE TABLE card_vault_key (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE card_vault_key (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  key_type                     varchar(40) NOT NULL CHECK (key_type IN ('PAN_DEK', 'CVV_KEY', 'PIN_KEY', 'ZPK', 'CVK', 'MDK')),
+  key_type                     varchar(40) NOT NULL CHECK (key_type IN ('PAN_DEK', 'CVV_KEY', 'PIN_KEY', 'ZPK', 'CVK', 'MDK', 'FINGERPRINT')),
   hsm_key_label                varchar(128) NOT NULL,
   kcv                          varchar(6) NOT NULL,
   algorithm                    varchar(32) NOT NULL DEFAULT 'AES-256-GCM',
@@ -35,13 +35,16 @@ CREATE TABLE card_vault_key (
   active_from                  timestamptz NOT NULL DEFAULT now(),
   retire_after                 timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
+  wrapped_key                  bytea,
+  master_key_ref               varchar(256),
+  wrapped_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE card_vault_key IS 'Key metadata for HSM-held keys (no key material stored)';
+COMMENT ON TABLE card_vault_key IS 'Key metadata (no clear key material); in envelope mode the data key wrapped by the KMS master key';
 COMMENT ON COLUMN card_vault_key.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN card_vault_key.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN card_vault_key.created_at IS 'Creation time';
@@ -57,6 +60,9 @@ COMMENT ON COLUMN card_vault_key.version IS 'Key version (incremented on rotatio
 COMMENT ON COLUMN card_vault_key.active_from IS 'Activation';
 COMMENT ON COLUMN card_vault_key.retire_after IS 'Scheduled rotation';
 COMMENT ON COLUMN card_vault_key.is_active IS 'Active (one active key per type)';
+COMMENT ON COLUMN card_vault_key.wrapped_key IS 'Envelope mode: the data key encrypted by the KMS master key (encryption context tenant + purpose + label/version); empty for keys held inside a PKCS#11 HSM [SECRET]';
+COMMENT ON COLUMN card_vault_key.master_key_ref IS 'Master key (version) that wraps the data key, e.g. the KMS key ARN or software:<kcv>; HSM-held keys: pkcs11';
+COMMENT ON COLUMN card_vault_key.wrapped_at IS 'When the data key was last wrapped (creation or master key rotation)';
 COMMENT ON COLUMN card_vault_key.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_vault_key.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN card_vault_key.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -124,10 +130,11 @@ CREATE TABLE card_data_vault (
   pan_token                    varchar(64) NOT NULL,
   pan_fingerprint              varchar(64) NOT NULL,
   pan_encrypted                bytea NOT NULL,
-  cvv_encrypted                bytea,
   expiry_encrypted             bytea NOT NULL,
   pin_encrypted                bytea,
   dek_key_id                   uuid NOT NULL REFERENCES card_vault_key(id),
+  cvk_key_id                   uuid REFERENCES card_vault_key(id),
+  pin_key_id                   uuid REFERENCES card_vault_key(id),
   card_id                      uuid,
   bin                          varchar(11),
   last4                        varchar(4),
@@ -155,10 +162,11 @@ COMMENT ON COLUMN card_data_vault.row_version IS 'Optimistic lock version; send 
 COMMENT ON COLUMN card_data_vault.pan_token IS 'Random token of the PAN (not derived from it)';
 COMMENT ON COLUMN card_data_vault.pan_fingerprint IS 'Keyed HMAC-SHA256 of the PAN for de-duplication and lookup';
 COMMENT ON COLUMN card_data_vault.pan_encrypted IS 'PAN encrypted (AES-256-GCM) with the data encryption key [SECRET]';
-COMMENT ON COLUMN card_data_vault.cvv_encrypted IS 'CVV2 encrypted (dynamic CVV cards may leave empty) [SECRET]';
 COMMENT ON COLUMN card_data_vault.expiry_encrypted IS 'Expiry encrypted [SECRET]';
-COMMENT ON COLUMN card_data_vault.pin_encrypted IS 'PIN encrypted with the data encryption key (never returned) [SECRET]';
+COMMENT ON COLUMN card_data_vault.pin_encrypted IS 'ISO 9564 format 0 PIN block encrypted under the PIN encryption key (deterministic AES key wrap, RFC 5649) for comparison; the PIN itself is never stored (GAP-03; never returned) [SECRET]';
 COMMENT ON COLUMN card_data_vault.dek_key_id IS 'Data encryption key used';
+COMMENT ON COLUMN card_data_vault.cvk_key_id IS 'Card verification key the CVV2 is derived under (CVV2 is never stored, GAP-03)';
+COMMENT ON COLUMN card_data_vault.pin_key_id IS 'PIN encryption key the stored PIN block is under';
 COMMENT ON COLUMN card_data_vault.card_id IS 'Card';
 COMMENT ON COLUMN card_data_vault.bin IS 'BIN (first 6-8 digits; not sensitive)';
 COMMENT ON COLUMN card_data_vault.last4 IS 'Last four digits';
@@ -176,6 +184,8 @@ COMMENT ON COLUMN card_data_vault.custom_field_5 IS 'Tenant-defined custom field
 CREATE INDEX ix_card_data_vault_tenant ON card_data_vault (tenant_id, created_at);
 CREATE INDEX ix_card_data_vault_pan_fingerprint ON card_data_vault (pan_fingerprint);
 CREATE INDEX ix_card_data_vault_dek_key_id ON card_data_vault (dek_key_id);
+CREATE INDEX ix_card_data_vault_cvk_key_id ON card_data_vault (cvk_key_id);
+CREATE INDEX ix_card_data_vault_pin_key_id ON card_data_vault (pin_key_id);
 CREATE INDEX ix_card_data_vault_card_id ON card_data_vault (card_id);
 ALTER TABLE card_data_vault ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON card_data_vault USING (tenant_id = current_setting('app.tenant_id')::uuid);

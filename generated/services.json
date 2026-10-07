@@ -468,7 +468,7 @@
     "schema": "card_vault",
     "package": "io.meridian.cardvault",
     "port": 9104,
-    "description": "PCI DSS scoped card data vault. Stores PAN, CVV2 and expiry encrypted with envelope encryption under HSM-managed keys and returns tokens. Isolated network segment; only authorisation, tokenisation and reveal flows may detokenise.",
+    "description": "PCI DSS scoped card data vault (CDE, GAP-01/02/03). Stores PAN and expiry encrypted with envelope encryption (per-tenant, per-purpose data keys wrapped by AWS KMS, or keys held inside a PKCS#11 HSM) and returns tokens. CVV2 is never stored: it is derived on demand under the card verification key. PINs are kept only as PIN blocks encrypted under the PIN encryption key (translated inside the HSM in HSM mode). Isolated network segment, no edge-gateway route (internal APIs); only card-service, card-authorization, card-tokenization and card-threeds call it.",
     "tags": [
       "Card Vault",
       "Card Vault Access Logs",
@@ -477,7 +477,8 @@
     "tables": 3,
     "events": [
       "cards.card_vault.revealed",
-      "cards.card_vault.keys_rotated"
+      "cards.card_vault.keys_rotated",
+      "cards.card_vault.keys_rewrapped"
     ]
   },
   {

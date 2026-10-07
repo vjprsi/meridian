@@ -1334,7 +1334,7 @@ API: /v1/card-statement-cycles · Requirements: LND-03, CRD-01
 
 ### Service `card-vault-service` — database `card_vault_db`
 
-PCI DSS scoped card data vault. Stores PAN, CVV2 and expiry encrypted with envelope encryption under HSM-managed keys and returns tokens. Isolated network segment; only authorisation, tokenisation and reveal flows may detokenise.
+PCI DSS scoped card data vault (CDE, GAP-01/02/03). Stores PAN and expiry encrypted with envelope encryption (per-tenant, per-purpose data keys wrapped by AWS KMS, or keys held inside a PKCS#11 HSM) and returns tokens. CVV2 is never stored: it is derived on demand under the card verification key. PINs are kept only as PIN blocks encrypted under the PIN encryption key (translated inside the HSM in HSM mode). Isolated network segment, no edge-gateway route (internal APIs); only card-service, card-authorization, card-tokenization and card-threeds call it.
 
 
 #### `card_data_vault`
@@ -1355,10 +1355,11 @@ API: /v1/card-vault · Requirements: CRD-07
 | pan_token | varchar(64) | no | UQ | pan_token (read-only) | Random token of the PAN (not derived from it) |
 | pan_fingerprint | varchar(64) | no |  | pan_fingerprint (read-only) | Keyed HMAC-SHA256 of the PAN for de-duplication and lookup |
 | pan_encrypted | bytea | no |  | — | PAN encrypted (AES-256-GCM) with the data encryption key secret |
-| cvv_encrypted | bytea | yes |  | — | CVV2 encrypted (dynamic CVV cards may leave empty) secret |
 | expiry_encrypted | bytea | no |  | — | Expiry encrypted secret |
-| pin_encrypted | bytea | yes |  | — | PIN encrypted with the data encryption key (never returned) secret |
+| pin_encrypted | bytea | yes |  | — | ISO 9564 format 0 PIN block encrypted under the PIN encryption key (deterministic AES key wrap, RFC 5649) for comparison; the PIN itself is never stored (GAP-03; never returned) secret |
 | dek_key_id | uuid | no | FK → card_vault_key | dek_key_id (read-only) | Data encryption key used |
+| cvk_key_id | uuid | yes | FK → card_vault_key | cvk_key_id (read-only) | Card verification key the CVV2 is derived under (CVV2 is never stored, GAP-03) |
+| pin_key_id | uuid | yes | FK → card_vault_key | pin_key_id (read-only) | PIN encryption key the stored PIN block is under |
 | card_id | uuid | yes | ref → card | card_id | Card |
 | bin | varchar(11) | yes |  | bin (read-only) | BIN (first 6-8 digits; not sensitive) |
 | last4 | varchar(4) | yes |  | last4 (read-only) | Last four digits |
@@ -1376,7 +1377,7 @@ API: /v1/card-vault · Requirements: CRD-07
 
 #### `card_vault_key`
 
-Key metadata for HSM-held keys (no key material stored)
+Key metadata (no clear key material); in envelope mode the data key wrapped by the KMS master key
 
 API: /v1/card-vault/keys · Requirements: CRD-07
 
@@ -1397,6 +1398,9 @@ API: /v1/card-vault/keys · Requirements: CRD-07
 | active_from | timestamptz | no |  | active_from | Activation |
 | retire_after | timestamptz | yes |  | retire_after | Scheduled rotation |
 | is_active | boolean | no |  | is_active (read-only) | Active (one active key per type) |
+| wrapped_key | bytea | yes |  | — | Envelope mode: the data key encrypted by the KMS master key (encryption context tenant + purpose + label/version); empty for keys held inside a PKCS#11 HSM secret |
+| master_key_ref | varchar(256) | yes |  | master_key_ref (read-only) | Master key (version) that wraps the data key, e.g. the KMS key ARN or software:<kcv>; HSM-held keys: pkcs11 |
+| wrapped_at | timestamptz | yes |  | wrapped_at (read-only) | When the data key was last wrapped (creation or master key rotation) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

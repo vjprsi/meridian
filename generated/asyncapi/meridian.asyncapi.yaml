@@ -111,6 +111,8 @@ channels:
         $ref: '#/components/messages/CardsCardVaultRevealed'
       CardsCardVaultKeysRotated:
         $ref: '#/components/messages/CardsCardVaultKeysRotated'
+      CardsCardVaultKeysRewrapped:
+        $ref: '#/components/messages/CardsCardVaultKeysRewrapped'
       CardsCardAuthorizationApproved:
         $ref: '#/components/messages/CardsCardAuthorizationApproved'
       CardsCardAuthorizationDeclined:
@@ -2906,6 +2908,28 @@ components:
           ce_type:
             type: string
             const: cards.card_vault.keys_rotated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CardVaultKey'
+    CardsCardVaultKeysRewrapped:
+      name: cards.card_vault.keys_rewrapped
+      title: The tenant's data keys were re-wrapped under a new master key version
+      summary: The tenant's data keys were re-wrapped under a new master key version
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: cards.card_vault.keys_rewrapped
           ce_source:
             type: string
           ce_id:
@@ -25114,7 +25138,7 @@ components:
       - success
     CardVaultKey:
       type: object
-      description: Key metadata for HSM-held keys (no key material stored)
+      description: Key metadata (no clear key material); in envelope mode the data key wrapped by the KMS master key
       properties:
         id:
           type: string
@@ -25159,6 +25183,7 @@ components:
           - ZPK
           - CVK
           - MDK
+          - FINGERPRINT
           description: Key purpose
         hsm_key_label:
           type: string
@@ -25191,6 +25216,21 @@ components:
         is_active:
           type: boolean
           description: Active (one active key per type)
+          readOnly: true
+        master_key_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 256
+          description: 'Master key (version) that wraps the data key, e.g. the KMS key ARN or software:<kcv>; HSM-held keys:
+            pkcs11'
+          readOnly: true
+        wrapped_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the data key was last wrapped (creation or master key rotation)
           readOnly: true
         custom_field_1:
           type:
