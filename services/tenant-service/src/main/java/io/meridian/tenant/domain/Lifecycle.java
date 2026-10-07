@@ -19,13 +19,33 @@ public final class Lifecycle {
             "OFFBOARDING", Set.of("TERMINATED"),
             "TERMINATED", Set.of());
 
-    /** Cell: PROVISIONING -> ACTIVE -> DRAINING -> READ_ONLY -> DECOMMISSIONED (DRAINING may return to ACTIVE). */
+    /**
+     * Cell: PROVISIONING -> ACTIVE -> DRAINING -> DECOMMISSIONED, plus the serving states the cell router acts on:
+     * READ_ONLY (writes refused: warm DR standby, maintenance) and OFFLINE (tenants fail over to their standby cell).
+     * A warm standby may start READ_ONLY; OFFLINE and READ_ONLY return to ACTIVE through /online.
+     */
     public static final Map<String, Set<String>> CELL = Map.of(
-            "PROVISIONING", Set.of("ACTIVE", "DECOMMISSIONED"),
-            "ACTIVE", Set.of("DRAINING"),
-            "DRAINING", Set.of("ACTIVE", "READ_ONLY", "DECOMMISSIONED"),
-            "READ_ONLY", Set.of("DRAINING", "DECOMMISSIONED"),
+            "PROVISIONING", Set.of("ACTIVE", "READ_ONLY", "DECOMMISSIONED"),
+            "ACTIVE", Set.of("DRAINING", "READ_ONLY", "OFFLINE"),
+            "DRAINING", Set.of("ACTIVE", "READ_ONLY", "OFFLINE", "DECOMMISSIONED"),
+            "READ_ONLY", Set.of("ACTIVE", "DRAINING", "OFFLINE", "DECOMMISSIONED"),
+            "OFFLINE", Set.of("ACTIVE", "READ_ONLY", "DECOMMISSIONED"),
             "DECOMMISSIONED", Set.of());
+
+    /**
+     * Tenant move: PENDING_APPROVAL -> APPROVED -> FROZEN -> COPYING -> COPIED -> SWITCHED -> COMPLETED. Rejected in
+     * workflow-service -> REJECTED; cancellable until the switch (after it the tenant already lives on the target).
+     */
+    public static final Map<String, Set<String>> TENANT_MOVE = Map.of(
+            "PENDING_APPROVAL", Set.of("APPROVED", "REJECTED", "CANCELLED"),
+            "APPROVED", Set.of("FROZEN", "CANCELLED"),
+            "FROZEN", Set.of("COPYING", "CANCELLED"),
+            "COPYING", Set.of("COPIED", "CANCELLED"),
+            "COPIED", Set.of("SWITCHED", "CANCELLED"),
+            "SWITCHED", Set.of("COMPLETED"),
+            "REJECTED", Set.of(),
+            "COMPLETED", Set.of(),
+            "CANCELLED", Set.of());
 
     /** Branch: ACTIVE <-> TEMPORARILY_CLOSED -> CLOSED (terminal). */
     public static final Map<String, Set<String>> BRANCH = Map.of(

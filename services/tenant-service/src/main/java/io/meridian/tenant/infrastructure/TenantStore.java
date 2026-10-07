@@ -16,7 +16,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Row access beyond generic CRUD: locking reads, partial updates and tenant-scoping switches. */
 @Repository
 public class TenantStore {
-    private static final Set<String> TABLES = Set.of("cell", "tenant", "tenant_placement", "tenant_module",
+    private static final Set<String> TABLES = Set.of("cell", "tenant", "tenant_move", "tenant_placement", "tenant_module",
             "legal_entity", "branch", "tenant_setting", "feature_flag", "tenant_branding");
 
     private final JdbcClient jdbc;

@@ -1,0 +1,223 @@
+{{- $r := .Values.router -}}
+{{- if not $r.registryUrl }}{{ fail "router.registryUrl (tenant-service of the control plane) is required" }}{{ end }}
+{{- if not $r.jwt.jwkSetUri }}{{ fail "router.jwt.jwkSetUri is required (jwt mode)" }}{{ end }}
+{{- range $cell, $state := $r.cellOverrides }}
+{{- if not (has $state (list "ACTIVE" "READ_ONLY" "OFFLINE")) }}{{ fail (printf "router.cellOverrides.%s must be ACTIVE, READ_ONLY or OFFLINE" $cell) }}{{ end }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+data:
+  MERIDIAN_SECURITY_MODE: "jwt"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" .Values.otel.endpoint | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME: "cell-router"
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ .Values.region | quote }}
+  # meridian.router.* (registry, JWT verification, cache, health checks with hysteresis, break-glass overrides)
+  SPRING_APPLICATION_JSON: {{ dict "meridian" (dict "router" (omit $r "auth")) | toJson | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "router.selector" . | nindent 4 }}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: management, port: 9090, targetPort: management}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "router.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ toJson .Values | sha256sum }}
+    spec:
+      serviceAccountName: cell-router
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: {{- include "router.selector" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "router.selector" . | nindent 14 }}
+      containers:
+        - name: app
+          image: {{ printf "%s/cell-router:%s" .Values.image.registry (.Values.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: management, containerPort: 9090}
+          envFrom:
+            - configMapRef:
+                name: cell-router
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: MERIDIAN_ROUTER_AUTH_TOKEN_URI
+              value: {{ $r.auth.tokenUri | quote }}
+            - name: MERIDIAN_ROUTER_AUTH_SCOPE
+              value: {{ $r.auth.scope | quote }}
+            - name: MERIDIAN_ROUTER_AUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $r.auth.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_ROUTER_AUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $r.auth.clientSecret }}, key: client-secret}}
+          resources:
+            requests: {cpu: {{ .Values.resources.cpu | quote }}, memory: {{ .Values.resources.memory | quote }}}
+            limits: {memory: {{ .Values.resources.memory | quote }}}
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: cell-router}
+  minReplicas: {{ .Values.replicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: {{ .Values.autoscaling.targetCpu }}}
+{{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # the routed port from the load balancer / ingress; management (metrics, probes) only from monitoring
+    - ports:
+        - {port: http, protocol: TCP}
+    {{- with .Values.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+{{- end }}
+{{- if .Values.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  endpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: 15s
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: cell-router, port: {name: http}}
+{{- end }}

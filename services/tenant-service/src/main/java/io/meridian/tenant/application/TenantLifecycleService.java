@@ -5,6 +5,7 @@ import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.tenant.domain.Lifecycle;
 import io.meridian.tenant.domain.Modules;
+import io.meridian.tenant.domain.Placement;
 import io.meridian.tenant.domain.SettingValues;
 import io.meridian.tenant.domain.TenantTemplate;
 import io.meridian.tenant.domain.Validators;
@@ -28,7 +29,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 public class TenantLifecycleService {
-    private static final Set<String> MIGRATABLE = Set.of("PROVISIONING", "ACTIVE", "SUSPENDED");
+    /** /migrate is a metadata-only placement change: only for tenants without data (live tenants use tenant moves). */
+    private static final Set<String> MIGRATABLE = Set.of("PROVISIONING");
 
     private final TenantStore store;
     private final CrudEngine crud;
@@ -197,8 +199,16 @@ public class TenantLifecycleService {
     public JsonNode migrate(UUID tenantId, UUID targetCellId, OffsetDateTime scheduledAt) {
         ObjectNode t = store.lock("tenant", tenantId);
         String status = t.get("status").asString();
+        if (Placement.MOVABLE_TENANT.contains(status) && !MIGRATABLE.contains(status)) {
+            throw ApiException.conflict("use_tenant_move", "A " + status + " tenant has data on its cell: move it with "
+                    + "POST /v1/platform/tenant-moves (maker-checker, write freeze, data copy, switch)");
+        }
         if (!MIGRATABLE.contains(status)) {
             throw ApiException.conflict("invalid_transition", "A " + status + " tenant cannot be migrated");
+        }
+        if (t.hasNonNull("active_move_id")) {
+            throw ApiException.conflict("migration_in_progress", "Tenant move " + t.get("active_move_id").asString()
+                    + " is in progress");
         }
         UUID currentCell = t.hasNonNull("cell_id") ? UUID.fromString(t.get("cell_id").asString()) : null;
         if (targetCellId.equals(currentCell)) {
@@ -209,11 +219,7 @@ public class TenantLifecycleService {
             throw ApiException.conflict("migration_in_progress", "A migration of this tenant is already scheduled or running");
         }
         ObjectNode target = store.lock("cell", targetCellId);
-        if (t.hasNonNull("data_residency_country") && t.hasNonNull("home_region")
-                && !t.get("home_region").asString().equals(target.get("region").asString())) {
-            throw ApiException.unprocessable("data_residency_violation", "Tenant data must stay in region "
-                    + t.get("home_region").asString() + " (data residency " + t.get("data_residency_country").asString() + ")");
-        }
+        Placement.requireResidency(t, target);
         reserveCapacity(targetCellId);
         OffsetDateTime now = io.meridian.common.time.Clocks.now();
         boolean scheduled = scheduledAt != null && scheduledAt.isAfter(now.plusMinutes(1));
@@ -223,7 +229,7 @@ public class TenantLifecycleService {
         } else {
             store.execute("""
                     update tenant_placement set status = 'COMPLETED', effective_to = now()
-                    where subject_tenant_id = ? and status = 'ACTIVE'""", tenantId);
+                    where subject_tenant_id = ? and status = 'ACTIVE' and role = 'PRIMARY'""", tenantId);
             if (currentCell != null) {
                 store.execute("update cell set tenant_count = greatest(tenant_count - 1, 0) where id = ?", currentCell);
             }
@@ -243,6 +249,86 @@ public class TenantLifecycleService {
         store.require("tenant", id);
     }
 
+    /**
+     * Chooses (or clears, with a null cell) the tenant's DR standby cell. The standby gets a STANDBY placement in the
+     * history; it reserves no capacity (it only serves the tenant while the home cell is OFFLINE).
+     */
+    @Transactional
+    public JsonNode setStandby(UUID tenantId, UUID standbyCellId, String reason) {
+        ObjectNode t = store.lock("tenant", tenantId);
+        UUID current = t.hasNonNull("standby_cell_id") ? UUID.fromString(t.get("standby_cell_id").asString()) : null;
+        if (Objects.equals(current, standbyCellId)) {
+            return t;
+        }
+        if (standbyCellId != null) {
+            if (!t.hasNonNull("cell_id")) {
+                throw ApiException.unprocessable("tenant_not_placed", "Place the tenant on a home cell first");
+            }
+            ObjectNode primary = store.require("cell", UUID.fromString(t.get("cell_id").asString()));
+            Placement.requireStandby(t, primary, store.require("cell", standbyCellId));
+        }
+        OffsetDateTime now = io.meridian.common.time.Clocks.now();
+        store.execute("""
+                update tenant_placement set status = 'COMPLETED', effective_to = now()
+                where subject_tenant_id = ? and status = 'ACTIVE' and role = 'STANDBY'""", tenantId);
+        if (standbyCellId != null) {
+            placement(tenantId, standbyCellId, current, "ACTIVE", now, reason, "STANDBY", null);
+        }
+        ObjectNode values = json.createObjectNode();
+        if (standbyCellId == null) {
+            values.putNull("standby_cell_id");
+        } else {
+            values.put("standby_cell_id", standbyCellId.toString());
+        }
+        ObjectNode row = store.update("tenant", tenantId, values);
+        events.publishForTenant(tenantId, "platform.tenant.standby_changed", "tenant", tenantId, row);
+        return row;
+    }
+
+    /**
+     * What the cell router needs to route one tenant: home cell and DR standby (the tenant's own, else the home cell's
+     * paired standby) with status and gateway URL, the tenant's traffic mode (READ_ONLY while a move freezes writes)
+     * and lifecycle status. Platform operators and the router's service identity only (SEC-15).
+     */
+    public JsonNode routing(UUID tenantId) {
+        ObjectNode t = store.require("tenant", tenantId);
+        ObjectNode out = json.createObjectNode();
+        out.put("tenant_id", tenantId.toString());
+        out.put("tenant_code", t.get("code").asString());
+        out.put("status", t.get("status").asString());
+        out.put("traffic_mode", t.path("traffic_mode").asString("NORMAL"));
+        copy(t, out, "traffic_mode_reason");
+        copy(t, out, "active_move_id");
+        copy(t, out, "home_region");
+        copy(t, out, "deployment_model");
+        ObjectNode primary = t.hasNonNull("cell_id") ? store.require("cell", UUID.fromString(t.get("cell_id").asString())) : null;
+        UUID standbyId = t.hasNonNull("standby_cell_id") ? UUID.fromString(t.get("standby_cell_id").asString())
+                : primary != null && primary.hasNonNull("standby_cell_id")
+                ? UUID.fromString(primary.get("standby_cell_id").asString()) : null;
+        ObjectNode standby = standbyId == null ? null : store.find("cell", standbyId).orElse(null);
+        if (standby != null && !Placement.residencyAllows(t, standby)) {
+            standby = null; // a paired standby outside the tenant's residency never receives its traffic
+        }
+        out.set("primary", primary == null ? null : cellView(primary));
+        out.set("standby", standby == null ? null : cellView(standby));
+        out.put("resolved_at", io.meridian.common.time.Clocks.now().toString());
+        return out;
+    }
+
+    private ObjectNode cellView(ObjectNode cell) {
+        ObjectNode c = json.createObjectNode();
+        for (String f : new String[] {"id", "code", "region", "status", "deployment_model", "gateway_url", "health_url"}) {
+            copy(cell, c, f);
+        }
+        return c;
+    }
+
+    private static void copy(JsonNode from, ObjectNode to, String field) {
+        if (from.hasNonNull(field)) {
+            to.set(field, from.get(field));
+        }
+    }
+
     // ------------------------------------------------------------------ cells
 
     @Transactional
@@ -258,11 +344,59 @@ public class TenantLifecycleService {
         return row;
     }
 
+    /**
+     * Takes a cell out of service (OFFLINE), makes it serve reads only (READ_ONLY) or returns it to service (ACTIVE).
+     * The cell router picks the change up from {@code platform.cell.status_changed} (and its periodic refresh) and
+     * fails the cell's tenants over to their standby cells while it is OFFLINE. Break-glass: a single operator,
+     * audited (event + updated_by), so a regional failover is not held up by an approval round.
+     */
+    @Transactional
+    public JsonNode setCellServing(UUID cellId, String target, String reason) {
+        ObjectNode cell = store.lock("cell", cellId);
+        String from = cell.get("status").asString();
+        if (from.equals(target)) {
+            throw ApiException.conflict("invalid_transition", "Cell is already " + target);
+        }
+        if ("ACTIVE".equals(target) && !Set.of("OFFLINE", "READ_ONLY").contains(from)) {
+            throw ApiException.conflict("invalid_transition",
+                    "Only an OFFLINE or READ_ONLY cell can be brought online (cell is " + from + ")");
+        }
+        Lifecycle.require(Lifecycle.CELL, "Cell", from, target);
+        ObjectNode values = json.createObjectNode();
+        values.put("status", target);
+        values.put("status_reason", reason);
+        values.put("status_changed_at", io.meridian.common.time.Clocks.now().toString());
+        ObjectNode row = store.update("cell", cellId, values);
+        events.publish("platform.cell.status_changed", "cell", cellId, row);
+        return row;
+    }
+
+    /**
+     * Create rules ({@link #checkCellCreate}) plus the deployment model: a DEDICATED or SELF_HOSTED cell hosts one
+     * tenant and {@code is_dedicated} is kept consistent with the model. Returns the body to insert.
+     */
+    public ObjectNode normalizeCellCreate(Object body) {
+        checkCellCreate(body);
+        ObjectNode v = json.valueToTree(body);
+        String model = v.hasNonNull("deployment_model") ? v.get("deployment_model").asString() : null;
+        if (model == null) {
+            v.put("deployment_model", v.path("is_dedicated").asBoolean(false) ? "DEDICATED" : "SHARED");
+        } else {
+            v.put("is_dedicated", !"SHARED".equals(model));
+        }
+        return v;
+    }
+
     public void checkCellCreate(Object body) {
         ObjectNode v = crud.toColumns("cell", body);
         String status = v.path("status").asString("PROVISIONING");
-        if (!Set.of("PROVISIONING", "ACTIVE").contains(status)) {
-            throw ApiException.unprocessable("invalid_initial_status", "A cell starts PROVISIONING or ACTIVE");
+        if (!Set.of("PROVISIONING", "ACTIVE", "READ_ONLY").contains(status)) {
+            throw ApiException.unprocessable("invalid_initial_status",
+                    "A cell starts PROVISIONING, ACTIVE or READ_ONLY (warm standby)");
+        }
+        checkEndpoints(v);
+        if (v.hasNonNull("standby_cell_id")) {
+            store.require("cell", UUID.fromString(v.get("standby_cell_id").asString()));
         }
         if (v.has("capacity_tenants") && v.get("capacity_tenants").asInt() < 1) {
             throw ApiException.unprocessable("invalid_capacity", "capacity_tenants must be at least 1");
@@ -275,8 +409,11 @@ public class TenantLifecycleService {
         String from = cell.get("status").asString();
         if (v.hasNonNull("status") && !from.equals(v.get("status").asString())) {
             String to = v.get("status").asString();
-            if ("DRAINING".equals(to)) {
-                throw ApiException.conflict("status_change_requires_action", "Drain a cell with /drain");
+            boolean viaPatch = "DECOMMISSIONED".equals(to)
+                    || "ACTIVE".equals(to) && Set.of("PROVISIONING", "DRAINING").contains(from);
+            if (!viaPatch) {
+                throw ApiException.conflict("status_change_requires_action",
+                        "Change a cell's serving state with /drain, /offline, /read-only or /online");
             }
             Lifecycle.require(Lifecycle.CELL, "Cell", from, to);
             if ("DECOMMISSIONED".equals(to) && cell.get("tenant_count").asInt() > 0) {
@@ -287,18 +424,46 @@ public class TenantLifecycleService {
         if (v.has("capacity_tenants") && v.get("capacity_tenants").asInt() < Math.max(1, cell.get("tenant_count").asInt())) {
             throw ApiException.unprocessable("invalid_capacity", "capacity_tenants cannot be below the current tenant_count");
         }
+        for (String fixed : new String[] {"deployment_model", "is_dedicated"}) {
+            if (v.hasNonNull(fixed) && !v.get(fixed).asString().equals(cell.path(fixed).asString())) {
+                throw ApiException.conflict("immutable_field", "A cell's deployment model is fixed at creation");
+            }
+        }
+        checkEndpoints(v);
+        if (v.hasNonNull("standby_cell_id") && v.get("standby_cell_id").asString().equals(id.toString())) {
+            throw ApiException.unprocessable("standby_is_home_cell", "A cell cannot be its own standby");
+        }
+    }
+
+    private static void checkEndpoints(ObjectNode v) {
+        for (String f : new String[] {"gateway_url", "health_url"}) {
+            if (v.hasNonNull(f)) {
+                String url = v.get(f).asString();
+                boolean ok;
+                try {
+                    java.net.URI u = java.net.URI.create(url);
+                    ok = Set.of("http", "https").contains(String.valueOf(u.getScheme())) && u.getHost() != null
+                            && u.getRawQuery() == null && u.getRawFragment() == null;
+                } catch (IllegalArgumentException e) {
+                    ok = false;
+                }
+                if (!ok) {
+                    throw ApiException.unprocessable("invalid_url", f + " must be an absolute http(s) URL without query");
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private ObjectNode reserveCapacity(UUID cellId) {
+    ObjectNode reserveCapacity(UUID cellId) {
         ObjectNode cell = store.lock("cell", cellId);
         if (!"ACTIVE".equals(cell.get("status").asString())) {
             throw ApiException.unprocessable("cell_not_accepting_tenants",
                     "Cell " + cell.get("code").asString() + " is " + cell.get("status").asString());
         }
         int count = cell.get("tenant_count").asInt();
-        int capacity = cell.get("is_dedicated").asBoolean() ? 1 : cell.get("capacity_tenants").asInt();
+        int capacity = Placement.capacity(cell);
         if (count >= capacity) {
             throw ApiException.unprocessable("cell_capacity_exhausted",
                     "Cell " + cell.get("code").asString() + " has no capacity (" + count + "/" + capacity + ")");
@@ -309,7 +474,16 @@ public class TenantLifecycleService {
 
     private ObjectNode placement(UUID tenantId, UUID cellId, UUID fromCellId, String status, OffsetDateTime from,
                                  String reason) {
+        return placement(tenantId, cellId, fromCellId, status, from, reason, "PRIMARY", null);
+    }
+
+    ObjectNode placement(UUID tenantId, UUID cellId, UUID fromCellId, String status, OffsetDateTime from,
+                         String reason, String role, UUID moveId) {
         ObjectNode p = json.createObjectNode();
+        p.put("role", role);
+        if (moveId != null) {
+            p.put("move_id", moveId.toString());
+        }
         p.put("subject_tenant_id", tenantId.toString());
         p.put("cell_id", cellId.toString());
         if (fromCellId != null) {

@@ -331,3 +331,27 @@ One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gat
   (`MERIDIAN_SERVICES_URL_TEMPLATE=http://{name}`), run in JWT mode, and use central approvals.
 - Validate: `helm lint infra/helm/meridian` and `helm template m infra/helm/meridian | kubeconform -strict -summary`
   (CI runs both and checks the chart matches the manifest).
+- Cell identity (S20): `global.cell.id` (the cell code in the tenant registry), `global.cell.region` and
+  `global.cell.role` (`primary`, or `standby` for a warm DR standby: no outbox relay, no event consumers until promoted).
+
+### Multi-region cells (S20)
+
+Tenants live in cells; the **cell router** (`platform/cell-router`, chart `infra/helm/meridian-router`, also generated
+by `tools/helm_chart.py`) is the regional front door: it takes the tenant from the verified token's `tenant_id` claim
+(public callbacks: the `tenant_id` parameter; client tenant headers are ignored and stripped), looks up the tenant's
+home cell in tenant-service (cached, invalidated by `platform.tenant.*` / `platform.cell.*` events) and proxies to that
+cell's edge gateway. Tenants frozen by a move get 503 + `Retry-After` for writes while reads continue; when an operator
+marks a cell OFFLINE the router sends its tenants to their standby cell.
+
+- Registry (platform operators only): `/v1/platform/cells` (`/offline`, `/read-only`, `/online`, `/drain`),
+  `/v1/platform/tenants/{id}/set-standby`, `/routing`, `/placements`, and maker-checker tenant moves
+  `/v1/platform/tenant-moves` (plan -> approve in workflow-service -> freeze -> copy hand-off -> confirm -> switch ->
+  unfreeze).
+- Install a router per region: `helm upgrade --install router infra/helm/meridian-router -n meridian-edge
+  --set region=eu-west-1 --set router.registryUrl=... --set router.jwt.jwkSetUri=... --set router.jwt.issuer=...`;
+  list the router's addresses in each cell's `global.trustedProxies`. The chart refuses to render without
+  `router.registryUrl` and `router.jwt.jwkSetUri` (lint with `--set` for both).
+- AWS: `infra/tofu/modules/region` pairs two cells (Aurora Global Database, MSK Replicator, S3 CRR both ways, Route 53
+  failover for the routers); example `infra/tofu/envs/prod-eu1` (`tofu init -backend=false && tofu validate`).
+- Design, RPO statement, failover runbook with RTO budget and deployment models (shared, dedicated, self-hosted):
+  [docs/MULTI_REGION.md](docs/MULTI_REGION.md).

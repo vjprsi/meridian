@@ -12,7 +12,12 @@ enums:
   TenantType: [BANK, FINTECH, TELCO, ENTERPRISE, CENTRAL_BANK, PLATFORM_OPERATOR]
   DeploymentModel: [SAAS_MULTI_TENANT, DEDICATED_CLOUD, SELF_HOSTED]
   CloudProvider: [AWS, GCP, AZURE, ON_PREMISES]
-  CellStatus: [PROVISIONING, ACTIVE, DRAINING, READ_ONLY, DECOMMISSIONED]
+  CellStatus: [PROVISIONING, ACTIVE, DRAINING, READ_ONLY, OFFLINE, DECOMMISSIONED]
+  CellDeploymentModel: [SHARED, DEDICATED, SELF_HOSTED]
+  PlacementRole: [PRIMARY, STANDBY]
+  TenantTrafficMode: [NORMAL, READ_ONLY, BLOCKED]
+  TenantMoveStatus: [PENDING_APPROVAL, APPROVED, REJECTED, FROZEN, COPYING, COPIED, SWITCHED, COMPLETED, CANCELLED]
+  DataCopyStrategy: [LOGICAL_REPLICATION, DUMP_RESTORE, NONE]
   PlacementStatus: [ACTIVE, MIGRATING, COMPLETED, ROLLED_BACK]
   LegalEntityStatus: [ACTIVE, INACTIVE, DISSOLVED]
   BranchType: [HEAD_OFFICE, BRANCH, SERVICE_CENTER, VIRTUAL, AGENT_HUB, BACK_OFFICE]
@@ -110,6 +115,14 @@ services:
           - "drain_reason string(255) ro | Why the cell is draining"
           - "drain_requested_at ts ro | When draining started"
           - "metadata json | Operational metadata"
+          - "deployment_model enum:CellDeploymentModel nn default=SHARED | Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package"
+          - "country country | Country hosting the cell's data (data residency checks)"
+          - "gateway_url string(500) | Base URL of the cell's edge gateway (upstream of the cell router)"
+          - "health_url string(500) | Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)"
+          - "endpoints json | Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)"
+          - "standby_cell_id uuid fk=cell | Paired DR cell in the standby region (default standby of the cell's tenants)"
+          - "status_reason string(255) ro | Reason given on the last offline / read-only / online action"
+          - "status_changed_at ts ro | When the cell last went offline, read-only or back online"
 
       - name: tenant
         prefix: ten
@@ -143,6 +156,40 @@ services:
           - "starter_pack_code string(64) | Starter pack applied right after provisioning (empty = none)"
           - "starter_pack_run_id uuid ro | Starter pack run started by provisioning"
           - "metadata json | Operator metadata"
+          - "standby_cell_id uuid fk=cell idx ro | DR standby cell: the cell router fails over to it when the home cell is OFFLINE (set by /set-standby)"
+          - "traffic_mode enum:TenantTrafficMode nn default=NORMAL ro | Routing state at the cell router: READ_ONLY while a move freezes writes"
+          - "traffic_mode_reason string(255) ro | Why the traffic mode is not NORMAL"
+          - "active_move_id uuid ro | Tenant move in progress"
+
+      - name: tenant_move
+        prefix: tmv
+        description: >
+          Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes,
+          data copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+        tenant: false
+        operator_only: true        # SEC-15: tenant registry, operators only
+        fr: [ADM-01]
+        columns:
+          - "subject_tenant_id uuid nn fk=tenant idx | Tenant being moved"
+          - "from_cell_id uuid fk=cell ro | Source cell (the tenant's home cell when planned)"
+          - "to_cell_id uuid nn fk=cell | Target cell"
+          - "status enum:TenantMoveStatus nn default=PENDING_APPROVAL ro | Workflow step"
+          - "reason string(255) nn | Why the tenant moves (rebalancing, dedicated upgrade, region change)"
+          - "copy_strategy enum:DataCopyStrategy nn default=LOGICAL_REPLICATION | How the data reaches the target cell (NONE: cells share the database cluster)"
+          - "planned_window_start ts | Maintenance window communicated to the tenant"
+          - "approval_request_id uuid ro | Approval request in workflow-service"
+          - "approved_by string(64) ro | Checker who approved the move"
+          - "approved_at ts ro | Approval time"
+          - "frozen_at ts ro | When writes were frozen"
+          - "copy_started_at ts ro | When the copy was handed to the data mover"
+          - "copy_checkpoint string(255) ro | Hand-off checkpoint reported by the data mover (final LSN, row-count / checksum digest)"
+          - "copy_completed_at ts ro | When the data mover confirmed a verified copy"
+          - "switched_at ts ro | When the placement switched to the target cell"
+          - "completed_at ts ro | When writes were unfrozen on the target cell"
+          - "cancelled_at ts ro | Cancellation time"
+          - "cancel_reason string(255) ro | Why the move was cancelled or rejected"
+          - "placement_id uuid ro | Placement created by the switch"
+          - "history json[] ro | Audit trail: {step, status, at, by, detail}"
 
       - name: tenant_placement
         prefix: tpl
@@ -158,6 +205,8 @@ services:
           - "effective_to ts | End of placement"
           - "reason string(255) | Reason, e.g. initial placement, rebalancing, dedicated upgrade"
           - "from_cell_id uuid fk=cell | Previous cell (migrations)"
+          - "role enum:PlacementRole nn default=PRIMARY | Home (primary) cell or DR standby cell"
+          - "move_id uuid fk=tenant_move | Tenant move that created the placement"
 
       - name: tenant_module
         prefix: tmo
@@ -335,9 +384,12 @@ services:
         table: cell
         description: Platform-operator API for deployment cells
         ops: [list, get, create, update]
-        filters: [region, cloud_provider, status, is_dedicated]
+        filters: [region, cloud_provider, status, is_dedicated, deployment_model]
         actions:
           - "POST /{id}/drain | Stop placing new tenants on the cell | reason string(255) nn"
+          - "POST /{id}/offline | Take the cell out of service: the cell router fails its tenants over to their standby cells (break-glass, audited) | reason string(255) nn"
+          - "POST /{id}/read-only | Serve reads only: the cell router answers writes with 503 (warm standby, maintenance) | reason string(255) nn"
+          - "POST /{id}/online | Return an OFFLINE or READ_ONLY cell to service (ACTIVE) | reason string(255) nn"
       - resource: tenants
         path: /v1/platform/tenants
         table: tenant
@@ -348,10 +400,27 @@ services:
           - "POST /{id}/activate | Activate a provisioned tenant"
           - "POST /{id}/suspend | Suspend a tenant (all APIs return 403) | reason string(255) nn"
           - "POST /{id}/reinstate | Lift a suspension | reason string(255) nn"
-          - "POST /{id}/migrate | Move the tenant to another cell | cell_id uuid nn, scheduled_at ts | tenant_placement"
-          - "GET /{id}/placements | Placement history | | tenant_placement[]"
+          - "POST /{id}/migrate | Place a PROVISIONING tenant (no data yet) on another cell; live tenants move through tenant-moves | cell_id uuid nn, scheduled_at ts | tenant_placement"
+          - "GET /{id}/placements | Placement history (primary and standby) | | tenant_placement[]"
+          - "POST /{id}/set-standby | Choose the DR standby cell (empty cell_id = none) | cell_id uuid, reason string(255) nn"
+          - "GET /{id}/routing | Routing view for the cell router: home and standby cells (status, gateway URL), traffic mode | | object"
           - "POST /provision-from-template | Provision a tenant from a template bank in minutes; with starter_pack the pack is applied right after commit (service identity acting for the new tenant) | template_code string(64) nn, code string(32) nn, name string(160) nn, legal_name string(255) nn, tenant_type enum:TenantType nn, default_currency currency nn, default_country country nn, primary_contact_email email nn, starter_pack string(64), starter_pack_parameters json"
           - "POST /{id}/apply-starter-pack | Apply, resume or upgrade a starter pack for this tenant (platform operator; calls run with service identity acting for the tenant; maker-checker items are submitted, never approved) | pack_code string(64) nn, version string(32), parameters json, dry_run bool | starter_pack_run"
+      - resource: tenant-moves
+        path: /v1/platform/tenant-moves
+        table: tenant_move
+        description: >
+          Platform-operator API for moving a live tenant between cells under maker-checker: plan (opens an approval
+          request), freeze writes, data copy hand-off, switch placement, unfreeze
+        ops: [list, get, create]
+        filters: [subject_tenant_id, status, from_cell_id, to_cell_id]
+        actions:
+          - "POST /{id}/freeze | Freeze the tenant's writes (READ_ONLY at the cell router); the move must be approved"
+          - "POST /{id}/start-copy | Hand the data copy to the data mover (event platform.tenant_move.copy_requested)"
+          - "POST /{id}/confirm-copy | The data mover reports a complete, verified copy at a checkpoint | checkpoint string(255) nn, verified bool nn"
+          - "POST /{id}/switch | Switch the tenant's home cell to the target cell (reads follow at once, writes stay frozen)"
+          - "POST /{id}/unfreeze | Lift the write freeze on the target cell and complete the move"
+          - "POST /{id}/cancel | Cancel the move before the switch; a frozen tenant is unfrozen on its source cell | reason string(255) nn"
       - resource: starter-pack-runs
         path: /v1/starter-pack-runs
         table: starter_pack_run
@@ -416,6 +485,18 @@ services:
       - "platform.starter_pack_run.completed | starter_pack_run | A starter pack run finished (completed, awaiting approval, needs attention or failed)"
       - "platform.cell.drain_started | cell | A cell stopped accepting new tenants"
       - "platform.tenant.migrated | tenant_placement | A tenant moved to another cell"
+      - "platform.cell.status_changed | cell | A cell went offline, read-only or back online (cell router failover)"
+      - "platform.tenant.standby_changed | tenant | A tenant's DR standby cell changed"
+      - "platform.tenant.traffic_mode_changed | tenant | A tenant's writes were frozen or unfrozen at the cell router"
+      - "platform.tenant_move.requested | tenant_move | A tenant move was planned and sent for approval"
+      - "platform.tenant_move.approved | tenant_move | A checker approved a tenant move"
+      - "platform.tenant_move.rejected | tenant_move | A tenant move was rejected, expired or withdrawn in workflow-service"
+      - "platform.tenant_move.frozen | tenant_move | The moving tenant's writes were frozen"
+      - "platform.tenant_move.copy_requested | tenant_move | Data copy handed to the data mover (source and target cells, strategy)"
+      - "platform.tenant_move.copy_completed | tenant_move | The data mover confirmed a verified copy"
+      - "platform.tenant_move.switched | tenant_move | The tenant's home cell switched to the target cell"
+      - "platform.tenant_move.completed | tenant_move | Writes unfrozen on the target cell; move finished"
+      - "platform.tenant_move.cancelled | tenant_move | A tenant move was cancelled before the switch"
       - "platform.tenant_module.changed | tenant_module | A module was enabled or disabled"
       - "platform.legal_entity.created | legal_entity | A legal entity was created"
       - "platform.legal_entity.updated | legal_entity | A legal entity was updated"

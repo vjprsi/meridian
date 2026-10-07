@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generates the Kubernetes Helm chart infra/helm/meridian from generated/services.json.
+"""Generates the Kubernetes Helm charts infra/helm/meridian and infra/helm/meridian-router.
 
-One chart deploys a whole Meridian cell: every domain service plus the edge gateway, each with Deployment,
+infra/helm/meridian deploys a whole Meridian cell: every domain service plus the edge gateway, each with Deployment,
 Service, ServiceAccount, HorizontalPodAutoscaler, PodDisruptionBudget, NetworkPolicy and (optionally) a
-Prometheus ServiceMonitor. Infrastructure (PostgreSQL, Kafka, Keycloak, OTel collector) is external and
+Prometheus ServiceMonitor; global.cell.* names the cell (S20). infra/helm/meridian-router deploys the cell router, the
+regional entry tier in front of the cells. Infrastructure (PostgreSQL, Kafka, Keycloak, OTel collector) is external and
 referenced through values. Secrets are referenced by name, never rendered. Run after tools/generate.py.
 """
 import json
@@ -11,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "infra" / "helm" / "meridian"
+ROUTER_OUT = ROOT / "infra" / "helm" / "meridian-router"
 CHART_VERSION = "0.1.0"
 
 # Services on the money path get more headroom by default; everything else starts small and autoscales.
@@ -55,6 +57,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/version: {{ .root.Values.global.image.tag | default .root.Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 meridian.io/domain: {{ .domain | default "platform" }}
+meridian.io/cell: {{ .root.Values.global.cell.id | default "unassigned" | quote }}
 {{- end }}
 
 {{- define "meridian.selector" -}}
@@ -279,6 +282,12 @@ spec:
 '''
 
 CONFIG_TPL = r'''{{- $g := .Values.global -}}
+{{- if and $g.cell.id (not (regexMatch "^[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?$" $g.cell.id)) }}
+{{- fail "global.cell.id must be the cell code of the tenant registry (lowercase letters, digits, dashes)" }}
+{{- end }}
+{{- if not (has $g.cell.role (list "primary" "standby")) }}
+{{- fail "global.cell.role must be primary or standby" }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -303,6 +312,18 @@ data:
   MERIDIAN_CALLBACKS_ACCEPT_LEGACY_SIGNATURES: {{ $g.callbacks.acceptLegacySignatures | quote }}
   MERIDIAN_CALLBACKS_MAX_SKEW: {{ $g.callbacks.maxSkew | quote }}
   MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
+  # S20: which cell this is (the cell router maps tenants to cells; telemetry is tagged per cell and region)
+  MERIDIAN_CELL_ID: {{ $g.cell.id | quote }}
+  MERIDIAN_CELL_REGION: {{ $g.cell.region | quote }}
+  MERIDIAN_CELL_ROLE: {{ $g.cell.role | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_MERIDIAN_CELL: {{ $g.cell.id | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ $g.cell.region | quote }}
+  {{- if eq $g.cell.role "standby" }}
+  # warm standby: its database is a read-only replica and its topics are replicated, so it neither relays outboxes
+  # nor consumes events (that would apply them twice); promotion = role primary (helm upgrade, rolling restart)
+  MERIDIAN_EVENTS_RELAY_ENABLED: "false"
+  SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+  {{- end }}
   MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
   MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: {{ $g.otel.samplingProbability | quote }}
@@ -341,6 +362,7 @@ spec:
 '''
 
 NOTES = r'''Meridian {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" in namespace {{ .Release.Namespace }}.
+Cell: {{ .Values.global.cell.id | default "(single-cell install)" }} {{ .Values.global.cell.region }} ({{ .Values.global.cell.role }})
 
 Components: {{ len .Values.services }}
 API: {{ if .Values.ingress.enabled }}https://{{ .Values.ingress.host }}{{ else }}kubectl port-forward svc/edge-gateway 18000:80{{ end }}
@@ -357,6 +379,344 @@ Required secrets in the namespace (not created by this chart):
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.
 '''
+
+
+ROUTER_HELPERS = r'''{{- define "router.labels" -}}
+app.kubernetes.io/name: cell-router
+app.kubernetes.io/part-of: meridian
+app.kubernetes.io/component: cell-router
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+meridian.io/region: {{ .Values.region | default "unassigned" | quote }}
+{{- end }}
+
+{{- define "router.selector" -}}
+app.kubernetes.io/name: cell-router
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+'''
+
+ROUTER_TPL = r'''{{- $r := .Values.router -}}
+{{- if not $r.registryUrl }}{{ fail "router.registryUrl (tenant-service of the control plane) is required" }}{{ end }}
+{{- if not $r.jwt.jwkSetUri }}{{ fail "router.jwt.jwkSetUri is required (jwt mode)" }}{{ end }}
+{{- range $cell, $state := $r.cellOverrides }}
+{{- if not (has $state (list "ACTIVE" "READ_ONLY" "OFFLINE")) }}{{ fail (printf "router.cellOverrides.%s must be ACTIVE, READ_ONLY or OFFLINE" $cell) }}{{ end }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+data:
+  MERIDIAN_SECURITY_MODE: "jwt"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" .Values.otel.endpoint | quote }}
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME: "cell-router"
+  MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_CLOUD_REGION: {{ .Values.region | quote }}
+  # meridian.router.* (registry, JWT verification, cache, health checks with hysteresis, break-glass overrides)
+  SPRING_APPLICATION_JSON: {{ dict "meridian" (dict "router" (omit $r "auth")) | toJson | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "router.selector" . | nindent 4 }}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: management, port: 9090, targetPort: management}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "router.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ toJson .Values | sha256sum }}
+    spec:
+      serviceAccountName: cell-router
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: {{- include "router.selector" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "router.selector" . | nindent 14 }}
+      containers:
+        - name: app
+          image: {{ printf "%s/cell-router:%s" .Values.image.registry (.Values.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: management, containerPort: 9090}
+          envFrom:
+            - configMapRef:
+                name: cell-router
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: MERIDIAN_ROUTER_AUTH_TOKEN_URI
+              value: {{ $r.auth.tokenUri | quote }}
+            - name: MERIDIAN_ROUTER_AUTH_SCOPE
+              value: {{ $r.auth.scope | quote }}
+            - name: MERIDIAN_ROUTER_AUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $r.auth.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_ROUTER_AUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $r.auth.clientSecret }}, key: client-secret}}
+          resources:
+            requests: {cpu: {{ .Values.resources.cpu | quote }}, memory: {{ .Values.resources.memory | quote }}}
+            limits: {memory: {{ .Values.resources.memory | quote }}}
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: management}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: cell-router}
+  minReplicas: {{ .Values.replicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: {{ .Values.autoscaling.targetCpu }}}
+{{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # the routed port from the load balancer / ingress; management (metrics, probes) only from monitoring
+    - ports:
+        - {port: http, protocol: TCP}
+    {{- with .Values.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: management, protocol: TCP}
+    {{- end }}
+{{- end }}
+{{- if .Values.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "router.selector" . | nindent 6 }}
+  endpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: 15s
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cell-router
+  labels: {{- include "router.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: cell-router, port: {name: http}}
+{{- end }}
+'''
+
+ROUTER_NOTES = r'''Meridian cell router {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" ({{ .Values.region | default "no region set" }}).
+
+Tenant registry: {{ .Values.router.registryUrl }}
+Health check for the load balancer / Route 53: GET /healthz on the http port.
+Required secret (not created by this chart):
+  {{ .Values.router.auth.clientSecret }}  client-id/client-secret of the router's service client
+                                (scopes meridian:internal platform:operator; registry reads are operator-only, SEC-15)
+Cell gateways must list the router's addresses in global.trustedProxies (SEC-16) to keep the client address.
+{{- if .Values.router.cellOverrides }}
+WARNING: break-glass cell overrides in force: {{ toJson .Values.router.cellOverrides }}
+{{- end }}
+'''
+
+ROUTER_VALUES = """# Generated by tools/helm_chart.py; edit the generator, not this file. Override per region with -f values-<region>.yaml.
+# The cell router is the regional entry tier: it resolves the tenant (JWT tenant_id claim; public callbacks:
+# tenant_id parameter), looks up the tenant's cell in the tenant registry and proxies to that cell's edge gateway.
+region: ""                       # cloud region of this router deployment, e.g. eu-west-1
+image:
+  registry: "ghcr.io/meridian"
+  tag: ""                        # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+replicas: 3                      # one per AZ at least: the router is the front door of every cell in the region
+resources: {cpu: 500m, memory: 512Mi}
+autoscaling: {enabled: true, maxReplicas: 12, targetCpu: 60}
+pdb: {minAvailable: 2}
+networkPolicy: {enabled: true, monitoringNamespace: monitoring}
+serviceMonitor: {enabled: false}
+service:
+  type: ClusterIP                # LoadBalancer (NLB) when Route 53 points straight at the router
+kafka:
+  bootstrapServers: "meridian-kafka:9092"   # tenant-service events (placement / cell invalidations)
+otel:
+  endpoint: "http://otel-collector.monitoring:4318"
+ingress:
+  enabled: false
+  className: ""
+  host: "api.example.com"
+  annotations: {}
+  tls: []
+
+router:
+  registryUrl: ""                # tenant-service of the control plane, e.g. http://tenant-service.meridian-control.svc
+  operatorTenant: ""             # SEC-15: platform-operator tenant id (registry reads are operator-only)
+  auth:
+    tokenUri: ""                 # OIDC token endpoint for the router's client credentials
+    clientSecret: "meridian-service-client"   # Secret with client-id / client-secret of a client with meridian:internal + platform:operator (realm client meridian-service, or a dedicated one)
+    scope: "meridian:internal platform:operator"
+  jwt:
+    jwkSetUri: ""                # IdP JWKS used to verify callers' tokens
+    issuer: ""
+    audiences: ["meridian-api"]  # SEC-14
+    tenantClaim: tenant_id
+  cacheTtl: 30s                  # placement cache (events invalidate sooner)
+  negativeTtl: 5s
+  maxStale: 15m                  # keep routing from cache while the registry is unreachable
+  cellsRefresh: 15s
+  timeout: 30s
+  retryAfter: 30s                # Retry-After of 503s (frozen tenants, cells down)
+  maxBodySize: 64MB
+  trustedProxies: []             # SEC-16: load balancer CIDRs in front of the router
+  health:
+    enabled: true
+    interval: 5s
+    probeTimeout: 2s
+    path: /actuator/health/readiness
+    failureThreshold: 3          # hysteresis: 3 failures to mark a cell unhealthy,
+    successThreshold: 5          # 5 successes to trust it again
+    autoFailover: false          # true only where standby cells are READ_ONLY warm standbys
+  events:
+    enabled: true
+    topic: meridian.platform.v1
+  cellOverrides: {}              # break-glass when the control plane is unreachable, e.g. {aws-euw1-c01: OFFLINE}
+"""
+
+
+def write_router_chart(app_version):
+    (ROUTER_OUT / "templates").mkdir(parents=True, exist_ok=True)
+    files = {
+        "Chart.yaml": f"""apiVersion: v2
+name: meridian-router
+description: Meridian cell router - regional entry tier that routes each tenant to its cell (S20)
+type: application
+version: {CHART_VERSION}
+appVersion: "{app_version}"
+kubeVersion: ">=1.30.0-0"
+""",
+        "values.yaml": ROUTER_VALUES,
+        "templates/_helpers.tpl": ROUTER_HELPERS,
+        "templates/router.yaml": ROUTER_TPL,
+        "templates/NOTES.txt": ROUTER_NOTES,
+        ".helmignore": ".git/\n*.md.bak\n",
+    }
+    for name, text in files.items():
+        (ROUTER_OUT / name).write_text(text, encoding="utf-8", newline="\n")
 
 
 def services_values(manifest):
@@ -416,7 +776,11 @@ def values_yaml(rows, app_version):
         '    serviceClientSecret: "meridian-service-client"',
         '    audience: "meridian-api"          # SEC-14: required aud of every access token',
         '    platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)',
-        "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress in front of the edge gateway",
+        "  cell:                     # S20: identity of this cell in the tenant registry",
+        '    id: ""                  # cell code, e.g. aws-euw1-c01 (empty: single-cell install)',
+        '    region: ""              # cloud region, e.g. eu-west-1',
+        "    role: primary           # primary | standby (warm DR standby: READ_ONLY in the registry until promoted)",
+        "  trustedProxies: []        # SEC-16: CIDRs of the load balancer / ingress / cell router in front of the gateway",
         "  callbacks:                # SEC-17: provider callback signatures",
         "    acceptLegacySignatures: true   # deprecation period: set false once every provider signs v2",
         '    maxSkew: "5m"',
@@ -474,6 +838,8 @@ kubeVersion: ">=1.30.0-0"
     for name, text in files.items():
         (OUT / name).write_text(text, encoding="utf-8", newline="\n")
     print(f"helm chart: {len(rows)} components -> {OUT.relative_to(ROOT)}")
+    write_router_chart(app_version)
+    print(f"helm chart: cell router -> {ROUTER_OUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

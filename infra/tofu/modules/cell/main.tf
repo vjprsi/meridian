@@ -1,11 +1,15 @@
 # One Meridian cell on AWS: an isolated VPC across three AZs, EKS for the services, Aurora PostgreSQL for the
 # per-service databases, MSK (Kafka) for events, a customer-managed KMS key encrypting everything at rest, an S3
 # bucket for documents/archives/exports, and Secrets Manager entries consumed by the Helm chart via External Secrets.
-# A region hosts one or more cells; the cell router (S20) maps tenants to cells.
+# A region hosts one or more cells; the cell router (S20) maps tenants to cells. With db_role primary / secondary the
+# Aurora cluster joins an Aurora Global Database (modules/region pairs two cells across regions for DR).
 
 locals {
-  name = "meridian-${var.cell}"
-  azs  = slice(data.aws_availability_zones.available.names, 0, 3)
+  name          = "meridian-${var.cell}"
+  db_standalone = var.db_role == "standalone"
+  db_secondary  = var.db_role == "secondary"
+  global_db_rpo = var.global_db_rpo_seconds != null && !local.db_secondary
+  azs           = slice(data.aws_availability_zones.available.names, 0, 3)
   tags = merge(var.tags, {
     "meridian:cell"        = var.cell
     "meridian:environment" = var.environment
@@ -125,17 +129,57 @@ resource "aws_rds_cluster_parameter_group" "pg" {
     name  = "log_min_duration_statement"
     value = "500"
   }
+  # Aurora Global Database managed RPO: commits on the primary pause when no secondary is within this lag (seconds)
+  dynamic "parameter" {
+    for_each = local.global_db_rpo ? [var.global_db_rpo_seconds] : []
+    content {
+      name  = "rds.global_db_rpo"
+      value = tostring(parameter.value)
+    }
+  }
   tags = local.tags
 }
 
+# Master password of a global-database member (managed master passwords are not available on global clusters).
+resource "random_password" "db_master" {
+  count   = var.db_role == "primary" ? 1 : 0
+  length  = 40
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "db_master" {
+  count      = var.db_role == "primary" ? 1 : 0
+  name       = "${local.name}/meridian-db-master"
+  kms_key_id = aws_kms_key.cell.arn
+  tags       = local.tags
+
+  # DR: the standby region needs the same credentials (the database users replicate with the global cluster)
+  dynamic "replica" {
+    for_each = var.secret_replicas
+    content {
+      region     = replica.value.region
+      kms_key_id = replica.value.kms_key_id
+    }
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_master" {
+  count         = var.db_role == "primary" ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.db_master[0].id
+  secret_string = jsonencode({ username = "meridian_admin", password = random_password.db_master[0].result })
+}
+
 resource "aws_rds_cluster" "pg" {
-  cluster_identifier                  = local.name
-  engine                              = "aurora-postgresql"
-  engine_version                      = var.postgres_version
-  database_name                       = "meridian"
-  master_username                     = "meridian_admin"
-  manage_master_user_password         = true
-  master_user_secret_kms_key_id       = aws_kms_key.cell.key_id
+  cluster_identifier        = local.name
+  engine                    = "aurora-postgresql"
+  engine_version            = var.postgres_version
+  global_cluster_identifier = var.global_cluster_identifier
+  # a secondary inherits database, users and passwords from the global cluster's primary
+  database_name                       = local.db_secondary ? null : "meridian"
+  master_username                     = local.db_secondary ? null : "meridian_admin"
+  manage_master_user_password         = local.db_standalone ? true : null
+  master_user_secret_kms_key_id       = local.db_standalone ? aws_kms_key.cell.key_id : null
+  master_password                     = var.db_role == "primary" ? random_password.db_master[0].result : null
   db_subnet_group_name                = module.vpc.database_subnet_group_name
   vpc_security_group_ids              = [aws_security_group.db.id]
   db_cluster_parameter_group_name     = aws_rds_cluster_parameter_group.pg.name
@@ -154,9 +198,19 @@ resource "aws_rds_cluster" "pg" {
     max_capacity = var.postgres_max_acu
   }
   tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = local.db_standalone || var.global_cluster_identifier != null
+      error_message = "db_role primary / secondary needs global_cluster_identifier"
+    }
+    # managed by the global cluster (switchover / failover swap the primary and secondary roles)
+    ignore_changes = [global_cluster_identifier, replication_source_identifier]
+  }
 }
 
 resource "aws_rds_cluster_instance" "pg" {
+  # prod: writer + 2 readers across three AZs (synchronous six-way storage replication, quorum 4/6 per write)
   count                           = var.environment == "prod" ? 3 : 1
   identifier                      = "${local.name}-${count.index}"
   cluster_identifier              = aws_rds_cluster.pg.id
@@ -185,6 +239,23 @@ resource "aws_vpc_security_group_ingress_rule" "kafka_from_eks" {
   ip_protocol                  = "tcp"
 }
 
+# MSK Replicator (DR, modules/region) attaches ENIs with this security group: brokers accept it, and it reaches them.
+resource "aws_vpc_security_group_ingress_rule" "kafka_self" {
+  security_group_id            = aws_security_group.kafka.id
+  referenced_security_group_id = aws_security_group.kafka.id
+  from_port                    = 9092
+  to_port                      = 9098
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "kafka_self" {
+  security_group_id            = aws_security_group.kafka.id
+  referenced_security_group_id = aws_security_group.kafka.id
+  from_port                    = 9092
+  to_port                      = 9098
+  ip_protocol                  = "tcp"
+}
+
 resource "aws_msk_cluster" "events" {
   cluster_name           = local.name
   kafka_version          = var.kafka_version
@@ -196,6 +267,19 @@ resource "aws_msk_cluster" "events" {
     storage_info {
       ebs_storage_info {
         volume_size = var.kafka_volume_gb
+      }
+    }
+    # multi-VPC private connectivity (IAM): needed when this cluster is the source of a cross-region MSK Replicator
+    dynamic "connectivity_info" {
+      for_each = var.kafka_multi_vpc ? [1] : []
+      content {
+        vpc_connectivity {
+          client_authentication {
+            sasl {
+              iam = true
+            }
+          }
+        }
       }
     }
   }
@@ -274,6 +358,15 @@ resource "aws_secretsmanager_secret" "db_app" {
   name       = "${local.name}/meridian-db-app"
   kms_key_id = aws_kms_key.cell.arn
   tags       = local.tags
+
+  # DR: the standby region needs the same credentials (the database users replicate with the global cluster)
+  dynamic "replica" {
+    for_each = var.secret_replicas
+    content {
+      region     = replica.value.region
+      kms_key_id = replica.value.kms_key_id
+    }
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_app" {
@@ -285,6 +378,15 @@ resource "aws_secretsmanager_secret" "db_owner" {
   name       = "${local.name}/meridian-db-owner"
   kms_key_id = aws_kms_key.cell.arn
   tags       = local.tags
+
+  # DR: the standby region needs the same credentials (the database users replicate with the global cluster)
+  dynamic "replica" {
+    for_each = var.secret_replicas
+    content {
+      region     = replica.value.region
+      kms_key_id = replica.value.kms_key_id
+    }
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_owner" {
