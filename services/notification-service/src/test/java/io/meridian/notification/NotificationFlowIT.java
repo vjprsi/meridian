@@ -199,7 +199,7 @@ class NotificationFlowIT {
         assertThat(n.get("notification_template_id").asString()).isEqualTo(welcomeV1);
         JsonNode attempts = get("/v1/notifications/" + sentEmail + "/attempts", TENANT).get("data");
         assertThat(attempts).hasSize(2);
-        assertThat(statuses(attempts)).containsExactlyInAnyOrder("ERROR", "ACCEPTED");
+        assertThat(statuses(attempts)).containsExactlyInAnyOrder("REJECTED", "ACCEPTED"); // SEC-18: loopback SMTP host refused
         assertThat(events(sentEmail)).containsExactly("platform.notification.sent");
 
         JsonNode missing = post("/v1/notifications/send-templated", """

@@ -31,7 +31,11 @@ public class ProgramService {
     private final Events events;
     private final Approvals approvals;
 
-    public ProgramService(Rows rows, Events events, Approvals approvals) {
+    private final io.meridian.web.outbound.OutboundUrlPolicy outboundPolicy;
+
+    public ProgramService(Rows rows, Events events, Approvals approvals,
+                          io.meridian.web.outbound.OutboundUrlPolicy outboundPolicy) {
+        this.outboundPolicy = outboundPolicy;
         this.rows = rows;
         this.events = events;
         this.approvals = approvals;
@@ -42,6 +46,7 @@ public class ProgramService {
     @Transactional
     public JsonNode createProgram(JsonNode req) {
         validateProgram(req);
+        checkJitUrl(req);
         ObjectNode values = rows.columns("card_program", req);
         return rows.insert("card_program", values);
     }
@@ -65,6 +70,7 @@ public class ProgramService {
             }
         });
         validateProgram(merged);
+        checkJitUrl(merged);
     }
 
     @Transactional
@@ -153,6 +159,19 @@ public class ProgramService {
         ObjectNode row = rows.get("card_program", id);
         events.publish("cards.card_program.status_changed", "card_program", row);
         return row;
+    }
+
+    /** SEC-18: the JIT webhook is checked against the outbound policy when saved, not only when called. */
+    private void checkJitUrl(JsonNode p) {
+        String url = Rows.str(p, "jit_webhook_url");
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        try {
+            outboundPolicy.check(url);
+        } catch (io.meridian.web.outbound.OutboundUrlPolicy.RejectedException e) {
+            throw ApiException.unprocessable("invalid_jit_webhook_url", "jit_webhook_url is not allowed: " + e.getMessage());
+        }
     }
 
     static void validateProgram(JsonNode p) {
