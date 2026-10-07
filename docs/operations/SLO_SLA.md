@@ -21,7 +21,7 @@ Prometheus / Alertmanager is deployed and paging is not wired (GAP-10 residual)
 | identity-service (J4) | `meridian.identity.mfa.verifications{outcome=verified\|invalid_code\|factor_locked\|...}` | `MfaService.verify` |
 | workflow-service | `meridian.workflow.approvals.pending`, `meridian.workflow.approvals.oldest.age` (seconds; all tenants, refreshed by the sweep) | `SweepService.Job` |
 | every service with an outbox | `meridian.outbox.backlog`, `meridian.outbox.oldest.age` (read at scrape time), `meridian.outbox.relayed`, `meridian.outbox.relay.failures` | `libs/meridian-events` `OutboxRelay` |
-| Keycloak (J4, local stack) | `keycloak_user_events_total{event, error}` with `--metrics-enabled --event-metrics-user-enabled` (management port 9000) | `infra/local/compose.yaml`; the realm also needs the `metrics-listener` event listener (not yet in `tools/keycloak_realm.py`) |
+| Keycloak (J4, local stack) | `keycloak_user_events_total{event, error}` with `--metrics-enabled --event-metrics-user-enabled` (management port 9000) | `infra/local/compose.yaml`; the realm enables the `metrics-listener` event listener (`tools/keycloak_realm.py`, GAP-06) |
 | Domain events (business SLIs) | e.g. `payments.payment.*` (incl. `held`, `fraud_degraded`), `operations.eod_run.completed/failed`, `ledger.recon_eod.completed` (auto-match rate), `platform.audit_chain.broken` | AsyncAPI `generated/asyncapi/meridian.asyncapi.yaml` |
 | AWS | Aurora (`DatabaseConnections`, `AuroraGlobalDBReplicationLag`, CPU), MSK (`SumOffsetLag`, `MaxOffsetLag`), MSK Replicator `ReplicationLatency`, S3 `ReplicationLatency`, Route 53 health checks; alarm `global_db_lag` in `infra/tofu/modules/region` | CloudWatch |
 
@@ -135,7 +135,7 @@ The burn-rate pattern used for every SLI (example J1 availability, budget 0.05 %
 
 | Gap | Summary | Owner | Backlog |
 |---|---|---|---|
-| GAP-10 | Residual: deploy Prometheus / Alertmanager / collector per cell, Alertmanager routes and paging, on-call; J1b / J8 metrics; Keycloak realm `metrics-listener` | TBD (SRE) | `spec/plan.yaml` PLT-OBSERVABILITY (In progress) |
+| GAP-10 | Residual: deploy Prometheus / Alertmanager / collector per cell, Alertmanager routes and paging, on-call; J1b / J8 metrics | TBD (SRE) | `spec/plan.yaml` PLT-OBSERVABILITY (In progress) |
 | GAP-06 | Logs for SLO investigations (no central logging) | TBD (SecOps) | Proposed |
 | - | 10,000 TPS per cell load test (S22 exit) | TBD (Performance) | `spec/plan.yaml` S22; [PERFORMANCE.md](../PERFORMANCE.md) |
 | GAP-12 | Connection budget limits horizontal scaling | TBD (Platform) | [SPEC_BACKLOG connection budget](../SPEC_BACKLOG.md#connection-budget) |
