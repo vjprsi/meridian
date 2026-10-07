@@ -1574,6 +1574,11 @@ paths:
           - APPLIED
           - CONFLICT
           - REJECTED
+      - name: idempotency_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
       - name: custom_field_1
         in: query
         schema:
@@ -3044,7 +3049,8 @@ components:
         payload_signature:
           type: string
           maxLength: 512
-          description: Device signature of the payload
+          description: 'Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified
+            by agent-channel-service against the registered device key)'
         status:
           type: string
           enum:
@@ -3068,6 +3074,13 @@ components:
           - 'null'
           format: date-time
           description: Processing time
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
           readOnly: true
         custom_field_1:
           type:
@@ -3142,7 +3155,8 @@ components:
         payload_signature:
           type: string
           maxLength: 512
-          description: Device signature of the payload
+          description: 'Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified
+            by agent-channel-service against the registered device key)'
         custom_field_1:
           type: string
           maxLength: 500

@@ -2,13 +2,14 @@ openapi: 3.1.0
 info:
   title: Meridian Core — customer-channel-service
   version: 1.0.0
-  description: 'Experience API for the bank''s own customer apps (web banking, mobile). Every operation acts for the signed-in
-    customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path,
-    query or body. The service calls the domain services with its own service identity and the customer''s tenant, checks
-    that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs
-    to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication
-    (step-up) for money movement and security changes. Domain services keep their operator APIs; customer tokens carry no
-    domain scope and are rejected there.
+  description: 'Experience APIs for the bank''s own apps. Customer apps (web banking, mobile) use /v1/me: every operation
+    acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer),
+    never from a path, query or body. The service calls the domain services with its own service identity and the customer''s
+    tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification
+    and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and
+    requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the
+    same way (agent_id claim, scope channels:agent; see agent-channel-service). Domain services keep their operator APIs;
+    customer and agent tokens carry no domain scope and are rejected there.
 
     '
   license:
@@ -12481,9 +12482,11 @@ components:
         clientCredentials:
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
-            channels:customer: Customer Channels (signed-in customer)
+            channels:customer: Customer and Agent Channels (signed-in customer)
+            channels:agent: Customer and Agent Channels (signed-in agent)
         authorizationCode:
           authorizationUrl: https://auth.meridian.example/oauth2/authorize
           tokenUrl: https://auth.meridian.example/oauth2/token
           scopes:
-            channels:customer: Customer Channels (signed-in customer)
+            channels:customer: Customer and Agent Channels (signed-in customer)
+            channels:agent: Customer and Agent Channels (signed-in agent)

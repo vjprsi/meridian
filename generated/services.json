@@ -270,7 +270,7 @@
   {
     "name": "customer-channel-service",
     "domain": "channels",
-    "domain_title": "Customer Channels",
+    "domain_title": "Customer and Agent Channels",
     "phase": 3,
     "database": "customer_channel_db",
     "schema": "customer_channel",
@@ -305,6 +305,42 @@
       "channels.customer_action.denied"
     ],
     "scope": "channels:customer"
+  },
+  {
+    "name": "agent-channel-service",
+    "domain": "channels",
+    "domain_title": "Customer and Agent Channels",
+    "phase": 3,
+    "database": "agent_channel_db",
+    "schema": "agent_channel",
+    "package": "io.meridian.agentchannel",
+    "port": 9165,
+    "description": "Agent channel BFF behind /v1/agent for the agent outlet app (offline PWA). Every operation acts for the signed-in agent only: the agent comes from the access token (agent_id claim, scope channels:agent), never from a path, query or body. Calls the domain services with its own service identity and the agent's tenant, checks that every referenced outlet, till, device, float request, cash request, transaction, bill payment, top-up, commission earning, onboarding application, document and offline batch belongs to the agent (404 otherwise, audited and published), rebuilds request bodies server-side (agent, outlet, float wallet, currency, channel) and requires a recent login or a device-bound proof for money movement. Devices register a public signing key (ES256 or Ed25519); offline batches and device proofs are verified against it. Keeps the device keys, the customer lookup log and the audit trail of what each agent did or was refused.",
+    "tags": [
+      "Agent Me",
+      "Agent Me Airtime",
+      "Agent Me Applications",
+      "Agent Me Bill Payments",
+      "Agent Me Billers",
+      "Agent Me Cash In",
+      "Agent Me Cash Out",
+      "Agent Me Cash Requests",
+      "Agent Me Commissions",
+      "Agent Me Customers",
+      "Agent Me Devices",
+      "Agent Me Float Requests",
+      "Agent Me Journeys",
+      "Agent Me Offline Batches",
+      "Agent Me Tills",
+      "Agent Me Transactions"
+    ],
+    "tables": 3,
+    "events": [
+      "channels.agent_action.denied",
+      "channels.agent_device_key.registered",
+      "channels.agent_device_key.revoked"
+    ],
+    "scope": "channels:agent"
   },
   {
     "name": "rewards-service",

@@ -1524,6 +1524,11 @@ paths:
           - COMPLETED
           - CANCELLED
           - FAILED
+      - name: idempotency_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
       - name: custom_field_1
         in: query
         schema:
@@ -4546,6 +4551,13 @@ components:
           - 'null'
           maxLength: 255
           description: Execution failure reason
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
           readOnly: true
         custom_field_1:
           type:

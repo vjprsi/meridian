@@ -173,10 +173,16 @@ channels:
         $ref: '#/components/messages/CardsCardDisputeClosed'
   channels:
     address: meridian.channels.v1
-    description: Customer Channels events
+    description: Customer and Agent Channels events
     messages:
       ChannelsCustomerActionDenied:
         $ref: '#/components/messages/ChannelsCustomerActionDenied'
+      ChannelsAgentActionDenied:
+        $ref: '#/components/messages/ChannelsAgentActionDenied'
+      ChannelsAgentDeviceKeyRegistered:
+        $ref: '#/components/messages/ChannelsAgentDeviceKeyRegistered'
+      ChannelsAgentDeviceKeyRevoked:
+        $ref: '#/components/messages/ChannelsAgentDeviceKeyRevoked'
   engagement:
     address: meridian.engagement.v1
     description: 'Engagement: Rewards, Insights and Campaigns events'
@@ -3496,6 +3502,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CustomerAction'
+    ChannelsAgentActionDenied:
+      name: channels.agent_action.denied
+      title: An agent referenced an object that is not theirs, or sent an invalid device signature
+      summary: An agent referenced an object that is not theirs, or sent an invalid device signature
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.agent_action.denied
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AgentAction'
+    ChannelsAgentDeviceKeyRegistered:
+      name: channels.agent_device_key.registered
+      title: An agent device registered a signing key
+      summary: An agent device registered a signing key
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.agent_device_key.registered
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AgentDeviceKey'
+    ChannelsAgentDeviceKeyRevoked:
+      name: channels.agent_device_key.revoked
+      title: An agent device key was revoked (re-registration or lost device)
+      summary: An agent device key was revoked (re-registration or lost device)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.agent_device_key.revoked
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AgentDeviceKey'
     EngagementRewardsProgramActivated:
       name: engagement.rewards_program.activated
       title: A rewards program went live
@@ -26434,6 +26506,233 @@ components:
       - customer_id
       - action
       - outcome
+    AgentAction:
+      type: object
+      description: Audit trail of agent actions through the channel, including object-level denials, step-up and signature
+        refusals
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        agent_id:
+          type: string
+          format: uuid
+          description: Signed-in agent (from the token)
+        user_subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Token subject (the person using the agent app)
+        action:
+          type: string
+          maxLength: 64
+          description: Operation (operation id of the /v1/agent endpoint)
+        object_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: OUTLET, TILL, DEVICE, FLOAT_REQUEST, CASH_REQUEST, TRANSACTION, BILL_PAYMENT, AIRTIME_TOPUP, APPLICATION,
+            DOCUMENT, OFFLINE_BATCH, AGENT, WALLET
+        object_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Object acted on, or the object id that was refused
+        outcome:
+          type: string
+          enum:
+          - SUCCEEDED
+          - DENIED
+          - STEP_UP_REQUIRED
+          - SIGNATURE_INVALID
+          - RATE_LIMITED
+          - FAILED
+          description: Result
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Problem code when not SUCCEEDED
+        result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Id of the record created downstream (transaction, float request, batch...)
+        agent_device_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Device whose key signed the request (device proof or offline batch)
+        auth_method:
+          type:
+          - string
+          - 'null'
+          enum:
+          - RECENT_LOGIN
+          - DEVICE_PROOF
+          - NONE
+          description: How money movement was authorised
+        auth_age_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Seconds since the agent's last login when the action ran
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Authentication context class of the token
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address (first X-Forwarded-For hop) (IPv4 or IPv6 address)
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent
+      required:
+      - id
+      - created_at
+      - agent_id
+      - action
+      - outcome
+    AgentDeviceKey:
+      type: object
+      description: Public signing key of an agent device (the private key never leaves the device); verifies offline batches
+        and device proofs
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        agent_id:
+          type: string
+          format: uuid
+          description: Agent owning the device
+        agent_device_id:
+          type: string
+          format: uuid
+          description: Device (agent-network-service)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet the device was registered at
+        key_algorithm:
+          type: string
+          enum:
+          - ES256
+          - ED25519
+          description: ES256 (ECDSA P-256, SHA-256, IEEE P1363 r||s signature) or ED25519
+        public_key:
+          type: string
+          description: Public key, SubjectPublicKeyInfo DER, base64
+        key_fingerprint:
+          type: string
+          maxLength: 64
+          description: SHA-256 of the SubjectPublicKeyInfo (hex)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - REVOKED
+          description: ACTIVE until revoked (re-registration revokes the previous key)
+          readOnly: true
+        registered_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Token subject that registered the key
+          readOnly: true
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last verified signature
+          readOnly: true
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Revocation time
+          readOnly: true
+        revoked_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the key was revoked
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - agent_device_id
+      - key_algorithm
+      - public_key
+      - key_fingerprint
+      - status
     RewardsProgram:
       type: object
       description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings
@@ -45490,7 +45789,8 @@ components:
         payload_signature:
           type: string
           maxLength: 512
-          description: Device signature of the payload
+          description: 'Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified
+            by agent-channel-service against the registered device key)'
         status:
           type: string
           enum:
@@ -45514,6 +45814,13 @@ components:
           - 'null'
           format: date-time
           description: Processing time
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
           readOnly: true
         custom_field_1:
           type:
@@ -73835,6 +74142,13 @@ components:
           - 'null'
           maxLength: 255
           description: Execution failure reason
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
           readOnly: true
         custom_field_1:
           type:

@@ -2019,9 +2019,9 @@ API: internal only · Requirements: CRD-08
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
-## Customer Channels (`channels`)
+## Customer and Agent Channels (`channels`)
 
-Experience API for the bank's own customer apps (web banking, mobile). Every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Domain services keep their operator APIs; customer tokens carry no domain scope and are rejected there.
+Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never from a path, query or body. The service calls the domain services with its own service identity and the customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order, thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds request bodies server-side and requires a recent authentication (step-up) for money movement and security changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see agent-channel-service). Domain services keep their operator APIs; customer and agent tokens carry no domain scope and are rejected there.
 
 
 ### Service `customer-channel-service` — database `customer_channel_db`
@@ -2053,6 +2053,87 @@ API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /
 | channel | varchar(16) | yes |  | channel | WEB or MOBILE |
 | ip_address | inet | yes |  | ip_address | Client address (first X-Forwarded-For hop) |
 | user_agent | varchar(255) | yes |  | user_agent | Client user agent |
+
+### Service `agent-channel-service` — database `agent_channel_db`
+
+Agent channel BFF behind /v1/agent for the agent outlet app (offline PWA). Every operation acts for the signed-in agent only: the agent comes from the access token (agent_id claim, scope channels:agent), never from a path, query or body. Calls the domain services with its own service identity and the agent's tenant, checks that every referenced outlet, till, device, float request, cash request, transaction, bill payment, top-up, commission earning, onboarding application, document and offline batch belongs to the agent (404 otherwise, audited and published), rebuilds request bodies server-side (agent, outlet, float wallet, currency, channel) and requires a recent login or a device-bound proof for money movement. Devices register a public signing key (ES256 or Ed25519); offline batches and device proofs are verified against it. Keeps the device keys, the customer lookup log and the audit trail of what each agent did or was refused.
+
+
+#### `agent_action` (append-only)
+
+Audit trail of agent actions through the channel, including object-level denials, step-up and signature refusals
+
+API: /v1/agent/airtime-topups, /v1/agent/bill-payments, /v1/agent/billers, /v1/agent/cash-in, /v1/agent/cash-out, /v1/agent/cash-requests, /v1/agent/commissions, /v1/agent/float-requests, /v1/agent/me, /v1/agent/onboarding/applications, /v1/agent/onboarding/journeys, /v1/agent/tills, /v1/agent/transactions
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| agent_id | uuid | no | ref → agent | agent_id | Signed-in agent (from the token) |
+| user_subject | varchar(64) | yes |  | user_subject | Token subject (the person using the agent app) |
+| action | varchar(64) | no |  | action | Operation (operation id of the /v1/agent endpoint) |
+| object_type | varchar(40) | yes |  | object_type | OUTLET, TILL, DEVICE, FLOAT_REQUEST, CASH_REQUEST, TRANSACTION, BILL_PAYMENT, AIRTIME_TOPUP, APPLICATION, DOCUMENT, OFFLINE_BATCH, AGENT, WALLET |
+| object_id | uuid | yes |  | object_id | Object acted on, or the object id that was refused |
+| outcome | varchar(40) (AgentActionOutcome) | no |  | outcome | Result |
+| error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
+| result_id | uuid | yes |  | result_id | Id of the record created downstream (transaction, float request, batch...) |
+| agent_device_id | uuid | yes | ref → agent_device | agent_device_id | Device whose key signed the request (device proof or offline batch) |
+| auth_method | varchar(40) (AgentAuthMethod) | yes |  | auth_method | How money movement was authorised |
+| auth_age_seconds | integer | yes |  | auth_age_seconds | Seconds since the agent's last login when the action ran |
+| acr | varchar(64) | yes |  | acr | Authentication context class of the token |
+| ip_address | inet | yes |  | ip_address | Client address (first X-Forwarded-For hop) |
+| user_agent | varchar(255) | yes |  | user_agent | Client user agent |
+
+#### `agent_device_key`
+
+Public signing key of an agent device (the private key never leaves the device); verifies offline batches and device proofs
+
+API: /v1/agent/devices, /v1/agent/offline-batches
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| agent_id | uuid | no | ref → agent | agent_id | Agent owning the device |
+| agent_device_id | uuid | no | ref → agent_device | agent_device_id | Device (agent-network-service) |
+| agent_outlet_id | uuid | yes | ref → agent_outlet | agent_outlet_id | Outlet the device was registered at |
+| key_algorithm | varchar(40) (DeviceKeyAlgorithm) | no |  | key_algorithm | ES256 (ECDSA P-256, SHA-256, IEEE P1363 r||s signature) or ED25519 |
+| public_key | text | no |  | public_key | Public key, SubjectPublicKeyInfo DER, base64 |
+| key_fingerprint | varchar(64) | no | UQ | key_fingerprint | SHA-256 of the SubjectPublicKeyInfo (hex) |
+| status | varchar(40) (DeviceKeyStatus) | no |  | status (read-only) | ACTIVE until revoked (re-registration revokes the previous key) |
+| registered_by | varchar(64) | yes |  | registered_by (read-only) | Token subject that registered the key |
+| last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last verified signature |
+| revoked_at | timestamptz | yes |  | revoked_at (read-only) | Revocation time |
+| revoked_reason | varchar(255) | yes |  | revoked_reason (read-only) | Why the key was revoked |
+
+#### `agent_customer_lookup` (append-only)
+
+Customer wallet lookups by agents (masked result returned to the agent; rate-limited per agent)
+
+API: /v1/agent/customer-wallets
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| agent_id | uuid | no | ref → agent | agent_id | Agent that looked the customer up |
+| lookup_type | varchar(40) (CustomerLookupType) | no |  | lookup_type | By mobile number or wallet number |
+| wallet_id | uuid | yes | ref → wallet | wallet_id | Wallet found (empty when none matched) |
+| found | boolean | no |  | found | Whether an active customer wallet matched |
+| display_name_masked | varchar(160) | yes |  | display_name_masked | Customer name, masked (first letters only) |
+| msisdn_masked | varchar(20) | yes |  | msisdn_masked | Mobile number, masked |
+| currency | char(3) | yes |  | currency | Wallet currency |
+| wallet_status | varchar(40) (WalletStatus) | yes |  | wallet_status | Wallet status |
+| kyc_tier | integer | yes |  | kyc_tier | KYC tier (drives limits) |
 
 ## Engagement: Rewards, Insights and Campaigns (`engagement`)
 
@@ -7931,10 +8012,11 @@ API: /v1/onboarding/offline-batches · Requirements: ONB-07
 | captured_to | timestamptz | no |  | captured_to | Latest capture time in the batch |
 | application_count | integer | no |  | application_count | Applications in the batch |
 | payload_uri | varchar(500) | no |  | payload_uri | Encrypted payload location |
-| payload_signature | varchar(512) | no |  | payload_signature | Device signature of the payload |
+| payload_signature | varchar(512) | no |  | payload_signature | Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified by agent-channel-service against the registered device key) |
 | status | varchar(40) (OfflineSyncStatus) | no |  | status (read-only) | Sync status |
 | result | jsonb | yes |  | result (read-only) | Per-application outcome and conflicts |
 | processed_at | timestamptz | yes |  | processed_at (read-only) | Processing time |
+| idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Idempotency-Key of the create request (lets a client reconcile an unknown outcome) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -16848,6 +16930,7 @@ API: /v1/agent-float-requests · Requirements: WAL-02
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Execution time |
 | rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Rejection or cancellation reason |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Execution failure reason |
+| idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Idempotency-Key of the create request (lets a client reconcile an unknown outcome) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

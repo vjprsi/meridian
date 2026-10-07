@@ -334,11 +334,13 @@ CREATE TABLE agent_float_request (
   completed_at                 timestamptz,
   rejection_reason             varchar(255),
   failure_reason               varchar(255),
+  idempotency_key              varchar(128),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_agent_float_request_1 UNIQUE (tenant_id, idempotency_key)
 );
 COMMENT ON TABLE agent_float_request IS 'A float top-up, rebalance, withdrawal or transfer between agents';
 COMMENT ON COLUMN agent_float_request.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -365,6 +367,7 @@ COMMENT ON COLUMN agent_float_request.wallet_transaction_id IS 'Resulting float 
 COMMENT ON COLUMN agent_float_request.completed_at IS 'Execution time';
 COMMENT ON COLUMN agent_float_request.rejection_reason IS 'Rejection or cancellation reason';
 COMMENT ON COLUMN agent_float_request.failure_reason IS 'Execution failure reason';
+COMMENT ON COLUMN agent_float_request.idempotency_key IS 'Idempotency-Key of the create request (lets a client reconcile an unknown outcome)';
 COMMENT ON COLUMN agent_float_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_float_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_float_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

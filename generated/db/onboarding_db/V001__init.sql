@@ -366,11 +366,13 @@ CREATE TABLE onboarding_offline_batch (
   status                       varchar(40) NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED', 'VALIDATING', 'APPLIED', 'CONFLICT', 'REJECTED')),
   result                       jsonb,
   processed_at                 timestamptz,
+  idempotency_key              varchar(128),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_onboarding_offline_batch_1 UNIQUE (tenant_id, idempotency_key)
 );
 COMMENT ON TABLE onboarding_offline_batch IS 'Batch of applications captured offline by an agent device and synced later';
 COMMENT ON COLUMN onboarding_offline_batch.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -386,10 +388,11 @@ COMMENT ON COLUMN onboarding_offline_batch.captured_from IS 'Earliest capture ti
 COMMENT ON COLUMN onboarding_offline_batch.captured_to IS 'Latest capture time in the batch';
 COMMENT ON COLUMN onboarding_offline_batch.application_count IS 'Applications in the batch';
 COMMENT ON COLUMN onboarding_offline_batch.payload_uri IS 'Encrypted payload location';
-COMMENT ON COLUMN onboarding_offline_batch.payload_signature IS 'Device signature of the payload';
+COMMENT ON COLUMN onboarding_offline_batch.payload_signature IS 'Device signature of the payload (agent channel: <algorithm>:<device id>:<base64 signature>, verified by agent-channel-service against the registered device key)';
 COMMENT ON COLUMN onboarding_offline_batch.status IS 'Sync status';
 COMMENT ON COLUMN onboarding_offline_batch.result IS 'Per-application outcome and conflicts';
 COMMENT ON COLUMN onboarding_offline_batch.processed_at IS 'Processing time';
+COMMENT ON COLUMN onboarding_offline_batch.idempotency_key IS 'Idempotency-Key of the create request (lets a client reconcile an unknown outcome)';
 COMMENT ON COLUMN onboarding_offline_batch.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN onboarding_offline_batch.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN onboarding_offline_batch.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
