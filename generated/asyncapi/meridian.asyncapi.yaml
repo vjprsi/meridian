@@ -965,6 +965,30 @@ channels:
         $ref: '#/components/messages/PlatformCellDrainStarted'
       PlatformTenantMigrated:
         $ref: '#/components/messages/PlatformTenantMigrated'
+      PlatformCellStatusChanged:
+        $ref: '#/components/messages/PlatformCellStatusChanged'
+      PlatformTenantStandbyChanged:
+        $ref: '#/components/messages/PlatformTenantStandbyChanged'
+      PlatformTenantTrafficModeChanged:
+        $ref: '#/components/messages/PlatformTenantTrafficModeChanged'
+      PlatformTenantMoveRequested:
+        $ref: '#/components/messages/PlatformTenantMoveRequested'
+      PlatformTenantMoveApproved:
+        $ref: '#/components/messages/PlatformTenantMoveApproved'
+      PlatformTenantMoveRejected:
+        $ref: '#/components/messages/PlatformTenantMoveRejected'
+      PlatformTenantMoveFrozen:
+        $ref: '#/components/messages/PlatformTenantMoveFrozen'
+      PlatformTenantMoveCopyRequested:
+        $ref: '#/components/messages/PlatformTenantMoveCopyRequested'
+      PlatformTenantMoveCopyCompleted:
+        $ref: '#/components/messages/PlatformTenantMoveCopyCompleted'
+      PlatformTenantMoveSwitched:
+        $ref: '#/components/messages/PlatformTenantMoveSwitched'
+      PlatformTenantMoveCompleted:
+        $ref: '#/components/messages/PlatformTenantMoveCompleted'
+      PlatformTenantMoveCancelled:
+        $ref: '#/components/messages/PlatformTenantMoveCancelled'
       PlatformTenantModuleChanged:
         $ref: '#/components/messages/PlatformTenantModuleChanged'
       PlatformLegalEntityCreated:
@@ -11860,6 +11884,270 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/TenantPlacement'
+    PlatformCellStatusChanged:
+      name: platform.cell.status_changed
+      title: A cell went offline, read-only or back online (cell router failover)
+      summary: A cell went offline, read-only or back online (cell router failover)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.cell.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Cell'
+    PlatformTenantStandbyChanged:
+      name: platform.tenant.standby_changed
+      title: A tenant's DR standby cell changed
+      summary: A tenant's DR standby cell changed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant.standby_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Tenant'
+    PlatformTenantTrafficModeChanged:
+      name: platform.tenant.traffic_mode_changed
+      title: A tenant's writes were frozen or unfrozen at the cell router
+      summary: A tenant's writes were frozen or unfrozen at the cell router
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant.traffic_mode_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Tenant'
+    PlatformTenantMoveRequested:
+      name: platform.tenant_move.requested
+      title: A tenant move was planned and sent for approval
+      summary: A tenant move was planned and sent for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveApproved:
+      name: platform.tenant_move.approved
+      title: A checker approved a tenant move
+      summary: A checker approved a tenant move
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveRejected:
+      name: platform.tenant_move.rejected
+      title: A tenant move was rejected, expired or withdrawn in workflow-service
+      summary: A tenant move was rejected, expired or withdrawn in workflow-service
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveFrozen:
+      name: platform.tenant_move.frozen
+      title: The moving tenant's writes were frozen
+      summary: The moving tenant's writes were frozen
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.frozen
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveCopyRequested:
+      name: platform.tenant_move.copy_requested
+      title: Data copy handed to the data mover (source and target cells, strategy)
+      summary: Data copy handed to the data mover (source and target cells, strategy)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.copy_requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveCopyCompleted:
+      name: platform.tenant_move.copy_completed
+      title: The data mover confirmed a verified copy
+      summary: The data mover confirmed a verified copy
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.copy_completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveSwitched:
+      name: platform.tenant_move.switched
+      title: The tenant's home cell switched to the target cell
+      summary: The tenant's home cell switched to the target cell
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.switched
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveCompleted:
+      name: platform.tenant_move.completed
+      title: Writes unfrozen on the target cell; move finished
+      summary: Writes unfrozen on the target cell; move finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
+    PlatformTenantMoveCancelled:
+      name: platform.tenant_move.cancelled
+      title: A tenant move was cancelled before the switch
+      summary: A tenant move was cancelled before the switch
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.tenant_move.cancelled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TenantMove'
     PlatformTenantModuleChanged:
       name: platform.tenant_module.changed
       title: A module was enabled or disabled
@@ -53075,6 +53363,35 @@ components:
           - 'null'
           additionalProperties: true
           description: Operator metadata
+        standby_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'DR standby cell: the cell router fails over to it when the home cell is OFFLINE (set by /set-standby)'
+          readOnly: true
+        traffic_mode:
+          type: string
+          enum:
+          - NORMAL
+          - READ_ONLY
+          - BLOCKED
+          description: 'Routing state at the cell router: READ_ONLY while a move freezes writes'
+          readOnly: true
+        traffic_mode_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the traffic mode is not NORMAL
+          readOnly: true
+        active_move_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Tenant move in progress
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -53123,6 +53440,7 @@ components:
       - timezone
       - environment
       - primary_contact_email
+      - traffic_mode
     StarterPackRun:
       type: object
       description: 'One application of a tenant starter pack (declarative bootstrap defaults: legal entity, ledger chart and
@@ -53380,6 +53698,7 @@ components:
           - ACTIVE
           - DRAINING
           - READ_ONLY
+          - OFFLINE
           - DECOMMISSIONED
           description: Lifecycle status
         is_dedicated:
@@ -53438,6 +53757,57 @@ components:
           - 'null'
           additionalProperties: true
           description: Operational metadata
+        deployment_model:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          - SELF_HOSTED
+          description: Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Country hosting the cell's data (data residency checks) (ISO 3166-1 alpha-2)
+        gateway_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Base URL of the cell's edge gateway (upstream of the cell router)
+        health_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)
+        endpoints:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)
+        standby_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Paired DR cell in the standby region (default standby of the cell's tenants)
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on the last offline / read-only / online action
+          readOnly: true
+        status_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the cell last went offline, read-only or back online
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -53480,6 +53850,7 @@ components:
       - is_dedicated
       - capacity_tenants
       - tenant_count
+      - deployment_model
     TenantPlacement:
       type: object
       description: History of a tenant's placement on cells, including cell-to-cell migrations
@@ -53556,6 +53927,18 @@ components:
           - 'null'
           format: uuid
           description: Previous cell (migrations)
+        role:
+          type: string
+          enum:
+          - PRIMARY
+          - STANDBY
+          description: Home (primary) cell or DR standby cell
+        move_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Tenant move that created the placement
         custom_field_1:
           type:
           - string
@@ -53595,6 +53978,225 @@ components:
       - cell_id
       - status
       - effective_from
+      - role
+    TenantMove:
+      type: object
+      description: 'Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes, data
+        copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        subject_tenant_id:
+          type: string
+          format: uuid
+          description: Tenant being moved
+        from_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source cell (the tenant's home cell when planned)
+          readOnly: true
+        to_cell_id:
+          type: string
+          format: uuid
+          description: Target cell
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - FROZEN
+          - COPYING
+          - COPIED
+          - SWITCHED
+          - COMPLETED
+          - CANCELLED
+          description: Workflow step
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 255
+          description: Why the tenant moves (rebalancing, dedicated upgrade, region change)
+        copy_strategy:
+          type: string
+          enum:
+          - LOGICAL_REPLICATION
+          - DUMP_RESTORE
+          - NONE
+          description: 'How the data reaches the target cell (NONE: cells share the database cluster)'
+        planned_window_start:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Maintenance window communicated to the tenant
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval request in workflow-service
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved the move
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        frozen_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When writes were frozen
+          readOnly: true
+        copy_started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the copy was handed to the data mover
+          readOnly: true
+        copy_checkpoint:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Hand-off checkpoint reported by the data mover (final LSN, row-count / checksum digest)
+          readOnly: true
+        copy_completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the data mover confirmed a verified copy
+          readOnly: true
+        switched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the placement switched to the target cell
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When writes were unfrozen on the target cell
+          readOnly: true
+        cancelled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Cancellation time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the move was cancelled or rejected
+          readOnly: true
+        placement_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Placement created by the switch
+          readOnly: true
+        history:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Audit trail: {step, status, at, by, detail}'
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_tenant_id
+      - to_cell_id
+      - status
+      - reason
+      - copy_strategy
     TenantModule:
       type: object
       description: Platform modules enabled for the tenant and their module-level configuration

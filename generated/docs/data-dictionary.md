@@ -9793,6 +9793,14 @@ API: /v1/platform/cells · Requirements: ADM-01
 | drain_reason | varchar(255) | yes |  | drain_reason (read-only) | Why the cell is draining |
 | drain_requested_at | timestamptz | yes |  | drain_requested_at (read-only) | When draining started |
 | metadata | jsonb | yes |  | metadata | Operational metadata |
+| deployment_model | varchar(40) (CellDeploymentModel) | no |  | deployment_model | Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package |
+| country | char(2) | yes |  | country | Country hosting the cell's data (data residency checks) |
+| gateway_url | varchar(500) | yes |  | gateway_url | Base URL of the cell's edge gateway (upstream of the cell router) |
+| health_url | varchar(500) | yes |  | health_url | Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness) |
+| endpoints | jsonb | yes |  | endpoints | Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics) |
+| standby_cell_id | uuid | yes | FK → cell | standby_cell_id | Paired DR cell in the standby region (default standby of the cell's tenants) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason given on the last offline / read-only / online action |
+| status_changed_at | timestamptz | yes |  | status_changed_at (read-only) | When the cell last went offline, read-only or back online |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9838,6 +9846,51 @@ API: /v1/platform/tenants · Requirements: ADM-01
 | starter_pack_code | varchar(64) | yes |  | starter_pack_code | Starter pack applied right after provisioning (empty = none) |
 | starter_pack_run_id | uuid | yes |  | starter_pack_run_id (read-only) | Starter pack run started by provisioning |
 | metadata | jsonb | yes |  | metadata | Operator metadata |
+| standby_cell_id | uuid | yes | FK → cell | standby_cell_id (read-only) | DR standby cell: the cell router fails over to it when the home cell is OFFLINE (set by /set-standby) |
+| traffic_mode | varchar(40) (TenantTrafficMode) | no |  | traffic_mode (read-only) | Routing state at the cell router: READ_ONLY while a move freezes writes |
+| traffic_mode_reason | varchar(255) | yes |  | traffic_mode_reason (read-only) | Why the traffic mode is not NORMAL |
+| active_move_id | uuid | yes |  | active_move_id (read-only) | Tenant move in progress |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `tenant_move`
+
+Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes, data copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+
+
+API: /v1/platform/tenant-moves · Requirements: ADM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| subject_tenant_id | uuid | no | FK → tenant | subject_tenant_id | Tenant being moved |
+| from_cell_id | uuid | yes | FK → cell | from_cell_id (read-only) | Source cell (the tenant's home cell when planned) |
+| to_cell_id | uuid | no | FK → cell | to_cell_id | Target cell |
+| status | varchar(40) (TenantMoveStatus) | no |  | status (read-only) | Workflow step |
+| reason | varchar(255) | no |  | reason | Why the tenant moves (rebalancing, dedicated upgrade, region change) |
+| copy_strategy | varchar(40) (DataCopyStrategy) | no |  | copy_strategy | How the data reaches the target cell (NONE: cells share the database cluster) |
+| planned_window_start | timestamptz | yes |  | planned_window_start | Maintenance window communicated to the tenant |
+| approval_request_id | uuid | yes |  | approval_request_id (read-only) | Approval request in workflow-service |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved the move |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| frozen_at | timestamptz | yes |  | frozen_at (read-only) | When writes were frozen |
+| copy_started_at | timestamptz | yes |  | copy_started_at (read-only) | When the copy was handed to the data mover |
+| copy_checkpoint | varchar(255) | yes |  | copy_checkpoint (read-only) | Hand-off checkpoint reported by the data mover (final LSN, row-count / checksum digest) |
+| copy_completed_at | timestamptz | yes |  | copy_completed_at (read-only) | When the data mover confirmed a verified copy |
+| switched_at | timestamptz | yes |  | switched_at (read-only) | When the placement switched to the target cell |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | When writes were unfrozen on the target cell |
+| cancelled_at | timestamptz | yes |  | cancelled_at (read-only) | Cancellation time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Why the move was cancelled or rejected |
+| placement_id | uuid | yes |  | placement_id (read-only) | Placement created by the switch |
+| history | jsonb | yes |  | history (read-only) | Audit trail: {step, status, at, by, detail} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9865,6 +9918,8 @@ API: internal only · Requirements: ADM-01
 | effective_to | timestamptz | yes |  | effective_to | End of placement |
 | reason | varchar(255) | yes |  | reason | Reason, e.g. initial placement, rebalancing, dedicated upgrade |
 | from_cell_id | uuid | yes | FK → cell | from_cell_id | Previous cell (migrations) |
+| role | varchar(40) (PlacementRole) | no |  | role | Home (primary) cell or DR standby cell |
+| move_id | uuid | yes | FK → tenant_move | move_id | Tenant move that created the placement |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

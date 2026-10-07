@@ -29,7 +29,7 @@ CREATE TABLE cell (
   code                         varchar(32) NOT NULL,
   region                       varchar(32) NOT NULL,
   cloud_provider               varchar(40) NOT NULL CHECK (cloud_provider IN ('AWS', 'GCP', 'AZURE', 'ON_PREMISES')),
-  status                       varchar(40) NOT NULL DEFAULT 'PROVISIONING' CHECK (status IN ('PROVISIONING', 'ACTIVE', 'DRAINING', 'READ_ONLY', 'DECOMMISSIONED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PROVISIONING' CHECK (status IN ('PROVISIONING', 'ACTIVE', 'DRAINING', 'READ_ONLY', 'OFFLINE', 'DECOMMISSIONED')),
   is_dedicated                 boolean NOT NULL DEFAULT false,
   capacity_tenants             integer NOT NULL DEFAULT 200,
   tenant_count                 integer NOT NULL DEFAULT 0,
@@ -40,6 +40,14 @@ CREATE TABLE cell (
   drain_reason                 varchar(255),
   drain_requested_at           timestamptz,
   metadata                     jsonb,
+  deployment_model             varchar(40) NOT NULL DEFAULT 'SHARED' CHECK (deployment_model IN ('SHARED', 'DEDICATED', 'SELF_HOSTED')),
+  country                      char(2),
+  gateway_url                  varchar(500),
+  health_url                   varchar(500),
+  endpoints                    jsonb,
+  standby_cell_id              uuid REFERENCES cell(id),
+  status_reason                varchar(255),
+  status_changed_at            timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -68,11 +76,20 @@ COMMENT ON COLUMN cell.standby_region IS 'Paired region for failover';
 COMMENT ON COLUMN cell.drain_reason IS 'Why the cell is draining';
 COMMENT ON COLUMN cell.drain_requested_at IS 'When draining started';
 COMMENT ON COLUMN cell.metadata IS 'Operational metadata';
+COMMENT ON COLUMN cell.deployment_model IS 'Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package';
+COMMENT ON COLUMN cell.country IS 'Country hosting the cell''s data (data residency checks)';
+COMMENT ON COLUMN cell.gateway_url IS 'Base URL of the cell''s edge gateway (upstream of the cell router)';
+COMMENT ON COLUMN cell.health_url IS 'Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)';
+COMMENT ON COLUMN cell.endpoints IS 'Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)';
+COMMENT ON COLUMN cell.standby_cell_id IS 'Paired DR cell in the standby region (default standby of the cell''s tenants)';
+COMMENT ON COLUMN cell.status_reason IS 'Reason given on the last offline / read-only / online action';
+COMMENT ON COLUMN cell.status_changed_at IS 'When the cell last went offline, read-only or back online';
 COMMENT ON COLUMN cell.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cell.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cell.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cell.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cell.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_cell_standby_cell_id ON cell (standby_cell_id);
 CREATE TRIGGER trg_cell_touch BEFORE UPDATE ON cell FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- tenant: A client organisation (bank, fintech, telco) using the platform
@@ -108,6 +125,10 @@ CREATE TABLE tenant (
   starter_pack_code            varchar(64),
   starter_pack_run_id          uuid,
   metadata                     jsonb,
+  standby_cell_id              uuid REFERENCES cell(id),
+  traffic_mode                 varchar(40) NOT NULL DEFAULT 'NORMAL' CHECK (traffic_mode IN ('NORMAL', 'READ_ONLY', 'BLOCKED')),
+  traffic_mode_reason          varchar(255),
+  active_move_id               uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -147,13 +168,91 @@ COMMENT ON COLUMN tenant.template_code IS 'Template the tenant was provisioned f
 COMMENT ON COLUMN tenant.starter_pack_code IS 'Starter pack applied right after provisioning (empty = none)';
 COMMENT ON COLUMN tenant.starter_pack_run_id IS 'Starter pack run started by provisioning';
 COMMENT ON COLUMN tenant.metadata IS 'Operator metadata';
+COMMENT ON COLUMN tenant.standby_cell_id IS 'DR standby cell: the cell router fails over to it when the home cell is OFFLINE (set by /set-standby)';
+COMMENT ON COLUMN tenant.traffic_mode IS 'Routing state at the cell router: READ_ONLY while a move freezes writes';
+COMMENT ON COLUMN tenant.traffic_mode_reason IS 'Why the traffic mode is not NORMAL';
+COMMENT ON COLUMN tenant.active_move_id IS 'Tenant move in progress';
 COMMENT ON COLUMN tenant.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_tenant_cell_id ON tenant (cell_id);
+CREATE INDEX ix_tenant_standby_cell_id ON tenant (standby_cell_id);
 CREATE TRIGGER trg_tenant_touch BEFORE UPDATE ON tenant FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- tenant_move: Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes, data copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+
+CREATE TABLE tenant_move (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  subject_tenant_id            uuid NOT NULL REFERENCES tenant(id),
+  from_cell_id                 uuid REFERENCES cell(id),
+  to_cell_id                   uuid NOT NULL REFERENCES cell(id),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'FROZEN', 'COPYING', 'COPIED', 'SWITCHED', 'COMPLETED', 'CANCELLED')),
+  reason                       varchar(255) NOT NULL,
+  copy_strategy                varchar(40) NOT NULL DEFAULT 'LOGICAL_REPLICATION' CHECK (copy_strategy IN ('LOGICAL_REPLICATION', 'DUMP_RESTORE', 'NONE')),
+  planned_window_start         timestamptz,
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  frozen_at                    timestamptz,
+  copy_started_at              timestamptz,
+  copy_checkpoint              varchar(255),
+  copy_completed_at            timestamptz,
+  switched_at                  timestamptz,
+  completed_at                 timestamptz,
+  cancelled_at                 timestamptz,
+  cancel_reason                varchar(255),
+  placement_id                 uuid,
+  history                      jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE tenant_move IS 'Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes, data copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+';
+COMMENT ON COLUMN tenant_move.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN tenant_move.created_at IS 'Creation time';
+COMMENT ON COLUMN tenant_move.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN tenant_move.updated_at IS 'Last update time';
+COMMENT ON COLUMN tenant_move.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN tenant_move.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN tenant_move.subject_tenant_id IS 'Tenant being moved';
+COMMENT ON COLUMN tenant_move.from_cell_id IS 'Source cell (the tenant''s home cell when planned)';
+COMMENT ON COLUMN tenant_move.to_cell_id IS 'Target cell';
+COMMENT ON COLUMN tenant_move.status IS 'Workflow step';
+COMMENT ON COLUMN tenant_move.reason IS 'Why the tenant moves (rebalancing, dedicated upgrade, region change)';
+COMMENT ON COLUMN tenant_move.copy_strategy IS 'How the data reaches the target cell (NONE: cells share the database cluster)';
+COMMENT ON COLUMN tenant_move.planned_window_start IS 'Maintenance window communicated to the tenant';
+COMMENT ON COLUMN tenant_move.approval_request_id IS 'Approval request in workflow-service';
+COMMENT ON COLUMN tenant_move.approved_by IS 'Checker who approved the move';
+COMMENT ON COLUMN tenant_move.approved_at IS 'Approval time';
+COMMENT ON COLUMN tenant_move.frozen_at IS 'When writes were frozen';
+COMMENT ON COLUMN tenant_move.copy_started_at IS 'When the copy was handed to the data mover';
+COMMENT ON COLUMN tenant_move.copy_checkpoint IS 'Hand-off checkpoint reported by the data mover (final LSN, row-count / checksum digest)';
+COMMENT ON COLUMN tenant_move.copy_completed_at IS 'When the data mover confirmed a verified copy';
+COMMENT ON COLUMN tenant_move.switched_at IS 'When the placement switched to the target cell';
+COMMENT ON COLUMN tenant_move.completed_at IS 'When writes were unfrozen on the target cell';
+COMMENT ON COLUMN tenant_move.cancelled_at IS 'Cancellation time';
+COMMENT ON COLUMN tenant_move.cancel_reason IS 'Why the move was cancelled or rejected';
+COMMENT ON COLUMN tenant_move.placement_id IS 'Placement created by the switch';
+COMMENT ON COLUMN tenant_move.history IS 'Audit trail: {step, status, at, by, detail}';
+COMMENT ON COLUMN tenant_move.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_move.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_move.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_move.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_move.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_tenant_move_subject_tenant_id ON tenant_move (subject_tenant_id);
+CREATE INDEX ix_tenant_move_from_cell_id ON tenant_move (from_cell_id);
+CREATE INDEX ix_tenant_move_to_cell_id ON tenant_move (to_cell_id);
+CREATE TRIGGER trg_tenant_move_touch BEFORE UPDATE ON tenant_move FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- tenant_placement: History of a tenant's placement on cells, including cell-to-cell migrations
 CREATE TABLE tenant_placement (
@@ -170,6 +269,8 @@ CREATE TABLE tenant_placement (
   effective_to                 timestamptz,
   reason                       varchar(255),
   from_cell_id                 uuid REFERENCES cell(id),
+  role                         varchar(40) NOT NULL DEFAULT 'PRIMARY' CHECK (role IN ('PRIMARY', 'STANDBY')),
+  move_id                      uuid REFERENCES tenant_move(id),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -190,6 +291,8 @@ COMMENT ON COLUMN tenant_placement.effective_from IS 'Start of placement';
 COMMENT ON COLUMN tenant_placement.effective_to IS 'End of placement';
 COMMENT ON COLUMN tenant_placement.reason IS 'Reason, e.g. initial placement, rebalancing, dedicated upgrade';
 COMMENT ON COLUMN tenant_placement.from_cell_id IS 'Previous cell (migrations)';
+COMMENT ON COLUMN tenant_placement.role IS 'Home (primary) cell or DR standby cell';
+COMMENT ON COLUMN tenant_placement.move_id IS 'Tenant move that created the placement';
 COMMENT ON COLUMN tenant_placement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_placement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_placement.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -198,6 +301,7 @@ COMMENT ON COLUMN tenant_placement.custom_field_5 IS 'Tenant-defined custom fiel
 CREATE INDEX ix_tenant_placement_subject_tenant_id ON tenant_placement (subject_tenant_id);
 CREATE INDEX ix_tenant_placement_cell_id ON tenant_placement (cell_id);
 CREATE INDEX ix_tenant_placement_from_cell_id ON tenant_placement (from_cell_id);
+CREATE INDEX ix_tenant_placement_move_id ON tenant_placement (move_id);
 CREATE TRIGGER trg_tenant_placement_touch BEFORE UPDATE ON tenant_placement FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- tenant_module: Platform modules enabled for the tenant and their module-level configuration

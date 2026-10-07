@@ -985,6 +985,12 @@ tags:
 - name: Tenants
   description: Platform-operator API for tenant lifecycle
   x-domain: Platform and Administration
+- name: Tenant Moves
+  description: 'Platform-operator API for moving a live tenant between cells under maker-checker: plan (opens an approval
+    request), freeze writes, data copy hand-off, switch placement, unfreeze
+
+    '
+  x-domain: Platform and Administration
 - name: Starter Pack Runs
   description: Tenant starter packs (bootstrap defaults) applied to the caller's tenant
   x-domain: Platform and Administration
@@ -81819,11 +81825,20 @@ paths:
           - ACTIVE
           - DRAINING
           - READ_ONLY
+          - OFFLINE
           - DECOMMISSIONED
       - name: is_dedicated
         in: query
         schema:
           type: boolean
+      - name: deployment_model
+        in: query
+        schema:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          - SELF_HOSTED
       - name: custom_field_1
         in: query
         schema:
@@ -82027,6 +82042,145 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CellsDrainRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: cell
+  /v1/platform/cells/{id}/offline:
+    post:
+      operationId: cellsOffline
+      summary: 'Take the cell out of service: the cell router fails its tenants over to their standby cells (break-glass,
+        audited)'
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellsOfflineRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: cell
+  /v1/platform/cells/{id}/read-only:
+    post:
+      operationId: cellsReadOnly
+      summary: 'Serve reads only: the cell router answers writes with 503 (warm standby, maintenance)'
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellsReadOnlyRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: cell
+  /v1/platform/cells/{id}/online:
+    post:
+      operationId: cellsOnline
+      summary: Return an OFFLINE or READ_ONLY cell to service (ACTIVE)
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellsOnlineRequest'
       x-requirements:
       - ADM-01
       x-service: tenant-service
@@ -82386,7 +82540,7 @@ paths:
   /v1/platform/tenants/{id}/migrate:
     post:
       operationId: tenantsMigrate
-      summary: Move the tenant to another cell
+      summary: Place a PROVISIONING tenant (no data yet) on another cell; live tenants move through tenant-moves
       tags:
       - Tenants
       security:
@@ -82432,7 +82586,7 @@ paths:
   /v1/platform/tenants/{id}/placements:
     get:
       operationId: tenantsPlacements
-      summary: Placement history
+      summary: Placement history (primary and standby)
       tags:
       - Tenants
       security:
@@ -82454,6 +82608,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantPlacementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant
+  /v1/platform/tenants/{id}/set-standby:
+    post:
+      operationId: tenantsSetStandby
+      summary: Choose the DR standby cell (empty cell_id = none)
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsSetStandbyRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant
+  /v1/platform/tenants/{id}/routing:
+    get:
+      operationId: tenantsRouting
+      summary: 'Routing view for the cell router: home and standby cells (status, gateway URL), traffic mode'
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -82554,6 +82791,421 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
       x-required-scope: platform:operator
       x-table: tenant
+  /v1/platform/tenant-moves:
+    get:
+      operationId: tenantMovesList
+      summary: List tenant moves
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: subject_tenant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - FROZEN
+          - COPYING
+          - COPIED
+          - SWITCHED
+          - COMPLETED
+          - CANCELLED
+      - name: from_cell_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: to_cell_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMovePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tenantMovesCreate
+      summary: Create tenant move
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMoveCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+      x-crud: true
+      x-crud-create: true
+  /v1/platform/tenant-moves/{id}:
+    get:
+      operationId: tenantMovesGet
+      summary: Retrieve tenant move
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+      x-crud: true
+      x-crud-get: true
+  /v1/platform/tenant-moves/{id}/freeze:
+    post:
+      operationId: tenantMovesFreeze
+      summary: Freeze the tenant's writes (READ_ONLY at the cell router); the move must be approved
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+  /v1/platform/tenant-moves/{id}/start-copy:
+    post:
+      operationId: tenantMovesStartCopy
+      summary: Hand the data copy to the data mover (event platform.tenant_move.copy_requested)
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+  /v1/platform/tenant-moves/{id}/confirm-copy:
+    post:
+      operationId: tenantMovesConfirmCopy
+      summary: The data mover reports a complete, verified copy at a checkpoint
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMovesConfirmCopyRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+  /v1/platform/tenant-moves/{id}/switch:
+    post:
+      operationId: tenantMovesSwitch
+      summary: Switch the tenant's home cell to the target cell (reads follow at once, writes stay frozen)
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+  /v1/platform/tenant-moves/{id}/unfreeze:
+    post:
+      operationId: tenantMovesUnfreeze
+      summary: Lift the write freeze on the target cell and complete the move
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
+  /v1/platform/tenant-moves/{id}/cancel:
+    post:
+      operationId: tenantMovesCancel
+      summary: Cancel the move before the switch; a frozen tenant is unfrozen on its source cell
+      tags:
+      - Tenant Moves
+      security:
+      - oauth2:
+        - platform:operator
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMove'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMovesCancelRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:operator")'
+      x-required-scope: platform:operator
+      x-table: tenant_move
   /v1/starter-pack-runs:
     get:
       operationId: starterPackRunsList
@@ -235475,6 +236127,30 @@ components:
           maxLength: 255
       required:
       - reason
+    CellsOfflineRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CellsReadOnlyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CellsOnlineRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     TenantPage:
       type: object
       description: One page of Tenant results (newest first)
@@ -235538,6 +236214,17 @@ components:
       required:
       - data
       - has_more
+    TenantsSetStandbyRequest:
+      type: object
+      properties:
+        cell_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     TenantsProvisionFromTemplateRequest:
       type: object
       properties:
@@ -235605,6 +236292,43 @@ components:
           type: boolean
       required:
       - pack_code
+    TenantMovePage:
+      type: object
+      description: One page of TenantMove results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantMove'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TenantMovesConfirmCopyRequest:
+      type: object
+      properties:
+        checkpoint:
+          type: string
+          maxLength: 255
+        verified:
+          type: boolean
+      required:
+      - checkpoint
+      - verified
+    TenantMovesCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     StarterPackRunPage:
       type: object
       description: One page of StarterPackRun results (newest first)
@@ -239886,6 +240610,7 @@ components:
           - ACTIVE
           - DRAINING
           - READ_ONLY
+          - OFFLINE
           - DECOMMISSIONED
           description: Lifecycle status
         is_dedicated:
@@ -239944,6 +240669,57 @@ components:
           - 'null'
           additionalProperties: true
           description: Operational metadata
+        deployment_model:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          - SELF_HOSTED
+          description: Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Country hosting the cell's data (data residency checks) (ISO 3166-1 alpha-2)
+        gateway_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Base URL of the cell's edge gateway (upstream of the cell router)
+        health_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)
+        endpoints:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)
+        standby_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Paired DR cell in the standby region (default standby of the cell's tenants)
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on the last offline / read-only / online action
+          readOnly: true
+        status_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the cell last went offline, read-only or back online
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -239986,6 +240762,7 @@ components:
       - is_dedicated
       - capacity_tenants
       - tenant_count
+      - deployment_model
     CellCreate:
       type: object
       properties:
@@ -240012,6 +240789,7 @@ components:
           - ACTIVE
           - DRAINING
           - READ_ONLY
+          - OFFLINE
           - DECOMMISSIONED
           description: Lifecycle status
         is_dedicated:
@@ -240041,6 +240819,33 @@ components:
           type: object
           additionalProperties: true
           description: Operational metadata
+        deployment_model:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          - SELF_HOSTED
+          description: Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country hosting the cell's data (data residency checks) (ISO 3166-1 alpha-2)
+        gateway_url:
+          type: string
+          maxLength: 500
+          description: Base URL of the cell's edge gateway (upstream of the cell router)
+        health_url:
+          type: string
+          maxLength: 500
+          description: Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)
+        endpoints:
+          type: object
+          additionalProperties: true
+          description: Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)
+        standby_cell_id:
+          type: string
+          format: uuid
+          description: Paired DR cell in the standby region (default standby of the cell's tenants)
         custom_field_1:
           type: string
           maxLength: 500
@@ -240091,6 +240896,7 @@ components:
           - ACTIVE
           - DRAINING
           - READ_ONLY
+          - OFFLINE
           - DECOMMISSIONED
           description: Lifecycle status
         is_dedicated:
@@ -240120,6 +240926,33 @@ components:
           type: object
           additionalProperties: true
           description: Operational metadata
+        deployment_model:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          - SELF_HOSTED
+          description: Shared multi-tenant cell, cell dedicated to one large tenant, or self-hosted package
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country hosting the cell's data (data residency checks) (ISO 3166-1 alpha-2)
+        gateway_url:
+          type: string
+          maxLength: 500
+          description: Base URL of the cell's edge gateway (upstream of the cell router)
+        health_url:
+          type: string
+          maxLength: 500
+          description: Health endpoint probed by the cell router (empty = <gateway_url>/actuator/health/readiness)
+        endpoints:
+          type: object
+          additionalProperties: true
+          description: Other endpoints of the cell (console, developer portal, Kafka bootstrap, metrics)
+        standby_cell_id:
+          type: string
+          format: uuid
+          description: Paired DR cell in the standby region (default standby of the cell's tenants)
         custom_field_1:
           type: string
           maxLength: 500
@@ -247477,6 +248310,35 @@ components:
           - 'null'
           additionalProperties: true
           description: Operator metadata
+        standby_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'DR standby cell: the cell router fails over to it when the home cell is OFFLINE (set by /set-standby)'
+          readOnly: true
+        traffic_mode:
+          type: string
+          enum:
+          - NORMAL
+          - READ_ONLY
+          - BLOCKED
+          description: 'Routing state at the cell router: READ_ONLY while a move freezes writes'
+          readOnly: true
+        traffic_mode_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the traffic mode is not NORMAL
+          readOnly: true
+        active_move_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Tenant move in progress
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -247525,6 +248387,7 @@ components:
       - timezone
       - environment
       - primary_contact_email
+      - traffic_mode
     TenantCreate:
       type: object
       properties:
@@ -248822,6 +249685,274 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TenantMove:
+      type: object
+      description: 'Maker-checker move of a tenant to another cell: plan (approval in workflow-service), freeze writes, data
+        copy hand-off to the data mover, placement switch, unfreeze. Every step is recorded in history.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        subject_tenant_id:
+          type: string
+          format: uuid
+          description: Tenant being moved
+        from_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Source cell (the tenant's home cell when planned)
+          readOnly: true
+        to_cell_id:
+          type: string
+          format: uuid
+          description: Target cell
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - FROZEN
+          - COPYING
+          - COPIED
+          - SWITCHED
+          - COMPLETED
+          - CANCELLED
+          description: Workflow step
+          readOnly: true
+        reason:
+          type: string
+          maxLength: 255
+          description: Why the tenant moves (rebalancing, dedicated upgrade, region change)
+        copy_strategy:
+          type: string
+          enum:
+          - LOGICAL_REPLICATION
+          - DUMP_RESTORE
+          - NONE
+          description: 'How the data reaches the target cell (NONE: cells share the database cluster)'
+        planned_window_start:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Maintenance window communicated to the tenant
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval request in workflow-service
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved the move
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        frozen_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When writes were frozen
+          readOnly: true
+        copy_started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the copy was handed to the data mover
+          readOnly: true
+        copy_checkpoint:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Hand-off checkpoint reported by the data mover (final LSN, row-count / checksum digest)
+          readOnly: true
+        copy_completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the data mover confirmed a verified copy
+          readOnly: true
+        switched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the placement switched to the target cell
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When writes were unfrozen on the target cell
+          readOnly: true
+        cancelled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Cancellation time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the move was cancelled or rejected
+          readOnly: true
+        placement_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Placement created by the switch
+          readOnly: true
+        history:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Audit trail: {step, status, at, by, detail}'
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_tenant_id
+      - to_cell_id
+      - status
+      - reason
+      - copy_strategy
+    TenantMoveCreate:
+      type: object
+      properties:
+        subject_tenant_id:
+          type: string
+          format: uuid
+          description: Tenant being moved
+        to_cell_id:
+          type: string
+          format: uuid
+          description: Target cell
+        reason:
+          type: string
+          maxLength: 255
+          description: Why the tenant moves (rebalancing, dedicated upgrade, region change)
+        copy_strategy:
+          type: string
+          enum:
+          - LOGICAL_REPLICATION
+          - DUMP_RESTORE
+          - NONE
+          description: 'How the data reaches the target cell (NONE: cells share the database cluster)'
+        planned_window_start:
+          type: string
+          format: date-time
+          description: Maintenance window communicated to the tenant
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - subject_tenant_id
+      - to_cell_id
+      - reason
     TenantPlacement:
       type: object
       description: History of a tenant's placement on cells, including cell-to-cell migrations
@@ -248898,6 +250029,18 @@ components:
           - 'null'
           format: uuid
           description: Previous cell (migrations)
+        role:
+          type: string
+          enum:
+          - PRIMARY
+          - STANDBY
+          description: Home (primary) cell or DR standby cell
+        move_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Tenant move that created the placement
         custom_field_1:
           type:
           - string
@@ -248937,6 +250080,7 @@ components:
       - cell_id
       - status
       - effective_from
+      - role
     TenantSetting:
       type: object
       description: Typed tenant-level setting (key/value) used by all services
