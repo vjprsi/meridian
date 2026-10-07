@@ -64,7 +64,11 @@ add the central path on top (reference: pricing-rules `DecisionTableService` + `
    EXPIRED / CANCELLED leave it pending. Must be idempotent (at-least-once delivery).
 3. After a direct decision on the service's own endpoint, call `approvals.cancelOpen(RESOURCE, id, null, reason)`;
    inside a transaction it runs after commit.
-4. Mode: `meridian.approvals.mode=workflow` (set by `tools/dev.py`) or `local` (default; existing tests unchanged).
+4. Ownership (SEC-03): register every new resource type in workflow-service `meridian.workflow.approval-owners`
+   (`<type>: <your-service>`; `ApprovalOwnersRegistryTest` fails otherwise). `Approvals` opens requests with the
+   service's own identity; workflow-service refuses a type from any other caller, records `owner_service`, and the
+   dispatcher only hands a decision to the owner. Execute from your own pending record, never from the payload alone.
+5. Mode: `meridian.approvals.mode=workflow` (set by `tools/dev.py`) or `local` (default; existing tests unchanged).
    Add one `*WorkflowApprovalIT` with `meridian.approvals.mode=workflow`, a mocked `ServiceClient`, and decisions fed
    through `ApprovalEventsDispatcher.dispatch(...)`.
 
@@ -93,6 +97,10 @@ Lessons from the rollout (all 63 services):
   `meridian-service-secret`). Bind the tenant first (`TenantContext.callAs(tenant, "job:<name>", ...)`);
   ServiceClient sends it as `X-Tenant-Id`, which receivers honour only for internal tokens.
 - Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
+- "Only the owning service may do this" (opening its approval requests, ledger `POST /ledger-accounts/{id}/overdraft-limit`):
+  the caller wraps the call in `ServiceClient.asService(() -> client.post(...))` (service token +
+  `X-Meridian-Service: <spring.application.name>`, `X-User` still the acting user); the receiver checks
+  `TenantContext.callingService()`, which is set only with an internal token (dev mode: the header alone).
 
 
 Customer requests (`customer-channel-service`, `/v1/me/*`): a customer token (scope `channels:customer`, claim
