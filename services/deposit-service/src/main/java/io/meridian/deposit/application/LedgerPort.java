@@ -29,8 +29,25 @@ public interface LedgerPort {
         }
     }
 
+    /**
+     * A journal entry. {@code reference} and {@code refs} (ledger {@code external_refs}: scheme_reference,
+     * counterparty_name, ...) are set on postings that move money outside the bank (cheque clearing, payouts to
+     * external payees) so nostro / clearing reconciliation can match them (RECON-REAL-REFS).
+     */
     record Posting(String key, String entryType, String description, String currency, String sourceType,
-                   UUID sourceId, LocalDate valueDate, List<Leg> legs) {}
+                   UUID sourceId, LocalDate valueDate, List<Leg> legs, String reference,
+                   java.util.Map<String, String> refs) {
+        public Posting(String key, String entryType, String description, String currency, String sourceType,
+                       UUID sourceId, LocalDate valueDate, List<Leg> legs) {
+            this(key, entryType, description, currency, sourceType, sourceId, valueDate, legs, null, null);
+        }
+
+        /** The same posting with a reference and payment references (null / blank values are dropped). */
+        public Posting withRefs(String reference, java.util.Map<String, String> refs) {
+            return new Posting(key, entryType, description, currency, sourceType, sourceId, valueDate, legs, reference,
+                    refs);
+        }
+    }
 
     /** Posts a balanced journal entry; returns its id. */
     UUID post(Posting posting);
