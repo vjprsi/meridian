@@ -1,0 +1,224 @@
+# Security Review — Meridian Banking Core
+
+Date: 2026-10-06 · Scope: `libs/*`, `services/*` (63), `platform/edge-gateway`, `web/*`, `infra/helm`, `infra/local/keycloak`,
+`generated/*` · Method: static, read-only code review against OWASP API Security Top 10 (2023) plus banking-specific
+integrity checks (money movement, maker-checker, card data). Nothing was built or run. Every finding below was traced
+end to end through the code path; line numbers are as of commit `d5d9757`.
+
+Out of scope / already tracked (not re-reported): customer object-level authorization (customer-channel-service BFF,
+`docs/SPEC_BACKLOG.md` "Customer channel security"), card limit counters read without lock, PgBouncer transaction-pooling
+caveat of `TenantAwareDataSource`, agent-app BFF, per-tenant-only applicant start limits, `price_plan` global catalogue.
+
+## Executive summary
+
+The platform's core guardrails are sound: SQL is parameterised everywhere (identifiers are allow-listed against
+`information_schema`), PostgreSQL row-level security is applied to every tenant table and services run as a
+non-owner role, the tenant is taken only from the JWT (or `X-Tenant-Id` for `meridian:internal` tokens only), all HMAC
+comparisons are constant-time, AES-GCM uses fresh random IVs, OTPs/PINs/API keys are hashed, and list limits are capped.
+No customer-reachable SQL injection, RLS bypass or tenant-header spoofing was found.
+
+The serious problems sit in four clusters:
+
+1. **Committed secrets reach production (Critical).** A stock Helm deployment never overrides the card-vault master key
+   or the provider-callback HMAC secrets, and nothing fails at startup. Every vaulted PAN/CVV/PIN key derives from a
+   value in git (SEC-01), and anyone can forge signed rail callbacks — e.g. a `pacs.008` that credits any account
+   (SEC-02).
+2. **Maker-checker can be routed around (High).** Any `platform:write` user can open an approval request for any
+   resource type with any payload and no amount (lightest route); identity-service executes `user_role/elevate` and
+   `role/add_permissions` straight from that payload (SEC-03). Ledger account PATCH changes overdraft limits directly,
+   bypassing the deposit overdraft approval (SEC-12).
+3. **Money-integrity races and unbound FX (High).** Journal reversal, payment returns/refunds and wallet reversals all
+   check "not yet reversed" on an unlocked read and then post via a separate key, so concurrent calls double-post
+   (SEC-05/06/07). A payment can consume any FX quote regardless of amount/currency (SEC-04).
+4. **Sensitive-data exposure and SSRF (High).** Live OTPs are stored in plaintext notification bodies and fanned out
+   to audit and webhooks (SEC-10); clear PAN + CVV reveal needs only `cards:write` (SEC-11); file-gateway and webhook
+   endpoints fetch tenant-supplied URLs with no private-address blocking and return the response (SEC-08/09).
+
+Recommended order: SEC-01/02 (startup secret guard + Helm secrets) → SEC-03 (lock approval creation to owning
+services) → SEC-05/06/07/04 (locks/unique indexes, FX binding) → SEC-10/11 → SEC-08/09 (shared outbound URL policy)
+→ SEC-12 and the Medium set.
+
+Counts: **Critical 2 · High 10 · Medium 16 · Low 12.**
+
+## Findings
+
+| ID | Sev | Category (OWASP API 2023) | Location | Description | Exploit scenario | Recommended fix |
+|---|---|---|---|---|---|---|
+| SEC-01 | Critical | API8 Misconfig / crypto | `services/card-vault-service/src/main/resources/application.yml:44`; `.../cardvault/config/CardVaultConfig.java:16`; `infra/helm/meridian/templates/services.yaml:82-103` | Software-HSM master key is committed (`bWVyaWRpYW4tZGV2LXZhdWx0LW1hc3Rlci1rZXktMDE=`); Helm injects no override; no startup guard. All DEK/CVK/ZPK/fingerprint keys derive from it (`SoftwareHsm.java:42-47`). | DB/backup read → offline decryption of every PAN, CVV, expiry; derive CVV2s; wrap PIN blocks under default ZPK. | Remove the default; fail startup in `jwt` mode when the key is missing/known-dev; inject from KMS/HSM via `secretKeyRef`; rotate all vaulted data. |
+| SEC-02 | Critical | API2 Broken authentication | `services/routing-service/src/main/resources/application.yml:44`; `.../routing/config/RoutingProperties.java:47-49`; `.../routing/application/InboundService.java:77,179-191` (+ card-service, card-threeds, card-tokenization, card-authorization JIT, loan-origination, document e-sign, file-gateway `FileStore.java:37`, audit, statement, onboarding, analytics, webhook encryption key) | `[public]` callback HMAC secrets, CAVV/OTP keys and link-signing keys fall back to committed `local-dev-*`/`change-me` values; Helm sets none; one global rail secret for every rail. | Unauthenticated POST of a signed `pacs.008` to `/v1/payment-rails/{id}/inbound` → inbound credit to any account; forged `pacs.002` settles/rejects outbound payments; forged 3DS/tokenisation/e-sign callbacks; mint never-expiring file links. | One libs startup guard: refuse to boot in `jwt` mode when any secret property is unset, short or matches a dev pattern; add all to Helm secrets; per-rail/per-provider secrets. |
+| SEC-03 | High | API5 BFLA / business logic | `services/workflow-service/.../application/ApprovalService.java:68-131`; `.../domain/ApprovalRoute.java:127`; `libs/meridian-approvals/.../ApprovalEventsDispatcher.java:52-66`; `services/identity-service/.../application/ApprovalExecutor.java:36-57`; `.../UserRoleService.java:122-150` | `POST /v1/approval-requests` (`platform:write`) accepts any `resource_type/action/payload/amount`; omitting `amount` drops amount-gated levels; dispatcher routes by `resource_type` only; identity executes elevate/add-permissions from the payload without re-checking privileged role, max duration or requester. Most handlers do not bind `approvalRequestId` to a request they opened. | Maker posts `{resource_type:user_role, action:elevate, payload:{user_id:<self>, role_id:<admin>, duration_minutes:10000000}}` with a benign title; any colleague approves → near-permanent admin. Same for `role/add_permissions`, float requests, payouts. | Only internal tokens may create requests for service-owned resource types (record creator `azp`); handlers apply only when `d.approvalRequestId()` equals the id stored on the resource; derive `amount` server-side; identity re-validates at execution. |
+| SEC-04 | High | Business logic / money | `services/payment-service/.../PaymentProcessor.java:148-152,598-611,663-670`; `services/fx-service/.../QuoteService.java:111-142` | FX quote accepted for a payment is never compared with the payment's amount/currency, nor bound to customer/account; `instructed_amount` is overwritten with the deal's buy side while the debit uses `p.amount`. | Quote "sell 10,000 USD → buy 9,200 EUR", payment of 1.00 USD with that `fx_quote_id`: debtor pays 1 USD, bank books a 10,000 USD deal, rail instructs 9,200 EUR. Approval thresholds are evaluated on 1 USD. | Require quote sell currency/amount == payment currency/amount (or derive amount from the quote); bind quotes to debtor account/customer; re-check at execute. |
+| SEC-05 | High | Money integrity (race) | `services/ledger-service/.../application/PostingService.java:170-193`; `.../LedgerStore.java` `reversalOf`; `generated/db/ledger_db/V001__init.sql:204` | "Already reversed" check is an unlocked read; `reversal_of_id` index is not unique; account locks are taken only inside `post()`. | Two concurrent `POST /journal-entries/{id}/reverse` with different keys → two reversals, customer credited/debited twice. | Unique partial index on `journal_entry(reversal_of_id) WHERE reversal_of_id IS NOT NULL` (map to 409), or `SELECT … FOR UPDATE` the original first. |
+| SEC-06 | High | Money integrity (race) | `services/payment-service/.../ReturnService.java:56-105` (returnInbound), `:124-170` (inboundReturn/creditBack), `:335-346` (refund) | Status checked on unlocked read; return row inserted, ledger posted with per-return key, status flipped only afterwards. | Two concurrent return requests (or concurrent pacs.004 redelivery) → customer debited / debtor credited twice; concurrent refunds exceed the payment amount. | Lock payment and insert a PENDING return in one tx before posting; deterministic ledger key per payment; lock while summing refunds. |
+| SEC-07 | High | Money integrity (race) | `services/wallet-service/.../TransactionEngine.java:768-835` | Remaining reversible amount computed on unlocked read; after posting, `reversed_amount = cur + amt` without re-validation. | Two parallel full reversals (two operators, or direct + approval handler) → payee debited twice, `reversed_amount` = 2× amount. | Re-check remaining amount under the row lock and reserve (status REVERSING) before posting; deterministic ledger key. |
+| SEC-08 | High | API7 SSRF | `services/file-gateway-service/.../infrastructure/ContentFetcher.java:17-18,32-36`; `.../api/InboundFilesController.java:52-55`; `.../application/InboundService.java:98-102` | `content_url` accepts any http(s) host, follows redirects, stores the body and exposes it via signed download. | `operations:write` user uploads `content_url=http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>` then downloads the file → cloud credentials / internal actuator data. | Shared `OutboundUrlPolicy` in libs: https only, resolve and reject loopback/private/link-local/CGNAT/ULA/metadata/IPv4-mapped, pin resolved IP, no redirects (or re-validate each hop), per-channel host allow-list; or egress proxy. |
+| SEC-09 | High | API7 SSRF | `services/webhook-service/.../domain/WebhookRules.java:17-41`; `.../infrastructure/WebhookHttpSender.java:30-35`; `DeliveryService.java:241` | Endpoint URL check is scheme/host-present only (no IP/DNS check); up to 4 KB of the response is stored and readable via delivery attempts; `/test` sends on demand. | Register `https://<internal-svc>` or a name resolving to 10.x/127.0.0.1, call `/test`, read the response body / error (internal scan + data read). | Apply SEC-08 policy at create, update and connect time; store only status (no body) for non-2xx/private targets. |
+| SEC-10 | High | API3 Excessive data exposure | `services/card-threeds-service/.../infrastructure/Downstream.java:62-72`; `services/card-tokenization-service/.../Downstream.java:71`; `services/payment-service/.../PayeeService.java:354-360`; `services/onboarding-service/.../ApplicantService.java:358`; `services/notification-service/.../NotificationService.java:217-234`; `DeliveryService.java:90-118` | OTPs passed as template variables; notification-service stores the rendered body in plaintext, returns it on `GET /v1/notifications` (`platform:read`) and publishes it in `platform.notification.*` events consumed by audit (immutable) and webhook fan-out. | Staff user or a webhook subscriber reads a live 3DS / token step-up / onboarding OTP and completes the challenge (SCA bypass, CNP fraud). | Mark secret variables; render only at send; persist a redacted body; strip body/destination from events; purge existing rows/audit copies. |
+| SEC-11 | High | API5 BFLA / PCI | `generated` `CardVaultApi` (reveal/lookup/verify/pin/pin-unblock/rotate-keys all `cards:write`); `services/card-vault-service/.../application/VaultService.java:111-155`; `CardVaultController.java:64-68` | Clear PAN + CVV + expiry returned when `public_key` is omitted; `purpose` and step-up not enforced; same scope that routine card servicing uses; vault is routed through the edge gateway. CVV2 is stored at all. | Any console user with `cards:write` dumps PAN/CVV of every card in the tenant; resets PIN tries; rotates keys. | Dedicated `cards:vault-reveal` (+ step-up `amr` check) and `cards:vault-admin` scopes; verify/lookup/pin internal-only; mandatory `public_key`; do not expose vault via the gateway; do not retain CVV2 post-issuance (PCI DSS 3.3.1). |
+| SEC-12 | High | API6 sensitive business flow / mass assignment | `services/ledger-service/.../application/AccountService.java:141-160` | Ledger account PATCH accepts `overdraft_limit`, `allow_negative`, `min_balance`, `currency`, `ledger_id`, `owner_id`, `closed_at` (only `status` is stripped). This bypasses deposit-service's maker-checker overdraft flow (G11) and can change the currency/ledger of an account with balances. | Single insider with `ledger:write` sets `overdraft_limit=1e9` on an account they control and withdraws. | Make `currency`, `ledger_id`, `owner_*`, `normal_balance` immutable; route limit/negative changes through an idempotent, approval-gated action callable only by deposit-service (internal token). |
+| SEC-13 | Medium | API8 Misconfig | every `services/*/src/main/resources/application.yml:37`; `libs/meridian-web/.../MeridianWebAutoConfiguration.java:69-70`; `.../tenancy/TenantFilter.java:51-55` | `security-mode: dev` is the default: all requests permitted, tenant/user/roles from headers, scopes skipped. Only the Helm ConfigMap sets `jwt`; the gateway forwards `X-Tenant-Id`, `X-User`, `X-Roles`, `X-MFA-Verified`, `X-On-Behalf-Of-Customer` unchanged. | Any deployment path missing `MERIDIAN_SECURITY_MODE` is fully open behind the gateway. | Default to `jwt`; allow `dev` only with an explicit local profile; strip internal headers at the gateway. |
+| SEC-14 | Medium | API2 / API5 | `libs/meridian-web/.../MeridianWebAutoConfiguration.java:81`; `web/developer-portal/src/lib/auth.ts:31`; `web/agent-app/src/lib/auth.ts:36`; `infra/local/keycloak/meridian-realm.json:417,442` | No `aud` validation; developer portal and agent-app sign in with the staff console client whose default scopes are every `domain:*` plus `meridian:admin`; password grant enabled. | External developer signs in to the portal and receives a token valid on every operator API incl. admin operations. | Per-app clients with minimal scopes; role-gated domain scopes; validate `aud` per service; disable direct access grants. |
+| SEC-15 | Medium | API1 BOLA / API5 | `generated/db/tenant_db/V001__init.sql:79` (no RLS on `tenant`, `cell`, `tenant_placement`); generated `TenantsApi.java:157,195` (`platform:read`, default CRUD); `libs/meridian-web/.../security/ScopeInterceptor.java:41` | Tenant registry (names, legal names, contact emails, cells, placements) of all banks is readable by any tenant's staff. `meridian:admin` is both "tenant superuser" (satisfies every scope) and "platform operator" (global writes, tenant suspend/migrate) and is not bound to a platform tenant. | Bank A's staff lists all other tenants; a tenant admin holding `meridian:admin` can suspend another tenant or edit global calendars/MCC codes. | Separate `platform:operator` scope valid only with the platform-operator tenant claim; operator-only reads of global tables (as `EodSweepsController.requireOperator` already does). |
+| SEC-16 | Medium | API4 Resource consumption | `platform/edge-gateway/.../ProxyController.java:94-103`; `services/onboarding-service/.../OnboardingApplicantController.java:175-187`; `.../ApplicantService.java:133-152,307-361` | Gateway copies client `X-Forwarded-For` and appends (does not overwrite); onboarding reads first hop; device limiter keyed on client-chosen fingerprint. Default config instead puts all applicants in one bucket (gateway IP). | Unlimited anonymous starts × 5 OTP sends to arbitrary numbers → SMS pumping/toll fraud; or trivial DoS of a tenant's onboarding. | Gateway drops inbound `X-Forwarded-*`/`Forwarded` and sets its own; take right-most trusted hop; edge rate limits per IP and per destination number; global OTP quotas. |
+| SEC-17 | Medium | API2 | `services/channel-service/.../GatewayCallbacks.java:31-40`; `services/card-service/.../CardOrdersController.java:72-77`; `services/card-tokenization-service/.../CardTokensController.java:65-75`; `services/card-threeds-service/.../ThreedsAuthenticationsController.java:52-67`; `services/kyc-service/.../CheckService.java:201-225`; `services/loan-origination-service/.../CallbackSecurity.java:41`; `services/interop-service/.../CallbackService.java:60-70` | Callback HMACs cover the body only: no timestamp/nonce (replayable forever), tenant from unsigned `?tenant_id`; 3DS result signature covers only `dsTransactionId` (static bearer value returning the CAVV); KYC signs only `reference:status` (score/reason codes unsigned); one secret shared by all lending providers. | Replay a captured callback; alter unsigned KYC fields; one provider forges another's e-sign SIGNED event. | Sign `timestamp.tenant.body`, ±5 min skew, nonce/event-id cache, per-provider/per-tenant secrets, sign all applied fields. |
+| SEC-18 | Medium | API7 SSRF (blind) | `services/kyc-service/.../HttpProviderAdapter.java:50,77`; `ProviderService.java:108-111`; `services/routing-service/.../AdapterService.java:45-58`; `services/card-service/.../ProgramService.java:166-168`; `services/card-authorization-service/.../JitHttpClient.java:42-60`; `services/notification-service/.../SmtpEmailAdapter.java:77-84` | Tenant-configured provider URLs (KYC base_url, rail endpoint_url, JIT webhook — http allowed, SMTP host/port) are called without address checks; status/error text stored (port-scan oracle). JIT decisions over http are unauthenticated. | Internal network scanning; MITM approves card authorisations over plain-http JIT. | SEC-08 policy; https-only JIT with signed responses. |
+| SEC-19 | Medium | Idempotency | `libs/meridian-web/.../idempotency/Idempotency.java:37-61`; ledger `PostingService.java:61-64`; `HoldService.java:55-58` | Keys scoped to (tenant, key); fingerprint is the body only (no method/route/path id/principal). ~176 action call sites pass only the body. Ledger post/hold replay by key without comparing the request. | Same key + same body on a different resource id silently replays the first response (second action never runs); a different user reusing a key gets another user's stored response; ledger replays mismatched lines without 422. | Fingerprint method + route template + path ids + principal + body; store/compare request hash on `journal_entry` and `hold`. |
+| SEC-20 | Medium | Mass assignment / four-eyes | `services/deposit-service/.../api/AccountRateOverridesController.java:36-57`; generated default `accountRateOverridesUpdate` (not overridden); `.../application/InterestService.java:91-96`; `.../domain/InterestCalculator.java:74-84` | Rate overrides take effect immediately with no approval although the table has `approval_request_id`; `rate_adjustment` is unbounded; the generated PATCH skips all create validation. Product cap clamps only when one is configured. | Insider sets a 100% credit rate (or adjustment) on a colluding account; EOD accrues and capitalises interest. | Override `update`; route create/update through central approvals; bound `rate_adjustment`; make the record immutable after approval. |
+| SEC-21 | Medium | Four-eyes | `services/wallet-service/.../TransactionEngine.java:778-783`; `.../api/WalletTransactionsController.java:118-124` | Direct reverse only requires caller ≠ original initiator; customer/agent/merchant transactions are never staff-initiated, so one staff member can reverse any of them. | Single insider reverses a customer's received transfer. | Require a prior reversal request by a different user (or always go through request-reversal / central approval). |
+| SEC-22 | Medium | Web security headers | `web/meridian-console/next.config.ts`, `web/developer-portal/next.config.ts` (no `headers()`); `web/agent-app/next.config.ts:38-46`; `web/developer-portal/.../console/try/page.tsx:66-72` | No `frame-ancestors`/`X-Frame-Options`, CSP, nosniff, Referrer-Policy; portal "try" page pre-fills method/path/body from the query string. | Clickjacking an operator into approving/sending; framed pre-filled destructive API call with the user's token. | Strict CSP with `frame-ancestors 'none'`, `nosniff`, Referrer-Policy on all apps; no write-request prefill from URL. |
+| SEC-23 | Medium | Client-side crypto | `web/agent-app/src/lib/outbox/crypto.ts:11,47-56`; `outbox.ts:82-152`; `components/ui.tsx:99` | Offline outbox key = PBKDF2(PIN of ≥1 digit) with a known-plaintext check value stored beside the salt. | Stolen device: 4–6 digit PIN brute-forced offline in minutes → queued customer PII/ID photos. | ≥6 digits or passphrase; wrap with non-extractable WebCrypto/WebAuthn device key; wipe after N failures. |
+| SEC-24 | Medium | Card fraud controls | `services/card-vault-service/.../VaultService.java:184-187`; `services/card-authorization-service/.../AuthDecisionEngine.java:257-258` | No per-card CVV2 failure counter/block. | Distributed card testing enumerates the 1,000 CVV2 values. | Count failures per card, block/alert after N, reset on success. |
+| SEC-25 | Medium | Secret storage | `services/identity-service/.../MfaService.java:73-74,97-101` | Staff TOTP seed stored in plaintext in `totp_seed_enc`; no attempt counter or used-step tracking on verify. | DB read → clone every staff MFA factor. | AES-GCM under KMS key (AAD = factor id); record last step; attempt limit. |
+| SEC-26 | Medium | API4 | gateway + all services (no body cap); `services/file-gateway-service/.../FormatService.java:114-116`; `InboundService.java:87`; `OutboundService.java:84`; public callback raw-body wrappers (e.g. `ThreedsConfig.java:41`) | No request-size limit at gateway/Tomcat/Jackson; base64 decoded before size check. | Unauthenticated multi-hundred-MB POSTs to public endpoints exhaust heap. | Route-level caps at gateway and `server.tomcat.max-swallow-size`/`max-http-form-post-size`, Jackson `maxDocumentLength`, check encoded length first. |
+| SEC-27 | Medium | Third-party trust | `services/openbanking-service/.../application/TppService.java:69-81,295-303`; `.../domain/SoftwareStatement.java:43-64` | TPP SSA verified with the key of the certificate the registrant supplies; no QTSP trust anchor, path validation or revocation check. | Self-signed cert with forged PSD2 QCStatement passes role/org checks (false assurance for staff registration). | PKIX validation against configured eIDAS/QTSP anchors, OCSP/CRL, SSA signed by the directory. |
+| SEC-28 | Medium | Money integrity (race) | `services/payment-service/.../PaymentProcessor.java:829-836`; `services/routing-service/.../InboundService.java:93-101` | Inbound dedupe is a non-locking select (e2e + rail + amount / MsgId); `NOTPROVIDED` e2e values can collide. | Concurrent duplicate `pacs.008` deliveries across routing replicas double-credit; distinct equal-amount credits wrongly deduped. | Unique index on (tenant, rail, message_id/transaction_id) with on-conflict handling. |
+| SEC-29 | Low | API5 (defence in depth) | `libs/meridian-web/.../security/ScopeInterceptor.java:31-36` | Handlers without `@RequiredScope` are allowed for any authenticated token. Not exploitable today (all 473 controllers implement generated interfaces; only `[public]` ops lack scopes). | A future hand-written endpoint is silently open. | Deny by default; explicit `@PublicEndpoint` marker. |
+| SEC-30 | Low | API4 ReDoS | `UssdEngine.java:270`; biller `ReferenceValidator.java:28`; insights `MatchRules.java:26`; config `JsonSchemaValidator.java:84`; `CustomFieldRules.java:110`; file-gateway `FileRules.java:41`, `LayoutValidator.java:147` | Tenant-admin regexes run on user/public input with no timeout or input cap in JVMs shared by all tenants. | One catastrophic pattern pins shared CPU (cross-tenant DoS). | RE2/J or bounded matcher; validate patterns on save; cap input length. |
+| SEC-31 | Low | API8 | `platform/edge-gateway/src/main/resources/application.yml:23` | Gateway exposes `/actuator/metrics` without auth through the ingress. | Route/latency/error reconnaissance. | Expose health only, or separate management port. |
+| SEC-32 | Low | Audit integrity | `services/card-vault-service/.../api/CardVaultController.java:134-137` | PCI access log `caller_service` taken from client `X-Caller-Service` header. | Staff attributes vault reads to another service (user still logged). | Use token `azp` for internal tokens only. |
+| SEC-33 | Low | Data at rest (PWA) | `web/agent-app/public/sw.js` | Reference cache (agent profile, outlets, float) keyed by path, cleared only on explicit sign-out. | Next user on a shared device sees previous agent's data offline. | Partition by tenant+agent; clear on every sign-in. |
+| SEC-34 | Low | Idempotency hygiene | `libs/meridian-web/.../idempotency/Idempotency.java:39-75`; `idempotency_key` tables | Rows (with response bodies, possibly PII) kept forever; a crash between claim and completion leaves the key "in progress" permanently. | Unbounded growth; permanent 409 for a key. | TTL purge in EOD pack; expire stale in-progress claims. |
+| SEC-35 | Low | Four-eyes hardening | `deposit/AccountSupport.java:185`, `wallet/WalletService.java:154`, `kyc/KycRules.java:95`, `loan-origination/Support.java:96`, `pricing-rules/VersionLifecycle.java:57`, `card-clearing/FeeService.java:114`, `tenant/ModuleService.java:114`, `onboarding/Events.java:59`; `identity/ApprovalExecutor.java:19,60` | `maker != null && maker.equals(checker)` passes when maker is null (fail-open); identity treats `service:` as non-human while `TenantFilter` issues `svc:`. | Any path that leaves maker unset allows self-approval. | Fail closed on null maker; one shared principal helper. |
+| SEC-36 | Low | Signed links | `services/file-gateway-service/.../FileStore.java:94-103`; `.../api/Http.java:30-35` | `readSigned` has no max-expiry cap and does not refuse quarantine keys; links built from request Host. | Leaked/forged links never expire; host-poisoned links. | Cap `expires` at now+TTL; refuse quarantine paths; configured public base URL. |
+| SEC-37 | Low | Key separation | `services/card-vault-service/.../SoftwareHsm.java:42-47`; `KeyService.create` | Same derived key material across tenants for default labels; tenant-chosen labels can collide with internal ones (AAD prevents direct cross-tenant decrypt today). | Weakens isolation if AAD is ever relaxed. | HKDF with tenant id + key type; reserved label namespace. |
+| SEC-38 | Low | Spoofing | `services/notification-service/.../SmtpEmailAdapter.java:51-53,74-76` | Platform SMTP relay accepts tenant `sender_id` as From. | Tenant sends mail as another bank's domain via the shared relay. | Verified sender domains per tenant. |
+| SEC-39 | Low | SSRF (admin) | `services/sanctions-service/.../Downstream.java:22-23,64-66` | `source_url` (meridian:admin) follows redirects, unbounded body. | Operator-level SSRF / memory exhaustion. | SEC-08 policy + size cap. |
+| SEC-40 | Low | Availability | `services/card-vault-service/.../VaultService.java:308-327` | PAN DEK rotation re-encrypts every record in one transaction within one HTTP request. | Long locks/timeouts on large tenants. | Background batched rotation. |
+
+## Critical and High — detail
+
+### SEC-01 Card-vault master key is a committed constant (Critical)
+
+`application.yml:44` sets `meridian.cards.vault.master-key` to a base64 dev constant. `CardVaultConfig.hsm()` reads it with
+an empty default and `SoftwareHsm` only checks that it is non-blank and 32 bytes (`SoftwareHsm.java:31-37`), so the
+committed value is accepted. The Helm deployment template (`services.yaml:82-103`) injects datasource, Flyway and
+service-client secrets only; neither `values.yaml` nor `config.yaml` sets `MERIDIAN_CARDS_VAULT_MASTER_KEY`. A stock
+install therefore encrypts real card data under a key published in git. Every derived key (PAN DEK, CVK, ZPK,
+fingerprint key — `SoftwareHsm.java:42-47`) inherits the exposure; AAD values are stored alongside ciphertext, so a
+database or backup read is sufficient to decrypt `card_data_vault`. Fix as in the table and treat as a PCI incident if
+any non-local environment ran with it.
+
+### SEC-02 Provider-callback secrets default to committed values (Critical)
+
+`routing-service` resolves `callback-secret: ${MERIDIAN_ROUTING_CALLBACK_SECRET:local-dev-rail-callback-secret}`
+(`application.yml:44`) and `RoutingProperties.secretFor` falls back to that single secret for every rail
+(`:47-49`). `InboundService.receiveAsTenant` verifies `X-Rail-Signature` with it (`:77`), then for `pacs.008` posts to
+payment-service `/v1/payments/inbound` (`:179-191`) — an inbound credit; for `pacs.002` it applies status reports to
+outbound payments (`:153`). The endpoint is `[public]` (permitAll) and needs only the rail UUID. The same pattern
+(committed default, no Helm override, no startup guard) applies to the card-service bureau callback, 3DS callback/CAVV
+and OTP keys, tokenisation, card-authorization JIT, loan-origination bureau/e-sign, document e-sign, file-gateway blob
+signing (`FileStore.java:37`), audit/statement download links, onboarding OTP/resume tokens, analytics embed and webhook
+secret encryption. Fix: a single `SecretGuard` in libs/meridian-web that fails startup in `jwt` mode for any configured
+secret property that is blank, < 32 bytes, or matches `dev|change-me|local`; list all of them in Helm `secretKeyRef`s.
+
+### SEC-03 Forged central approval requests (High)
+
+`ApprovalService.create` (workflow-service) is reachable by any `platform:write` user. The caller controls
+`resource_type`, `resource_id`, `action`, `payload`, `title/summary` and the optional `amount`; `maker` is set from the
+principal (correct), but nothing restricts creation to the service that owns the resource. `ApprovalRoute.forAmount(levels,
+null)` keeps only levels without a `min_amount`; with no policy the route is a single unrestricted level.
+`ApprovalEventsDispatcher.dispatch` selects the handler by `resource_type` alone. identity-service's handlers
+(`IdentityApprovals.java:71-77`) call `ApprovalExecutor.applyApproved`, which executes `user_role/elevate` via
+`UserRoleService.grantElevation` — this re-checks only user ACTIVE and segregation of duties, not that the role is
+privileged, the duration ≤ max, or that the elevated user is the requester (all enforced only in `requestElevation`).
+`role/add_permissions` grants arbitrary permission ids. Result: a maker plus one approver (deceived by a free-text title
+or colluding) yields a permanent privileged role. Money handlers mostly re-check local pending state (payments, limits
+with approval id, loan restructure, config), but several (e.g. agent float requests) accept a copied payload fingerprint.
+Fix: record the creating client (`azp`) and accept user-token creates only for workflow-owned types; handlers require
+`d.approvalRequestId()` to equal the id stored on the resource; compute `amount` server-side; identity re-validates.
+
+### SEC-04 FX quote not bound to the payment (High)
+
+At initiation `PaymentProcessor` only requires `instructed_currency != currency` when `fx_quote_id` is present
+(`:148-152`). At execution it calls `acceptFxQuote` and overwrites `fx_rate`, `instructed_amount`, `instructed_currency`
+from the booked deal (`:598-611`); the hold and debit use `p.amount`/`p.currency` (`:617-620`) and the rail message
+carries both amounts (`:663-670`). `QuoteService.accept` books the deal from the quote's own sell/buy amounts
+(`:111-142`). No code compares quote sell amount/currency with the payment, and quotes are not bound to an account or
+customer, so any active quote in the tenant can fund an arbitrarily small payment. Approval thresholds are evaluated on
+the small `amount`. Becomes customer-exploitable once the channel BFF exposes FX payments.
+
+### SEC-05 / SEC-06 / SEC-07 Double reversal / return / refund races (High)
+
+All three follow the same anti-pattern: check "not yet reversed/returned" on an unlocked read, perform a ledger posting
+under a key derived from a freshly generated row id, and only afterwards transition state.
+- Ledger: `PostingService.reverse` (`:170-193`) → `store.reversalOf` (plain select) → `post(...)`; `reversal_of_id`
+  has a non-unique index (`V001__init.sql:204`). Two calls with different Idempotency-Keys both post.
+- Payments: `ReturnService.returnInbound` checks `SETTLED` on `records.get` (`:57-63`), inserts a new return
+  (`:71-85`), posts `prt-post:<returnId>` (`:88-91`), and transitions to RETURNED only at `:105`. `inboundReturn` /
+  `creditBack` and `refund` have the same shape.
+- Wallet: `TransactionEngine` computes remaining reversible amount unlocked (`:768-784`), posts (`:795`), then
+  `reversed_amount = cur + amt` under lock without re-validation (`:801-835`).
+Fix with a database invariant (unique partial index / CHECK `reversed_amount <= amount`) plus locking the source row
+before posting and deterministic ledger idempotency keys derived from the source entity.
+
+### SEC-08 / SEC-09 SSRF with response read-back (High)
+
+file-gateway `ContentFetcher` uses `Redirect.NORMAL` and validates only the scheme; the fetched bytes are stored
+(`InboundService.java:98-102`) and downloadable through a signed link — a full-read SSRF to cloud metadata and internal
+services. webhook-service `WebhookRules.validateUrl` requires https and a host but performs no address resolution;
+`WebhookHttpSender` stores 4 KB of the response which is readable via delivery attempts, and `/test` triggers delivery on
+demand (https-only narrows but does not remove internal reach: internal TLS services, `kubernetes.default.svc`, DNS
+pointing to private ranges). Both need a shared outbound policy that resolves and checks the address at connect time
+(prevent DNS rebinding by pinning the resolved IP) and refuses redirects.
+
+### SEC-10 OTPs persisted and broadcast in plaintext (High)
+
+card-threeds `Downstream.sendOtp` puts the OTP in `variables.otp` (`:62-72`); notification-service renders the template
+and stores the rendered `body` (`NotificationService.java:217-234`), lists it on `GET /v1/notifications`
+(`platform:read`) and publishes the row in `platform.notification.sent/delivered`, consumed by audit-service
+(append-only, retained) and webhook-service (tenant endpoints). Same for card-tokenisation step-up, payee alias and
+onboarding OTPs. Anyone with platform read access or a webhook subscription can complete a cardholder's 3DS challenge.
+
+### SEC-11 Card vault reveal behind generic `cards:write` (High)
+
+All mutating/revealing vault operations require only `cards:write` — the same scope card servicing staff hold (and, in
+the shipped realm, every console user). `VaultService.reveal` (`:111-155`) returns `pan`, `cvv`, expiry in clear when
+`public_key` is blank; `purpose` is free text; no step-up. Also review storing CVV2 at all after card production (PCI DSS
+3.3.1); CVV2 can be recomputed with the CVK when needed.
+
+### SEC-12 Ledger account PATCH bypasses overdraft approval (High)
+
+`AccountService.update` (`:141-160`) strips only `status` from `LedgerAccountUpdate`, then writes every other column,
+including `overdraft_limit`, `allow_negative`, `min_balance`, `currency`, `ledger_id`, `owner_type/owner_id` and
+`closed_at`, and refreshes `available_balance`. deposit-service routes overdraft changes through maker-checker (G11),
+but a direct ledger PATCH by any `ledger:write` holder achieves the same without approval. Severity assumes
+`ledger:write` is held by staff (it is, in the shipped realm); if restricted to service clients this drops to Medium.
+
+## Verified OK (brief)
+
+- **Injection.** `CrudEngine` places only identifiers that exist in `information_schema` for the table and match
+  `[a-z][a-z0-9_]*` (`CrudEngine.java:33,268-295`); filters/sort are fixed by generated parameter names; values are bind
+  parameters; writes use `json_populate_record` with a bound JSON string; keyset cursor is a decoded UUID bound as
+  `?::uuid`; limits clamp to 1..200 (`Cursor.java:28-33`). Service SQL: concatenated identifiers are constants or
+  allow-listed; search uses bound FTS parameters; analytics saved queries run an in-memory DSL (no user SQL).
+- **Tenant isolation.** Every tenant table has `ENABLE ROW LEVEL SECURITY` + `tenant_isolation` policy (USING also acts
+  as WITH CHECK); services connect as `meridian_app` (non-owner), Flyway as owner; the only SECURITY DEFINER is routing's
+  documented callback lookup. `TenantAwareDataSource` stamps every checkout (nil UUID when unbound); `TenantFilter` and
+  `TenantContext.callAs` clear in `finally`; all 9 Kafka consumers bind the tenant from the outbox-written `ce_tenantid`
+  header; schedulers switch tenant per iteration; executors use fresh virtual threads. `idempotency_key` queries are
+  explicitly tenant-scoped. Global tables (`sanctions_list`, `holiday_calendar`) filter `owner_tenant_id` correctly; writes
+  need `meridian:admin`.
+- **AuthN/Z plumbing.** JWT mode: tenant only from the claim; `X-Tenant-Id`/`X-User` honoured only for `meridian:internal`
+  tokens (`TenantFilter.java:43-50`); dev headers (`X-Roles`, `X-MFA-Verified`) are read only when `devMode()`; every
+  generated operation carries `@RequiredScope`; only spec-`[public]` routes are `permitAll`; no `/v1/internal/**` routes;
+  gateway path normalisation cannot reach unrouted paths.
+- **Mass assignment (generic).** `toColumns` drops server columns (`id`, `tenant_id`, `created_*`, `updated_*`,
+  `row_version`); generated Create/Update DTOs omit `ro` fields; path params override body; sensitive status/tier fields
+  (customer status, wallet tier, privacy request status, KYC review, etc.) are guarded in overridden controllers.
+- **Public endpoints.** All HMAC/link comparisons use `MessageDigest.isEqual`; missing secret/signature never verifies;
+  raw-body signatures use size-limited caching wrappers; tenant resolution via signed ids or route tables; onboarding
+  applicant tokens are 256-bit random, SHA-256 stored, application-bound, rotating; applicant OTPs hashed with attempt
+  and send limits.
+- **Crypto.** AES-GCM with 12-byte random IV per encryption, AAD binds tenant/token/field; PIN material zeroised,
+  constant-time compared, try-limited under row lock; customer PIN PBKDF2 210k, wallet PIN PBKDF2 120k with lockout in its
+  own transaction; API keys/client secrets 256-bit, SHA-256 stored, not stored in idempotency replay; no `java.util.Random`
+  for security values; no PAN/OTP/token/secret in log statements.
+- **Money basics.** Ledger lines positive and balanced per currency, line currency = account currency, accounts locked in
+  sorted order, funds checked under lock; holds lock hold + account, capture ≤ remaining; payments validate amount/currency,
+  reject same-account transfers; wallet amounts positive with minor-unit check, reversal-of-reversal blocked; FX quote
+  accept is locked and single-use; limits reservations locked; BigDecimal division uses a MathContext; workflow-service
+  checker rules (maker excluded, one decision per user, per-level roles, step-up MFA) are correct for genuine requests.
+- **Web apps.** Tokens in `sessionStorage` (not `localStorage`); auth code + PKCE (S256) with state check; fixed callback
+  routes, portal return-to restricted to `/console`; no `dangerouslySetInnerHTML`/`innerHTML` sinks with data; only
+  non-secret `NEXT_PUBLIC_*` values; customer-web service worker never caches `/v1`, `/auth` or credentialed requests;
+  agent-app outbox uses AES-GCM with per-record IV and record-id AAD.
