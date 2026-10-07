@@ -10,10 +10,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * deposit-service settings ({@code meridian.deposit.*}).
  *
  * @param ledgerId          ledger book that holds customer deposit accounts and the GL accounts below
- * @param country           booking country (ISO 3166 alpha-2) used for IBAN generation
- * @param bankCode          bank identifier inside the BBAN (e.g. "MERI" for GB, BLZ for DE)
- * @param branchCode        branch / sort code inside the BBAN where the country uses one
- * @param accountNumberLength default account number length (incl. Luhn check digit) when no IBAN format applies
+ * @param country           single-tenant fallback: the country whose legal entities may use the three numbering values
+ *                          below when the tenant's numbering settings (config-service namespace account_numbering) do
+ *                          not set them; never applied to a legal entity of another country (unset by default)
+ * @param bankCode          fallback bank identifier inside the BBAN / national number (e.g. "MERI" for GB, BLZ for DE)
+ * @param branchCode        fallback branch / sort code where the country's format uses one
+ * @param accountNumberLength fallback length of a generic national account number (incl. check digit)
  * @param gl                internal ledger accounts used as counterparties
  * @param withholdingTaxRate default withholding tax on credit interest when the product snapshot has none
  * @param holidays          public holidays for business-day adjustment (weekends are always non-business days)
@@ -27,10 +29,6 @@ public record DepositProperties(UUID ledgerId, String country, String bankCode, 
                                 List<LocalDate> holidays, Dormancy dormancy, Integer maxPotsPerAccount, Batch batch) {
 
     public DepositProperties {
-        country = country == null ? "GB" : country;
-        bankCode = bankCode == null ? "MERI" : bankCode;
-        branchCode = branchCode == null ? "000001" : branchCode;
-        accountNumberLength = accountNumberLength == null ? 10 : accountNumberLength;
         gl = gl == null ? new Gl(null, null, null, null, null) : gl;
         withholdingTaxRate = withholdingTaxRate == null ? BigDecimal.ZERO : withholdingTaxRate;
         holidays = holidays == null ? List.of() : List.copyOf(holidays);

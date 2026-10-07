@@ -152,6 +152,10 @@ class DepositFlowIT {
         when(serviceClient.get(anyString(), anyString())).thenAnswer(i -> {
             String service = i.getArgument(0);
             String path = i.getArgument(1);
+            if ("tenant-service".equals(service) && path.startsWith("/v1/legal-entities/")) {
+                // a GB legal entity without numbering settings: the deployment's GB bank / sort code apply
+                return json.readTree("{\"id\":\"" + path.substring(19) + "\",\"code\":\"MAIN\",\"country\":\"GB\"}");
+            }
             return "product-catalog-service".equals(service) ? catalog(path) : ledger.get(service, path);
         });
     }

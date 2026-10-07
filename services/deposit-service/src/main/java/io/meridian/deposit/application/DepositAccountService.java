@@ -15,11 +15,11 @@ import io.meridian.deposit.config.DepositProperties;
 import io.meridian.deposit.domain.AccountNumbers;
 import io.meridian.deposit.domain.AccountRestrictions;
 import io.meridian.deposit.domain.Currencies;
+import io.meridian.deposit.domain.NumberingRule;
 import io.meridian.deposit.domain.Schedule;
 import io.meridian.deposit.infrastructure.ProductCatalogClient;
 import io.meridian.deposit.infrastructure.Rows;
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -27,7 +27,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -52,15 +51,17 @@ public class DepositAccountService {
     private final Events events;
     private final DepositProperties props;
     private final ProductCatalogClient catalog;
-    private final SecureRandom random = new SecureRandom();
     private final Approvals approvals;
+    private final AccountNumbering numbering;
 
     /** Approval resource type for account openings in workflow-service (G11). */
     public static final String APPROVAL_RESOURCE = "deposit_account";
 
     public DepositAccountService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events,
-                                 DepositProperties props, ProductCatalogClient catalog, Approvals approvals) {
+                                 DepositProperties props, ProductCatalogClient catalog, Approvals approvals,
+                                 AccountNumbering numbering) {
         this.approvals = approvals;
+        this.numbering = numbering;
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
@@ -96,26 +97,31 @@ public class DepositAccountService {
         snapshot.rate("OVERDRAFT_INTEREST");
         v.set("product_terms", terms);
 
-        String number = uniqueAccountNumber();
-        v.put("account_number", number);
+        // Identifiers follow the booking legal entity: its country's scheme, bank / branch codes and BIC.
+        NumberingRule rule = numbering.rule(uuid(v, "legal_entity_id"), uuid(v, "branch_id"));
+        NumberingRule.Numbers numbers = numbering.allocate(rule);
+        v.put("account_number", numbers.accountNumber());
+        if (numbers.bic() != null) {
+            v.put("bic", numbers.bic());
+        }
         String iban = str(v, "iban");
         if (iban == null || AUTO.contains(iban.trim().toUpperCase(Locale.ROOT))) {
-            Optional<String> built = safeIban(number);
-            if (built.isPresent()) {
-                v.put("iban", built.get());
-                v.put("bban", built.get().substring(4));
+            if (numbers.iban() != null) {
+                v.put("iban", numbers.iban());
             } else {
                 v.remove("iban");
             }
+            v.put("bban", numbers.bban());
         } else {
             String normalised = iban.replace(" ", "").toUpperCase(Locale.ROOT);
-            if (!AccountNumbers.isValidIban(normalised)) {
-                throw ApiException.unprocessable("invalid_iban", "iban " + iban + " fails the ISO 13616 mod-97 check");
+            Integer expected = normalised.startsWith(rule.country()) ? rule.ibanLength() : null;
+            if (!AccountNumbers.isValidIban(normalised, expected)) {
+                throw ApiException.unprocessable("invalid_iban", "iban " + iban + " fails the ISO 13616 structure or mod-97 check");
             }
             v.put("iban", normalised);
         }
-        if (!v.has("routing_code") && props.branchCode() != null) {
-            v.put("routing_code", props.branchCode());
+        if (!v.has("routing_code") && numbers.routingCode() != null) {
+            v.put("routing_code", numbers.routingCode());
         }
         v.put("status", "PENDING_APPROVAL");
         ObjectNode row = rows.insert(TABLE, v);
@@ -140,25 +146,6 @@ public class DepositAccountService {
         approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
                 "Open " + type + " account " + str(row, "account_number") + " (" + currency + ")", payload), "open:" + id);
         return row;
-    }
-
-    private String uniqueAccountNumber() {
-        int length = AccountNumbers.accountLength(props.country(), props.accountNumberLength());
-        for (int attempt = 0; attempt < 20; attempt++) {
-            String candidate = AccountNumbers.generate(length, random);
-            if (rows.scalar("select 1 from deposit_account where account_number = ?", Integer.class, candidate).isEmpty()) {
-                return candidate;
-            }
-        }
-        throw ApiException.conflict("account_number_exhausted", "Could not allocate a unique account number");
-    }
-
-    private Optional<String> safeIban(String accountNumber) {
-        try {
-            return AccountNumbers.iban(props.country(), props.bankCode(), props.branchCode(), accountNumber);
-        } catch (IllegalArgumentException e) {
-            return Optional.empty();
-        }
     }
 
     private static boolean validCurrency(String c) {
