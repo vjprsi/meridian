@@ -3929,6 +3929,16 @@ API: /v1/journal-entries · Requirements: LED-01, LED-05, LED-06, LED-07
 | hash | varchar(64) | yes |  | hash (read-only) | SHA-256 over this entry and the previous hash (tamper evidence) |
 | prev_hash | varchar(64) | yes |  | prev_hash (read-only) | Hash of the previous journal entry in the ledger |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| uetr | varchar(36) | yes |  | uetr (read-only) | Payment refs (from external_refs): SWIFT gpi / ISO 20022 UETR, lower-case UUID; copied to every ledger entry |
+| end_to_end_id | varchar(35) | yes |  | end_to_end_id (read-only) | Payment refs: ISO 20022 end-to-end id; copied to every ledger entry |
+| instruction_id | varchar(35) | yes |  | instruction_id (read-only) | Payment refs: ISO 20022 instruction id; copied to every ledger entry |
+| bank_reference | varchar(64) | yes |  | bank_reference (read-only) | Payment refs: bank / clearing-system reference (account servicer reference on the statement); copied to every ledger entry |
+| scheme_reference | varchar(64) | yes |  | scheme_reference (read-only) | Payment refs: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id); copied to every ledger entry |
+| batch_id | varchar(64) | yes |  | batch_id (read-only) | Payment refs: batch / bulk payment / settlement file id grouping the postings of one batch booking; copied to every ledger entry |
+| counterparty_name | varchar(140) | yes |  | counterparty_name (read-only) | Payment refs: counterparty (creditor of an outbound, debtor of an inbound payment) name; copied to every ledger entry PII |
+| counterparty_account_hash | varchar(80) | yes |  | counterparty_account_hash (read-only) | Payment refs: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored; copied to every ledger entry |
+| counterparty_account_last4 | varchar(4) | yes |  | counterparty_account_last4 (read-only) | Payment refs: last four characters of the counterparty account (display only); copied to every ledger entry |
+| purpose_code | varchar(35) | yes |  | purpose_code (read-only) | Payment refs: ISO 20022 purpose / category purpose code; copied to every ledger entry |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -3958,6 +3968,17 @@ API: /v1/ledger-entries · Requirements: LED-01, LED-02, LED-03
 | effective_at | timestamptz | no |  | effective_at (read-only) | Copied from the journal entry for range queries |
 | value_date | date | no |  | value_date (read-only) | Copied from the journal entry (reconciliation matches on value date) |
 | reference | varchar(128) | yes |  | reference (read-only) | Copied from the journal entry (reconciliation matches on reference) |
+| entry_type | varchar(40) (JournalEntryType) | yes |  | entry_type (read-only) | Copied from the journal entry (reconciliation pairs reversals) |
+| uetr | varchar(36) | yes |  | uetr (read-only) | Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID |
+| end_to_end_id | varchar(35) | yes |  | end_to_end_id (read-only) | Copied from the journal entry: ISO 20022 end-to-end id |
+| instruction_id | varchar(35) | yes |  | instruction_id (read-only) | Copied from the journal entry: ISO 20022 instruction id |
+| bank_reference | varchar(64) | yes |  | bank_reference (read-only) | Copied from the journal entry: bank / clearing-system reference (account servicer reference on the statement) |
+| scheme_reference | varchar(64) | yes |  | scheme_reference (read-only) | Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id) |
+| batch_id | varchar(64) | yes |  | batch_id (read-only) | Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of one batch booking |
+| counterparty_name | varchar(140) | yes |  | counterparty_name (read-only) | Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment) name PII |
+| counterparty_account_hash | varchar(80) | yes |  | counterparty_account_hash (read-only) | Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored |
+| counterparty_account_last4 | varchar(4) | yes |  | counterparty_account_last4 (read-only) | Copied from the journal entry: last four characters of the counterparty account (display only) |
+| purpose_code | varchar(35) | yes |  | purpose_code (read-only) | Copied from the journal entry: ISO 20022 purpose / category purpose code |
 | account_version | bigint | no |  | account_version (read-only) | Account balance version after this entry (gapless per account) |
 | balance_after | numeric(28,8) | no |  | balance_after (read-only) | Posted balance of the account after this entry |
 | description | varchar(500) | yes |  | description | Line narrative |

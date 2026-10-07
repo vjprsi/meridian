@@ -40452,6 +40452,41 @@ paths:
         schema:
           type: string
           maxLength: 128
+      - name: uetr
+        in: query
+        schema:
+          type: string
+          maxLength: 36
+      - name: end_to_end_id
+        in: query
+        schema:
+          type: string
+          maxLength: 35
+      - name: instruction_id
+        in: query
+        schema:
+          type: string
+          maxLength: 35
+      - name: bank_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: scheme_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: batch_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: counterparty_account_hash
+        in: query
+        schema:
+          type: string
+          maxLength: 80
       - name: custom_field_1
         in: query
         schema:
@@ -41056,7 +41091,8 @@ paths:
   /v1/holds/{id}/capture:
     post:
       operationId: holdsCapture
-      summary: 'Capture all or part of a hold: debit the held account, credit the counter account'
+      summary: 'Capture all or part of a hold: debit the held account, credit the counter account (reference and external_refs
+        as on POST /v1/journal-entries)'
       tags:
       - Holds
       security:
@@ -157220,6 +157256,102 @@ components:
           maxLength: 128
           description: Copied from the journal entry (reconciliation matches on reference)
           readOnly: true
+        entry_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          description: Copied from the journal entry (reconciliation pairs reversals)
+          readOnly: true
+        uetr:
+          type:
+          - string
+          - 'null'
+          maxLength: 36
+          description: 'Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID'
+          readOnly: true
+        end_to_end_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Copied from the journal entry: ISO 20022 end-to-end id'
+          readOnly: true
+        instruction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Copied from the journal entry: ISO 20022 instruction id'
+          readOnly: true
+        bank_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Copied from the journal entry: bank / clearing-system reference (account servicer reference on the
+            statement)'
+          readOnly: true
+        scheme_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction
+            id)'
+          readOnly: true
+        batch_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of
+            one batch booking'
+          readOnly: true
+        counterparty_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: 'Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment)
+            name'
+          readOnly: true
+        counterparty_account_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: 'Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>,
+            meridian.refs.counterparty-key); the account itself is never stored'
+          readOnly: true
+        counterparty_account_last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: 'Copied from the journal entry: last four characters of the counterparty account (display only)'
+          readOnly: true
+        purpose_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Copied from the journal entry: ISO 20022 purpose / category purpose code'
+          readOnly: true
         account_version:
           type: integer
           format: int64
@@ -202587,6 +202719,12 @@ components:
           maxLength: 500
         release_remainder:
           type: boolean
+        reference:
+          type: string
+          maxLength: 128
+        external_refs:
+          type: object
+          additionalProperties: true
       required:
       - amount
       - counter_account_id
@@ -205466,6 +205604,83 @@ components:
           - 'null'
           additionalProperties: true
           description: Client-defined key/value metadata
+        uetr:
+          type:
+          - string
+          - 'null'
+          maxLength: 36
+          description: 'Payment refs (from external_refs): SWIFT gpi / ISO 20022 UETR, lower-case UUID; copied to every ledger
+            entry'
+          readOnly: true
+        end_to_end_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Payment refs: ISO 20022 end-to-end id; copied to every ledger entry'
+          readOnly: true
+        instruction_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Payment refs: ISO 20022 instruction id; copied to every ledger entry'
+          readOnly: true
+        bank_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Payment refs: bank / clearing-system reference (account servicer reference on the statement); copied
+            to every ledger entry'
+          readOnly: true
+        scheme_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Payment refs: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id); copied
+            to every ledger entry'
+          readOnly: true
+        batch_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Payment refs: batch / bulk payment / settlement file id grouping the postings of one batch booking;
+            copied to every ledger entry'
+          readOnly: true
+        counterparty_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 140
+          description: 'Payment refs: counterparty (creditor of an outbound, debtor of an inbound payment) name; copied to
+            every ledger entry'
+          readOnly: true
+        counterparty_account_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: 'Payment refs: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key);
+            the account itself is never stored; copied to every ledger entry'
+          readOnly: true
+        counterparty_account_last4:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: 'Payment refs: last four characters of the counterparty account (display only); copied to every ledger
+            entry'
+          readOnly: true
+        purpose_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 35
+          description: 'Payment refs: ISO 20022 purpose / category purpose code; copied to every ledger entry'
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -205592,6 +205807,14 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        external_refs:
+          type: object
+          additionalProperties: true
+          description: 'Structured payment references, validated and stored in the typed columns above (immutable once posted):
+            {uetr, end_to_end_id, instruction_id, bank_reference, scheme_reference, batch_id, counterparty_name, counterparty_account,
+            purpose_code}. counterparty_account (IBAN / account number / wallet id) is stored only as counterparty_account_hash
+            + counterparty_account_last4. Unknown keys are refused (write-only; not stored as a column)'
+          writeOnly: true
         entries:
           type: array
           items:

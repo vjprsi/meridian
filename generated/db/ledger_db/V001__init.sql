@@ -164,6 +164,16 @@ CREATE TABLE journal_entry (
   hash                         varchar(64),
   prev_hash                    varchar(64),
   metadata                     jsonb,
+  uetr                         varchar(36),
+  end_to_end_id                varchar(35),
+  instruction_id               varchar(35),
+  bank_reference               varchar(64),
+  scheme_reference             varchar(64),
+  batch_id                     varchar(64),
+  counterparty_name            varchar(140),
+  counterparty_account_hash    varchar(80),
+  counterparty_account_last4   varchar(4),
+  purpose_code                 varchar(35),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -195,6 +205,16 @@ COMMENT ON COLUMN journal_entry.total_debits IS 'Sum of debits in base currency 
 COMMENT ON COLUMN journal_entry.hash IS 'SHA-256 over this entry and the previous hash (tamper evidence)';
 COMMENT ON COLUMN journal_entry.prev_hash IS 'Hash of the previous journal entry in the ledger';
 COMMENT ON COLUMN journal_entry.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN journal_entry.uetr IS 'Payment refs (from external_refs): SWIFT gpi / ISO 20022 UETR, lower-case UUID; copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.end_to_end_id IS 'Payment refs: ISO 20022 end-to-end id; copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.instruction_id IS 'Payment refs: ISO 20022 instruction id; copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.bank_reference IS 'Payment refs: bank / clearing-system reference (account servicer reference on the statement); copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.scheme_reference IS 'Payment refs: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id); copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.batch_id IS 'Payment refs: batch / bulk payment / settlement file id grouping the postings of one batch booking; copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.counterparty_name IS 'Payment refs: counterparty (creditor of an outbound, debtor of an inbound payment) name; copied to every ledger entry [PII]';
+COMMENT ON COLUMN journal_entry.counterparty_account_hash IS 'Payment refs: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored; copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.counterparty_account_last4 IS 'Payment refs: last four characters of the counterparty account (display only); copied to every ledger entry';
+COMMENT ON COLUMN journal_entry.purpose_code IS 'Payment refs: ISO 20022 purpose / category purpose code; copied to every ledger entry';
 COMMENT ON COLUMN journal_entry.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN journal_entry.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN journal_entry.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -228,6 +248,17 @@ CREATE TABLE ledger_entry (
   effective_at                 timestamptz NOT NULL,
   value_date                   date NOT NULL,
   reference                    varchar(128),
+  entry_type                   varchar(40) CHECK (entry_type IN ('STANDARD', 'REVERSAL', 'ADJUSTMENT', 'ACCRUAL', 'FEE', 'INTEREST', 'FX', 'TRANSFER', 'CARD_SETTLEMENT', 'PAYMENT', 'LOAN', 'OPENING_BALANCE', 'MIGRATION', 'CORRECTION')),
+  uetr                         varchar(36),
+  end_to_end_id                varchar(35),
+  instruction_id               varchar(35),
+  bank_reference               varchar(64),
+  scheme_reference             varchar(64),
+  batch_id                     varchar(64),
+  counterparty_name            varchar(140),
+  counterparty_account_hash    varchar(80),
+  counterparty_account_last4   varchar(4),
+  purpose_code                 varchar(35),
   account_version              bigint NOT NULL,
   balance_after                numeric(28,8) NOT NULL,
   description                  varchar(500),
@@ -254,6 +285,17 @@ COMMENT ON COLUMN ledger_entry.base_amount IS 'Amount in ledger base currency (a
 COMMENT ON COLUMN ledger_entry.effective_at IS 'Copied from the journal entry for range queries';
 COMMENT ON COLUMN ledger_entry.value_date IS 'Copied from the journal entry (reconciliation matches on value date)';
 COMMENT ON COLUMN ledger_entry.reference IS 'Copied from the journal entry (reconciliation matches on reference)';
+COMMENT ON COLUMN ledger_entry.entry_type IS 'Copied from the journal entry (reconciliation pairs reversals)';
+COMMENT ON COLUMN ledger_entry.uetr IS 'Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID';
+COMMENT ON COLUMN ledger_entry.end_to_end_id IS 'Copied from the journal entry: ISO 20022 end-to-end id';
+COMMENT ON COLUMN ledger_entry.instruction_id IS 'Copied from the journal entry: ISO 20022 instruction id';
+COMMENT ON COLUMN ledger_entry.bank_reference IS 'Copied from the journal entry: bank / clearing-system reference (account servicer reference on the statement)';
+COMMENT ON COLUMN ledger_entry.scheme_reference IS 'Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id)';
+COMMENT ON COLUMN ledger_entry.batch_id IS 'Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of one batch booking';
+COMMENT ON COLUMN ledger_entry.counterparty_name IS 'Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment) name [PII]';
+COMMENT ON COLUMN ledger_entry.counterparty_account_hash IS 'Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored';
+COMMENT ON COLUMN ledger_entry.counterparty_account_last4 IS 'Copied from the journal entry: last four characters of the counterparty account (display only)';
+COMMENT ON COLUMN ledger_entry.purpose_code IS 'Copied from the journal entry: ISO 20022 purpose / category purpose code';
 COMMENT ON COLUMN ledger_entry.account_version IS 'Account balance version after this entry (gapless per account)';
 COMMENT ON COLUMN ledger_entry.balance_after IS 'Posted balance of the account after this entry';
 COMMENT ON COLUMN ledger_entry.description IS 'Line narrative';
