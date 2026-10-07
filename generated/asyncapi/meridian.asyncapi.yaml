@@ -29676,7 +29676,8 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who opened the thread
+          description: 'Who opened the thread (server-set from the caller: CUSTOMER when relayed for a customer, else STAFF)'
+          readOnly: true
         work_queue_id:
           type:
           - string
@@ -29836,13 +29837,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who sent it
+          description: Who sent it (server-set from the caller)
+          readOnly: true
         sender_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff sender
+          description: Staff sender (the calling staff user; null for customers)
+          readOnly: true
         body:
           type: string
           description: Message text
@@ -29938,13 +29941,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Customer or staff
+          description: Customer or staff (server-set from the caller)
+          readOnly: true
         reader_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff reader
+          description: Staff reader (the calling staff user; null for customers)
+          readOnly: true
         read_at:
           type: string
           format: date-time
@@ -44319,7 +44324,9 @@ components:
         definition:
           type: object
           additionalProperties: true
-          description: Steps, branching conditions and screens (server-driven UI)
+          description: Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions
+            {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key,
+            required, pattern, enum, min_length, max_length, min, max}
         decision_rules:
           type:
           - object
@@ -44330,6 +44337,13 @@ components:
           type: integer
           format: int32
           description: Days before an idle application expires
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service
+            ones)
         published_at:
           type:
           - string
@@ -44449,7 +44463,8 @@ components:
         application_number:
           type: string
           maxLength: 32
-          description: Human-readable reference
+          description: Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>)
+          readOnly: true
         onboarding_journey_id:
           type: string
           format: uuid

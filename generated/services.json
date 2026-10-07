@@ -431,7 +431,7 @@
     "schema": "inbox",
     "package": "io.meridian.inbox",
     "port": 9156,
-    "description": "Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners.",
+    "description": "Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners. Who is speaking is never taken from the request body: the caller is CUSTOMER only when an internal service token (the customer channel service) relays the call with the X-On-Behalf-Of-Customer header (customer id; ignored for any other caller, 403 when a non-internal token sends it); every other authenticated principal is bank-side (STAFF). Customer callers are confined to their own threads (404 otherwise), never see internal notes and cannot assign, edit or read the message/receipt resources; opened_by, sender_type, sender_user_id, reader_type and reader_user_id are server-set.",
     "tags": [
       "Announcements",
       "Secure Message Threads",
@@ -967,13 +967,14 @@
     "schema": "onboarding",
     "package": "io.meridian.onboarding",
     "port": 9119,
-    "description": "No-code onboarding journeys per product, segment and country; runs applications step by step across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and syncs offline agent-assisted applications.",
+    "description": "No-code onboarding journeys per product, segment and country; runs applications step by step across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and syncs offline agent-assisted applications. Unauthenticated prospects use the public applicant surface (/v1/onboarding/public/applications): start on a published journey by code (rate-limited, attestation token), then act with a short-lived opaque applicant token sent as X-Applicant-Token, stored only as a SHA-256 hash and bound to one application (any other application answers 404), rotated through token/refresh.",
     "tags": [
+      "Onboarding Applicant",
       "Onboarding Applications",
       "Onboarding Journeys",
       "Onboarding Offline Batches"
     ],
-    "tables": 4,
+    "tables": 6,
     "events": [
       "party.onboarding_journey.published",
       "party.onboarding_journey.retired",
