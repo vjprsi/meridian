@@ -9,6 +9,7 @@ import io.meridian.limits.domain.LimitModel.RuleResult;
 import io.meridian.limits.domain.LimitModel.Usage;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import net.jqwik.api.ForAll;
@@ -75,6 +76,17 @@ class LimitEngineTest {
         assertThat(rolling.rolling()).isTrue();
         assertThat(rolling.start()).isEqualTo(Instant.parse("2026-10-07T15:00:00Z"));
         assertThat(rolling.lookbackStart()).isEqualTo(Instant.parse("2026-10-06T16:00:00Z"));
+    }
+
+    @Test
+    void calendarWindowsFollowTheBusinessDateRollingWindowsTheClock() {
+        Instant now = Instant.parse("2026-10-07T00:20:00Z"); // business day 2026-10-06 still open
+        LocalDate businessDate = LocalDate.parse("2026-10-06");
+        assertThat(LimitEngine.window("DAILY", now, businessDate).start()).isEqualTo(Instant.parse("2026-10-06T00:00:00Z"));
+        assertThat(LimitEngine.window("DAILY", now, businessDate).end()).isEqualTo(Instant.parse("2026-10-07T00:00:00Z"));
+        assertThat(LimitEngine.window("MONTHLY", Instant.parse("2026-11-01T00:05:00Z"), LocalDate.parse("2026-10-31")).start())
+                .isEqualTo(Instant.parse("2026-10-01T00:00:00Z"));
+        assertThat(LimitEngine.window("ROLLING_24H", now, businessDate).start()).isEqualTo(Instant.parse("2026-10-07T00:00:00Z"));
     }
 
     @Property(tries = 500)

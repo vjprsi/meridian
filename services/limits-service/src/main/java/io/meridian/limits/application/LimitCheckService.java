@@ -11,6 +11,7 @@ import io.meridian.limits.domain.LimitModel.RuleResult;
 import io.meridian.limits.domain.LimitModel.Usage;
 import io.meridian.limits.infrastructure.Db;
 import io.meridian.limits.infrastructure.LimitStore;
+import io.meridian.web.time.BusinessDates;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,7 +41,11 @@ public class LimitCheckService {
     private final Db db;
     private final JsonMapper json;
 
-    public LimitCheckService(LimitStore store, LimitRuleCache rules, TransactionTemplate tx, Db db, JsonMapper json) {
+    private final BusinessDates businessDates;
+
+    public LimitCheckService(LimitStore store, LimitRuleCache rules, TransactionTemplate tx, Db db, JsonMapper json,
+                             BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.store = store;
         this.rules = rules;
         this.tx = tx;
@@ -259,6 +264,8 @@ public class LimitCheckService {
     Evaluation run(CheckRequest req, boolean lock) {
         LimitModel.Selection sel = LimitEngine.select(rules.rules(), req);
         Instant now = Instant.now();
+        // calendar periods follow the tenant's business date (UTC calendar date when business-day-service has none)
+        java.time.LocalDate today = businessDates.today(() -> now.atZone(java.time.ZoneOffset.UTC).toLocalDate());
         ArrayNode keys = json.createArrayNode();
         ArrayNode rolling = json.createArrayNode();
         Set<UUID> subjects = new LinkedHashSet<>();
@@ -269,7 +276,7 @@ public class LimitCheckService {
             if (!a.rule().counted()) {
                 continue;
             }
-            LimitModel.Window w = LimitEngine.window(a.rule().period(), now);
+            LimitModel.Window w = LimitEngine.window(a.rule().period(), now, today);
             ObjectNode k = keys.addObject();
             k.put("limit_rule_id", a.rule().id().toString());
             k.put("subject_type", a.countingSubjectType());

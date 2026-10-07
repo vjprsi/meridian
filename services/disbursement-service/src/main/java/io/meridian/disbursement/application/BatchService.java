@@ -80,9 +80,10 @@ public class BatchService {
         UUID programId = uuid(req, "disbursement_program_id");
         ObjectNode program = rows.get(ProgramService.TABLE, programId);
         requireActive(program);
+        java.time.LocalDate today = rows.today();
         boolean inPeriod = rows.scalar("""
-                select (start_date is null or start_date <= current_date) and (end_date is null or end_date >= current_date)
-                from disbursement_program where id = ?""", Boolean.class, programId).orElse(false);
+                select (start_date is null or start_date <= ?) and (end_date is null or end_date >= ?)
+                from disbursement_program where id = ?""", Boolean.class, today, today, programId).orElse(false);
         if (!inPeriod) {
             throw ApiException.unprocessable("program_not_in_period", "Today is outside the program start and end dates");
         }
@@ -90,7 +91,7 @@ public class BatchService {
             throw ApiException.unprocessable("currency_mismatch", "Batch currency must be the program currency " + str(program, "currency"));
         }
         ObjectNode v = rows.columns(TABLE, req);
-        String day = rows.scalar("select to_char(current_date, 'YYYYMMDD')", String.class).orElseThrow();
+        String day = today.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
         v.put("batch_reference", "DB" + day + "-" + randomCode(8));
         v.put("status", "DRAFT");
         v.put("approvals_required", integer(program, "approval_levels"));

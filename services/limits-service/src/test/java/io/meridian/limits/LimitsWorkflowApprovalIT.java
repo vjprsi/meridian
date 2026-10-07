@@ -55,6 +55,9 @@ class LimitsWorkflowApprovalIT {
     @Autowired
     ApprovalEventsDispatcher dispatcher;
 
+    @Autowired
+    io.meridian.web.time.BusinessDates businessDates;
+
     @MockitoBean
     ServiceClient serviceClient;
 
@@ -175,6 +178,26 @@ class LimitsWorkflowApprovalIT {
         // direct reject needs a pending submission
         assertThat(post("/v1/risk/limits/rules/" + rule + "/reject", "{\"reason\":\"x\"}", 409, "bob").get("code").asString())
                 .isEqualTo("no_pending_submission");
+    }
+
+    @Test
+    void dailyCountersFollowTheBusinessDate() throws Exception {
+        when(serviceClient.get(eq("business-day-service"), startsWith("/v1/operations/business-days")))
+                .thenReturn(json.readTree("{\"data\":[{\"business_date\":\"2026-01-15\"}]}"));
+        businessDates.invalidate();
+        try {
+            String rule = rule("WF_BD_DAILY");
+            post("/v1/risk/limits/rules/" + rule + "/activate", "{}", 200, "bob");
+            String subject = UUID.randomUUID().toString();
+            post("/v1/risk/limits/checks", """
+                    {"subject_type":"ACCOUNT","subject_id":"%s","transaction_type":"P2P","amount":"10","currency":"USD"}"""
+                    .formatted(subject), 201, "svc");
+            JsonNode usage = get("/v1/risk/limits/usages?limit_rule_id=" + rule).get("data").get(0);
+            assertThat(OffsetDateTime.parse(usage.get("period_start").asString()).toInstant())
+                    .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+        } finally {
+            businessDates.invalidate();
+        }
     }
 
     private ObjectNode ruleDecision(String requestId, String rule, Map<?, ?> payload, String approver) {
