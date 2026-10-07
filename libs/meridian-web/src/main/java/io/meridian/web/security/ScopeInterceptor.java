@@ -17,7 +17,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 /**
  * Enforces {@link RequiredScope} (found on the generated interface method) against the token's scopes.
  * Accepts the exact scope, the domain wildcard {@code <domain>:*}, {@code <domain>:write} for reads, or
- * {@code meridian:admin}. The customer scope ({@link CustomerContext#CUSTOMER_SCOPE}) is only satisfied by itself.
+ * {@code meridian:admin}. The channel scopes (customer {@link CustomerContext#CUSTOMER_SCOPE}, agent
+ * {@link AgentContext#AGENT_SCOPE}) are only satisfied by themselves.
  * Dev mode (no tokens) skips the check.
  */
 public class ScopeInterceptor implements HandlerInterceptor {
@@ -48,7 +49,7 @@ public class ScopeInterceptor implements HandlerInterceptor {
      * shortcut); every other endpoint needs a domain scope, which customer tokens never carry, so they are refused.
      */
     static boolean permits(Set<String> granted, String need) {
-        if (CustomerContext.CUSTOMER_SCOPE.equals(need)) {
+        if (CustomerContext.CUSTOMER_SCOPE.equals(need) || AgentContext.AGENT_SCOPE.equals(need)) {
             return granted.contains(need);
         }
         String domain = need.substring(0, need.indexOf(':'));

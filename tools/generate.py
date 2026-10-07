@@ -152,6 +152,9 @@ class Service:
     tables: list
     apis: list
     events: list
+    # Service-level channel scope overriding the domain's (e.g. channels:agent for the agent channel BFF in the
+    # channels domain, whose other service uses the domain scope channels:customer).
+    scope: str | None = None
 
 
 @dataclass
@@ -311,8 +314,11 @@ def load_domains() -> list:
                 parts = [p.strip() for p in e.split("|")]
                 events.append(Event(parts[0], parts[1] if len(parts) > 1 else "",
                                     parts[2] if len(parts) > 2 else "", did, sname))
+            sscope = s.get("scope")
+            if sscope is not None and not re.fullmatch(rf"{re.escape(did)}:[a-z][a-z0-9_-]*", str(sscope)):
+                raise SpecError(f"{path.name}: service {sname} scope must be '{did}:<name>', got {sscope!r}")
             services.append(Service(sname, did, db, s.get("language", "java"),
-                                    s.get("description", ""), tables, apis, events))
+                                    s.get("description", ""), tables, apis, events, sscope))
         scope = raw.get("scope")
         if scope is not None and not re.fullmatch(rf"{re.escape(did)}:[a-z][a-z0-9_-]*", str(scope)):
             raise SpecError(f"{path.name}: scope must be '{did}:<name>', got {scope!r}")
@@ -873,7 +879,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                "info": {"title": f"Meridian Core — {d.title} API", "version": "1.0.0", "description": d.description, "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}},
                "servers": bundle["servers"], "security": [{"oauth2": []}], "tags": [], "paths": {},
                "components": copy.deepcopy(COMMON_COMPONENTS)}
-        scopes = ({d.scope: f"{d.title} (signed-in customer)"} if d.scope
+        channel_scopes = [x for x in [d.scope] + [sv.scope for sv in d.services] if x]
+        scopes = ({sc: f"{d.title} (signed-in {sc.split(':', 1)[1]})" for sc in channel_scopes} if channel_scopes
                   else {f"{d.id}:read": f"Read {d.title}", f"{d.id}:write": f"Change {d.title}"})
         for flow in doc["components"]["securitySchemes"]["oauth2"]["flows"].values():
             flow["scopes"] = dict(scopes)
@@ -902,7 +909,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         oid = f"{op}{i}"
                         i += 1
                     used_ids.add(oid)
-                    granted = d.scope or f"{d.id}:{scope}"
+                    granted = s.scope or d.scope or f"{d.id}:{scope}"
                     o = {"operationId": oid, "summary": summary, "tags": [tag],
                          "security": [{"oauth2": [granted]}],
                          "parameters": (params or []), "responses": {}}
@@ -928,7 +935,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     else:
                         # Platform-global tables (no tenant column) are shared by every tenant: only platform
                         # operators (meridian:admin) may change them; reads use the normal domain scope.
-                        need = "meridian:admin" if (scope == "write" and not t.tenant and not d.scope) else granted
+                        need = ("meridian:admin" if (scope == "write" and not t.tenant and not (s.scope or d.scope))
+                                else granted)
                         o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{need}")'
                         o["x-required-scope"] = need
                     o["x-table"] = t.name
@@ -1187,8 +1195,8 @@ def gen_manifest(domains):
                 "tags": sorted({" ".join(w.capitalize() for w in a.resource.split("-")) for a in s.apis}),
                 "tables": len(s.tables), "events": [e.name for e in s.events],
             })
-            if d.scope:
-                out[-1]["scope"] = d.scope
+            if s.scope or d.scope:
+                out[-1]["scope"] = s.scope or d.scope
     mp.write_text(json.dumps(out, indent=2), encoding="utf-8", newline="\n")
 
 

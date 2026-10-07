@@ -1,20 +1,27 @@
 domain: channels
-title: Customer Channels
+title: Customer and Agent Channels
 phase: 3
 scope: channels:customer
 description: >
-  Experience API for the bank's own customer apps (web banking, mobile). Every operation acts for the signed-in
-  customer only: the customer comes from the access token (customer_id claim, scope channels:customer), never
-  from a path, query or body. The service calls the domain services with its own service identity and the
+  Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use /v1/me: every operation acts for
+  the signed-in customer only: the customer comes from the access token (customer_id claim, scope channels:customer),
+  never from a path, query or body. The service calls the domain services with its own service identity and the
   customer's tenant, checks that every referenced account, card, loan, wallet, payment, payee, standing order,
   thread, notification and document belongs to the customer (an object of someone else answers 404), rebuilds
   request bodies server-side and requires a recent authentication (step-up) for money movement and security
-  changes. Domain services keep their operator APIs; customer tokens carry no domain scope and are rejected there.
+  changes. Agent outlet apps use /v1/agent the same way (agent_id claim, scope channels:agent; see
+  agent-channel-service). Domain services keep their operator APIs; customer and agent tokens carry no domain scope
+  and are rejected there.
 
 enums:
   CustomerActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
   LostCardReason: [LOST, STOLEN]
   MyPaymentKind: [OWN_TRANSFER, PAYEE]
+  AgentActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, SIGNATURE_INVALID, RATE_LIMITED, FAILED]
+  AgentAuthMethod: [RECENT_LOGIN, DEVICE_PROOF, NONE]
+  DeviceKeyAlgorithm: [ES256, ED25519]
+  DeviceKeyStatus: [ACTIVE, REVOKED]
+  CustomerLookupType: [MSISDN, WALLET_NUMBER]
 
 services:
   # ------------------------------------------------------------------ customer-channel-service
@@ -275,3 +282,256 @@ services:
 
     events:
       - "channels.customer_action.denied | customer_action | A customer referenced an object that is not theirs (object-level authorization denial)"
+
+  # ------------------------------------------------------------------ agent-channel-service
+  - name: agent-channel-service
+    database: agent_channel_db
+    scope: channels:agent
+    description: >
+      Agent channel BFF behind /v1/agent for the agent outlet app (offline PWA). Every operation acts for the
+      signed-in agent only: the agent comes from the access token (agent_id claim, scope channels:agent), never from
+      a path, query or body. Calls the domain services with its own service identity and the agent's tenant, checks
+      that every referenced outlet, till, device, float request, cash request, transaction, bill payment, top-up,
+      commission earning, onboarding application, document and offline batch belongs to the agent (404 otherwise,
+      audited and published), rebuilds request bodies server-side (agent, outlet, float wallet, currency, channel)
+      and requires a recent login or a device-bound proof for money movement. Devices register a public signing key
+      (ES256 or Ed25519); offline batches and device proofs are verified against it. Keeps the device keys, the
+      customer lookup log and the audit trail of what each agent did or was refused.
+    tables:
+      - name: agent_action
+        prefix: aact
+        description: Audit trail of agent actions through the channel, including object-level denials, step-up and signature refusals
+        immutable: true
+        ext: false
+        columns:
+          - "agent_id uuid nn ref=agent idx | Signed-in agent (from the token)"
+          - "user_subject string(64) | Token subject (the person using the agent app)"
+          - "action string(64) nn | Operation (operation id of the /v1/agent endpoint)"
+          - "object_type string(40) | OUTLET, TILL, DEVICE, FLOAT_REQUEST, CASH_REQUEST, TRANSACTION, BILL_PAYMENT, AIRTIME_TOPUP, APPLICATION, DOCUMENT, OFFLINE_BATCH, AGENT, WALLET"
+          - "object_id uuid | Object acted on, or the object id that was refused"
+          - "outcome enum:AgentActionOutcome nn | Result"
+          - "error_code string(64) | Problem code when not SUCCEEDED"
+          - "result_id uuid | Id of the record created downstream (transaction, float request, batch...)"
+          - "agent_device_id uuid ref=agent_device | Device whose key signed the request (device proof or offline batch)"
+          - "auth_method enum:AgentAuthMethod | How money movement was authorised"
+          - "auth_age_seconds int | Seconds since the agent's last login when the action ran"
+          - "acr string(64) | Authentication context class of the token"
+          - "ip_address inet | Client address (first X-Forwarded-For hop)"
+          - "user_agent string(255) | Client user agent"
+        indexes: [[agent_id, created_at], [outcome, created_at]]
+
+      - name: agent_device_key
+        prefix: adk
+        description: Public signing key of an agent device (the private key never leaves the device); verifies offline batches and device proofs
+        ext: false
+        columns:
+          - "agent_id uuid nn ref=agent idx | Agent owning the device"
+          - "agent_device_id uuid nn ref=agent_device idx | Device (agent-network-service)"
+          - "agent_outlet_id uuid ref=agent_outlet | Outlet the device was registered at"
+          - "key_algorithm enum:DeviceKeyAlgorithm nn | ES256 (ECDSA P-256, SHA-256, IEEE P1363 r||s signature) or ED25519"
+          - "public_key text nn | Public key, SubjectPublicKeyInfo DER, base64"
+          - "key_fingerprint string(64) nn uq | SHA-256 of the SubjectPublicKeyInfo (hex)"
+          - "status enum:DeviceKeyStatus nn default=ACTIVE ro | ACTIVE until revoked (re-registration revokes the previous key)"
+          - "registered_by string(64) ro | Token subject that registered the key"
+          - "last_used_at ts ro | Last verified signature"
+          - "revoked_at ts ro | Revocation time"
+          - "revoked_reason string(255) ro | Why the key was revoked"
+        indexes: [[agent_device_id, status]]
+
+      - name: agent_customer_lookup
+        prefix: acl
+        description: Customer wallet lookups by agents (masked result returned to the agent; rate-limited per agent)
+        immutable: true
+        ext: false
+        columns:
+          - "agent_id uuid nn ref=agent idx | Agent that looked the customer up"
+          - "lookup_type enum:CustomerLookupType nn | By mobile number or wallet number"
+          - "wallet_id uuid ref=wallet | Wallet found (empty when none matched)"
+          - "found bool nn | Whether an active customer wallet matched"
+          - "display_name_masked string(160) | Customer name, masked (first letters only)"
+          - "msisdn_masked string(20) | Mobile number, masked"
+          - "currency currency | Wallet currency"
+          - "wallet_status enum:WalletStatus | Wallet status"
+          - "kyc_tier int | KYC tier (drives limits)"
+        indexes: [[agent_id, created_at]]
+
+    apis:
+      - resource: agent-me
+        path: /v1/agent/me
+        table: agent_action
+        description: The signed-in agent, its outlets, floats, wallets, KPIs, sub-agents and channel activity
+        ops: []
+        actions:
+          - "GET / | The signed-in agent (from the token's agent_id) | | agent"
+          - "GET /outlets | The agent's outlets | | agent_outlet[]"
+          - "GET /floats | The agent's float positions (low-float thresholds) | | agent_float[]"
+          - "GET /float-wallet | The agent's float wallet (status, has_pin) | | wallet"
+          - "GET /float-balance | Balance of the agent's float wallet | | account_balance"
+          - "GET /commission-balance | Balance of the agent's commission wallet | | account_balance"
+          - "GET /performance?from:date&to:date&sub_agent_id:uuid | Daily KPIs of the agent, or (read-only, when the hierarchy allows it) of one of its direct sub-agents | | agent_performance_daily[]"
+          - "GET /sub-agents | The agent's direct sub-agents (read-only) | | agent[]"
+          - "GET /activity | What the agent did or was refused through the channel, newest first | | agent_action[]"
+
+      - resource: agent-me-devices
+        path: /v1/agent/devices
+        table: agent_device_key
+        description: The agent's devices and their signing keys (device binding)
+        ops: []
+        actions:
+          - "GET / | The agent's devices | | agent_device[]"
+          - "POST / | Register (or re-register) this device at one of the agent's outlets with its public signing key; a previous key of the device is revoked (needs a recent login) | serial_number string(64) nn, device_type enum:AgentDeviceType nn, agent_outlet_id uuid nn, model string(64), os_version string(32), app_version string(32), key_algorithm enum:DeviceKeyAlgorithm nn, public_key text nn | agent_device_key"
+          - "GET /{device_id} | One of the agent's devices | | agent_device"
+          - "GET /{device_id}/keys | Signing keys registered for one of the agent's devices | | agent_device_key[]"
+          - "POST /{device_id}/heartbeat | Heartbeat of one of the agent's devices with the last known location | latitude rate, longitude rate, app_version string(32) | agent_device"
+          - "POST /{device_id}/revoke | Revoke the signing keys of one of the agent's devices and report it lost (offline batches and device proofs from it are refused from now on) | reason string(255) | agent_device"
+
+      - resource: agent-me-float-requests
+        path: /v1/agent/float-requests
+        table: agent_action
+        description: Float top-up and rebalance requests of the agent
+        ops: []
+        actions:
+          - "GET /?status:enum:FloatRequestStatus&idempotency_key:string(128) | The agent's float requests, newest first; idempotency_key finds the request created with that client key (reconciling an unknown outcome) | | agent_float_request[]"
+          - "POST / | Request float: TOP_UP (bank transfer or cash deposit, bank_reference required) or REBALANCE (from the parent agent); requesting agent, target float wallet, currency and source are set server-side (recent login or device proof; one Idempotency-Key per request) | request_type enum:FloatRequestType nn, amount amount nn, funding_method string(32), bank_reference string(64) | agent_float_request"
+          - "GET /{float_request_id} | One of the agent's float requests | | agent_float_request"
+          - "POST /{float_request_id}/cancel | Cancel one of the agent's pending float requests | reason string(255) | agent_float_request"
+
+      - resource: agent-me-cash-requests
+        path: /v1/agent/cash-requests
+        table: agent_action
+        description: Cash-in-transit delivery and pickup requests for the agent's outlets
+        ops: []
+        actions:
+          - "GET /?agent_outlet_id:uuid&status:enum:FloatRequestStatus | Cash requests of the agent's outlets (optionally one outlet) | | cash_management_request[]"
+          - "POST / | Request a cash delivery or pickup for one of the agent's outlets (currency = agent currency) | agent_outlet_id uuid nn, request_type enum:CashRequestType nn, amount amount nn, denominations json, requested_for ts | cash_management_request"
+          - "GET /{cash_request_id} | One of the agent's cash requests | | cash_management_request"
+          - "POST /{cash_request_id}/cancel | Cancel one of the agent's cash requests | reason string(255) | cash_management_request"
+
+      - resource: agent-me-tills
+        path: /v1/agent/tills
+        table: agent_action
+        description: Tills at the agent's outlets, opened and closed per shift with cash counts
+        ops: []
+        actions:
+          - "GET /?agent_outlet_id:uuid&status:enum:AgentTillStatus | Tills at the agent's outlets (optionally one outlet) | | agent_till[]"
+          - "POST / | Create a till at one of the agent's outlets (currency = agent currency) | agent_outlet_id uuid nn, till_number string(32) nn | agent_till"
+          - "GET /{till_id} | One of the agent's tills | | agent_till"
+          - "POST /{till_id}/open | Open one of the agent's tills with an opening cash count; the signed-in user is the operator | opening_cash amount nn, denominations json | agent_till"
+          - "POST /{till_id}/close | Close one of the agent's tills with the closing cash count (variance computed downstream) | declared_cash amount nn, denominations json | agent_till"
+
+      - resource: agent-me-customers
+        path: /v1/agent/customer-wallets
+        table: agent_customer_lookup
+        description: Customer wallet lookup for cash-in / cash-out (masked data only; rate-limited and logged)
+        ops: []
+        actions:
+          - "GET /lookup?msisdn:phone&wallet_number:string(32) | Find an active customer wallet by mobile number or wallet number; returns masked data only (429 rate_limited after too many lookups) | | agent_customer_lookup"
+
+      - resource: agent-me-transactions
+        path: /v1/agent/transactions
+        table: agent_action
+        description: Wallet transactions the agent took part in (cash-in, cash-out, float, bills and airtime from its float wallet) and receipts
+        ops: []
+        actions:
+          - "GET /?from:ts&to:ts&txn_type:enum:WalletTxnType&status:enum:WalletTxnStatus&idempotency_key:string(128) | The agent's wallet transactions, newest first; idempotency_key finds the transaction created with that client key | | wallet_transaction[]"
+          - "POST /quote | Fee quote for a cash-in, cash-out, bill payment or airtime top-up at the agent (payer / payee wallets set server-side): {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount, payee_name, limits_ok, limit_violation} | txn_type enum:WalletTxnType nn, amount amount nn, payee_msisdn phone, payer_wallet_id uuid | object"
+          - "GET /{transaction_id} | One of the agent's transactions | | wallet_transaction"
+          - "GET /{transaction_id}/receipt | Printable receipt of one of the agent's transactions | | text/plain"
+
+      - resource: agent-me-cash-in
+        path: /v1/agent/cash-in
+        table: agent_action
+        description: Cash-in from the agent's float wallet to a customer wallet
+        ops: []
+        actions:
+          - "POST / | Cash-in: the agent's float wallet pays e-value to the customer wallet of a mobile number (recent login or device proof; one Idempotency-Key per operation) | payee_msisdn phone nn, amount amount nn, agent_outlet_id uuid, pin string(12) | wallet_transaction"
+
+      - resource: agent-me-cash-out
+        path: /v1/agent/cash-out
+        table: agent_action
+        description: Cash-out at the agent (funds held on the customer wallet until the customer confirms)
+        ops: []
+        actions:
+          - "POST / | Start a cash-out from a customer wallet into the agent's float wallet; funds are held until the customer confirms (recent login or device proof) | payer_wallet_id uuid nn, amount amount nn, agent_outlet_id uuid | wallet_transaction"
+          - "POST /{transaction_id}/confirm | The customer confirms one of the agent's pending cash-outs with PIN or OTP (recent login or device proof) | pin string(12), otp string(8) | wallet_transaction"
+          - "POST /{transaction_id}/cancel | Cancel one of the agent's pending cash-outs (releases the hold) | reason string(255) | wallet_transaction"
+
+      - resource: agent-me-billers
+        path: /v1/agent/billers
+        table: agent_action
+        description: Biller catalogue for bill payments and airtime (reference data)
+        ops: []
+        actions:
+          - "GET /?category:enum:BillerCategory | Active billers | | biller[]"
+          - "GET /{biller_id}/products | Active products of an active biller | | biller_product[]"
+          - "POST /{biller_id}/validate-reference | Validate an account reference and fetch the bill from the biller | account_reference string(64) nn | bill_inquiry"
+
+      - resource: agent-me-bill-payments
+        path: /v1/agent/bill-payments
+        table: agent_action
+        description: Bill payments paid from the agent's float wallet for walk-in customers
+        ops: []
+        actions:
+          - "GET /?idempotency_key:string(128) | Bill payments from the agent's float wallet, newest first; idempotency_key finds the one created with that client key | | bill_payment[]"
+          - "POST / | Pay a bill from the agent's float wallet (channel AGENT_APP; recent login or device proof; one Idempotency-Key per payment) | biller_id uuid nn, biller_product_id uuid, bill_inquiry_id uuid, account_reference string(64) nn, customer_name string(160), amount amount nn, pin string(12) | bill_payment"
+          - "GET /{bill_payment_id} | One of the agent's bill payments | | bill_payment"
+          - "GET /{bill_payment_id}/receipt | Receipt of one of the agent's bill payments (token, biller reference) | | text/plain"
+
+      - resource: agent-me-airtime
+        path: /v1/agent/airtime-topups
+        table: agent_action
+        description: Airtime and bundle top-ups paid from the agent's float wallet
+        ops: []
+        actions:
+          - "GET /?idempotency_key:string(128) | Top-ups from the agent's float wallet, newest first; idempotency_key finds the one created with that client key | | airtime_topup[]"
+          - "POST / | Top up a mobile number from the agent's float wallet (channel AGENT_APP; recent login or device proof; one Idempotency-Key per top-up) | biller_id uuid nn, biller_product_id uuid, target_msisdn phone nn, amount amount nn, pin string(12) | airtime_topup"
+          - "GET /{topup_id} | One of the agent's top-ups | | airtime_topup"
+
+      - resource: agent-me-commissions
+        path: /v1/agent/commissions
+        table: agent_action
+        description: Commissions earned by the agent
+        ops: []
+        actions:
+          - "GET /?from:date&to:date | The agent's commission earnings, newest first | | commission_earning[]"
+          - "GET /summary?from:date&to:date | Earned, clawed back and unpaid totals of the agent: {groups[{beneficiary_wallet_id, currency, earned, clawed_back, net, unpaid}]} | | object"
+
+      - resource: agent-me-journeys
+        path: /v1/agent/onboarding/journeys
+        table: agent_action
+        description: Onboarding journeys the agent may run (published, agent channel)
+        ops: []
+        actions:
+          - "GET / | Published onboarding journeys that allow the agent channel | | onboarding_journey[]"
+
+      - resource: agent-me-applications
+        path: /v1/agent/onboarding/applications
+        table: agent_action
+        description: Assisted onboarding of prospects by the agent (onboarding-service; channel AGENT)
+        ops: []
+        actions:
+          - "GET /?status:enum:OnboardingApplicationStatus | Applications the agent started, newest first | | onboarding_application[]"
+          - "POST / | Start an application for a prospect on a published agent-channel journey (channel AGENT and agent set server-side) | onboarding_journey_id uuid nn, phone phone nn, email email, collected_data json, product_ids json[], agent_device_id uuid | onboarding_application"
+          - "GET /{application_id} | One of the agent's applications | | onboarding_application"
+          - "GET /{application_id}/next-step | Next step of one of the agent's applications | | onboarding_step"
+          - "GET /{application_id}/steps | Steps of one of the agent's applications | | onboarding_step[]"
+          - "POST /{application_id}/steps/{step_code} | Submit a step of one of the agent's applications | input json nn | onboarding_step"
+          - "POST /{application_id}/documents | Register a document of the prospect (owner = the application) about to be uploaded | document_type enum:PlatformDocumentType nn, file_name string(255) nn, content_type string(100) nn, document_number string(64) | document"
+          - "POST /{application_id}/documents/{document_id}/upload-url | Pre-signed upload target for a document of one of the agent's applications | | object"
+          - "POST /{application_id}/documents/{document_id}/complete-upload | Confirm the upload of a document of one of the agent's applications (size and SHA-256) | size_bytes bigint nn, checksum string(64) nn | document"
+          - "POST /{application_id}/submit | Submit one of the agent's applications for decision | | onboarding_application"
+
+      - resource: agent-me-offline-batches
+        path: /v1/agent/offline-batches
+        table: agent_device_key
+        description: Onboarding applications captured offline on a registered device, signed with its key
+        ops: []
+        actions:
+          - "GET /?idempotency_key:string(128) | The agent's offline batches, newest first; idempotency_key finds the batch submitted with that client key | | onboarding_offline_batch[]"
+          - "POST / | Submit an offline batch signed with the device key over the canonical batch payload (see the service README); unknown or other agents' devices answer 404, revoked keys 422 device_key_revoked, bad signatures 422 device_signature_invalid; one Idempotency-Key per batch | agent_device_id uuid nn, captured_from ts nn, captured_to ts nn, application_count int nn, payload_uri string(500) nn, signature string(512) nn | onboarding_offline_batch"
+          - "GET /{batch_id} | One of the agent's offline batches | | onboarding_offline_batch"
+
+    events:
+      - "channels.agent_action.denied | agent_action | An agent referenced an object that is not theirs, or sent an invalid device signature"
+      - "channels.agent_device_key.registered | agent_device_key | An agent device registered a signing key"
+      - "channels.agent_device_key.revoked | agent_device_key | An agent device key was revoked (re-registration or lost device)"

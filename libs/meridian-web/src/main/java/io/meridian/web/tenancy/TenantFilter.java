@@ -2,6 +2,8 @@ package io.meridian.web.tenancy;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.MeridianProperties;
+import io.meridian.web.security.AgentContext;
+import io.meridian.web.security.AgentContext.AgentPrincipal;
 import io.meridian.web.security.CustomerContext;
 import io.meridian.web.security.CustomerContext.CustomerPrincipal;
 import jakarta.servlet.FilterChain;
@@ -73,6 +75,21 @@ public class TenantFilter extends OncePerRequestFilter {
         if (customer != null) {
             principal = customer.principalName();
         }
+        // Agent channel: an agent token (scope channels:agent + agent_id claim; dev mode X-Agent-Id), never together
+        // with a customer or an internal token.
+        AgentPrincipal agent = null;
+        if (customer == null && via == null) {
+            if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+                agent = AgentContext.fromJwt(jwt).orElse(null);
+            } else if (props.devMode()) {
+                agent = AgentContext.fromDevHeaders(req.getHeader(AgentContext.AGENT_HEADER), req.getHeader(USER_HEADER),
+                        req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
+                        .orElse(null);
+            }
+        }
+        if (agent != null) {
+            principal = agent.principalName();
+        }
         try {
             if (tenant != null) {
                 TenantContext.set(tenant, principal, via);
@@ -81,10 +98,14 @@ public class TenantFilter extends OncePerRequestFilter {
             if (customer != null) {
                 CustomerContext.set(customer);
             }
+            if (agent != null) {
+                AgentContext.set(agent);
+            }
             chain.doFilter(req, res);
         } finally {
             TenantContext.clear();
             CustomerContext.clear();
+            AgentContext.clear();
         }
     }
 

@@ -24,7 +24,7 @@ public class AgentFloatRequestsController implements AgentFloatRequestsApi {
 
     @Override
     public ResponseEntity<AgentFloatRequest> agentFloatRequestsCreate(String idempotencyKey, AgentFloatRequestCreate body) {
-        return actions.create(idempotencyKey, body, AgentFloatRequest.class, () -> floats.createRequest(actions.tree(body)));
+        return actions.create(idempotencyKey, body, AgentFloatRequest.class, () -> floats.createRequest(actions.tree(body), idempotencyKey));
     }
 
     @Override

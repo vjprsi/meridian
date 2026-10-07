@@ -2,6 +2,7 @@ package io.meridian.web.client;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.web.security.AgentContext;
 import io.meridian.web.security.CustomerContext;
 import java.io.IOException;
 import java.io.InputStream;
@@ -149,9 +150,12 @@ public class ServiceClient {
                 throw new ApiException(503, "service_identity_not_configured",
                         "Calling " + service + " as this service needs meridian.service-auth.* (client credentials)");
             }
-        } else if (customer) {
-            // the customer the service acts for; receivers honour it only with an internal (service) token
-            b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
+        } else if (customer || AgentContext.current().isPresent()) {
+            // the customer the service acts for; receivers honour it only with an internal (service) token.
+            // An agent's token is never forwarded either (agent channel): service identity, X-User agent:<id>.
+            if (customer) {
+                b.header(CustomerContext.ON_BEHALF_HEADER, CustomerContext.customerId().toString());
+            }
             // A customer's token is never forwarded (it carries no domain scope, and the receiving service must not
             // act with the customer's identity): the customer channel calls with its own service identity for the
             // tenant, as the acting user customer:<id>. Dev-mode role / MFA headers are not relayed either.
@@ -159,7 +163,7 @@ public class ServiceClient {
                 b.header("Authorization", "Bearer " + serviceTokens.token());
             } else if (auth != null) {
                 throw new ApiException(503, "service_identity_not_configured",
-                        "Customer requests need meridian.service-auth.* (client credentials) to call " + service);
+                        "Customer and agent requests need meridian.service-auth.* (client credentials) to call " + service);
             }
         } else {
             // dev-mode caller attributes (roles, step-up MFA): receivers only honour them in dev mode; with JWTs the
