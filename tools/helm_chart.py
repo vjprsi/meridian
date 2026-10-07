@@ -127,6 +127,17 @@ def cde_callers(routes):
     return {k: sorted(v) for k, v in found.items()}
 
 
+def identity_env() -> dict:
+    """GAP-16 (merged into services_values, kept apart from SERVICE_ENV): card-vault-service accepts tokens of the staff
+    console and of the per-service clients of the services that call it (derived from the code by
+    tools/service_access.py). While global.auth.sharedServiceClient is true, add the shared client to this list per
+    environment (services[card-vault-service].env)."""
+    import service_access
+    callers = sorted(service_access.client_id(s["name"]) for s in service_access.manifest()
+                     if "card-vault-service" in service_access.called_services(s["name"]))
+    return {"card-vault-service": {"MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS": ",".join(["meridian-console"] + callers)}}
+
+
 HELPERS = r'''{{/* Common labels for a Meridian component. */}}
 {{- define "meridian.labels" -}}
 app.kubernetes.io/name: {{ .name }}
@@ -180,7 +191,13 @@ metadata:
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
   {{- if and $svc.keyManagement $root.Values.cde.keys.serviceAccountRoleArn }}
   annotations:
-    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}   # IRSA: CDE KMS key use
+    # IRSA: CDE KMS key use. One role per service account: the CDE vault role must also carry the vault's
+    # MSK permissions when global.kafka.iam is on (backlog: merge kafka-acls.json grants into the CDE role)
+    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}
+  {{- else if and $g.kafka.iam.enabled (ne (toString $svc.serviceIdentity) "false") }}
+  annotations:
+    # GAP-16: the service's own MSK principal (IAM role, IRSA): infra/tofu cell output kafka_service_role_arns
+    eks.amazonaws.com/role-arn: {{ replace "{name}" $svc.name $g.kafka.iam.roleArnTemplate | quote }}
   {{- end }}
 automountServiceAccountToken: false
 ---
@@ -287,10 +304,15 @@ spec:
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: {{ $svc.dbPool | default $g.postgres.poolSize | quote }}
             {{- end }}
+            {{- if ne (toString $svc.serviceIdentity) "false" }}
+            # GAP-16: the service's own client svc-<service> (Secret meridian-<service>-client); the legacy shared client
+            # only while global.auth.sharedServiceClient is true (migration)
+            {{- $client := $svc.clientSecret | default (ternary $g.auth.serviceClientSecret (printf "meridian-%s-client" $svc.name) $g.auth.sharedServiceClient) }}
             - name: MERIDIAN_SERVICE_AUTH_CLIENT_ID
-              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-id}}
+              valueFrom: {secretKeyRef: {name: {{ $client }}, key: client-id}}
             - name: MERIDIAN_SERVICE_AUTH_CLIENT_SECRET
-              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
+              valueFrom: {secretKeyRef: {name: {{ $client }}, key: client-secret}}
+            {{- end }}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
             {{- if $svc.managementPort }}
@@ -330,10 +352,13 @@ spec:
             - name: MERIDIAN_CARDS_VAULT_PKCS11_PIN
               valueFrom: {secretKeyRef: {name: {{ $keys.pkcs11.pinSecret }}, key: pin}}
             {{- end }}
-            {{- with $root.Values.cde.allowedClients }}
-            - name: MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS     # azp of the clients that may call the vault (GAP-16)
-              value: {{ . | quote }}
             {{- end }}
+            {{- if and $g.auth.idpEvents.enabled (eq $svc.name "audit-service") }}
+            # GAP-06: read-only Keycloak client meridian-audit-events (view-events) for the IdP events poller
+            - name: MERIDIAN_AUDIT_KEYCLOAK_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.idpEvents.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_AUDIT_KEYCLOAK_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.idpEvents.clientSecret }}, key: client-secret}}
             {{- end }}
           resources:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
@@ -646,6 +671,33 @@ data:
   MERIDIAN_GATEWAY_URL_TEMPLATE: "http://{name}"
   MERIDIAN_APPROVALS_MODE: {{ $g.approvalsMode | quote }}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ $g.kafka.bootstrapServers | quote }}
+  {{- if $g.kafka.iam.enabled }}
+  {{- if not (contains "{name}" $g.kafka.iam.roleArnTemplate) }}
+  {{- fail "global.kafka.iam.roleArnTemplate must contain {name} (infra/tofu cell output kafka_service_role_arns)" }}
+  {{- end }}
+  # GAP-16: every service authenticates to MSK as its own IAM principal (IRSA role of its service account); topic and
+  # group permissions come from tools/kafka_acls.py (infra/tofu/modules/cell/kafka_iam.tf)
+  SPRING_KAFKA_SECURITY_PROTOCOL: "SASL_SSL"
+  SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: "AWS_MSK_IAM"
+  SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: "software.amazon.msk.auth.iam.IAMLoginModule required;"
+  SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS: "software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+  {{- end }}
+  # GAP-16: shared service clients whose X-Meridian-Service header is still believed (migration only; empty = none)
+  MERIDIAN_SECURITY_LEGACY_SERVICE_CLIENTS: {{ join "," $g.auth.legacyServiceClients | quote }}
+  # GAP-13: minimum acr of user tokens using meridian:admin / platform:operator
+  MERIDIAN_SECURITY_PRIVILEGED_ACR: {{ $g.auth.privilegedAcr | quote }}
+  # GAP-06: application logs as ECS JSON lines on stdout (request_id, tenant_id, principal, trace ids; no PII)
+  MERIDIAN_LOGGING_FORMAT: {{ $g.logging.format | quote }}
+  {{- if $g.auth.idpEvents.enabled }}
+  {{- if not $g.auth.platformOperatorTenant }}
+  {{- fail "global.auth.idpEvents needs global.auth.platformOperatorTenant (IdP events are audited in that tenant)" }}
+  {{- end }}
+  # GAP-06: audit-service copies Keycloak sign-in / admin events into the audit trail (client meridian-audit-events)
+  MERIDIAN_AUDIT_KEYCLOAK_ENABLED: "true"
+  MERIDIAN_AUDIT_KEYCLOAK_URL: {{ regexReplaceAll "/realms/[^/]+/?$" $g.auth.issuerUri "" | quote }}
+  MERIDIAN_AUDIT_KEYCLOAK_REALM: {{ regexReplaceAll "^.*/realms/([^/]+)/?$" $g.auth.issuerUri "${1}" | quote }}
+  MERIDIAN_AUDIT_KEYCLOAK_TENANT: {{ $g.auth.platformOperatorTenant | quote }}
+  {{- end }}
   SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: {{ $g.auth.issuerUri | quote }}
   # SEC-14: tokens must carry this audience; SEC-15: only this tenant's users may use platform:operator
   MERIDIAN_SECURITY_AUDIENCES: {{ $g.auth.audience | quote }}
@@ -822,7 +874,12 @@ Required secrets in the namespace (not created by this chart):
   {{ .Values.global.postgres.appSecret }}        username/password of the runtime role (RLS-bound, no DDL)
   {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner, mounted only by the
       <service>-migrate Jobs (Helm pre-install / pre-upgrade hooks), never by a running Deployment (GAP-22)
-  {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the service account (scope meridian:internal)
+{{- if .Values.global.auth.sharedServiceClient }}
+  {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the LEGACY shared service client (migration)
+{{- else }}
+  meridian-<service>-client  client-id/client-secret of each service's own client svc-<service> (GAP-16; infra/tofu
+      cell output service_client_secret_arns)
+{{- end }}
 {{- range $svc := .Values.services }}
 {{- if and $svc.enabled $svc.secretEnv }}
   {{ $svc.secretName | default (printf "meridian-%s-secrets" $svc.name) }}  keys: {{ join ", " (values $svc.secretEnv | sortAlpha) }}
@@ -839,6 +896,9 @@ Required secrets in the namespace (not created by this chart):
 {{- end }}
 {{- range $k, $users := $shared }}
   {{ $k }}  (one Secret shared by {{ join ", " $users }})
+{{- end }}
+{{- if .Values.global.auth.idpEvents.enabled }}
+  {{ .Values.global.auth.idpEvents.clientSecret }}  client-id/client-secret of meridian-audit-events (GAP-06)
 {{- end }}
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.
@@ -1195,6 +1255,7 @@ kubeVersion: ">=1.30.0-0"
 def services_values(manifest, callers=None):
     callers = callers or {}
     rows = []
+    identity = identity_env()
     for s in manifest:
         r = {"name": s["name"], "domain": s["domain"], "enabled": True,
              "database": s.get("database"), "schema": s.get("schema")}
@@ -1214,11 +1275,15 @@ def services_values(manifest, callers=None):
                                    for c in callers.get(s["name"], [])]
         if s["name"] == "card-vault-service":
             r["keyManagement"] = True
+        if s["name"] in identity:
+            r["env"] = dict(sorted({**r.get("env", {}), **identity[s["name"]]}.items()))
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
                  "replicas": 3, "cpu": "500m", "memory": "512Mi",
                  # SEC-31 / GAP-10: actuator (probes, /actuator/prometheus) never on the port behind the ingress
-                 "managementPort": 9090})
+                 "managementPort": 9090,
+                 # GAP-16: proxies with the caller's token, never calls as itself and uses no Kafka
+                 "serviceIdentity": False})
     return rows
 
 
@@ -1263,9 +1328,18 @@ def values_yaml(rows, app_version):
         "    resources: {cpu: 250m, memory: 512Mi}",
         "  kafka:",
         '    bootstrapServers: "meridian-kafka:9092"',
+        "    iam:                    # GAP-16: MSK IAM, one principal per service (SASL_SSL / AWS_MSK_IAM, IRSA)",
+        "      enabled: false",
+        '      roleArnTemplate: ""   # e.g. arn:aws:iam::123456789012:role/meridian-eu1a-kafka-{name} (tofu output)',
         "  auth:",
         '    issuerUri: "https://auth.example.com/realms/meridian"',
-        '    serviceClientSecret: "meridian-service-client"',
+        '    serviceClientSecret: "meridian-service-client"   # LEGACY shared client (used only with sharedServiceClient)',
+        "    sharedServiceClient: false        # GAP-16 migration: true = every service uses serviceClientSecret again",
+        "    legacyServiceClients: []          # GAP-16 migration: e.g. [meridian-service] while old pods still call",
+        "    privilegedAcr: 2                  # GAP-13: acr needed for meridian:admin / platform:operator user tokens",
+        "    idpEvents:                        # GAP-06: audit-service copies Keycloak sign-in / admin events",
+        "      enabled: false                  # needs platformOperatorTenant (the tenant the events are audited in)",
+        '      clientSecret: "meridian-audit-events-client"   # client-id / client-secret of meridian-audit-events',
         '    audience: "meridian-api"          # SEC-14: required aud of every access token',
         '    platformOperatorTenant: ""        # SEC-15: tenant id of the platform operator (empty: service tokens only)',
         "  cell:                     # S20: identity of this cell in the tenant registry",
@@ -1279,6 +1353,7 @@ def values_yaml(rows, app_version):
         "  otel:",
         '    endpoint: "http://otel-collector.monitoring:4318"',
         "    samplingProbability: 0.1",
+        "  logging: {format: json}   # GAP-06: json (ECS lines on stdout, for the node log collector) | text",
         "  env: {}                   # extra environment for every component",
         "",
         "ingress:",
@@ -1327,13 +1402,15 @@ def values_yaml(rows, app_version):
         "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,",
         "# managementPort (actuator on its own port: probes and the ServiceMonitor use it),",
         "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),",
-        "# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share).",
+        "# sharedSecretEnv (ENV_VAR: {secret, key} of one Secret several services must share),",
+        "# clientSecret (Secret of the service's OAuth client, default meridian-<service>-client), serviceIdentity (false:",
+        "# no OAuth client and no Kafka principal, e.g. the edge gateway).",
         "services:",
     ]
     for r in rows:
         lines.append(f"  - name: {r['name']}")
         for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory", "managementPort", "zone",
-                  "keyManagement"):
+                  "keyManagement", "serviceIdentity"):
             if k in r:
                 lines.append(f"    {k}: {yaml_value(r[k])}")
         if "allowedCallers" in r:

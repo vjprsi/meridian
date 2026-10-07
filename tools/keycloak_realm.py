@@ -34,8 +34,22 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
                              openid/profile; tokens carry merchant_id, merchant_user_id and tenant_id from admin-only
                              user attributes and auth_time / acr (refund approvals, payout account changes and
                              administration need a recent authentication); no password grant
-  meridian-service           confidential, client credentials, every staff scope + meridian:internal + platform:operator
-                             (service-to-service)
+  meridian-console / meridian-developer-portal also use the staff browser flow "meridian staff browser" (GAP-13):
+                             password plus a second factor (WebAuthn security key when registered, else a TOTP app;
+                             TOTP set-up forced for a user without one), acr.loa.map {"1": 1, "2": 2}, level 2
+                             requested and required (default.acr.values / minimum.acr.value 2); tokens carry acr, amr,
+                             auth_time. Services require acr 2 for meridian:admin / platform:operator
+  svc-<service>              GAP-16: one confidential client per service (client credentials): meridian:internal plus
+                             <domain>:write of every service it calls and the special scopes its call paths need
+                             (tools/service_access.py); azp proves the calling service (libs/meridian-web TenantFilter).
+                             Local secret svc-<service>-secret; deployments: Secret meridian-<service>-client
+  meridian-service           LEGACY shared service client (migration only): every staff scope + meridian:internal +
+                             platform:operator; its X-Meridian-Service header is believed only by services that list it
+                             in meridian.security.legacy-service-clients
+  meridian-audit-events      GAP-06: confidential, client credentials, realm-management view-events only (audit-service
+                             copies user and admin events into the audit trail); no Meridian scope or audience
+Realm events (GAP-06): user events (USER_EVENT_TYPES) and admin events with representation stored for 90 days;
+listeners jboss-logging and metrics-listener (keycloak_user_events_total, needs --event-metrics-user-enabled).
   meridian-cell-router       confidential, client credentials, only platform:routing-read (tenant routing and cell
                              reads); tokens carry the platform-operator tenant, no meridian:internal
   meridian-readonly          confidential, client credentials, read scopes only (authorisation tests)
@@ -56,8 +70,9 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
                              manage-users (Keycloak has no narrower role for user sessions); no Meridian scope, no
                              meridian-api audience, so its tokens are useless against the Meridian APIs
 Users:
-  ops.admin          staff demo user (console), demo tenant, realm role meridian-admin
-  platform.operator  platform operator (console), platform-operator tenant, realm role platform-operator
+  ops.admin          staff demo user (console), demo tenant, realm role meridian-admin; demo TOTP authenticator
+                     (secret DEMO_STAFF_TOTP_SECRET) for the staff second factor
+  platform.operator  platform operator (console), platform-operator tenant, realm role platform-operator; same demo TOTP
   demo.customer      customer demo user (customer-web); set its customer_id attribute to a customer of the demo tenant.
                      Has a demo TOTP authenticator (secret DEMO_CUSTOMER_TOTP_SECRET, base32 in the guide) so acr 2
                      can be reached locally; enrol more factors in the app (Security)
@@ -132,6 +147,28 @@ CUSTOMER_BROWSER_FLOW_ID = "0199a000-0000-7000-8000-00000000f101"   # fixed: the
 # Local demo only: TOTP secret of demo.customer (Keycloak keeps the raw secret; authenticator apps use its base32).
 DEMO_CUSTOMER_TOTP_SECRET = "MeridianDemoTotp2026"
 CUSTOMER_SESSIONS_CLIENT = "meridian-customer-sessions"
+# GAP-13: staff Levels of Authentication. Staff clients require level 2 (password + second factor) for every sign-in;
+# the second factor is asked again for an authorisation more than STAFF_LOA2_MAX_AGE seconds after the last one.
+STAFF_LOA1_MAX_AGE = 36000
+STAFF_LOA2_MAX_AGE = 3600
+STAFF_BROWSER_FLOW = "meridian staff browser"
+STAFF_BROWSER_FLOW_ID = "0199a000-0000-7000-8000-00000000f102"   # fixed: the client overrides refer to it
+STAFF_ACR_LOA_MAP = {"1": 1, "2": 2}
+# Local demo only: TOTP secret of the demo staff users ops.admin / platform.operator (raw secret; base32 in the guide).
+DEMO_STAFF_TOTP_SECRET = "MeridianStaffTotp2026"
+# GAP-06: realm events. Stored for EVENTS_EXPIRATION seconds in Keycloak (audit-service copies them into the audit
+# trail, which keeps them per the audit retention policy); CODE_TO_TOKEN successes are left out (one per sign-in).
+EVENTS_EXPIRATION = 90 * 24 * 3600
+USER_EVENT_TYPES = [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR", "CODE_TO_TOKEN_ERROR", "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR",
+    "REFRESH_TOKEN_ERROR", "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR", "UPDATE_CREDENTIAL", "UPDATE_CREDENTIAL_ERROR",
+    "REMOVE_CREDENTIAL", "REMOVE_CREDENTIAL_ERROR", "UPDATE_TOTP", "REMOVE_TOTP", "RESET_PASSWORD",
+    "RESET_PASSWORD_ERROR", "SEND_RESET_PASSWORD", "USER_DISABLED_BY_PERMANENT_LOCKOUT",
+    "USER_DISABLED_BY_TEMPORARY_LOCKOUT", "IMPERSONATE", "IMPERSONATE_ERROR", "TOKEN_EXCHANGE", "TOKEN_EXCHANGE_ERROR",
+    "GRANT_CONSENT", "REVOKE_GRANT", "UPDATE_EMAIL", "DELETE_ACCOUNT",
+]
+# GAP-06: read-only client of audit-service (realm-management view-events: user and admin events, nothing else).
+AUDIT_EVENTS_CLIENT = "meridian-audit-events"
 
 
 def execution(authenticator: str, requirement: str, priority: int, config: str | None = None) -> dict:
@@ -200,6 +237,102 @@ def customer_browser_flows() -> tuple[list, list]:
               execution("auth-otp-form", "ALTERNATIVE", 30, "meridian-customer-amr-otp")]),
     ]
     return flows, configs
+
+
+def staff_browser_flows() -> tuple[list, list]:
+    """GAP-13: browser flow of the staff apps (console, developer portal) with Levels of Authentication.
+
+    cookie (SSO; satisfies only the level the session already reached)
+    | forms
+        level 1 (Condition - Level of Authentication 1): username + password                    -> acr 1, amr pwd
+        level 2 (Condition - Level of Authentication 2): second factor                          -> acr 2, amr hwk / otp
+            security key   (Condition - user configured): WebAuthn, when the user registered one
+            authenticator  (Condition - sub-flow "security key" not executed): TOTP form; REQUIRED, so a user without
+                           any factor must set up an authenticator app before the sign-in completes (forced enrolment)
+    The staff clients request and require level 2 (default.acr.values / minimum.acr.value = 2): every staff sign-in is
+    password plus a second factor. Services additionally require acr 2 for meridian:admin / platform:operator
+    (meridian.security.privileged-acr), so a token from any weaker path is refused for privileged operations. The second
+    factor is asked again when an authorisation comes more than STAFF_LOA2_MAX_AGE after the last one.
+    """
+    def amr(value: str, max_age: int) -> dict:
+        return {"default.reference.value": value, "default.reference.maxAge": str(max_age)}
+
+    configs = [
+        {"alias": "meridian-staff-loa1", "config": {"loa-condition-level": "1", "loa-max-age": str(STAFF_LOA1_MAX_AGE)}},
+        {"alias": "meridian-staff-loa2", "config": {"loa-condition-level": "2", "loa-max-age": str(STAFF_LOA2_MAX_AGE)}},
+        {"alias": "meridian-staff-amr-pwd", "config": amr("pwd", STAFF_LOA1_MAX_AGE)},
+        {"alias": "meridian-staff-amr-otp", "config": amr("otp", STAFF_LOA2_MAX_AGE)},
+        {"alias": "meridian-staff-amr-hwk", "config": amr("hwk", STAFF_LOA2_MAX_AGE)},
+        {"alias": "meridian-staff-no-security-key", "config": {"flow_to_check": "meridian staff security key",
+                                                              "check_result": "not-executed"}},
+    ]
+    flows = [
+        flow(STAFF_BROWSER_FLOW, "Staff sign-in (console, developer portal): password plus a second factor (acr 2); "
+             "WebAuthn security key or TOTP authenticator app, enrolment forced on first sign-in",
+             [execution("auth-cookie", "ALTERNATIVE", 10),
+              sub_flow("meridian staff forms", "ALTERNATIVE", 20)], top=True, flow_id=STAFF_BROWSER_FLOW_ID),
+        flow("meridian staff forms", "Level 1 and level 2 sub-flows",
+             [sub_flow("meridian staff level 1", "CONDITIONAL", 10),
+              sub_flow("meridian staff level 2", "CONDITIONAL", 20)]),
+        flow("meridian staff level 1", "acr 1: username and password",
+             [execution("conditional-level-of-authentication", "REQUIRED", 10, "meridian-staff-loa1"),
+              execution("auth-username-password-form", "REQUIRED", 20, "meridian-staff-amr-pwd")]),
+        flow("meridian staff level 2", "acr 2: a second factor (asked again after the level-2 max age)",
+             [execution("conditional-level-of-authentication", "REQUIRED", 10, "meridian-staff-loa2"),
+              sub_flow("meridian staff second factor", "REQUIRED", 20)]),
+        flow("meridian staff second factor", "WebAuthn security key when registered, otherwise the TOTP app",
+             [sub_flow("meridian staff security key", "CONDITIONAL", 10),
+              sub_flow("meridian staff authenticator app", "CONDITIONAL", 20)]),
+        flow("meridian staff security key", "WebAuthn (2FA) for users who registered a security key",
+             [execution("conditional-user-configured", "REQUIRED", 10),
+              execution("webauthn-authenticator", "REQUIRED", 20, "meridian-staff-amr-hwk")]),
+        flow("meridian staff authenticator app", "TOTP for everyone else (set-up forced when missing)",
+             [execution("conditional-sub-flow-executed", "REQUIRED", 10, "meridian-staff-no-security-key"),
+              execution("auth-otp-form", "REQUIRED", 20, "meridian-staff-amr-otp")]),
+    ]
+    return flows, configs
+
+
+def realm_events() -> dict:
+    """GAP-06: user events (sign-ins, failures, factor changes, lockouts, client-credential logins) and admin events with
+    representations are stored in the realm (eventsExpiration) and read by audit-service with the read-only
+    meridian-audit-events client (polling the admin events API into the audit trail); metrics-listener feeds the
+    keycloak_user_events_total metric (J4 login SLI, needs --event-metrics-user-enabled); jboss-logging writes them to
+    Keycloak's log (shipped with the other container logs)."""
+    return {
+        "eventsEnabled": True,
+        "eventsExpiration": EVENTS_EXPIRATION,
+        "eventsListeners": ["jboss-logging", "metrics-listener"],
+        "enabledEventTypes": USER_EVENT_TYPES,
+        "adminEventsEnabled": True,
+        "adminEventsDetailsEnabled": True,
+    }
+
+
+def service_clients(scope_names: set, tenant_mapper: dict) -> tuple[list, list]:
+    """GAP-16: one confidential client per service (svc-<service>, client credentials), scopes from
+    tools/service_access.py; the secret here is a local development value (deployments: Secret
+    meridian-<service>-client, keys client-id / client-secret). Service accounts of clients that need platform:operator
+    get the platform-operator realm role (the scope is role-gated)."""
+    import service_access
+    clients, users = [], []
+    realm_scopes = set(scope_names)
+    for s in service_access.manifest():
+        name = s["name"]
+        scopes = service_access.http_scopes(name, realm_scopes)
+        clients.append({
+            "clientId": service_access.client_id(name), "name": f"{name} (service identity)",
+            "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+            "publicClient": False, "secret": f"{service_access.client_id(name)}-secret",
+            "serviceAccountsEnabled": True, "standardFlowEnabled": False, "directAccessGrantsEnabled": False,
+            "implicitFlowEnabled": False, "fullScopeAllowed": False,
+            "protocolMappers": [tenant_mapper, audience_mapper()],
+            "defaultClientScopes": scopes, "optionalClientScopes": []})
+        if "platform:operator" in scopes:
+            users.append({"username": f"service-account-{service_access.client_id(name)}", "enabled": True,
+                          "serviceAccountClientId": service_access.client_id(name),
+                          "realmRoles": ["platform-operator"]})
+    return clients, users
 
 
 def oidc_standard_scopes() -> list:
@@ -303,14 +436,34 @@ def audience_mapper() -> dict:
                        "id.token.claim": "false", "introspection.token.claim": "true"}}
 
 
+def session_mappers() -> list:
+    """auth_time / acr / amr / sub of the sign-in (step-up checks, privileged-scope acr, session revocation)."""
+    return [
+        {"name": "auth_time", "protocol": "openid-connect", "protocolMapper": "oidc-usersessionmodel-note-mapper",
+         "config": {"user.session.note": "AUTH_TIME", "claim.name": "auth_time", "jsonType.label": "long",
+                    "access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "acr", "protocol": "openid-connect", "protocolMapper": "oidc-acr-mapper",
+         "config": {"access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "amr", "protocol": "openid-connect", "protocolMapper": "oidc-amr-mapper",
+         "config": {"access.token.claim": "true", "id.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "sub", "protocol": "openid-connect", "protocolMapper": "oidc-sub-mapper",
+         "config": {"access.token.claim": "true", "introspection.token.claim": "true"}},
+    ]
+
+
 def staff_app(client_id: str, name: str, origins: list, scopes: list, optional: list | None = None) -> dict:
-    """Public staff web app: authorization code + PKCE only, tenant from the user's tenant_id attribute."""
+    """Public staff web app: authorization code + PKCE only, tenant from the user's tenant_id attribute. GAP-13: the
+    staff browser flow (password + second factor), level 2 requested and required for every sign-in; tokens carry
+    acr / amr / auth_time / sub."""
     return {"clientId": client_id, "name": name, "publicClient": True,
             "standardFlowEnabled": True, "implicitFlowEnabled": False, "directAccessGrantsEnabled": False,
             "serviceAccountsEnabled": False, "fullScopeAllowed": False,
             "redirectUris": [o + "/*" for o in origins], "webOrigins": origins,
-            "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+"},
-            "protocolMappers": [attribute_mapper("tenant_id", "tenant_id"), audience_mapper()],
+            "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "+",
+                           "acr.loa.map": json.dumps(STAFF_ACR_LOA_MAP, separators=(",", ":")),
+                           "default.acr.values": "2", "minimum.acr.value": "2"},
+            "authenticationFlowBindingOverrides": {"browser": STAFF_BROWSER_FLOW_ID},
+            "protocolMappers": [attribute_mapper("tenant_id", "tenant_id"), audience_mapper()] + session_mappers(),
             "defaultClientScopes": ["profile", "email", "web-origins"] + scopes,
             "optionalClientScopes": optional or []}
 
@@ -380,6 +533,9 @@ def main():
     console_scopes = scope_names + [CHANNELS_ADMIN_SCOPE]
     portal_scopes = ["platform:read", "platform:write"]
     customer_flows, customer_flow_configs = customer_browser_flows()
+    staff_flows, staff_flow_configs = staff_browser_flows()
+    svc_clients, svc_users = service_clients(set(scope_names + [CHANNELS_ADMIN_SCOPE, operator, ROUTING_SCOPE]),
+                                             tenant_mapper)
     realm = {
         "realm": "meridian",
         "enabled": True,
@@ -400,8 +556,9 @@ def main():
         "webAuthnPolicyPasswordlessRequireResidentKey": "Yes",
         "webAuthnPolicyPasswordlessUserVerificationRequirement": "required",
         "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegister": True,
-        "authenticationFlows": customer_flows,
-        "authenticatorConfig": customer_flow_configs,
+        "authenticationFlows": customer_flows + staff_flows,
+        "authenticatorConfig": customer_flow_configs + staff_flow_configs,
+        **realm_events(),
         "requiredActions": required_actions(),
         "clientScopes": scopes,
         "roles": {"realm": [
@@ -417,7 +574,11 @@ def main():
             staff_app("meridian-console", "Meridian ops console", ["http://localhost:13100"], console_scopes,
                       [operator] + privileged),
             staff_app("meridian-developer-portal", "Meridian developer portal", DEV_PORTAL_ORIGINS, portal_scopes),
-            {"clientId": "meridian-service", "name": "Meridian service account", "publicClient": False,
+            # Legacy shared service client (GAP-16 migration only: Helm global.auth.sharedServiceClient). Every service
+            # now has its own client svc-<service> (below); receivers believe this client's X-Meridian-Service header
+            # only while they list it in meridian.security.legacy-service-clients. Delete it once no release uses it.
+            {"clientId": "meridian-service", "name": "Meridian service account (legacy shared, migration only)",
+             "publicClient": False,
              "secret": "meridian-service-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,
              "protocolMappers": [tenant_mapper, audience_mapper()],
@@ -456,6 +617,12 @@ def main():
              "protocolMappers": customer_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + customer_scopes,
              "optionalClientScopes": []},
+            # GAP-06: audit-service only: reads user and admin events (realm-management view-events). No Meridian scope
+            # or audience, so its tokens are useless against the Meridian APIs.
+            {"clientId": AUDIT_EVENTS_CLIENT, "name": "Keycloak events reader (audit-service)",
+             "publicClient": False, "secret": "meridian-audit-events-secret", "serviceAccountsEnabled": True,
+             "standardFlowEnabled": False, "directAccessGrantsEnabled": False, "implicitFlowEnabled": False,
+             "fullScopeAllowed": True, "protocolMappers": [], "defaultClientScopes": [], "optionalClientScopes": []},
             # customer-channel-service only: list / end the signed-in customer's own Keycloak sessions and list their
             # sign-in factors (admin REST API for the token's sub). No Meridian scope or audience.
             {"clientId": CUSTOMER_SESSIONS_CLIENT, "name": "Customer sessions (customer-channel-service)",
@@ -487,16 +654,24 @@ def main():
              "protocolMappers": merchant_mappers + [audience_mapper()],
              "defaultClientScopes": ["profile", "email", "web-origins"] + merchant_scopes,
              "optionalClientScopes": []},
-        ],
+        ] + svc_clients,
         "users": [
             {"username": "ops.admin", "enabled": True, "email": "ops.admin@meridian.local", "emailVerified": True,
              "firstName": "Ops", "lastName": "Admin", "attributes": {"tenant_id": [DEMO_TENANT]},
              "realmRoles": ["meridian-admin"],
-             "credentials": [{"type": "password", "value": "Meridian#Admin2026", "temporary": False}]},
+             "credentials": [{"type": "password", "value": "Meridian#Admin2026", "temporary": False},
+                             {"type": "otp", "userLabel": "Demo staff authenticator app",
+                              "secretData": json.dumps({"value": DEMO_STAFF_TOTP_SECRET}),
+                              "credentialData": json.dumps({"subType": "totp", "digits": 6, "counter": 0,
+                                                            "period": 30, "algorithm": "HmacSHA1"})}]},
             {"username": "platform.operator", "enabled": True, "email": "platform.operator@meridian.local",
              "emailVerified": True, "firstName": "Platform", "lastName": "Operator",
              "attributes": {"tenant_id": [PLATFORM_TENANT]}, "realmRoles": ["platform-operator"],
-             "credentials": [{"type": "password", "value": "Meridian#Operator2026", "temporary": False}]},
+             "credentials": [{"type": "password", "value": "Meridian#Operator2026", "temporary": False},
+                             {"type": "otp", "userLabel": "Demo staff authenticator app",
+                              "secretData": json.dumps({"value": DEMO_STAFF_TOTP_SECRET}),
+                              "credentialData": json.dumps({"subType": "totp", "digits": 6, "counter": 0,
+                                                            "period": 30, "algorithm": "HmacSHA1"})}]},
             {"username": "service-account-meridian-service", "enabled": True, "serviceAccountClientId": "meridian-service",
              "realmRoles": ["meridian-admin", "platform-operator"]},
             {"username": "demo.customer", "enabled": True, "email": "demo.customer@meridian.local",
@@ -507,6 +682,8 @@ def main():
                               "secretData": json.dumps({"value": DEMO_CUSTOMER_TOTP_SECRET}),
                               "credentialData": json.dumps({"subType": "totp", "digits": 6, "counter": 0,
                                                             "period": 30, "algorithm": "HmacSHA1"})}]},
+            {"username": f"service-account-{AUDIT_EVENTS_CLIENT}", "enabled": True,
+             "serviceAccountClientId": AUDIT_EVENTS_CLIENT, "clientRoles": {"realm-management": ["view-events"]}},
             {"username": f"service-account-{CUSTOMER_SESSIONS_CLIENT}", "enabled": True,
              "serviceAccountClientId": CUSTOMER_SESSIONS_CLIENT,
              "clientRoles": {"realm-management": ["view-users", "manage-users"]}},
@@ -534,7 +711,7 @@ def main():
              "attributes": {"merchant_id": [DEMO_MERCHANT], "merchant_user_id": [DEMO_MERCHANT_CASHIER],
                             "tenant_id": [DEMO_TENANT]},
              "credentials": [{"type": "password", "value": "Meridian#Cashier2026", "temporary": False}]},
-        ],
+        ] + svc_users,
     }
     out = ROOT / "infra" / "local" / "keycloak" / "meridian-realm.json"
     out.parent.mkdir(parents=True, exist_ok=True)

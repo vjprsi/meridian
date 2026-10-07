@@ -119,11 +119,12 @@ public class MeridianWebAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
     SecurityFilterChain meridianSecurity(HttpSecurity http, MeridianProperties props, JsonMapper json,
-                                         org.springframework.core.env.Environment env) throws Exception {
+                                         org.springframework.core.env.Environment env,
+                                         io.meridian.web.security.SecurityProperties security) throws Exception {
         java.util.List<String[]> publicRoutes = publicRoutes(json, env.getProperty("spring.application.name", ""));
         http.csrf(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .addFilterAfter(new TenantFilter(props), AnonymousAuthenticationFilter.class);
+            .addFilterAfter(new TenantFilter(props, security), AnonymousAuthenticationFilter.class);
         if (props.devMode()) {
             http.authorizeHttpRequests(a -> a.anyRequest().permitAll());
         } else {

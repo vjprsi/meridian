@@ -168,6 +168,188 @@
           "authenticatorConfig": "meridian-customer-amr-otp"
         }
       ]
+    },
+    {
+      "alias": "meridian staff browser",
+      "description": "Staff sign-in (console, developer portal): password plus a second factor (acr 2); WebAuthn security key or TOTP authenticator app, enrolment forced on first sign-in",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "meridian staff forms",
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ],
+      "id": "0199a000-0000-7000-8000-00000000f102"
+    },
+    {
+      "alias": "meridian staff forms",
+      "description": "Level 1 and level 2 sub-flows",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "flowAlias": "meridian staff level 1",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 10,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "meridian staff level 2",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "meridian staff level 1",
+      "description": "acr 1: username and password",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-loa1"
+        },
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-amr-pwd"
+        }
+      ]
+    },
+    {
+      "alias": "meridian staff level 2",
+      "description": "acr 2: a second factor (asked again after the level-2 max age)",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-loa2"
+        },
+        {
+          "flowAlias": "meridian staff second factor",
+          "authenticatorFlow": true,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "meridian staff second factor",
+      "description": "WebAuthn security key when registered, otherwise the TOTP app",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "flowAlias": "meridian staff security key",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 10,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "meridian staff authenticator app",
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "meridian staff security key",
+      "description": "WebAuthn (2FA) for users who registered a security key",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "webauthn-authenticator",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-amr-hwk"
+        }
+      ]
+    },
+    {
+      "alias": "meridian staff authenticator app",
+      "description": "TOTP for everyone else (set-up forced when missing)",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-sub-flow-executed",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-no-security-key"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "meridian-staff-amr-otp"
+        }
+      ]
     }
   ],
   "authenticatorConfig": [
@@ -212,8 +394,89 @@
         "default.reference.value": "hwk",
         "default.reference.maxAge": "300"
       }
+    },
+    {
+      "alias": "meridian-staff-loa1",
+      "config": {
+        "loa-condition-level": "1",
+        "loa-max-age": "36000"
+      }
+    },
+    {
+      "alias": "meridian-staff-loa2",
+      "config": {
+        "loa-condition-level": "2",
+        "loa-max-age": "3600"
+      }
+    },
+    {
+      "alias": "meridian-staff-amr-pwd",
+      "config": {
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "meridian-staff-amr-otp",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "3600"
+      }
+    },
+    {
+      "alias": "meridian-staff-amr-hwk",
+      "config": {
+        "default.reference.value": "hwk",
+        "default.reference.maxAge": "3600"
+      }
+    },
+    {
+      "alias": "meridian-staff-no-security-key",
+      "config": {
+        "flow_to_check": "meridian staff security key",
+        "check_result": "not-executed"
+      }
     }
   ],
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "eventsListeners": [
+    "jboss-logging",
+    "metrics-listener"
+  ],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "LOGOUT_ERROR",
+    "CODE_TO_TOKEN_ERROR",
+    "CLIENT_LOGIN",
+    "CLIENT_LOGIN_ERROR",
+    "REFRESH_TOKEN_ERROR",
+    "UPDATE_PASSWORD",
+    "UPDATE_PASSWORD_ERROR",
+    "UPDATE_CREDENTIAL",
+    "UPDATE_CREDENTIAL_ERROR",
+    "REMOVE_CREDENTIAL",
+    "REMOVE_CREDENTIAL_ERROR",
+    "UPDATE_TOTP",
+    "REMOVE_TOTP",
+    "RESET_PASSWORD",
+    "RESET_PASSWORD_ERROR",
+    "SEND_RESET_PASSWORD",
+    "USER_DISABLED_BY_PERMANENT_LOCKOUT",
+    "USER_DISABLED_BY_TEMPORARY_LOCKOUT",
+    "IMPERSONATE",
+    "IMPERSONATE_ERROR",
+    "TOKEN_EXCHANGE",
+    "TOKEN_EXCHANGE_ERROR",
+    "GRANT_CONSENT",
+    "REVOKE_GRANT",
+    "UPDATE_EMAIL",
+    "DELETE_ACCOUNT"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
   "requiredActions": [
     {
       "alias": "CONFIGURE_TOTP",
@@ -969,7 +1232,13 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+"
+        "post.logout.redirect.uris": "+",
+        "acr.loa.map": "{\"1\":1,\"2\":2}",
+        "default.acr.values": "2",
+        "minimum.acr.value": "2"
+      },
+      "authenticationFlowBindingOverrides": {
+        "browser": "0199a000-0000-7000-8000-00000000f102"
       },
       "protocolMappers": [
         {
@@ -994,6 +1263,48 @@
             "included.custom.audience": "meridian-api",
             "access.token.claim": "true",
             "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "auth_time",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "config": {
+            "user.session.note": "AUTH_TIME",
+            "claim.name": "auth_time",
+            "jsonType.label": "long",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "acr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-acr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "config": {
+            "access.token.claim": "true",
             "introspection.token.claim": "true"
           }
         }
@@ -1076,7 +1387,13 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+"
+        "post.logout.redirect.uris": "+",
+        "acr.loa.map": "{\"1\":1,\"2\":2}",
+        "default.acr.values": "2",
+        "minimum.acr.value": "2"
+      },
+      "authenticationFlowBindingOverrides": {
+        "browser": "0199a000-0000-7000-8000-00000000f102"
       },
       "protocolMappers": [
         {
@@ -1103,6 +1420,48 @@
             "id.token.claim": "false",
             "introspection.token.claim": "true"
           }
+        },
+        {
+          "name": "auth_time",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "config": {
+            "user.session.note": "AUTH_TIME",
+            "claim.name": "auth_time",
+            "jsonType.label": "long",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "acr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-acr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
         }
       ],
       "defaultClientScopes": [
@@ -1116,7 +1475,7 @@
     },
     {
       "clientId": "meridian-service",
-      "name": "Meridian service account",
+      "name": "Meridian service account (legacy shared, migration only)",
       "publicClient": false,
       "secret": "meridian-service-secret",
       "serviceAccountsEnabled": true,
@@ -1506,6 +1865,20 @@
         "web-origins",
         "channels:customer"
       ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "meridian-audit-events",
+      "name": "Keycloak events reader (audit-service)",
+      "publicClient": false,
+      "secret": "meridian-audit-events-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "protocolMappers": [],
+      "defaultClientScopes": [],
       "optionalClientScopes": []
     },
     {
@@ -1918,6 +2291,3108 @@
         "channels:merchant"
       ],
       "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-deposit-service",
+      "name": "deposit-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-deposit-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:operator",
+        "platform:write",
+        "product:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-statement-service",
+      "name": "statement-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-statement-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-service",
+      "name": "card-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-vault-service",
+      "name": "card-vault-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-vault-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-authorization-service",
+      "name": "card-authorization-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-authorization-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-tokenization-service",
+      "name": "card-tokenization-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-tokenization-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-threeds-service",
+      "name": "card-threeds-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-threeds-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-clearing-service",
+      "name": "card-clearing-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-clearing-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-card-dispute-service",
+      "name": "card-dispute-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-card-dispute-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "cards:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-customer-channel-service",
+      "name": "customer-channel-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-customer-channel-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "engagement:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-agent-channel-service",
+      "name": "agent-channel-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-agent-channel-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-business-channel-service",
+      "name": "business-channel-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-business-channel-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-merchant-channel-service",
+      "name": "merchant-channel-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-merchant-channel-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-rewards-service",
+      "name": "rewards-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-rewards-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-insights-service",
+      "name": "insights-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-insights-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-campaign-service",
+      "name": "campaign-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-campaign-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-inbox-service",
+      "name": "inbox-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-inbox-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write",
+        "servicing:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-ledger-service",
+      "name": "ledger-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-ledger-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-gl-service",
+      "name": "gl-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-gl-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-reconciliation-service",
+      "name": "reconciliation-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-reconciliation-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-loan-origination-service",
+      "name": "loan-origination-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-loan-origination-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write",
+        "product:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-loan-service",
+      "name": "loan-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-loan-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "product:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-collateral-service",
+      "name": "collateral-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-collateral-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-collections-service",
+      "name": "collections-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-collections-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-openbanking-service",
+      "name": "openbanking-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-openbanking-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-business-day-service",
+      "name": "business-day-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-business-day-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "platform:operator",
+        "platform:routing-read",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-file-gateway-service",
+      "name": "file-gateway-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-file-gateway-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-search-service",
+      "name": "search-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-search-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-archive-service",
+      "name": "archive-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-archive-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:operator",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-customer-service",
+      "name": "customer-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-customer-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "engagement:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write",
+        "servicing:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-onboarding-service",
+      "name": "onboarding-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-onboarding-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-kyc-service",
+      "name": "kyc-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-kyc-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-payment-service",
+      "name": "payment-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-payment-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write",
+        "risk:*",
+        "risk:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-routing-service",
+      "name": "routing-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-routing-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-fx-service",
+      "name": "fx-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-fx-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-tenant-service",
+      "name": "tenant-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-tenant-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:operator",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-identity-service",
+      "name": "identity-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-identity-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:operator",
+        "platform:routing-read",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-config-service",
+      "name": "config-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-config-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-reference-data-service",
+      "name": "reference-data-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-reference-data-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-document-service",
+      "name": "document-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-document-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-workflow-service",
+      "name": "workflow-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-workflow-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "engagement:write",
+        "ledger:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:write",
+        "product:write",
+        "reporting:write",
+        "risk:write",
+        "servicing:write",
+        "treasury:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-notification-service",
+      "name": "notification-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-notification-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-webhook-service",
+      "name": "webhook-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-webhook-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-audit-service",
+      "name": "audit-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-audit-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:operator",
+        "platform:routing-read",
+        "platform:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-billing-service",
+      "name": "billing-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-billing-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-product-catalog-service",
+      "name": "product-catalog-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-product-catalog-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "product:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-pricing-rules-service",
+      "name": "pricing-rules-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-pricing-rules-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-regulatory-reporting-service",
+      "name": "regulatory-reporting-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-regulatory-reporting-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "cards:write",
+        "ledger:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:write",
+        "risk:write",
+        "servicing:write",
+        "treasury:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-analytics-service",
+      "name": "analytics-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-analytics-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "lending:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-ai-platform-service",
+      "name": "ai-platform-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-ai-platform-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-fraud-service",
+      "name": "fraud-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-fraud-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:write",
+        "reporting:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-transaction-monitoring-service",
+      "name": "transaction-monitoring-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-transaction-monitoring-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-sanctions-service",
+      "name": "sanctions-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-sanctions-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-case-management-service",
+      "name": "case-management-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-case-management-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-limits-service",
+      "name": "limits-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-limits-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-crm-service",
+      "name": "crm-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-crm-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "platform:operator",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-treasury-deal-service",
+      "name": "treasury-deal-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-treasury-deal-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:write",
+        "treasury:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-liquidity-service",
+      "name": "liquidity-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-liquidity-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "payments:write",
+        "platform:write",
+        "treasury:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-alm-service",
+      "name": "alm-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-alm-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-wallet-service",
+      "name": "wallet-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-wallet-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "party:write",
+        "payments:write",
+        "platform:write",
+        "risk:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-agent-network-service",
+      "name": "agent-network-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-agent-network-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-commission-service",
+      "name": "commission-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-commission-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-biller-service",
+      "name": "biller-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-biller-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-merchant-service",
+      "name": "merchant-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-merchant-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "accounts:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-channel-service",
+      "name": "channel-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-channel-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-disbursement-service",
+      "name": "disbursement-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-disbursement-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "svc-interop-service",
+      "name": "interop-service (service identity)",
+      "description": "GAP-16 per-service identity: client credentials, azp proves the calling service",
+      "publicClient": false,
+      "secret": "svc-interop-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "ledger:write",
+        "meridian:internal",
+        "operations:write",
+        "platform:write",
+        "wallets:write"
+      ],
+      "optionalClientScopes": []
     }
   ],
   "users": [
@@ -1941,6 +5416,12 @@
           "type": "password",
           "value": "Meridian#Admin2026",
           "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
         }
       ]
     },
@@ -1964,6 +5445,12 @@
           "type": "password",
           "value": "Meridian#Operator2026",
           "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
         }
       ]
     },
@@ -2004,6 +5491,16 @@
           "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
         }
       ]
+    },
+    {
+      "username": "service-account-meridian-audit-events",
+      "enabled": true,
+      "serviceAccountClientId": "meridian-audit-events",
+      "clientRoles": {
+        "realm-management": [
+          "view-events"
+        ]
+      }
     },
     {
       "username": "service-account-meridian-customer-sessions",
@@ -2141,6 +5638,102 @@
           "value": "Meridian#Cashier2026",
           "temporary": false
         }
+      ]
+    },
+    {
+      "username": "service-account-svc-deposit-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-deposit-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-customer-channel-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-customer-channel-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-business-channel-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-business-channel-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-business-day-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-business-day-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-archive-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-archive-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-customer-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-customer-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-payment-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-payment-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-routing-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-routing-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-tenant-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-tenant-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-identity-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-identity-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-audit-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-audit-service",
+      "realmRoles": [
+        "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-crm-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-crm-service",
+      "realmRoles": [
+        "platform-operator"
       ]
     }
   ]

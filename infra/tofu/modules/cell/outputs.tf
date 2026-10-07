@@ -90,3 +90,13 @@ output "cde_db_endpoint" {
   description = "Helm cde.postgres.host (null: the CDE shares the cell cluster)"
   value       = var.cde_dedicated_db ? aws_rds_cluster.cde[0].endpoint : null
 }
+
+output "kafka_service_role_arns" {
+  description = "GAP-16: IAM role (MSK principal) per service; Helm global.kafka.iam.roleArnTemplate = <prefix>{name}"
+  value       = { for k, r in aws_iam_role.kafka_service : k => r.arn }
+}
+
+output "service_client_secret_arns" {
+  description = "GAP-16: Secrets Manager entry per service with its Keycloak client (sync to Secret meridian-<service>-client)"
+  value       = { for k, s in aws_secretsmanager_secret.service_client : k => s.arn }
+}

@@ -99,16 +99,30 @@ Lessons from the rollout (all 63 services):
 
 - A call made while handling a user request forwards the user's token (the user's permissions apply).
 - A call with no user context (scheduled job, provider callback, Kafka consumer) uses a client-credentials token
-  with scope `meridian:internal`; set `meridian.service-auth.token-uri / client-id / client-secret`
-  (local: `http://localhost:15180/realms/meridian/protocol/openid-connect/token`, `meridian-service`,
-  `meridian-service-secret`). Bind the tenant first (`TenantContext.callAs(tenant, "job:<name>", ...)`);
-  ServiceClient sends it as `X-Tenant-Id`, which receivers honour only for internal tokens.
-- Records written this way carry `created_by = svc:<client>[/<on-behalf-of>]`.
+  with scope `meridian:internal` of the service's OWN client `svc-<spring.application.name>` (GAP-16,
+  [SERVICE_IDENTITY.md](SERVICE_IDENTITY.md)); set `meridian.service-auth.token-uri` and `.client-secret` (the client id
+  defaults to `svc-<name>`; local: `http://localhost:15180/realms/meridian/protocol/openid-connect/token`,
+  `svc-<name>-secret`, set by `tools/dev.py` in jwt mode; Helm: Secret `meridian-<service>-client`). The client's
+  scopes are derived from the services your code calls (`tools/service_access.py`, regenerate the realm with
+  `tools/keycloak_realm.py` after adding a call to a new service). Bind the tenant first
+  (`TenantContext.callAs(tenant, "job:<name>", ...)`); ServiceClient sends it as `X-Tenant-Id`, which receivers honour
+  only for internal tokens.
+- Records written this way carry `created_by = svc:<service>[/<on-behalf-of>]`.
 - "Only the owning service may do this" (opening its approval requests, ledger `POST /ledger-accounts/{id}/overdraft-limit`):
   the caller wraps the call in `ServiceClient.asService(() -> client.post(...))` (service token +
   `X-Meridian-Service: <spring.application.name>`, `X-User` still the acting user); the receiver checks
-  `TenantContext.callingService()`, which is set only with an internal token (dev mode: the header alone).
-
+  `TenantContext.callingService()`. In jwt mode its value comes from the token's `azp` (`svc-<service>`), never from
+  the header, which only says "acting as myself"; the header's value is believed only in dev mode and, during the
+  migration from the shared `meridian-service` client, for clients listed in `meridian.security.legacy-service-clients`.
+- Kafka: in a cell with `global.kafka.iam.enabled` each service is its own MSK principal and may produce only to its
+  domain topic and consume only the topics of its `@KafkaListener`s (+ `meridian.platform.v1`); a new listener on
+  another topic needs `python tools/kafka_acls.py` (CI checks it) and a tofu apply.
+- Staff tokens (GAP-13): the console and developer portal require password plus a second factor (acr 2). An operation
+  whose access rests on `meridian:admin` (the admin shortcut) or `platform:operator` needs a user token with acr >=
+  `meridian.security.privileged-acr` (2), else 401 `insufficient_user_authentication` with the RFC 9470 challenge
+  (`acr_values="2"`); internal tokens are exempt.
+- Logs (GAP-06): JSON (ECS) outside dev mode with `request_id`, `tenant_id`, `principal`, `calling_service` and trace
+  ids; never log names, contact data, payloads or secrets ([operations/LOGGING.md](operations/LOGGING.md)).
 
 Customer requests (`customer-channel-service`, `/v1/me/*`): a customer token (scope `channels:customer`, claim
 `customer_id`) is bound as `io.meridian.web.security.CustomerContext` (`CustomerContext.customerId()`, `authTime()`,

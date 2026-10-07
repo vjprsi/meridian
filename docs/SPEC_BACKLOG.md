@@ -258,6 +258,12 @@ Remaining:
 - Payment-service approval levels the business's approvers cannot satisfy remain with the bank's staff; the portal
   shows `downstream_status`.
 
+## Card-vault IAM role (merge note 2026-10-07)
+
+A Kubernetes service account carries one IRSA role. card-vault-service uses the CDE KMS role
+(`cde.keys.serviceAccountRoleArn`); with `global.kafka.iam` on, add the vault's MSK grants from
+`infra/tofu/modules/cell/kafka-acls.json` to that CDE role in `infra/tofu/modules/cell/cde.tf`.
+
 ## Resume point (paused 2026-10-07)
 
 - Full build after the e2e fixes: only billing-service BillingFlowIT fails (issueAndPayInvoice,

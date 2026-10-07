@@ -176,3 +176,15 @@ variable "cde_namespaces" {
   type        = list(string)
   default     = ["meridian", "meridian-cde"]
 }
+
+variable "kafka_iam_enabled" {
+  description = "GAP-16: one IAM role per service as its MSK principal (IRSA), scoped by kafka-acls.json (tools/kafka_acls.py)"
+  type        = bool
+  default     = true
+}
+
+variable "k8s_namespace" {
+  description = "Namespace of the Meridian Helm release in this cell (service accounts trusted by the Kafka IAM roles)"
+  type        = string
+  default     = "meridian"
+}

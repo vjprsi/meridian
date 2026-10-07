@@ -206,6 +206,73 @@ ALTER TABLE privileged_change ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON privileged_change USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_privileged_change_touch BEFORE UPDATE ON privileged_change FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- access_review: Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource type access_review), then revocations are applied
+CREATE TABLE access_review (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  period                       varchar(16) NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'SUBMITTED', 'COMPLETED', 'CANCELLED')),
+  due_date                     date NOT NULL,
+  dormant_days                 integer NOT NULL DEFAULT 90,
+  item_count                   integer NOT NULL DEFAULT 0,
+  attested_count               integer NOT NULL DEFAULT 0,
+  revoked_count                integer NOT NULL DEFAULT 0,
+  privileged_count             integer NOT NULL DEFAULT 0,
+  dormant_count                integer NOT NULL DEFAULT 0,
+  reviewer                     varchar(64),
+  submitted_at                 timestamptz,
+  approval_request_id          uuid,
+  decided_by                   varchar(64),
+  completed_at                 timestamptz,
+  rejection_reason             varchar(500),
+  cancel_reason                varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_access_review_period UNIQUE (tenant_id, period)
+);
+COMMENT ON TABLE access_review IS 'Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource type access_review), then revocations are applied';
+COMMENT ON COLUMN access_review.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN access_review.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN access_review.created_at IS 'Creation time';
+COMMENT ON COLUMN access_review.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN access_review.updated_at IS 'Last update time';
+COMMENT ON COLUMN access_review.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN access_review.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN access_review.period IS 'Review period, e.g. 2026-Q4';
+COMMENT ON COLUMN access_review.status IS 'Lifecycle (changed by decisions, submit, approval, cancel)';
+COMMENT ON COLUMN access_review.due_date IS 'Date by which the review must be completed';
+COMMENT ON COLUMN access_review.dormant_days IS 'Accounts without a sign-in for this many days are flagged dormant';
+COMMENT ON COLUMN access_review.item_count IS 'Role assignments under review';
+COMMENT ON COLUMN access_review.attested_count IS 'Items attested';
+COMMENT ON COLUMN access_review.revoked_count IS 'Items marked for revocation';
+COMMENT ON COLUMN access_review.privileged_count IS 'Items for privileged roles';
+COMMENT ON COLUMN access_review.dormant_count IS 'Items of dormant accounts';
+COMMENT ON COLUMN access_review.reviewer IS 'Who submitted the decisions (maker)';
+COMMENT ON COLUMN access_review.submitted_at IS 'Submission time';
+COMMENT ON COLUMN access_review.approval_request_id IS 'Central approval of the decisions';
+COMMENT ON COLUMN access_review.decided_by IS 'Checker who approved (or rejected) the decisions';
+COMMENT ON COLUMN access_review.completed_at IS 'When the approved revocations were applied';
+COMMENT ON COLUMN access_review.rejection_reason IS 'Why the checker sent the decisions back';
+COMMENT ON COLUMN access_review.cancel_reason IS 'Why the review was cancelled';
+COMMENT ON COLUMN access_review.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_access_review_tenant ON access_review (tenant_id, created_at);
+CREATE INDEX ix_access_review_approval_request_id ON access_review (approval_request_id);
+ALTER TABLE access_review ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON access_review USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_access_review_touch BEFORE UPDATE ON access_review FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- access_policy: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
 CREATE TABLE access_policy (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -739,6 +806,72 @@ CREATE INDEX ix_user_role_approval_request_id ON user_role (approval_request_id)
 ALTER TABLE user_role ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON user_role USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_user_role_touch BEFORE UPDATE ON user_role FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- access_review_item: One role assignment under access review, with the reviewer's attest / revoke decision
+CREATE TABLE access_review_item (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  access_review_id             uuid NOT NULL REFERENCES access_review(id),
+  user_id                      uuid NOT NULL REFERENCES app_user(id),
+  user_role_id                 uuid NOT NULL,
+  role_id                      uuid NOT NULL REFERENCES role(id),
+  role_code                    varchar(64) NOT NULL,
+  is_privileged                boolean NOT NULL DEFAULT false,
+  user_status                  varchar(32) NOT NULL,
+  last_login_at                timestamptz,
+  dormant                      boolean NOT NULL DEFAULT false,
+  valid_to                     timestamptz,
+  decision                     varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (decision IN ('PENDING', 'ATTEST', 'REVOKE')),
+  decision_comment             varchar(500),
+  decided_by                   varchar(64),
+  decided_at                   timestamptz,
+  revoked_at                   timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE access_review_item IS 'One role assignment under access review, with the reviewer''s attest / revoke decision';
+COMMENT ON COLUMN access_review_item.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN access_review_item.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN access_review_item.created_at IS 'Creation time';
+COMMENT ON COLUMN access_review_item.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN access_review_item.updated_at IS 'Last update time';
+COMMENT ON COLUMN access_review_item.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN access_review_item.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN access_review_item.access_review_id IS 'Review';
+COMMENT ON COLUMN access_review_item.user_id IS 'User holding the role';
+COMMENT ON COLUMN access_review_item.user_role_id IS 'Role assignment under review (removed when the revocation is applied)';
+COMMENT ON COLUMN access_review_item.role_id IS 'Role';
+COMMENT ON COLUMN access_review_item.role_code IS 'Role code at the snapshot';
+COMMENT ON COLUMN access_review_item.is_privileged IS 'Privileged role (just-in-time elevation)';
+COMMENT ON COLUMN access_review_item.user_status IS 'User status at the snapshot';
+COMMENT ON COLUMN access_review_item.last_login_at IS 'Last sign-in at the snapshot';
+COMMENT ON COLUMN access_review_item.dormant IS 'No sign-in for the review''s dormant_days';
+COMMENT ON COLUMN access_review_item.valid_to IS 'End of the assignment, if time-bound';
+COMMENT ON COLUMN access_review_item.decision IS 'Reviewer decision (POST /decisions)';
+COMMENT ON COLUMN access_review_item.decision_comment IS 'Reviewer justification';
+COMMENT ON COLUMN access_review_item.decided_by IS 'Reviewer';
+COMMENT ON COLUMN access_review_item.decided_at IS 'Decision time';
+COMMENT ON COLUMN access_review_item.revoked_at IS 'When the revocation was applied';
+COMMENT ON COLUMN access_review_item.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review_item.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review_item.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review_item.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN access_review_item.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_access_review_item_tenant ON access_review_item (tenant_id, created_at);
+CREATE INDEX ix_access_review_item_access_review_id ON access_review_item (access_review_id);
+CREATE INDEX ix_access_review_item_user_id ON access_review_item (user_id);
+CREATE INDEX ix_access_review_item_role_id ON access_review_item (role_id);
+ALTER TABLE access_review_item ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON access_review_item USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_access_review_item_touch BEFORE UPDATE ON access_review_item FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- mfa_factor: A multi-factor authentication factor enrolled by a staff user
 CREATE TABLE mfa_factor (

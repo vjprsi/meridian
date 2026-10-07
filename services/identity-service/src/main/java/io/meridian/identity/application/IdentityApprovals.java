@@ -17,7 +17,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Maker-checker for identity operations through workflow-service (G11, libs/meridian-approvals): MFA reset
- * ({@code app_user}), role permission grants ({@code role}) and just-in-time elevations ({@code user_role}).
+ * ({@code app_user}), role permission grants ({@code role}), just-in-time elevations ({@code user_role}) and access
+ * review decisions ({@code access_review}, GAP-13).
  * These operations have no local decision endpoint, so they are always routed to workflow-service whatever
  * {@code meridian.approvals.mode} says; approved requests come back through one {@link ApprovalOutcomeHandler} per
  * resource type and are executed by {@link ApprovalExecutor} with the deciding approver as principal.
@@ -74,6 +75,12 @@ public class IdentityApprovals {
     @Bean
     ApprovalOutcomeHandler userRoleApprovalHandler(ApprovalExecutor executor) {
         return handler("user_role", executor);
+    }
+
+    /** GAP-13: second-person approval of an access review's attest / revoke decisions. */
+    @Bean
+    ApprovalOutcomeHandler accessReviewApprovalHandler(ApprovalExecutor executor) {
+        return handler(AccessReviewService.RESOURCE_TYPE, executor);
     }
 
     /**

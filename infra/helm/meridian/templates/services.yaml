@@ -21,7 +21,13 @@ metadata:
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
   {{- if and $svc.keyManagement $root.Values.cde.keys.serviceAccountRoleArn }}
   annotations:
-    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}   # IRSA: CDE KMS key use
+    # IRSA: CDE KMS key use. One role per service account: the CDE vault role must also carry the vault's
+    # MSK permissions when global.kafka.iam is on (backlog: merge kafka-acls.json grants into the CDE role)
+    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}
+  {{- else if and $g.kafka.iam.enabled (ne (toString $svc.serviceIdentity) "false") }}
+  annotations:
+    # GAP-16: the service's own MSK principal (IAM role, IRSA): infra/tofu cell output kafka_service_role_arns
+    eks.amazonaws.com/role-arn: {{ replace "{name}" $svc.name $g.kafka.iam.roleArnTemplate | quote }}
   {{- end }}
 automountServiceAccountToken: false
 ---
@@ -128,10 +134,15 @@ spec:
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: {{ $svc.dbPool | default $g.postgres.poolSize | quote }}
             {{- end }}
+            {{- if ne (toString $svc.serviceIdentity) "false" }}
+            # GAP-16: the service's own client svc-<service> (Secret meridian-<service>-client); the legacy shared client
+            # only while global.auth.sharedServiceClient is true (migration)
+            {{- $client := $svc.clientSecret | default (ternary $g.auth.serviceClientSecret (printf "meridian-%s-client" $svc.name) $g.auth.sharedServiceClient) }}
             - name: MERIDIAN_SERVICE_AUTH_CLIENT_ID
-              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-id}}
+              valueFrom: {secretKeyRef: {name: {{ $client }}, key: client-id}}
             - name: MERIDIAN_SERVICE_AUTH_CLIENT_SECRET
-              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
+              valueFrom: {secretKeyRef: {name: {{ $client }}, key: client-secret}}
+            {{- end }}
             - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
               value: {{ $svc.name }}
             {{- if $svc.managementPort }}
@@ -171,10 +182,13 @@ spec:
             - name: MERIDIAN_CARDS_VAULT_PKCS11_PIN
               valueFrom: {secretKeyRef: {name: {{ $keys.pkcs11.pinSecret }}, key: pin}}
             {{- end }}
-            {{- with $root.Values.cde.allowedClients }}
-            - name: MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS     # azp of the clients that may call the vault (GAP-16)
-              value: {{ . | quote }}
             {{- end }}
+            {{- if and $g.auth.idpEvents.enabled (eq $svc.name "audit-service") }}
+            # GAP-06: read-only Keycloak client meridian-audit-events (view-events) for the IdP events poller
+            - name: MERIDIAN_AUDIT_KEYCLOAK_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.idpEvents.clientSecret }}, key: client-id}}
+            - name: MERIDIAN_AUDIT_KEYCLOAK_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.idpEvents.clientSecret }}, key: client-secret}}
             {{- end }}
           resources:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}

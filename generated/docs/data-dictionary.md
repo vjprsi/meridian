@@ -10612,6 +10612,79 @@ API: internal only · Requirements: ADM-02, ADM-03
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `access_review`
+
+Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource type access_review), then revocations are applied
+
+API: /v1/access-reviews · Requirements: ADM-02, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| period | varchar(16) | no | UQ | period | Review period, e.g. 2026-Q4 |
+| status | varchar(40) (AccessReviewStatus) | no |  | status (read-only) | Lifecycle (changed by decisions, submit, approval, cancel) |
+| due_date | date | no |  | due_date | Date by which the review must be completed |
+| dormant_days | integer | no |  | dormant_days | Accounts without a sign-in for this many days are flagged dormant |
+| item_count | integer | no |  | item_count (read-only) | Role assignments under review |
+| attested_count | integer | no |  | attested_count (read-only) | Items attested |
+| revoked_count | integer | no |  | revoked_count (read-only) | Items marked for revocation |
+| privileged_count | integer | no |  | privileged_count (read-only) | Items for privileged roles |
+| dormant_count | integer | no |  | dormant_count (read-only) | Items of dormant accounts |
+| reviewer | varchar(64) | yes |  | reviewer (read-only) | Who submitted the decisions (maker) |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval of the decisions |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Checker who approved (or rejected) the decisions |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | When the approved revocations were applied |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the checker sent the decisions back |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Why the review was cancelled |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `access_review_item`
+
+One role assignment under access review, with the reviewer's attest / revoke decision
+
+API: /v1/access-reviews/{access_review_id}/items · Requirements: ADM-02, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| access_review_id | uuid | no | FK → access_review | access_review_id (read-only) | Review |
+| user_id | uuid | no | FK → app_user | user_id (read-only) | User holding the role |
+| user_role_id | uuid | no |  | user_role_id (read-only) | Role assignment under review (removed when the revocation is applied) |
+| role_id | uuid | no | FK → role | role_id (read-only) | Role |
+| role_code | varchar(64) | no |  | role_code (read-only) | Role code at the snapshot |
+| is_privileged | boolean | no |  | is_privileged (read-only) | Privileged role (just-in-time elevation) |
+| user_status | varchar(32) | no |  | user_status (read-only) | User status at the snapshot |
+| last_login_at | timestamptz | yes |  | last_login_at (read-only) | Last sign-in at the snapshot |
+| dormant | boolean | no |  | dormant (read-only) | No sign-in for the review's dormant_days |
+| valid_to | timestamptz | yes |  | valid_to (read-only) | End of the assignment, if time-bound |
+| decision | varchar(40) (AccessReviewDecision) | no |  | decision (read-only) | Reviewer decision (POST /decisions) |
+| decision_comment | varchar(500) | yes |  | decision_comment (read-only) | Reviewer justification |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Reviewer |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| revoked_at | timestamptz | yes |  | revoked_at (read-only) | When the revocation was applied |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `access_policy`
 
 Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)

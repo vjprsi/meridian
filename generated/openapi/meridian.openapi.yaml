@@ -1062,6 +1062,14 @@ tags:
 - name: Permissions
   description: Catalogue of fine-grained permissions (resource + action), shared by all tenants
   x-domain: Platform and Administration
+- name: Access Reviews
+  description: Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted
+    as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource
+    type access_review), then revocations are applied
+  x-domain: Platform and Administration
+- name: Access Review Items
+  description: One role assignment under access review, with the reviewer's attest / revoke decision
+  x-domain: Platform and Administration
 - name: Access Policies
   description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
   x-domain: Platform and Administration
@@ -88043,6 +88051,460 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
       x-required-scope: platform:read
       x-table: permission
+      x-crud: true
+      x-crud-get: true
+  /v1/access-reviews:
+    get:
+      operationId: accessReviewsList
+      summary: List access reviews
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - SUBMITTED
+          - COMPLETED
+          - CANCELLED
+      - name: period
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReviewPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: access_review
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: accessReviewsCreate
+      summary: Create access review
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessReviewCreate'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: access_review
+      x-crud: true
+      x-crud-create: true
+  /v1/access-reviews/{id}:
+    get:
+      operationId: accessReviewsGet
+      summary: Retrieve access review
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: access_review
+      x-crud: true
+      x-crud-get: true
+  /v1/access-reviews/report:
+    get:
+      operationId: accessReviewsReport
+      summary: 'Access review report: users x roles x last sign-in, privileged role holders, dormant accounts'
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: dormant_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: access_review
+  /v1/access-reviews/{id}/decisions:
+    post:
+      operationId: accessReviewsDecisions
+      summary: Record attest / revoke decisions ([{item_id, decision, comment}])
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessReviewsDecisionsRequest'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: access_review
+  /v1/access-reviews/{id}/submit:
+    post:
+      operationId: accessReviewsSubmit
+      summary: Submit the decisions for a second person's approval (maker-checker)
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: access_review
+  /v1/access-reviews/{id}/cancel:
+    post:
+      operationId: accessReviewsCancel
+      summary: Cancel an open review
+      tags:
+      - Access Reviews
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessReviewsCancelRequest'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-required-scope: platform:write
+      x-table: access_review
+  /v1/access-reviews/{access_review_id}/items:
+    get:
+      operationId: accessReviewItemsList
+      summary: List access review items
+      tags:
+      - Access Review Items
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: access_review_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: decision
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - ATTEST
+          - REVOKE
+      - name: is_privileged
+        in: query
+        schema:
+          type: boolean
+      - name: dormant
+        in: query
+        schema:
+          type: boolean
+      - name: user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReviewItemPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: access_review_item
+      x-crud: true
+      x-crud-list: true
+  /v1/access-reviews/{access_review_id}/items/{id}:
+    get:
+      operationId: accessReviewItemsGet
+      summary: Retrieve access review item
+      tags:
+      - Access Review Items
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: access_review_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessReviewItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-required-scope: platform:read
+      x-table: access_review_item
       x-crud: true
       x-crud-get: true
   /v1/access-policies:
@@ -240709,6 +241171,58 @@ components:
       required:
       - data
       - has_more
+    AccessReviewPage:
+      type: object
+      description: One page of AccessReview results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessReview'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AccessReviewsDecisionsRequest:
+      type: object
+      properties:
+        decisions:
+          type: array
+          items: {}
+      required:
+      - decisions
+    AccessReviewsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    AccessReviewItemPage:
+      type: object
+      description: One page of AccessReviewItem results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessReviewItem'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AccessPolicyPage:
       type: object
       description: One page of AccessPolicy results (newest first)
@@ -242425,6 +242939,393 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    AccessReview:
+      type: object
+      description: Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted
+        as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals
+        (resource type access_review), then revocations are applied
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        period:
+          type: string
+          maxLength: 16
+          description: Review period, e.g. 2026-Q4
+        status:
+          type: string
+          enum:
+          - OPEN
+          - SUBMITTED
+          - COMPLETED
+          - CANCELLED
+          description: Lifecycle (changed by decisions, submit, approval, cancel)
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+          description: Date by which the review must be completed
+        dormant_days:
+          type: integer
+          format: int32
+          description: Accounts without a sign-in for this many days are flagged dormant
+        item_count:
+          type: integer
+          format: int32
+          description: Role assignments under review
+          readOnly: true
+        attested_count:
+          type: integer
+          format: int32
+          description: Items attested
+          readOnly: true
+        revoked_count:
+          type: integer
+          format: int32
+          description: Items marked for revocation
+          readOnly: true
+        privileged_count:
+          type: integer
+          format: int32
+          description: Items for privileged roles
+          readOnly: true
+        dormant_count:
+          type: integer
+          format: int32
+          description: Items of dormant accounts
+          readOnly: true
+        reviewer:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who submitted the decisions (maker)
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval of the decisions
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved (or rejected) the decisions
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the approved revocations were applied
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker sent the decisions back
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the review was cancelled
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - period
+      - status
+      - due_date
+      - dormant_days
+      - item_count
+      - attested_count
+      - revoked_count
+      - privileged_count
+      - dormant_count
+    AccessReviewCreate:
+      type: object
+      properties:
+        period:
+          type: string
+          maxLength: 16
+          description: Review period, e.g. 2026-Q4
+        due_date:
+          type: string
+          format: date
+          description: Date by which the review must be completed
+        dormant_days:
+          type: integer
+          format: int32
+          description: Accounts without a sign-in for this many days are flagged dormant
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - period
+      - due_date
+    AccessReviewItem:
+      type: object
+      description: One role assignment under access review, with the reviewer's attest / revoke decision
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        access_review_id:
+          type: string
+          format: uuid
+          description: Review
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          description: User holding the role
+          readOnly: true
+        user_role_id:
+          type: string
+          format: uuid
+          description: Role assignment under review (removed when the revocation is applied)
+          readOnly: true
+        role_id:
+          type: string
+          format: uuid
+          description: Role
+          readOnly: true
+        role_code:
+          type: string
+          maxLength: 64
+          description: Role code at the snapshot
+          readOnly: true
+        is_privileged:
+          type: boolean
+          description: Privileged role (just-in-time elevation)
+          readOnly: true
+        user_status:
+          type: string
+          maxLength: 32
+          description: User status at the snapshot
+          readOnly: true
+        last_login_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last sign-in at the snapshot
+          readOnly: true
+        dormant:
+          type: boolean
+          description: No sign-in for the review's dormant_days
+          readOnly: true
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the assignment, if time-bound
+          readOnly: true
+        decision:
+          type: string
+          enum:
+          - PENDING
+          - ATTEST
+          - REVOKE
+          description: Reviewer decision (POST /decisions)
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reviewer justification
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Reviewer
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the revocation was applied
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - access_review_id
+      - user_id
+      - user_role_id
+      - role_id
+      - role_code
+      - is_privileged
+      - user_status
+      - dormant
+      - decision
     ApiRequestLog:
       type: object
       description: One API request handled by the gateway; powers developer logs and usage metering. Append-only.

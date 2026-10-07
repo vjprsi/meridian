@@ -31,6 +31,11 @@ import org.springframework.web.servlet.HandlerInterceptor;
  * </ul>
  * {@link RequiredScope#anyOf()} lists scopes accepted instead of the required one; any one of them that is satisfied
  * (under its own rules) admits the request.
+ * GAP-13: access that rests on {@value #ADMIN_SCOPE} (the admin shortcut) or {@value #OPERATOR_SCOPE} needs a user token
+ * of at least {@code meridian.security.privileged-acr} (default 2: the staff browser flow's level 2, a second factor
+ * within its max age); a weaker token gets 401 {@code insufficient_user_authentication} with
+ * {@code WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="2"} (RFC 9470), so the console
+ * re-authorises with {@code acr_values=2}. Internal service tokens are exempt.
  * SEC-29: a {@code /v1} handler without {@link RequiredScope} is refused unless it is marked {@link PublicEndpoint}
  * or the request matches a spec-{@code [public]} route. Dev mode (no tokens) skips the check.
  */
@@ -39,6 +44,8 @@ public class ScopeInterceptor implements HandlerInterceptor {
     public static final String OPERATOR_SCOPE = "platform:operator";
     /** Narrow scope of the cell router (registry routing reads only); never implied by a wildcard or admin scope. */
     public static final String ROUTING_READ_SCOPE = "platform:routing-read";
+    /** The tenant superuser scope (satisfies every domain scope of its tenant). */
+    public static final String ADMIN_SCOPE = "meridian:admin";
 
     private final MeridianProperties props;
     private final SecurityProperties security;
@@ -72,6 +79,7 @@ public class ScopeInterceptor implements HandlerInterceptor {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         Set<String> granted = scopes(auth);
         boolean operatorDenied = false;
+        boolean stepUpNeeded = false;
         for (String candidate : candidates(required)) {
             if (!permits(granted, candidate)) {
                 continue;
@@ -80,7 +88,18 @@ public class ScopeInterceptor implements HandlerInterceptor {
                 operatorDenied = true;
                 continue;
             }
+            if (privilegedOnly(granted, candidate) && !strongEnough(auth, granted)) {
+                stepUpNeeded = true;
+                continue;
+            }
             return true;
+        }
+        if (stepUpNeeded && !operatorDenied) {
+            res.setHeader("WWW-Authenticate", "Bearer error=\"insufficient_user_authentication\", error_description=\""
+                    + "A stronger authentication is required\", acr_values=\"" + security.privilegedAcr() + "\"");
+            throw new ApiException(401, "insufficient_user_authentication", "This operation uses a privileged scope ("
+                    + ADMIN_SCOPE + " / " + OPERATOR_SCOPE + ") and needs authentication level (acr) "
+                    + security.privilegedAcr() + ": sign in again with acr_values=" + security.privilegedAcr());
         }
         if (operatorDenied) {
             throw new ApiException(403, "operator_tenant_required",
@@ -96,6 +115,42 @@ public class ScopeInterceptor implements HandlerInterceptor {
         out.add(required.value());
         out.addAll(List.of(required.anyOf()));
         return out;
+    }
+
+    /** True when only a privileged scope (admin shortcut, operator) grants {@code need}. */
+    static boolean privilegedOnly(Set<String> granted, String need) {
+        if (OPERATOR_SCOPE.equals(need) || ADMIN_SCOPE.equals(need)) {
+            return true;
+        }
+        if (operatorGrade(need) || !granted.contains(ADMIN_SCOPE)) {
+            return false;
+        }
+        Set<String> withoutAdmin = new HashSet<>(granted);
+        withoutAdmin.remove(ADMIN_SCOPE);
+        return !permits(withoutAdmin, need);
+    }
+
+    /** GAP-13: internal service tokens, or user tokens whose acr reaches {@code meridian.security.privileged-acr}. */
+    private boolean strongEnough(Authentication auth, Set<String> granted) {
+        if (security.privilegedAcr() <= 0 || granted.contains("meridian:internal")) {
+            return true;
+        }
+        if (!(auth != null && auth.getPrincipal() instanceof Jwt jwt)) {
+            return false;
+        }
+        return acrLevel(jwt.getClaimAsString("acr")) >= security.privilegedAcr();
+    }
+
+    /** Numeric level of an acr claim ("1", "2"; anything else counts as 0). */
+    static int acrLevel(String acr) {
+        if (acr == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(acr.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** Scopes honoured only for internal service tokens and tokens of the platform-operator tenant. */
@@ -126,7 +181,7 @@ public class ScopeInterceptor implements HandlerInterceptor {
             return granted.contains(need);
         }
         String domain = need.substring(0, need.indexOf(':'));
-        return granted.contains(need) || granted.contains(domain + ":*") || granted.contains("meridian:admin")
+        return granted.contains(need) || granted.contains(domain + ":*") || granted.contains(ADMIN_SCOPE)
                 || (need.endsWith(":read") && granted.contains(domain + ":write"));
     }
 

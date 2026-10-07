@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicReference;
+import io.meridian.web.security.ServiceIdentity;
 import org.springframework.core.env.Environment;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -20,6 +21,12 @@ import tools.jackson.databind.json.JsonMapper;
  * jobs, provider callbacks). Configured with {@code meridian.service-auth.token-uri}, {@code .client-id},
  * {@code .client-secret}; the token must carry scope {@code meridian:internal}, which lets the receiving service
  * accept the tenant from the {@code X-Tenant-Id} header. Tokens are cached until 30 s before expiry.
+ *
+ * <p>GAP-16: each service has its own client, {@code svc-<spring.application.name>} ({@link ServiceIdentity}); that is
+ * the default client id, so a deployment only supplies the secret (Helm: the per-service Secret
+ * {@code meridian-<service>-client}). During the migration a deployment may still set the shared client
+ * ({@code meridian-service}) explicitly; receivers then believe its {@code X-Meridian-Service} header only when they
+ * list it in {@code meridian.security.legacy-service-clients}.
  */
 public class ServiceTokenProvider {
     private record Token(String value, Instant expiresAt) {}
@@ -34,8 +41,16 @@ public class ServiceTokenProvider {
     public ServiceTokenProvider(JsonMapper json, Environment env) {
         this.json = json;
         this.tokenUri = env.getProperty("meridian.service-auth.token-uri");
-        this.clientId = env.getProperty("meridian.service-auth.client-id");
+        String configured = env.getProperty("meridian.service-auth.client-id");
+        String app = env.getProperty("spring.application.name");
+        this.clientId = configured != null && !configured.isBlank() ? configured.trim()
+                : app == null || app.isBlank() ? null : ServiceIdentity.clientIdOf(app);
         this.clientSecret = env.getProperty("meridian.service-auth.client-secret");
+    }
+
+    /** The OAuth client this service authenticates as ({@code svc-<service>} unless configured otherwise). */
+    public String clientId() {
+        return clientId;
     }
 
     public boolean configured() {

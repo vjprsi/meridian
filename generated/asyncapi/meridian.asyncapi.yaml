@@ -1071,6 +1071,14 @@ channels:
         $ref: '#/components/messages/PlatformMfaFactorVerified'
       PlatformAppUserMfaReset:
         $ref: '#/components/messages/PlatformAppUserMfaReset'
+      PlatformAccessReviewOpened:
+        $ref: '#/components/messages/PlatformAccessReviewOpened'
+      PlatformAccessReviewSubmitted:
+        $ref: '#/components/messages/PlatformAccessReviewSubmitted'
+      PlatformAccessReviewCompleted:
+        $ref: '#/components/messages/PlatformAccessReviewCompleted'
+      PlatformAccessReviewReturned:
+        $ref: '#/components/messages/PlatformAccessReviewReturned'
       PlatformCustomFieldDefinitionChanged:
         $ref: '#/components/messages/PlatformCustomFieldDefinitionChanged'
       PlatformConfigEntryActivated:
@@ -13090,6 +13098,94 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AppUser'
+    PlatformAccessReviewOpened:
+      name: platform.access_review.opened
+      title: A periodic access review was opened (assignments snapshotted)
+      summary: A periodic access review was opened (assignments snapshotted)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.access_review.opened
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AccessReview'
+    PlatformAccessReviewSubmitted:
+      name: platform.access_review.submitted
+      title: Reviewer decisions were submitted for approval
+      summary: Reviewer decisions were submitted for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.access_review.submitted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AccessReview'
+    PlatformAccessReviewCompleted:
+      name: platform.access_review.completed
+      title: Access review decisions approved; revocations applied
+      summary: Access review decisions approved; revocations applied
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.access_review.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AccessReview'
+    PlatformAccessReviewReturned:
+      name: platform.access_review.returned
+      title: The checker rejected the decisions; the review is open again
+      summary: The checker rejected the decisions; the review is open again
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: platform.access_review.returned
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AccessReview'
     PlatformCustomFieldDefinitionChanged:
       name: platform.custom_field_definition.changed
       title: A custom field definition was created, changed or retired
@@ -57388,6 +57484,185 @@ components:
       - is_primary
       - status
       - failed_attempts
+    AccessReview:
+      type: object
+      description: Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted
+        as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals
+        (resource type access_review), then revocations are applied
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        period:
+          type: string
+          maxLength: 16
+          description: Review period, e.g. 2026-Q4
+        status:
+          type: string
+          enum:
+          - OPEN
+          - SUBMITTED
+          - COMPLETED
+          - CANCELLED
+          description: Lifecycle (changed by decisions, submit, approval, cancel)
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+          description: Date by which the review must be completed
+        dormant_days:
+          type: integer
+          format: int32
+          description: Accounts without a sign-in for this many days are flagged dormant
+        item_count:
+          type: integer
+          format: int32
+          description: Role assignments under review
+          readOnly: true
+        attested_count:
+          type: integer
+          format: int32
+          description: Items attested
+          readOnly: true
+        revoked_count:
+          type: integer
+          format: int32
+          description: Items marked for revocation
+          readOnly: true
+        privileged_count:
+          type: integer
+          format: int32
+          description: Items for privileged roles
+          readOnly: true
+        dormant_count:
+          type: integer
+          format: int32
+          description: Items of dormant accounts
+          readOnly: true
+        reviewer:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who submitted the decisions (maker)
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval of the decisions
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved (or rejected) the decisions
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the approved revocations were applied
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker sent the decisions back
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the review was cancelled
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - period
+      - status
+      - due_date
+      - dormant_days
+      - item_count
+      - attested_count
+      - revoked_count
+      - privileged_count
+      - dormant_count
     CustomFieldDefinition:
       type: object
       description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation,

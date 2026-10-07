@@ -33,6 +33,8 @@ enums:
   RoleType: [SYSTEM, CUSTOM]
   RoleScopeType: [TENANT, LEGAL_ENTITY, BRANCH]
   PrivilegedChangeStatus: [PENDING, APPLIED, REJECTED, CANCELLED, FAILED]
+  AccessReviewStatus: [OPEN, SUBMITTED, COMPLETED, CANCELLED]
+  AccessReviewDecision: [PENDING, ATTEST, REVOKE]
   PolicyEffect: [ALLOW, DENY]
   SsoProtocol: [OIDC, SAML2]
   ProviderIntegrationStatus: [ACTIVE, INACTIVE, ERROR, TESTING]
@@ -641,6 +643,49 @@ services:
           - "decided_at ts ro | Decision time"
           - "failure_reason string(255) ro | Why an approved change could not be applied"
 
+      - name: access_review
+        prefix: arv
+        description: Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource type access_review), then revocations are applied
+        fr: [ADM-02, ADM-03]
+        columns:
+          - "period string(16) nn uq | Review period, e.g. 2026-Q4"
+          - "status enum:AccessReviewStatus nn default=OPEN ro | Lifecycle (changed by decisions, submit, approval, cancel)"
+          - "due_date date nn | Date by which the review must be completed"
+          - "dormant_days int nn default=90 | Accounts without a sign-in for this many days are flagged dormant"
+          - "item_count int nn default=0 ro | Role assignments under review"
+          - "attested_count int nn default=0 ro | Items attested"
+          - "revoked_count int nn default=0 ro | Items marked for revocation"
+          - "privileged_count int nn default=0 ro | Items for privileged roles"
+          - "dormant_count int nn default=0 ro | Items of dormant accounts"
+          - "reviewer string(64) ro | Who submitted the decisions (maker)"
+          - "submitted_at ts ro | Submission time"
+          - "approval_request_id uuid ref=approval_request ro | Central approval of the decisions"
+          - "decided_by string(64) ro | Checker who approved (or rejected) the decisions"
+          - "completed_at ts ro | When the approved revocations were applied"
+          - "rejection_reason string(500) ro | Why the checker sent the decisions back"
+          - "cancel_reason string(255) ro | Why the review was cancelled"
+
+      - name: access_review_item
+        prefix: ari
+        description: One role assignment under access review, with the reviewer's attest / revoke decision
+        fr: [ADM-02, ADM-03]
+        columns:
+          - "access_review_id uuid nn fk=access_review idx ro | Review"
+          - "user_id uuid nn fk=app_user idx ro | User holding the role"
+          - "user_role_id uuid nn ro | Role assignment under review (removed when the revocation is applied)"
+          - "role_id uuid nn fk=role ro | Role"
+          - "role_code string(64) nn ro | Role code at the snapshot"
+          - "is_privileged bool nn default=false ro | Privileged role (just-in-time elevation)"
+          - "user_status string(32) nn ro | User status at the snapshot"
+          - "last_login_at ts ro | Last sign-in at the snapshot"
+          - "dormant bool nn default=false ro | No sign-in for the review's dormant_days"
+          - "valid_to ts ro | End of the assignment, if time-bound"
+          - "decision enum:AccessReviewDecision nn default=PENDING ro | Reviewer decision (POST /decisions)"
+          - "decision_comment string(500) ro | Reviewer justification"
+          - "decided_by string(64) ro | Reviewer"
+          - "decided_at ts ro | Decision time"
+          - "revoked_at ts ro | When the revocation was applied"
+
       - name: access_policy
         prefix: apo
         description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
@@ -832,6 +877,21 @@ services:
         table: permission
         ops: [list, get]
         filters: [domain, resource, is_sensitive]
+      - resource: access-reviews
+        path: /v1/access-reviews
+        table: access_review
+        ops: [list, get, create]
+        filters: [status, period]
+        actions:
+          - "GET /report?dormant_days:int | Access review report: users x roles x last sign-in, privileged role holders, dormant accounts | | object"
+          - "POST /{id}/decisions | Record attest / revoke decisions ([{item_id, decision, comment}]) | decisions json[] nn"
+          - "POST /{id}/submit | Submit the decisions for a second person's approval (maker-checker) | | approval_request"
+          - "POST /{id}/cancel | Cancel an open review | reason string(255) nn"
+      - resource: access-review-items
+        path: /v1/access-reviews/{access_review_id}/items
+        table: access_review_item
+        ops: [list, get]
+        filters: [decision, is_privileged, dormant, user_id]
       - resource: access-policies
         path: /v1/access-policies
         table: access_policy
@@ -912,6 +972,10 @@ services:
       - "platform.api_client.secret_rotated | api_client | The client secret was rotated"
       - "platform.mfa_factor.verified | mfa_factor | An MFA factor was verified and activated"
       - "platform.app_user.mfa_reset | app_user | All MFA factors of a user were disabled after approval"
+      - "platform.access_review.opened | access_review | A periodic access review was opened (assignments snapshotted)"
+      - "platform.access_review.submitted | access_review | Reviewer decisions were submitted for approval"
+      - "platform.access_review.completed | access_review | Access review decisions approved; revocations applied"
+      - "platform.access_review.returned | access_review | The checker rejected the decisions; the review is open again"
 
   # ------------------------------------------------------------------ config-service
   - name: config-service

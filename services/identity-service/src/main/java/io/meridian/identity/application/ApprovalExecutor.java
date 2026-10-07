@@ -25,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class ApprovalExecutor {
     /** Resource types whose approvals this service executes. */
-    public static final Set<String> RESOURCE_TYPES = Set.of("app_user", "role", "user_role");
+    public static final Set<String> RESOURCE_TYPES = Set.of("app_user", "role", "user_role",
+            AccessReviewService.RESOURCE_TYPE);
     private static final Set<String> SYSTEM_PRINCIPALS = Set.of("system", "workflow-service", "identity-service");
 
     private final MfaService mfa;
@@ -33,9 +34,11 @@ public class ApprovalExecutor {
     private final UserRoleService userRoles;
     private final IdentityStore store;
     private final JsonMapper json;
+    private final AccessReviewService accessReviews;
 
     public ApprovalExecutor(MfaService mfa, RoleService roles, UserRoleService userRoles, IdentityStore store,
-                            JsonMapper json) {
+                            JsonMapper json, AccessReviewService accessReviews) {
+        this.accessReviews = accessReviews;
         this.mfa = mfa;
         this.roles = roles;
         this.userRoles = userRoles;
@@ -100,6 +103,11 @@ public class ApprovalExecutor {
                 }
                 yield userRoles.grantElevation(approvalId, details);
             }
+            case "access_review/complete" -> {
+                // GAP-13: the checker confirms the reviewer's attest / revoke decisions; revocations are applied now
+                requireSameId(details, "review_id", target);
+                yield accessReviews.complete(target, approvalId);
+            }
             default -> throw ApiException.unprocessable("unsupported_approval", "identity-service cannot execute " + operation);
         };
         store.jdbc().sql("""
@@ -122,6 +130,9 @@ public class ApprovalExecutor {
         };
         if (status == null) {
             return;
+        }
+        if (AccessReviewService.RESOURCE_TYPE.equals(d.resourceType())) {
+            accessReviews.returnForRework(d);      // the reviewer reworks the decisions and submits again
         }
         store.jdbc().sql("""
                 update privileged_change set status = ?, decided_by = ?, decided_at = ?, updated_by = ?

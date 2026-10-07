@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Checks the generated realm's customer MFA against a real, THROWAWAY Keycloak 26.x (CHN-CUSTOMER-MFA).
+"""Checks the generated realm against a real, THROWAWAY Keycloak 26.x: customer MFA (CHN-CUSTOMER-MFA), staff MFA
+(GAP-13), per-service clients (GAP-16) and realm events (GAP-06).
 
 Imports infra/local/keycloak/meridian-realm.json (DELETING any realm "meridian" there first), then drives the
 customer browser flow like a browser (no JavaScript needed: password and TOTP forms) and checks: acr 1 for a password
@@ -9,6 +10,12 @@ factor cannot reach acr 2 but still signs in at acr 1; the enrolment / removal a
 (CONFIGURE_TOTP, webauthn-register, delete_credential); the password grant needs totp; the meridian-customer-sessions
 client lists sessions and credentials, ends one session (refresh token refused), signs a user out everywhere and
 cannot read clients or change the realm; the profile / email scopes exist.
+Staff (GAP-13): console and developer portal use the staff flow (password + TOTP / WebAuthn, acr 2 required), a lower
+acr cannot be requested, max_age re-asks both factors, a staff user without a factor must enrol an authenticator app
+before any token is issued. Service identities (GAP-16): svc-<service> client-credential tokens carry azp and the derived
+scopes (role-gated platform:operator only where needed); the legacy shared client still works. Events (GAP-06): login,
+login error, client login and admin events (with representation) are stored and readable only by the
+meridian-audit-events client (view-events: no user reads, no realm changes).
 
     python tools/keycloak_realm.py
     python tools/keycloak_mfa_check.py --url http://127.0.0.1:18998 --replace-realm   # admin / admin by default
@@ -89,7 +96,7 @@ def totp(secret: bytes, t=None):
 
 class NoRedirectToApp(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req_, fp, code, msg, headers, newurl):
-        if newurl.startswith("http://localhost:13300"):
+        if newurl.startswith("http://localhost:13"):          # any Meridian web app (13100 console ... 13600)
             raise AppRedirect(newurl)
         return super().redirect_request(req_, fp, code, msg, headers, newurl)
 
@@ -100,7 +107,10 @@ class AppRedirect(Exception):
 
 
 class Browser:
-    def __init__(self):
+    def __init__(self, client=None, redirect=None):
+        self.client = client or CLIENT
+        self.redirect = redirect or REDIRECT
+
         class LocalhostIsSecure(http.cookiejar.DefaultCookiePolicy):
             def return_ok_secure(self, cookie, request):   # like browsers: http://localhost counts as secure
                 return True
@@ -122,7 +132,8 @@ class Browser:
     def authorize(self, **extra):
         verifier = secrets.token_urlsafe(48)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
-        q = {"client_id": CLIENT, "redirect_uri": REDIRECT, "response_type": "code", "scope": "openid profile email",
+        q = {"client_id": self.client, "redirect_uri": self.redirect, "response_type": "code",
+             "scope": "openid profile email",
              "code_challenge": challenge, "code_challenge_method": "S256", "state": secrets.token_hex(8),
              "nonce": secrets.token_hex(8)}
         q.update(extra)
@@ -143,20 +154,22 @@ def page_kind(page):
     return "unknown"
 
 
-def exchange(code_url, verifier):
+def exchange(code_url, verifier, client=None, redirect=None):
     code = urllib.parse.parse_qs(urllib.parse.urlparse(code_url).query).get("code", [None])[0]
     s, b = req("POST", "/realms/meridian/protocol/openid-connect/token",
-               form={"grant_type": "authorization_code", "client_id": CLIENT, "code": code,
-                     "redirect_uri": REDIRECT, "code_verifier": verifier})
+               form={"grant_type": "authorization_code", "client_id": client or CLIENT, "code": code,
+                     "redirect_uri": redirect or REDIRECT, "code_verifier": verifier})
     return s, b
 
 
-def finish(br, res, verifier, password=None, otp_secret=None, username="demo.customer"):
-    """Drives login pages until the app redirect; returns (tokens, pages seen)."""
+def finish(br, res, verifier, password=None, otp_secret=None, username="demo.customer", enrol=False, enrolled=None):
+    """Drives login pages until the app redirect; returns (tokens, pages seen). With enrol, completes a forced TOTP
+    set-up (the new secret is stored in enrolled["secret"])."""
+    enrolled = enrolled if enrolled is not None else {}
     seen = []
-    for _ in range(6):
+    for _ in range(8):
         if res[0] == "redirect":
-            s, b = exchange(res[1], verifier)
+            s, b = exchange(res[1], verifier, br.client, br.redirect)
             if s != 200:
                 print("token exchange failed", s, b, res[1][:300])
                 return None, seen
@@ -172,9 +185,164 @@ def finish(br, res, verifier, password=None, otp_secret=None, username="demo.cus
             res = br.open(action, {"username": username, "password": password, "credentialId": ""})
         elif kind == "kc-otp-login-form":
             res = br.open(action, {"otp": totp(otp_secret), "login": "Sign In"})
+        elif kind == "kc-totp-settings-form" and enrol:
+            # forced enrolment: the page carries the new raw secret in the hidden totpSecret field
+            secret_field = re.search(r'name="totpSecret"[^>]*value="([^"]+)"', page) or \
+                re.search(r'value="([^"]+)"[^>]*name="totpSecret"', page)
+            enrolled["secret"] = html.unescape(secret_field.group(1)).encode()
+            res = br.open(action, {"totp": totp(enrolled["secret"]), "totpSecret": html.unescape(secret_field.group(1)),
+                                   "userLabel": "check", "mode": ""})
         else:
             return None, seen + [page[:1500]]
     return None, seen
+
+
+STAFF_TOTP = b"MeridianStaffTotp2026"
+CONSOLE = ("meridian-console", "http://localhost:13100/auth/callback")
+PORTAL = ("meridian-developer-portal", "http://localhost:13200/auth/callback")
+
+
+def staff_checks(tok):
+    """GAP-13: staff sign-in is password plus a second factor (acr 2), enrolment is forced, privileged scopes ride on
+    acr 2 tokens."""
+    s, flows = req("GET", "/admin/realms/meridian/authentication/flows", token=tok)
+    aliases = {f["alias"]: f["id"] for f in flows}
+    check("staff browser flow imported with its fixed id",
+          aliases.get("meridian staff browser") == "0199a000-0000-7000-8000-00000000f102")
+    for client_id, _ in (CONSOLE, PORTAL):
+        s, cl = req("GET", f"/admin/realms/meridian/clients?clientId={client_id}", token=tok)
+        a = cl[0]["attributes"]
+        check(f"{client_id}: staff flow override, acr.loa.map, level 2 default and minimum",
+              cl[0]["authenticationFlowBindingOverrides"].get("browser") == aliases.get("meridian staff browser")
+              and json.loads(a.get("acr.loa.map", "{}")) == {"1": 1, "2": 2}
+              and a.get("default.acr.values") == "2" and a.get("minimum.acr.value") == "2", a)
+    # 1. enrolled staff user: password then TOTP, acr 2, admin scope present
+    br = Browser(*CONSOLE)
+    res, ver = br.authorize()
+    tokens, seen = finish(br, res, ver, password="Meridian#Admin2026", otp_secret=STAFF_TOTP, username="ops.admin")
+    at = jwt(tokens["access_token"]) if tokens else {}
+    check("console sign-in asks password and the authenticator code, token acr 2",
+          tokens and seen == ["kc-form-login", "kc-otp-login-form"] and at.get("acr") == "2",
+          (seen, {k: at.get(k) for k in ("acr", "amr", "azp")}))
+    check("staff token carries amr [pwd, otp], auth_time, tenant_id and meridian:admin",
+          at.get("amr") == ["pwd", "otp"] and at.get("auth_time") and at.get("tenant_id")
+          and "meridian:admin" in at.get("scope", "").split(), {k: at.get(k) for k in ("amr", "auth_time", "scope")})
+    # 2. a lower level cannot be requested: acr_values=1 still ends at acr 2 (minimum), here through SSO
+    res, ver = br.authorize(acr_values="1")
+    t2, seen = finish(br, res, ver, otp_secret=STAFF_TOTP)
+    check("acr_values=1 is raised to the minimum: SSO answers with acr 2, no password-only token",
+          t2 and jwt(t2["access_token"]).get("acr") == "2", (seen, t2 and jwt(t2["access_token"]).get("acr")))
+    # 3. max_age forces password + second factor again
+    time.sleep(3)                     # auth_time has whole-second resolution: stay clearly past max_age
+    res, ver = br.authorize(max_age="1")
+    t3, seen = finish(br, res, ver, password="Meridian#Admin2026", otp_secret=STAFF_TOTP, username="ops.admin")
+    check("max_age exceeded re-asks password and second factor", seen == ["kc-form-login", "kc-otp-login-form"]
+          and t3 and jwt(t3["access_token"]).get("acr") == "2", seen)
+    # 4. a staff user without a second factor must enrol one before any token is issued
+    new_staff = {"username": "new.staff", "enabled": True, "email": "new.staff@meridian.local", "emailVerified": True,
+                 "firstName": "New", "lastName": "Staff", "attributes": {"tenant_id": ["0199a000-0000-7000-8000-00000000000a"]},
+                 "credentials": [{"type": "password", "value": "Meridian#NewStaff2026", "temporary": False}]}
+    s, b = req("POST", "/admin/realms/meridian/users", body=new_staff, token=admin_token())
+    check("create staff user without second factor", s == 201, b)
+    br2 = Browser(*PORTAL)
+    res, ver = br2.authorize()
+    first = finish(br2, res, ver, password="Meridian#NewStaff2026", username="new.staff")
+    check("developer portal: no token for a staff user without a second factor; TOTP set-up is forced",
+          first[0] is None and "kc-totp-settings-form" in first[1], first[1][:3])
+    br3 = Browser(*PORTAL)
+    res, ver = br3.authorize()
+    enrolled = {}
+    t4, seen = finish(br3, res, ver, password="Meridian#NewStaff2026", username="new.staff", enrol=True,
+                      enrolled=enrolled)
+    at4 = jwt(t4["access_token"]) if t4 else {}
+    s, users = req("GET", "/admin/realms/meridian/users?username=new.staff&exact=true", token=admin_token())
+    s, creds = req("GET", f"/admin/realms/meridian/users/{users[0]['id']}/credentials", token=admin_token())
+    # (the enrolment runs as a required action, not as the OTP authenticator, so amr shows only pwd for this sign-in)
+    check("after enrolling the authenticator app the sign-in completes with acr 2 and the user has an otp factor",
+          t4 and at4.get("acr") == "2" and "otp" in {c["type"] for c in creds},
+          (seen, at4.get("acr"), at4.get("amr"), [c["type"] for c in creds]))
+    check("developer portal tokens carry platform:read/write only (never meridian:admin)",
+          "meridian:admin" not in at4.get("scope", "") and "platform:write" in at4.get("scope", ""), at4.get("scope"))
+    br4 = Browser(*CONSOLE)
+    res, ver = br4.authorize()
+    t5, seen = finish(br4, res, ver, password="Meridian#NewStaff2026", username="new.staff",
+                      otp_secret=enrolled.get("secret"))
+    check("enrolled factor is then asked at every new sign-in", seen == ["kc-form-login", "kc-otp-login-form"]
+          and t5 is not None, seen)
+    # a failed password for the events checks
+    br5 = Browser(*CONSOLE)
+    res, ver = br5.authorize()
+    page = res[1] if res[0] == "page" else ""
+    br5.open(form_action(page), {"username": "ops.admin", "password": "wrong-password", "credentialId": ""})
+
+
+def client_token(client_id, secret):
+    return req("POST", "/realms/meridian/protocol/openid-connect/token",
+               form={"grant_type": "client_credentials", "client_id": client_id, "client_secret": secret})
+
+
+def service_identity_checks():
+    """GAP-16: one client per service; azp names the service; scopes derived from the calls it makes."""
+    s, b = client_token("svc-deposit-service", "svc-deposit-service-secret")
+    at = jwt(b["access_token"]) if s == 200 else {}
+    scopes = set(at.get("scope", "").split())
+    check("svc-deposit-service: client credentials token with azp svc-deposit-service, audience and tenant",
+          s == 200 and at.get("azp") == "svc-deposit-service" and "meridian-api" in (
+              at.get("aud") if isinstance(at.get("aud"), list) else [at.get("aud")]) and at.get("tenant_id"),
+          {k: at.get(k) for k in ("azp", "aud", "tenant_id")})
+    check("svc-deposit-service scopes: meridian:internal + the domains it calls (ledger, product), never admin",
+          {"meridian:internal", "ledger:write", "product:write"} <= scopes and "meridian:admin" not in scopes
+          and not any(x.startswith("channels:customer") for x in scopes), sorted(scopes))
+    s, b = client_token("svc-archive-service", "svc-archive-service-secret")
+    arch = set(jwt(b["access_token"]).get("scope", "").split()) if s == 200 else set()
+    check("svc-archive-service gets the role-gated platform:operator (data-lifecycle calls)",
+          "platform:operator" in arch, sorted(arch))
+    s, b = client_token("svc-gl-service", "svc-gl-service-secret")
+    gl = set(jwt(b["access_token"]).get("scope", "").split()) if s == 200 else set()
+    check("svc-gl-service has no platform:operator and no foreign domain it does not call",
+          s == 200 and "platform:operator" not in gl and "payments:write" not in gl, sorted(gl))
+    s, b = client_token("svc-deposit-service", "wrong")
+    check("a wrong client secret is refused", s == 401, s)
+    s, b = client_token("meridian-service", "meridian-service-secret")
+    check("legacy shared client still issues tokens during the migration",
+          s == 200 and jwt(b["access_token"]).get("azp") == "meridian-service", s)
+
+
+def events_checks():
+    """GAP-06: login and admin events are stored and readable by the audit-service events client only."""
+    tok = admin_token()
+    s, realm = req("GET", "/admin/realms/meridian", token=tok)
+    check("realm stores user events with metrics-listener and jboss-logging, admin events with representation",
+          realm.get("eventsEnabled") and realm.get("adminEventsEnabled") and realm.get("adminEventsDetailsEnabled")
+          and {"metrics-listener", "jboss-logging"} <= set(realm.get("eventsListeners", [])),
+          {k: realm.get(k) for k in ("eventsEnabled", "eventsListeners", "adminEventsEnabled",
+                                     "adminEventsDetailsEnabled", "eventsExpiration")})
+    s, b = client_token("meridian-audit-events", "meridian-audit-events-secret")
+    check("audit events client obtains a token", s == 200, b if s != 200 else "")
+    et = b.get("access_token")
+    claims = jwt(et) if et else {}
+    check("audit events client token has no Meridian audience or scope",
+          "meridian-api" not in (claims.get("aud") if isinstance(claims.get("aud"), list) else [claims.get("aud")])
+          and ":" not in claims.get("scope", "").replace("openid", ""), (claims.get("aud"), claims.get("scope")))
+    s, events = req("GET", "/admin/realms/meridian/events?max=500", token=et)
+    types = {e.get("type") for e in events} if s == 200 else set()
+    print("event types seen:", sorted(types))
+    print("event sample:", json.dumps(events[0])[:500] if s == 200 and events else events)
+    check("user events readable: LOGIN, LOGIN_ERROR, CLIENT_LOGIN recorded with ids",
+          s == 200 and {"LOGIN", "LOGIN_ERROR", "CLIENT_LOGIN"} <= types and all(e.get("id") for e in events),
+          (s, sorted(types)))
+    svc = [e for e in events if e.get("type") == "CLIENT_LOGIN" and e.get("clientId") == "svc-deposit-service"]
+    check("service client logins are attributed to the per-service client", bool(svc), len(svc))
+    s, admin_events = req("GET", "/admin/realms/meridian/admin-events?max=200", token=et)
+    created = [e for e in admin_events if e.get("operationType") == "CREATE" and e.get("resourceType") == "USER"] \
+        if s == 200 else []
+    print("admin event sample:", json.dumps(created[0])[:600] if created else admin_events)
+    check("admin events readable: user creation recorded with representation and id",
+          s == 200 and created and created[0].get("representation") and created[0].get("id"), (s, len(created)))
+    s, b = req("GET", "/admin/realms/meridian/users", token=et)
+    check("audit events client cannot read users", s == 403, s)
+    s, b = req("PUT", "/admin/realms/meridian", body={"eventsEnabled": False}, token=et)
+    check("audit events client cannot change the realm (or switch events off)", s == 403, s)
 
 
 def main():
@@ -336,6 +504,9 @@ def main():
     s, b = req("GET", "/realms/meridian/.well-known/openid-configuration")
     check("profile and email scopes advertised", {"profile", "email"} <= set(b.get("scopes_supported", [])),
           b.get("scopes_supported"))
+    staff_checks(tok)
+    service_identity_checks()
+    events_checks()
     print("\nSUMMARY", sum(1 for _, ok in results if ok), "/", len(results), "passed")
     for n, ok in results:
         if not ok:

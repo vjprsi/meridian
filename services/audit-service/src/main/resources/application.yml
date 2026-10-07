@@ -67,6 +67,17 @@ meridian:
       access-key: ${MERIDIAN_AUDIT_WORM_ACCESS_KEY:meridian}
       secret-key: ${MERIDIAN_AUDIT_WORM_SECRET_KEY:meridian-secret}
       object-lock-mode: ${MERIDIAN_AUDIT_WORM_OBJECT_LOCK_MODE:COMPLIANCE}
+    # GAP-06: Keycloak sign-in / admin events copied into the audit trail (KeycloakEventsPoller, read-only client
+    # meridian-audit-events with realm-management view-events), recorded in the platform-operator tenant.
+    keycloak:
+      enabled: ${MERIDIAN_AUDIT_KEYCLOAK_ENABLED:false}
+      base-url: ${MERIDIAN_AUDIT_KEYCLOAK_URL:http://localhost:15180}
+      realm: ${MERIDIAN_AUDIT_KEYCLOAK_REALM:meridian}
+      client-id: ${MERIDIAN_AUDIT_KEYCLOAK_CLIENT_ID:meridian-audit-events}
+      client-secret: ${MERIDIAN_AUDIT_KEYCLOAK_CLIENT_SECRET:meridian-audit-events-secret}
+      tenant: ${MERIDIAN_AUDIT_KEYCLOAK_TENANT:0199a000-0000-7000-8000-0000000000f0}
+      poll-interval: 60s
+      lookback: 2d                  # window at start-up (events are de-duplicated, so restarts re-read safely)
 
 management:
   endpoints:
