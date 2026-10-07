@@ -276,7 +276,7 @@
     "schema": "customer_channel",
     "package": "io.meridian.customerchannel",
     "port": 9164,
-    "description": "Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning services); keeps only the audit trail of what each customer did or was refused.",
+    "description": "Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning services); keeps the audit trail of what each customer did or was refused and the registry of the customer's sign-in sessions (keyed by the identity provider's session id, the token's sid claim). Step-up follows the identity provider's Levels of Authentication: money movement and security changes need acr 2 (password plus a second factor) from an authentication at most a few minutes old, per operation configurable; otherwise 401 step_up_required with an RFC 9470 WWW-Authenticate challenge (acr_values, max_age).",
     "tags": [
       "My Accounts",
       "My Activity",
@@ -296,13 +296,17 @@
       "My Payments",
       "My Profile",
       "My Rewards",
+      "My Security",
+      "My Sessions",
       "My Standing Orders",
       "My Threads",
       "My Wallets"
     ],
-    "tables": 1,
+    "tables": 2,
     "events": [
-      "channels.customer_action.denied"
+      "channels.customer_action.denied",
+      "channels.customer_session.new_device",
+      "channels.customer_session.revoked"
     ],
     "scope": "channels:customer"
   },

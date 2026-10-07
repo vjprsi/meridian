@@ -26,6 +26,10 @@ servers:
 security:
 - oauth2: []
 tags:
+- name: My Sessions
+  description: The customer's sign-in sessions and devices; sign out one session or everywhere
+- name: My Security
+  description: The customer's sign-in security (authentication strength, second factors, step-up policy)
 - name: My Profile
   description: The signed-in customer's own customer record
 - name: My Contacts
@@ -184,6 +188,155 @@ tags:
 - name: Merchant App Activity
   description: The merchant's app activity (security log)
 paths:
+  /v1/me/sessions:
+    get:
+      operationId: mySessionsList
+      summary: The customer's sessions, active ones first (refreshed from the identity provider when the sessions client is
+        configured; is_current marks this session)
+      tags:
+      - My Sessions
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSessionPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_session
+  /v1/me/sessions/{session_id}/revoke:
+    post:
+      operationId: mySessionsRevoke
+      summary: 'Sign out one of the customer''s sessions: refused by the channel at once and ended at the identity provider'
+      tags:
+      - My Sessions
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSession'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MySessionsRevokeRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_session
+  /v1/me/sessions/revoke-all:
+    post:
+      operationId: mySessionsRevokeAll
+      summary: 'Sign out everywhere: every active session of the customer, including this one unless include_current is false'
+      tags:
+      - My Sessions
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSessionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MySessionsRevokeAllRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_session
+  /v1/me/security:
+    get:
+      operationId: mySecurityGet
+      summary: The current authentication (acr, amr, auth_time, session), the second factors enrolled at the identity provider
+        ({id, type, label, created_at}; empty when the sessions client is not configured) and the step-up policy per operation
+        ({operation, acr, max_age_seconds})
+      tags:
+      - My Security
+      security:
+      - oauth2:
+        - channels:customer
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
   /v1/me/profile:
     get:
       operationId: myProfileGet
@@ -201,14 +354,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Customer'
-        '400': &id001
-          $ref: '#/components/responses/BadRequest'
-        '401': &id002
-          $ref: '#/components/responses/Unauthorized'
-        '403': &id003
-          $ref: '#/components/responses/Forbidden'
-        '429': &id004
-          $ref: '#/components/responses/TooManyRequests'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
         '404':
           $ref: '#/components/responses/NotFound'
       x-service: customer-channel-service
@@ -12159,6 +12308,35 @@ components:
       - title
       - status
       - code
+    CustomerSessionPage:
+      type: object
+      description: One page of CustomerSession results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSession'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MySessionsRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    MySessionsRevokeAllRequest:
+      type: object
+      properties:
+        include_current:
+          type: boolean
     MyProfileUpdateRequest:
       type: object
       properties:
@@ -23145,7 +23323,7 @@ components:
           - 'null'
           maxLength: 40
           description: ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT,
-            DEVICE, BUDGET, INSIGHT
+            DEVICE, BUDGET, INSIGHT, SESSION
         object_id:
           type:
           - string
@@ -23893,6 +24071,152 @@ components:
       - relationship_type
       - valid_from
       - verified
+    CustomerSession:
+      type: object
+      description: 'A sign-in session of the customer, registered the first time the channel sees the identity provider session
+        (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay
+        valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured.
+        A session from a device the customer never used before raises channels.customer_session.new_device.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Signed-in customer (from the token)
+        session_id:
+          type: string
+          maxLength: 64
+          description: Identity provider session id (sid claim)
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Identity provider user id (token sub)
+        device_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent
+        device_label:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Readable device, e.g. Chrome on Windows
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent when the session was first seen
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address when the session was first seen (IPv4 or IPv6 address)
+        last_ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address of the latest request (IPv4 or IPv6 address)
+        first_seen_at:
+          type: string
+          format: date-time
+          description: First request of the session through the channel
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Latest request (updated at most once a minute)
+        auth_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last authentication of the session (token auth_time)
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Highest authentication level seen in the session
+        new_device:
+          type: boolean
+          description: The device had not been used by the customer before (alert sent)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - REVOKED
+          - ENDED
+          description: ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the session was signed out
+        revoked_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why (customer's reason, SIGN_OUT_EVERYWHERE, ...)
+        idp_session_ended:
+          type: boolean
+          description: The identity provider confirmed the session was ended
+        is_current:
+          type: boolean
+          description: The session of the request (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - session_id
+      - first_seen_at
+      - last_seen_at
+      - new_device
+      - status
+      - idp_session_ended
     DepositAccount:
       type: object
       description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)

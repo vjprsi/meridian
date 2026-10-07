@@ -16,7 +16,10 @@ def me(customer_id: str, step_up: bool = False) -> dict:
     """Dev-mode customer identity headers (JWT mode: customer token with customer_id / auth_time claims)."""
     h = {"X-Customer-Id": customer_id}
     if step_up:
+        # dev-mode equivalent of a fresh second-factor sign-in (JWT: auth_time + acr "2" + amr)
         h["X-Auth-Time"] = str(int(time.time()))
+        h["X-Acr"] = "2"
+        h["X-Amr"] = "pwd,otp"
     return h
 
 

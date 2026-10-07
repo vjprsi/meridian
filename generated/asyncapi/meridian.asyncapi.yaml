@@ -177,6 +177,10 @@ channels:
     messages:
       ChannelsCustomerActionDenied:
         $ref: '#/components/messages/ChannelsCustomerActionDenied'
+      ChannelsCustomerSessionNewDevice:
+        $ref: '#/components/messages/ChannelsCustomerSessionNewDevice'
+      ChannelsCustomerSessionRevoked:
+        $ref: '#/components/messages/ChannelsCustomerSessionRevoked'
       ChannelsAgentActionDenied:
         $ref: '#/components/messages/ChannelsAgentActionDenied'
       ChannelsAgentDeviceKeyRegistered:
@@ -3590,6 +3594,52 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CustomerAction'
+    ChannelsCustomerSessionNewDevice:
+      name: channels.customer_session.new_device
+      title: A customer signed in from a device they had not used before (notification rule NEW_DEVICE_SIGN_IN alerts the
+        customer)
+      summary: A customer signed in from a device they had not used before (notification rule NEW_DEVICE_SIGN_IN alerts the
+        customer)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.customer_session.new_device
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerSession'
+    ChannelsCustomerSessionRevoked:
+      name: channels.customer_session.revoked
+      title: A customer signed out one of their sessions or everywhere
+      summary: A customer signed out one of their sessions or everywhere
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: channels.customer_session.revoked
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerSession'
     ChannelsAgentActionDenied:
       name: channels.agent_action.denied
       title: An agent referenced an object that is not theirs, or sent an invalid device signature
@@ -27511,7 +27561,7 @@ components:
           - 'null'
           maxLength: 40
           description: ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT,
-            DEVICE, BUDGET, INSIGHT
+            DEVICE, BUDGET, INSIGHT, SESSION
         object_id:
           type:
           - string
@@ -27573,6 +27623,152 @@ components:
       - customer_id
       - action
       - outcome
+    CustomerSession:
+      type: object
+      description: 'A sign-in session of the customer, registered the first time the channel sees the identity provider session
+        (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay
+        valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured.
+        A session from a device the customer never used before raises channels.customer_session.new_device.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Signed-in customer (from the token)
+        session_id:
+          type: string
+          maxLength: 64
+          description: Identity provider session id (sid claim)
+        subject:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Identity provider user id (token sub)
+        device_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent
+        device_label:
+          type:
+          - string
+          - 'null'
+          maxLength: 120
+          description: Readable device, e.g. Chrome on Windows
+        user_agent:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Client user agent when the session was first seen
+        ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address when the session was first seen (IPv4 or IPv6 address)
+        last_ip_address:
+          type:
+          - string
+          - 'null'
+          description: Client address of the latest request (IPv4 or IPv6 address)
+        first_seen_at:
+          type: string
+          format: date-time
+          description: First request of the session through the channel
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Latest request (updated at most once a minute)
+        auth_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last authentication of the session (token auth_time)
+        acr:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Highest authentication level seen in the session
+        new_device:
+          type: boolean
+          description: The device had not been used by the customer before (alert sent)
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - REVOKED
+          - ENDED
+          description: ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the session was signed out
+        revoked_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why (customer's reason, SIGN_OUT_EVERYWHERE, ...)
+        idp_session_ended:
+          type: boolean
+          description: The identity provider confirmed the session was ended
+        is_current:
+          type: boolean
+          description: The session of the request (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - session_id
+      - first_seen_at
+      - last_seen_at
+      - new_device
+      - status
+      - idp_session_ended
     AgentAction:
       type: object
       description: Audit trail of agent actions through the channel, including object-level denials, step-up and signature

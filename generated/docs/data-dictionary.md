@@ -2034,14 +2034,14 @@ Experience APIs for the bank's own apps. Customer apps (web banking, mobile) use
 
 ### Service `customer-channel-service` — database `customer_channel_db`
 
-Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning services); keeps only the audit trail of what each customer did or was refused.
+Customer channel BFF behind /v1/me. Stateless towards domain data (reads and acts through the owning services); keeps the audit trail of what each customer did or was refused and the registry of the customer's sign-in sessions (keyed by the identity provider's session id, the token's sid claim). Step-up follows the identity provider's Levels of Authentication: money movement and security changes need acr 2 (password plus a second factor) from an authentication at most a few minutes old, per operation configurable; otherwise 401 step_up_required with an RFC 9470 WWW-Authenticate challenge (acr_values, max_age).
 
 
 #### `customer_action` (append-only)
 
 Audit trail of customer actions through the channel, including object-level denials and step-up refusals
 
-API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /v1/me/budgets, /v1/me/cards, /v1/me/contacts, /v1/me/devices, /v1/me/documents, /v1/me/inbox/threads, /v1/me/insights, /v1/me/kyc, /v1/me/loans, /v1/me/notification-preferences, /v1/me/notifications, /v1/me/payees, /v1/me/payments, /v1/me/profile, /v1/me/rewards, /v1/me/standing-orders, /v1/me/wallets
+API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /v1/me/budgets, /v1/me/cards, /v1/me/contacts, /v1/me/devices, /v1/me/documents, /v1/me/inbox/threads, /v1/me/insights, /v1/me/kyc, /v1/me/loans, /v1/me/notification-preferences, /v1/me/notifications, /v1/me/payees, /v1/me/payments, /v1/me/profile, /v1/me/rewards, /v1/me/security, /v1/me/standing-orders, /v1/me/wallets
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2051,7 +2051,7 @@ API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | customer_id | uuid | no | ref → customer | customer_id | Signed-in customer (from the token) |
 | action | varchar(64) | no |  | action | Operation (operation id of the /v1/me endpoint) |
-| object_type | varchar(40) | yes |  | object_type | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT |
+| object_type | varchar(40) | yes |  | object_type | ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT, SESSION |
 | object_id | uuid | yes |  | object_id | Object acted on, or the object id that was refused |
 | outcome | varchar(40) (CustomerActionOutcome) | no |  | outcome | Result |
 | error_code | varchar(64) | yes |  | error_code | Problem code when not SUCCEEDED |
@@ -2061,6 +2061,40 @@ API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /
 | channel | varchar(16) | yes |  | channel | WEB or MOBILE |
 | ip_address | inet | yes |  | ip_address | Client address (first X-Forwarded-For hop) |
 | user_agent | varchar(255) | yes |  | user_agent | Client user agent |
+
+#### `customer_session`
+
+A sign-in session of the customer, registered the first time the channel sees the identity provider session (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured. A session from a device the customer never used before raises channels.customer_session.new_device.
+
+
+API: /v1/me/sessions
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Signed-in customer (from the token) |
+| session_id | varchar(64) | no |  | session_id | Identity provider session id (sid claim) |
+| subject | varchar(64) | yes |  | subject | Identity provider user id (token sub) |
+| device_hash | varchar(64) | yes |  | device_hash | SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent |
+| device_label | varchar(120) | yes |  | device_label | Readable device, e.g. Chrome on Windows |
+| user_agent | varchar(255) | yes |  | user_agent | Client user agent when the session was first seen |
+| ip_address | inet | yes |  | ip_address | Client address when the session was first seen |
+| last_ip_address | inet | yes |  | last_ip_address | Client address of the latest request |
+| first_seen_at | timestamptz | no |  | first_seen_at | First request of the session through the channel |
+| last_seen_at | timestamptz | no |  | last_seen_at | Latest request (updated at most once a minute) |
+| auth_time | timestamptz | yes |  | auth_time | Last authentication of the session (token auth_time) |
+| acr | varchar(16) | yes |  | acr | Highest authentication level seen in the session |
+| new_device | boolean | no |  | new_device | The device had not been used by the customer before (alert sent) |
+| status | varchar(40) (CustomerSessionStatus) | no |  | status | ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider) |
+| revoked_at | timestamptz | yes |  | revoked_at | When the session was signed out |
+| revoked_reason | varchar(255) | yes |  | revoked_reason | Why (customer's reason, SIGN_OUT_EVERYWHERE, ...) |
+| idp_session_ended | boolean | no |  | idp_session_ended | The identity provider confirmed the session was ended |
 
 ### Service `agent-channel-service` — database `agent_channel_db`
 

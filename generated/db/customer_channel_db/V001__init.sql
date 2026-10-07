@@ -44,7 +44,7 @@ COMMENT ON COLUMN customer_action.created_at IS 'Creation time';
 COMMENT ON COLUMN customer_action.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN customer_action.customer_id IS 'Signed-in customer (from the token)';
 COMMENT ON COLUMN customer_action.action IS 'Operation (operation id of the /v1/me endpoint)';
-COMMENT ON COLUMN customer_action.object_type IS 'ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT';
+COMMENT ON COLUMN customer_action.object_type IS 'ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT, SESSION';
 COMMENT ON COLUMN customer_action.object_id IS 'Object acted on, or the object id that was refused';
 COMMENT ON COLUMN customer_action.outcome IS 'Result';
 COMMENT ON COLUMN customer_action.error_code IS 'Problem code when not SUCCEEDED';
@@ -61,6 +61,68 @@ CREATE INDEX ix_customer_action_c2 ON customer_action (outcome, created_at);
 ALTER TABLE customer_action ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customer_action USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_customer_action_append_only BEFORE UPDATE OR DELETE ON customer_action FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- customer_session: A sign-in session of the customer, registered the first time the channel sees the identity provider session (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured. A session from a device the customer never used before raises channels.customer_session.new_device.
+
+CREATE TABLE customer_session (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  customer_id                  uuid NOT NULL,
+  session_id                   varchar(64) NOT NULL,
+  subject                      varchar(64),
+  device_hash                  varchar(64),
+  device_label                 varchar(120),
+  user_agent                   varchar(255),
+  ip_address                   inet,
+  last_ip_address              inet,
+  first_seen_at                timestamptz NOT NULL,
+  last_seen_at                 timestamptz NOT NULL,
+  auth_time                    timestamptz,
+  acr                          varchar(16),
+  new_device                   boolean NOT NULL DEFAULT false,
+  status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED', 'ENDED')),
+  revoked_at                   timestamptz,
+  revoked_reason               varchar(255),
+  idp_session_ended            boolean NOT NULL DEFAULT false,
+  CONSTRAINT uq_customer_session_1 UNIQUE (customer_id, session_id)
+);
+COMMENT ON TABLE customer_session IS 'A sign-in session of the customer, registered the first time the channel sees the identity provider session (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured. A session from a device the customer never used before raises channels.customer_session.new_device.
+';
+COMMENT ON COLUMN customer_session.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN customer_session.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN customer_session.created_at IS 'Creation time';
+COMMENT ON COLUMN customer_session.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN customer_session.updated_at IS 'Last update time';
+COMMENT ON COLUMN customer_session.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN customer_session.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN customer_session.customer_id IS 'Signed-in customer (from the token)';
+COMMENT ON COLUMN customer_session.session_id IS 'Identity provider session id (sid claim)';
+COMMENT ON COLUMN customer_session.subject IS 'Identity provider user id (token sub)';
+COMMENT ON COLUMN customer_session.device_hash IS 'SHA-256 (hex) of the app''s device id (X-Device-Id) or, without one, of the user agent';
+COMMENT ON COLUMN customer_session.device_label IS 'Readable device, e.g. Chrome on Windows';
+COMMENT ON COLUMN customer_session.user_agent IS 'Client user agent when the session was first seen';
+COMMENT ON COLUMN customer_session.ip_address IS 'Client address when the session was first seen';
+COMMENT ON COLUMN customer_session.last_ip_address IS 'Client address of the latest request';
+COMMENT ON COLUMN customer_session.first_seen_at IS 'First request of the session through the channel';
+COMMENT ON COLUMN customer_session.last_seen_at IS 'Latest request (updated at most once a minute)';
+COMMENT ON COLUMN customer_session.auth_time IS 'Last authentication of the session (token auth_time)';
+COMMENT ON COLUMN customer_session.acr IS 'Highest authentication level seen in the session';
+COMMENT ON COLUMN customer_session.new_device IS 'The device had not been used by the customer before (alert sent)';
+COMMENT ON COLUMN customer_session.status IS 'ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)';
+COMMENT ON COLUMN customer_session.revoked_at IS 'When the session was signed out';
+COMMENT ON COLUMN customer_session.revoked_reason IS 'Why (customer''s reason, SIGN_OUT_EVERYWHERE, ...)';
+COMMENT ON COLUMN customer_session.idp_session_ended IS 'The identity provider confirmed the session was ended';
+CREATE INDEX ix_customer_session_tenant ON customer_session (tenant_id, created_at);
+CREATE INDEX ix_customer_session_customer_id ON customer_session (customer_id);
+CREATE INDEX ix_customer_session_c1 ON customer_session (customer_id, status, last_seen_at);
+ALTER TABLE customer_session ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON customer_session USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_customer_session_touch BEFORE UPDATE ON customer_session FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).
