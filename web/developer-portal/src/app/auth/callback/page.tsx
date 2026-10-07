@@ -1,0 +1,29 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { oidc, saveSession, sessionFromOidc, takeReturnTo } from "@/lib/auth";
+import { useSession } from "@/components/providers";
+
+export default function AuthCallback() {
+  const router = useRouter();
+  const { setSession } = useSession();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    oidc().signinRedirectCallback()
+      .then((user) => {
+        const s = sessionFromOidc(user);
+        saveSession(s);
+        setSession(s);
+        router.replace(takeReturnTo());
+      })
+      .catch((e) => setError(String(e)));
+  }, [router, setSession]);
+
+  return (
+    <main className="grid min-h-screen place-items-center text-sm text-muted">
+      {error ? <p role="alert" className="text-bad">Sign-in failed: {error}</p> : <p>Signing you in…</p>}
+    </main>
+  );
+}
