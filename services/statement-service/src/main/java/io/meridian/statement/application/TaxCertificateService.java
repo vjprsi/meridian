@@ -36,7 +36,11 @@ public class TaxCertificateService {
     private final OutboxWriter outbox;
     private final Clock clock;
 
-    public TaxCertificateService(Rows rows, BankData bank, OutboxWriter outbox, Clock clock) {
+    private final io.meridian.web.time.BusinessDates businessDates;
+
+    public TaxCertificateService(Rows rows, BankData bank, OutboxWriter outbox, Clock clock,
+                                 io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.rows = rows;
         this.bank = bank;
         this.outbox = outbox;
@@ -49,7 +53,7 @@ public class TaxCertificateService {
         int year = v.get("tax_year").asInt();
         LocalDate start = date(v, "period_start");
         LocalDate end = date(v, "period_end");
-        TaxCertificates.validate(year, start, end, LocalDate.now(clock));
+        TaxCertificates.validate(year, start, end, businessDates.today(() -> LocalDate.now(clock)));
         UUID customer = uuid(v, "customer_id");
         UUID accountId = uuid(v, "deposit_account_id");
         String type = str(v, "certificate_type");

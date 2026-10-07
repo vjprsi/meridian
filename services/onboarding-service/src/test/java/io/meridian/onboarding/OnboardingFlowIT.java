@@ -180,6 +180,8 @@ class OnboardingFlowIT {
         HttpResponse<String> created = send("POST", "/v1/onboarding/applications", body, "app-create-1", TENANT, "maker", null);
         assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
         String app = json.readTree(created.body()).get("id").asString();
+        assertThat(json.readTree(created.body()).get("application_number").asString())
+                .as("server-generated; the client's number is ignored").matches("APP-\\d{8}-[0-9A-Z]{8}");
         HttpResponse<String> replay = send("POST", "/v1/onboarding/applications", body, "app-create-1", TENANT, "maker", null);
         assertThat(replay.statusCode()).isEqualTo(201);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");

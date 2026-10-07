@@ -48,7 +48,6 @@ public class InboxService {
                 .put("customer_id", me().toString())
                 .put("subject", required(req, "subject"))
                 .put("topic", text(req, "topic"))
-                .put("opened_by", "CUSTOMER")
                 .put("initial_message", required(req, "initial_message"));
         UUID related = uuid(req, "related_id", false);
         if (related != null) {

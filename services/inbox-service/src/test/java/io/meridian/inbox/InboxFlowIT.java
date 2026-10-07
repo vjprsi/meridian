@@ -48,6 +48,7 @@ class InboxFlowIT {
     static final String TENANT = "0199a000-0000-7000-8000-0000000000e1";
     static final String OTHER_TENANT = "0199a000-0000-7000-8000-0000000000e2";
     static final String ALICE = "0199a000-0000-7000-8000-00000000a101";
+    static final String BOB = "0199a000-0000-7000-8000-00000000a102";
     static final String QUEUE = "0199a000-0000-7000-8000-00000000c101";
     static final String AGENT = "0199a000-0000-7000-8000-00000000f101";
     static final String DOC_OK = "0199a000-0000-7000-8000-00000000d101";
@@ -112,14 +113,14 @@ class InboxFlowIT {
     @Test
     @Order(1)
     void customerOpensThreadWithFirstMessageRoutedToCrm() throws Exception {
-        assertThat(code(post("/v1/inbox/threads", """
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads", """
                 {"customer_id":"%s","subject":"x","initial_attachment_document_ids":["%s"]}""".formatted(ALICE, DOC_OK), 422)))
                 .isEqualTo("initial_message_required");
         String body = """
                 {"customer_id":"%s","subject":"Card charge I do not recognise","topic":"CARDS","work_queue_id":"%s",
                  "initial_message":"There is a charge of 49.99 I did not make","initial_attachment_document_ids":["%s"]}"""
                 .formatted(ALICE, QUEUE, DOC_OK);
-        HttpResponse<String> r = send("POST", "/v1/inbox/threads", body, "open-thread-1", TENANT);
+        HttpResponse<String> r = send("POST", "/v1/inbox/threads", body, "open-thread-1", TENANT, ALICE);
         assertThat(r.statusCode()).as(r.body()).isEqualTo(201);
         JsonNode t = json.readTree(r.body());
         thread = t.get("id").asString();
@@ -132,7 +133,7 @@ class InboxFlowIT {
         assertThat(t.get("last_sender_type").asString()).isEqualTo("CUSTOMER");
         assertThat(crmCalls).contains("/v1/servicing/work-items");
 
-        HttpResponse<String> replay = send("POST", "/v1/inbox/threads", body, "open-thread-1", TENANT);
+        HttpResponse<String> replay = send("POST", "/v1/inbox/threads", body, "open-thread-1", TENANT, ALICE);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(json.readTree(replay.body()).get("id").asString()).isEqualTo(thread);
         assertThat(get("/v1/inbox/threads/" + thread + "/messages").get("data")).hasSize(1);
@@ -151,27 +152,34 @@ class InboxFlowIT {
         assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
                 {"body":"see attached","sender_type":"STAFF","attachment_document_ids":["%s"]}""".formatted(DOC_MISSING), 422)))
                 .isEqualTo("attachment_not_found");
-        assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
-                {"body":"secret","sender_type":"CUSTOMER","is_internal_note":true}""", 422)))
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + thread + "/messages", """
+                {"body":"secret","is_internal_note":true}""", 422)))
                 .isEqualTo("internal_note_not_allowed");
+        assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
+                {"body":"pretending","sender_type":"CUSTOMER"}""", 422)))
+                .as("staff cannot post as the customer").isEqualTo("sender_mismatch");
+        assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
+                {"body":"as someone else","sender_user_id":"%s"}""".formatted(AGENT), 422)))
+                .as("sender_user_id must be the caller").isEqualTo("sender_mismatch");
         assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
                 {"sender_type":"STAFF"}""", 400))).isNotBlank();
 
-        JsonNode reply = post("/v1/inbox/threads/" + thread + "/messages", """
+        JsonNode reply = asUser(AGENT, "POST", "/v1/inbox/threads/" + thread + "/messages", """
                 {"body":"We have blocked the card; dispute form attached","sender_type":"STAFF","sender_user_id":"%s",
                  "attachment_document_ids":["%s"],"client_message_id":"web-1"}""".formatted(AGENT, DOC_OK), 201);
+        assertThat(reply.get("sender_user_id").asString()).isEqualTo(AGENT);
         staffMessage = reply.get("id").asString();
         assertThat(reply.hasNonNull("notification_id")).isTrue();
         assertThat(notifications).hasSize(1);
         assertThat(notifications.getFirst().get("recipient_id").asString()).isEqualTo(ALICE);
 
-        JsonNode dup = post("/v1/inbox/threads/" + thread + "/messages", """
-                {"body":"We have blocked the card; dispute form attached","sender_type":"STAFF","sender_user_id":"%s",
-                 "attachment_document_ids":["%s"],"client_message_id":"web-1"}""".formatted(AGENT, DOC_OK), 201);
+        JsonNode dup = asUser(AGENT, "POST", "/v1/inbox/threads/" + thread + "/messages", """
+                {"body":"We have blocked the card; dispute form attached","attachment_document_ids":["%s"],
+                 "client_message_id":"web-1"}""".formatted(DOC_OK), 201);
         assertThat(dup.get("id").asString()).as("client_message_id de-duplicates").isEqualTo(staffMessage);
 
         post("/v1/inbox/threads/" + thread + "/messages", """
-                {"body":"Customer called earlier, verified","sender_type":"STAFF","is_internal_note":true}""", 201);
+                {"body":"Customer called earlier, verified","is_internal_note":true}""", 201);
         JsonNode t = get("/v1/inbox/threads/" + thread);
         assertThat(t.get("status").asString()).isEqualTo("AWAITING_CUSTOMER");
         assertThat(t.get("unread_customer").asInt()).isEqualTo(1);
@@ -193,17 +201,19 @@ class InboxFlowIT {
     @Test
     @Order(3)
     void readReceipts() throws Exception {
-        JsonNode t = post("/v1/inbox/threads/" + thread + "/read", "{\"reader_type\":\"CUSTOMER\"}", 200);
+        assertThat(code(post("/v1/inbox/threads/" + thread + "/read", "{\"reader_type\":\"CUSTOMER\"}", 422)))
+                .as("staff cannot mark read as the customer").isEqualTo("reader_mismatch");
+        JsonNode t = asCustomer(ALICE, "POST", "/v1/inbox/threads/" + thread + "/read", "{}", 200);
         assertThat(t.get("unread_customer").asInt()).isZero();
         assertThat(t.get("unread_staff").asInt()).isEqualTo(1);
         JsonNode receipts = get("/v1/inbox/messages/" + staffMessage + "/receipts").get("data");
         assertThat(receipts).hasSize(1);
         assertThat(receipts.get(0).get("reader_type").asString()).isEqualTo("CUSTOMER");
-        post("/v1/inbox/threads/" + thread + "/read", "{\"reader_type\":\"CUSTOMER\"}", 200);
+        asCustomer(ALICE, "POST", "/v1/inbox/threads/" + thread + "/read", "{\"reader_type\":\"CUSTOMER\"}", 200);
         assertThat(get("/v1/inbox/messages/" + staffMessage + "/receipts").get("data")).as("receipts are written once").hasSize(1);
         assertThat(outbox("engagement.secure_message.read", null)).isEqualTo(2); // staff reply + system message
 
-        JsonNode staffRead = post("/v1/inbox/threads/" + thread + "/read", """
+        JsonNode staffRead = asUser(AGENT, "POST", "/v1/inbox/threads/" + thread + "/read", """
                 {"reader_type":"STAFF","reader_user_id":"%s"}""".formatted(AGENT), 200);
         assertThat(staffRead.get("unread_staff").asInt()).isZero();
     }
@@ -221,8 +231,8 @@ class InboxFlowIT {
         assertThat(closed.get("closed_by").asString()).isEqualTo("maker");
         assertThat(crmCalls).contains("/v1/servicing/work-items/" + WORK_ITEM + "/complete");
         assertThat(code(post("/v1/inbox/threads/" + thread + "/close", "{}", 409))).isEqualTo("invalid_transition");
-        assertThat(code(post("/v1/inbox/threads/" + thread + "/messages", """
-                {"body":"one more thing","sender_type":"CUSTOMER"}""", 409))).isEqualTo("thread_closed");
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + thread + "/messages", """
+                {"body":"one more thing"}""", 409))).isEqualTo("thread_closed");
         assertThat(code(post("/v1/inbox/threads/" + thread + "/assign", "{\"assigned_user_id\":\"%s\"}".formatted(AGENT), 409)))
                 .isEqualTo("thread_closed");
         assertThat(code(patch("/v1/inbox/threads/" + thread, "{\"subject\":\"x\"}", closed.get("row_version").asInt(), 409)))
@@ -250,6 +260,80 @@ class InboxFlowIT {
                 "{\"body\":\"hi\",\"sender_type\":\"STAFF\"}", key(), OTHER_TENANT).statusCode()).isEqualTo(404);
         HttpResponse<String> list = send("GET", "/v1/inbox/threads?customer_id=" + ALICE, null, null, OTHER_TENANT);
         assertThat(json.readTree(list.body()).get("data")).isEmpty();
+    }
+
+    @Test
+    @Order(6)
+    void customersAreConfinedToTheirOwnThreadsAndNeverSeeInternalNotes() throws Exception {
+        // opened_by is server-set: a staff caller sending opened_by=CUSTOMER still opens as STAFF
+        JsonNode staffOpened = post("/v1/inbox/threads", """
+                {"customer_id":"%s","subject":"Your new card","opened_by":"CUSTOMER","initial_message":"It is on its way"}"""
+                .formatted(ALICE), 201);
+        assertThat(staffOpened.get("opened_by").asString()).isEqualTo("STAFF");
+        assertThat(staffOpened.get("last_sender_type").asString()).isEqualTo("STAFF");
+
+        // a customer cannot open a thread for somebody else, and opens as CUSTOMER
+        assertThat(code(asCustomer(BOB, "POST", "/v1/inbox/threads", """
+                {"customer_id":"%s","subject":"x","initial_message":"y"}""".formatted(ALICE), 422)))
+                .isEqualTo("customer_mismatch");
+        JsonNode bobs = asCustomer(BOB, "POST", "/v1/inbox/threads", """
+                {"customer_id":"%s","subject":"Loan question","initial_message":"Can I repay early?"}""".formatted(BOB), 201);
+        assertThat(bobs.get("customer_id").asString()).isEqualTo(BOB);
+        assertThat(bobs.get("opened_by").asString()).isEqualTo("CUSTOMER");
+        String bobThread = bobs.get("id").asString();
+
+        String aliceThread = staffOpened.get("id").asString();
+        post("/v1/inbox/threads/" + aliceThread + "/messages", """
+                {"body":"Card shipped by courier, tracking ABC","is_internal_note":true}""", 201);
+
+        // customer cannot post as STAFF or as a staff user
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + aliceThread + "/messages", """
+                {"body":"I am the bank","sender_type":"STAFF"}""", 422))).isEqualTo("sender_mismatch");
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + aliceThread + "/messages", """
+                {"body":"I am the bank","sender_user_id":"%s"}""".formatted(AGENT), 422))).isEqualTo("sender_mismatch");
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + aliceThread + "/read", """
+                {"reader_type":"STAFF"}""", 422))).isEqualTo("reader_mismatch");
+        JsonNode mine = asCustomer(ALICE, "POST", "/v1/inbox/threads/" + aliceThread + "/messages", """
+                {"body":"Thanks!"}""", 201);
+        assertThat(mine.get("sender_type").asString()).isEqualTo("CUSTOMER");
+        assertThat(mine.has("sender_user_id")).isFalse();
+
+        // internal notes: never for customers
+        assertThat(code(asCustomer(ALICE, "GET", "/v1/inbox/threads/" + aliceThread + "/messages?include_internal=true",
+                null, 403))).isEqualTo("staff_only");
+        JsonNode visible = asCustomer(ALICE, "GET", "/v1/inbox/threads/" + aliceThread + "/messages", null, 200).get("data");
+        assertThat(visible).hasSize(2);
+        visible.forEach(m -> assertThat(m.get("is_internal_note").asBoolean()).isFalse());
+        assertThat(get("/v1/inbox/threads/" + aliceThread + "/messages?include_internal=true").get("data")).hasSize(3);
+        assertThat(code(asCustomer(ALICE, "GET", "/v1/inbox/messages?secure_message_thread_id=" + aliceThread
+                + "&is_internal_note=true", null, 403))).isEqualTo("staff_only");
+        assertThat(code(asCustomer(ALICE, "GET", "/v1/inbox/messages/" + mine.get("id").asString() + "/receipts", null, 403)))
+                .isEqualTo("staff_only");
+
+        // another customer's thread does not exist for Bob
+        asCustomer(BOB, "GET", "/v1/inbox/threads/" + aliceThread, null, 404);
+        asCustomer(BOB, "GET", "/v1/inbox/threads/" + aliceThread + "/messages", null, 404);
+        asCustomer(BOB, "POST", "/v1/inbox/threads/" + aliceThread + "/messages", "{\"body\":\"hi\"}", 404);
+        asCustomer(BOB, "POST", "/v1/inbox/threads/" + aliceThread + "/read", "{}", 404);
+        asCustomer(BOB, "POST", "/v1/inbox/threads/" + aliceThread + "/close", "{}", 404);
+        JsonNode bobList = asCustomer(BOB, "GET", "/v1/inbox/threads?customer_id=" + ALICE, null, 200).get("data");
+        assertThat(ids(bobList)).containsExactly(bobThread);
+        assertThat(asCustomer(ALICE, "GET", "/v1/inbox/threads/" + aliceThread, null, 200).get("id").asString())
+                .isEqualTo(aliceThread);
+
+        // staff-only operations
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/threads/" + aliceThread + "/assign",
+                "{\"assigned_user_id\":\"%s\"}".formatted(AGENT), 403))).isEqualTo("staff_only");
+        assertThat(code(asCustomer(ALICE, "POST", "/v1/inbox/announcements/refresh-status", null, 403))).isEqualTo("staff_only");
+        assertThat(code(asCustomer(ALICE, "GET", "/v1/inbox/announcements/active?customer_id=" + BOB + "&app=CUSTOMER_WEB",
+                null, 422))).isEqualTo("customer_mismatch");
+        asCustomer(ALICE, "GET", "/v1/inbox/announcements/active?customer_id=" + ALICE + "&app=CUSTOMER_WEB", null, 200);
+
+        // customers can close their own thread; staff behaviour is unchanged
+        assertThat(asCustomer(BOB, "POST", "/v1/inbox/threads/" + bobThread + "/close", "{}", 200).get("status").asString())
+                .isEqualTo("CLOSED");
+        assertThat(asUser(AGENT, "GET", "/v1/inbox/threads?customer_id=" + ALICE, null, 200).get("data").size())
+                .isGreaterThanOrEqualTo(2);
     }
 
     // ------------------------------------------------------------------ announcements
@@ -354,6 +438,24 @@ class InboxFlowIT {
         return json.readTree(r.body());
     }
 
+    private JsonNode asCustomer(String customer, String method, String path, String body, int expected) throws Exception {
+        HttpResponse<String> r = send(method, path, body, "GET".equals(method) ? null : key(), TENANT, customer);
+        assertThat(r.statusCode()).as(method + " " + path + " -> " + r.body()).isEqualTo(expected);
+        return json.readTree(r.body());
+    }
+
+    private JsonNode asUser(String user, String method, String path, String body, int expected) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("X-Tenant-Id", TENANT).header("X-User", user).header("Content-Type", "application/json");
+        if (!"GET".equals(method)) {
+            b.header("Idempotency-Key", key());
+        }
+        b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.statusCode()).as(method + " " + path + " -> " + r.body()).isEqualTo(expected);
+        return json.readTree(r.body());
+    }
+
     private JsonNode patch(String path, String body, int version, int expected) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", TENANT).header("X-User", "maker").header("Content-Type", "application/json")
@@ -371,8 +473,17 @@ class InboxFlowIT {
     }
 
     private HttpResponse<String> send(String method, String path, String body, String idemKey, String tenant) throws Exception {
+        return send(method, path, body, idemKey, tenant, null);
+    }
+
+    /** {@code customer} != null: relayed by the customer channel service on behalf of that customer. */
+    private HttpResponse<String> send(String method, String path, String body, String idemKey, String tenant,
+                                      String customer) throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("X-Tenant-Id", tenant).header("X-User", "maker").header("Content-Type", "application/json");
+        if (customer != null) {
+            b.header("X-On-Behalf-Of-Customer", customer);
+        }
         if (idemKey != null) {
             b.header("Idempotency-Key", idemKey);
         }

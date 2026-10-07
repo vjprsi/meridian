@@ -1142,7 +1142,12 @@ services:
     database: inbox_db
     description: >
       Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts,
-      plus in-app announcements and banners.
+      plus in-app announcements and banners. Who is speaking is never taken from the request body: the caller is
+      CUSTOMER only when an internal service token (the customer channel service) relays the call with the
+      X-On-Behalf-Of-Customer header (customer id; ignored for any other caller, 403 when a non-internal token sends
+      it); every other authenticated principal is bank-side (STAFF). Customer callers are confined to their own
+      threads (404 otherwise), never see internal notes and cannot assign, edit or read the message/receipt
+      resources; opened_by, sender_type, sender_user_id, reader_type and reader_user_id are server-set.
     tables:
       - name: secure_message_thread
         prefix: smt
@@ -1153,7 +1158,7 @@ services:
           - "subject string(200) nn | Subject"
           - "topic string(64) | Topic code (CARDS, PAYMENTS, LOANS, GENERAL)"
           - "status enum:SecureThreadStatus nn default=OPEN ro | Status (changes through messages and close / reopen)"
-          - "opened_by enum:SecureMessageSender nn default=CUSTOMER | Who opened the thread"
+          - "opened_by enum:SecureMessageSender nn default=CUSTOMER ro | Who opened the thread (server-set from the caller: CUSTOMER when relayed for a customer, else STAFF)"
           - "work_queue_id uuid ref=work_queue | CRM work queue the thread is routed to"
           - "work_item_id uuid ref=work_item ro | CRM work item tracking the thread"
           - "assigned_user_id uuid ref=app_user idx ro | Staff member handling it (set through assign)"
@@ -1168,7 +1173,7 @@ services:
           - "closed_by string(64) ro | Principal that closed the thread"
           - "reopened_count int nn default=0 ro | Times reopened"
         request_only:
-          - "initial_message text | First message of the thread, sent by opened_by"
+          - "initial_message text | First message of the thread, sent as the caller"
           - "initial_attachment_document_ids uuid[] | Attachments of the first message (document-service ids)"
 
       - name: secure_message
@@ -1178,8 +1183,8 @@ services:
         fr: [ENG-05]
         columns:
           - "secure_message_thread_id uuid nn fk=secure_message_thread idx | Thread"
-          - "sender_type enum:SecureMessageSender nn | Who sent it"
-          - "sender_user_id uuid ref=app_user | Staff sender"
+          - "sender_type enum:SecureMessageSender nn ro | Who sent it (server-set from the caller)"
+          - "sender_user_id uuid ref=app_user ro | Staff sender (the calling staff user; null for customers)"
           - "body text nn pii | Message text"
           - "attachment_document_ids uuid[] | Attached documents (document-service ids, verified AVAILABLE)"
           - "is_internal_note bool nn default=false | Staff-only note, hidden from the customer"
@@ -1194,8 +1199,8 @@ services:
         fr: [ENG-05]
         columns:
           - "secure_message_id uuid nn fk=secure_message idx | Message"
-          - "reader_type enum:SecureMessageSender nn | Customer or staff"
-          - "reader_user_id uuid ref=app_user | Staff reader"
+          - "reader_type enum:SecureMessageSender nn ro | Customer or staff (server-set from the caller)"
+          - "reader_user_id uuid ref=app_user ro | Staff reader (the calling staff user; null for customers)"
           - "read_at ts nn default=now | Read time"
         unique: [[secure_message_id, reader_type, reader_user_id]]
 
@@ -1240,10 +1245,10 @@ services:
         ops: [list, get, create, update]
         filters: [customer_id, status, topic, assigned_user_id, work_queue_id]
         actions:
-          - "GET /{id}/messages?include_internal:bool | Messages in the thread (internal notes only when include_internal=true) | | secure_message[]"
-          - "POST /{id}/messages | Send a message in the thread | body text nn, sender_type enum:SecureMessageSender nn, sender_user_id uuid, attachment_document_ids uuid[], is_internal_note bool, client_message_id string(64) | secure_message"
-          - "POST /{id}/read | Mark all messages from the other party read for the caller | reader_type enum:SecureMessageSender nn, reader_user_id uuid | secure_message_thread"
-          - "POST /{id}/assign | Assign to a staff member (and its CRM work item) | assigned_user_id uuid nn | secure_message_thread"
+          - "GET /{id}/messages?include_internal:bool | Messages in the thread (internal notes only when include_internal=true, staff callers only: 403 staff_only for customers) | | secure_message[]"
+          - "POST /{id}/messages | Send a message in the thread as the caller. sender_type is derived (CUSTOMER for a relayed customer, STAFF otherwise; bank-side callers may declare SYSTEM or BOT); a disagreeing sender_type or sender_user_id is 422 sender_mismatch | body text nn, sender_type enum:SecureMessageSender, sender_user_id uuid, attachment_document_ids uuid[], is_internal_note bool, client_message_id string(64) | secure_message"
+          - "POST /{id}/read | Mark all messages from the other party read for the caller (reader derived from the caller; a disagreeing reader_type or reader_user_id is 422 reader_mismatch) | reader_type enum:SecureMessageSender, reader_user_id uuid | secure_message_thread"
+          - "POST /{id}/assign | Assign to a staff member (and its CRM work item); staff only | assigned_user_id uuid nn | secure_message_thread"
           - "POST /{id}/close | Close the thread | reason string(255) | secure_message_thread"
           - "POST /{id}/reopen | Reopen the thread | reason string(255) | secure_message_thread"
       - resource: secure-messages
@@ -1261,8 +1266,8 @@ services:
         actions:
           - "POST /{id}/publish | Publish (SCHEDULED until starts_at, then LIVE) | | announcement"
           - "POST /{id}/withdraw | Withdraw | reason string(255) | announcement"
-          - "POST /{id}/dismiss | The customer dismissed the announcement | customer_id uuid nn | none"
-          - "GET /active?customer_id:uuid!&app:enum:AnnouncementApp!&placement:enum:AnnouncementPlacement&language:string(10) | Announcements active for the customer and app (segments, schedule, dismissals) | | announcement[]"
+          - "POST /{id}/dismiss | The customer dismissed the announcement (a relayed customer may only dismiss for itself: 422 customer_mismatch) | customer_id uuid nn | none"
+          - "GET /active?customer_id:uuid!&app:enum:AnnouncementApp!&placement:enum:AnnouncementPlacement&language:string(10) | Announcements active for the customer and app (segments, schedule, dismissals); a relayed customer may only ask for itself | | announcement[]"
           - "POST /refresh-status | Move due announcements live and expire ended ones (called by the scheduler) | | object"
 
     events:

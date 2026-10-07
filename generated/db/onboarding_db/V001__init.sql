@@ -39,6 +39,7 @@ CREATE TABLE onboarding_journey (
   definition                   jsonb NOT NULL,
   decision_rules               jsonb,
   expiry_days                  integer NOT NULL DEFAULT 30,
+  legal_entity_id              uuid,
   published_at                 timestamptz,
   published_by                 varchar(64),
   retired_at                   timestamptz,
@@ -68,9 +69,10 @@ COMMENT ON COLUMN onboarding_journey.country IS 'Country the journey applies to'
 COMMENT ON COLUMN onboarding_journey.channels IS 'Allowed channels (OnboardingChannel values)';
 COMMENT ON COLUMN onboarding_journey.product_ids IS 'Products that can be opened at the end of the journey';
 COMMENT ON COLUMN onboarding_journey.target_tier IS 'KYC tier granted on approval';
-COMMENT ON COLUMN onboarding_journey.definition IS 'Steps, branching conditions and screens (server-driven UI)';
+COMMENT ON COLUMN onboarding_journey.definition IS 'Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max}';
 COMMENT ON COLUMN onboarding_journey.decision_rules IS 'Auto-approve / refer / reject rules';
 COMMENT ON COLUMN onboarding_journey.expiry_days IS 'Days before an idle application expires';
+COMMENT ON COLUMN onboarding_journey.legal_entity_id IS 'Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)';
 COMMENT ON COLUMN onboarding_journey.published_at IS 'Publication time';
 COMMENT ON COLUMN onboarding_journey.published_by IS 'Checker who published the version';
 COMMENT ON COLUMN onboarding_journey.retired_at IS 'Retirement time';
@@ -82,6 +84,7 @@ COMMENT ON COLUMN onboarding_journey.custom_field_3 IS 'Tenant-defined custom fi
 COMMENT ON COLUMN onboarding_journey.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN onboarding_journey.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_onboarding_journey_tenant ON onboarding_journey (tenant_id, created_at);
+CREATE INDEX ix_onboarding_journey_legal_entity_id ON onboarding_journey (legal_entity_id);
 CREATE INDEX ix_onboarding_journey_approval_request_id ON onboarding_journey (approval_request_id);
 ALTER TABLE onboarding_journey ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON onboarding_journey USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -146,7 +149,7 @@ COMMENT ON COLUMN onboarding_application.created_by IS 'Principal that created t
 COMMENT ON COLUMN onboarding_application.updated_at IS 'Last update time';
 COMMENT ON COLUMN onboarding_application.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN onboarding_application.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN onboarding_application.application_number IS 'Human-readable reference';
+COMMENT ON COLUMN onboarding_application.application_number IS 'Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>)';
 COMMENT ON COLUMN onboarding_application.onboarding_journey_id IS 'Journey version';
 COMMENT ON COLUMN onboarding_application.customer_id IS 'Customer created or matched';
 COMMENT ON COLUMN onboarding_application.legal_entity_id IS 'Bank entity that will hold the relationship (needed to create the customer)';
@@ -255,6 +258,94 @@ CREATE INDEX ix_onboarding_step_onboarding_application_id ON onboarding_step (on
 ALTER TABLE onboarding_step ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON onboarding_step USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_onboarding_step_touch BEFORE UPDATE ON onboarding_step FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- onboarding_applicant_token: Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest)
+CREATE TABLE onboarding_applicant_token (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  onboarding_application_id    uuid NOT NULL REFERENCES onboarding_application(id),
+  token_hash                   varchar(64) NOT NULL,
+  expires_at                   timestamptz NOT NULL,
+  revoked_at                   timestamptz,
+  revoked_reason               varchar(32),
+  last_used_at                 timestamptz,
+  issued_ip                    inet,
+  device_fingerprint           varchar(128),
+  CONSTRAINT uq_onboarding_applicant_token_token_hash UNIQUE (tenant_id, token_hash)
+);
+COMMENT ON TABLE onboarding_applicant_token IS 'Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest)';
+COMMENT ON COLUMN onboarding_applicant_token.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN onboarding_applicant_token.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN onboarding_applicant_token.created_at IS 'Creation time';
+COMMENT ON COLUMN onboarding_applicant_token.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN onboarding_applicant_token.updated_at IS 'Last update time';
+COMMENT ON COLUMN onboarding_applicant_token.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN onboarding_applicant_token.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN onboarding_applicant_token.onboarding_application_id IS 'Application the token is bound to';
+COMMENT ON COLUMN onboarding_applicant_token.token_hash IS 'SHA-256 of the token (the token itself is never stored)';
+COMMENT ON COLUMN onboarding_applicant_token.expires_at IS 'Expiry (short-lived; rotate with token/refresh)';
+COMMENT ON COLUMN onboarding_applicant_token.revoked_at IS 'Revocation time (rotated, application closed)';
+COMMENT ON COLUMN onboarding_applicant_token.revoked_reason IS 'ROTATED, SUBMITTED, CLOSED';
+COMMENT ON COLUMN onboarding_applicant_token.last_used_at IS 'Last authenticated request';
+COMMENT ON COLUMN onboarding_applicant_token.issued_ip IS 'Client IP at issue';
+COMMENT ON COLUMN onboarding_applicant_token.device_fingerprint IS 'Device fingerprint at issue';
+CREATE INDEX ix_onboarding_applicant_token_tenant ON onboarding_applicant_token (tenant_id, created_at);
+CREATE INDEX ix_onboarding_applicant_token_onboarding_application_id ON onboarding_applicant_token (onboarding_application_id);
+ALTER TABLE onboarding_applicant_token ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON onboarding_applicant_token USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_onboarding_applicant_token_touch BEFORE UPDATE ON onboarding_applicant_token FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- onboarding_otp: One-time code sent to verify the applicant's phone or email for a contact step (hashes only)
+CREATE TABLE onboarding_otp (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  onboarding_application_id    uuid NOT NULL REFERENCES onboarding_application(id),
+  step_code                    varchar(64) NOT NULL,
+  channel                      varchar(16) NOT NULL,
+  destination                  varchar(254) NOT NULL,
+  code_hash                    varchar(64) NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'VERIFIED', 'EXPIRED', 'LOCKED', 'SUPERSEDED')),
+  attempts                     integer NOT NULL DEFAULT 0,
+  max_attempts                 integer NOT NULL DEFAULT 5,
+  expires_at                   timestamptz NOT NULL,
+  verified_at                  timestamptz,
+  notification_id              uuid
+);
+COMMENT ON TABLE onboarding_otp IS 'One-time code sent to verify the applicant''s phone or email for a contact step (hashes only)';
+COMMENT ON COLUMN onboarding_otp.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN onboarding_otp.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN onboarding_otp.created_at IS 'Creation time';
+COMMENT ON COLUMN onboarding_otp.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN onboarding_otp.updated_at IS 'Last update time';
+COMMENT ON COLUMN onboarding_otp.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN onboarding_otp.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN onboarding_otp.onboarding_application_id IS 'Application';
+COMMENT ON COLUMN onboarding_otp.step_code IS 'PHONE_VERIFICATION or EMAIL_VERIFICATION step';
+COMMENT ON COLUMN onboarding_otp.channel IS 'SMS or EMAIL';
+COMMENT ON COLUMN onboarding_otp.destination IS 'Phone or email the code was sent to [PII]';
+COMMENT ON COLUMN onboarding_otp.code_hash IS 'HMAC-SHA256 of the code (the code itself is never stored)';
+COMMENT ON COLUMN onboarding_otp.status IS 'Status';
+COMMENT ON COLUMN onboarding_otp.attempts IS 'Wrong attempts so far';
+COMMENT ON COLUMN onboarding_otp.max_attempts IS 'Wrong attempts before the code is locked';
+COMMENT ON COLUMN onboarding_otp.expires_at IS 'Code expiry';
+COMMENT ON COLUMN onboarding_otp.verified_at IS 'Verification time';
+COMMENT ON COLUMN onboarding_otp.notification_id IS 'Notification that delivered the code';
+CREATE INDEX ix_onboarding_otp_tenant ON onboarding_otp (tenant_id, created_at);
+CREATE INDEX ix_onboarding_otp_onboarding_application_id ON onboarding_otp (onboarding_application_id);
+CREATE INDEX ix_onboarding_otp_notification_id ON onboarding_otp (notification_id);
+ALTER TABLE onboarding_otp ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON onboarding_otp USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_onboarding_otp_touch BEFORE UPDATE ON onboarding_otp FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- onboarding_offline_batch: Batch of applications captured offline by an agent device and synced later
 CREATE TABLE onboarding_offline_batch (

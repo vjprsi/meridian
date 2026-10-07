@@ -6,7 +6,7 @@ import io.meridian.customerchannel.api.generated.model.AccountHolderPage;
 import io.meridian.customerchannel.api.generated.model.DepositAccount;
 import io.meridian.customerchannel.api.generated.model.DepositAccountPage;
 import io.meridian.customerchannel.api.generated.model.LedgerEntryPage;
-import io.meridian.customerchannel.api.generated.model.MyAccountsStatementsRequest;
+import io.meridian.customerchannel.api.generated.model.MyAccountsAddStatementsRequest;
 import io.meridian.customerchannel.api.generated.model.Statement;
 import io.meridian.customerchannel.api.generated.model.StatementPage;
 import io.meridian.customerchannel.application.AccountService;
@@ -60,7 +60,7 @@ public class MyAccountsController implements MyAccountsApi {
 
     @Override
     public ResponseEntity<Statement> myAccountsAddStatements(UUID accountId, String idempotencyKey,
-                                                             MyAccountsStatementsRequest body) {
+                                                             MyAccountsAddStatementsRequest body) {
         return http.ok(accounts.requestStatement(accountId, http.body(body), idempotencyKey), Statement.class);
     }
 

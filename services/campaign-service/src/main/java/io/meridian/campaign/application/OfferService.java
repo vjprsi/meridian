@@ -230,7 +230,7 @@ public class OfferService {
                 Set<UUID> segments = Set.of();
                 if (rules.needsSegments()) {
                     try {
-                        segments = external.activeSegments(customer, now.toLocalDate());
+                        segments = external.activeSegments(customer, rows.today());
                     } catch (RuntimeException e) {
                         reason = "segment_check_failed";
                     }

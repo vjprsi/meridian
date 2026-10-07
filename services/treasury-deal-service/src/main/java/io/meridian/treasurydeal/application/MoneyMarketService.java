@@ -66,7 +66,7 @@ public class MoneyMarketService {
         ObjectNode v = rows.columns(TABLE, req);
         ObjectNode cp = counterparties.requireActive(Rows.uuid(v, "treasury_counterparty_id"));
         normalise(v);
-        validate(v, cp, rows.today());
+        validate(v, cp, rows.today(Rows.uuid(v, "legal_entity_id")));
         UUID id = Ids.newId();
         v.put("id", id.toString());
         v.put("deal_ref", Support.dealRef("MM", Rows.date(v, "trade_date"), id));
@@ -93,7 +93,7 @@ public class MoneyMarketService {
         merged.setAll(changes);
         ObjectNode cp = counterparties.requireActive(Rows.uuid(merged, "treasury_counterparty_id"));
         normalise(merged);
-        validate(merged, cp, rows.today());
+        validate(merged, cp, rows.today(Rows.uuid(merged, "legal_entity_id")));
         computeInterest(merged);
         changes.setAll(pick(merged, "is_call", "interest_amount", "maturity_amount"));
         ObjectNode out = rows.update(TABLE, id, changes);
@@ -220,7 +220,7 @@ public class MoneyMarketService {
         ObjectNode deal = rows.lock(TABLE, id);
         Support.transition(Lifecycle.DEAL, deal, "SETTLED", "deal");
         LocalDate valueDate = Rows.date(deal, "value_date");
-        if (valueDate.isAfter(rows.today())) {
+        if (valueDate.isAfter(rows.today(Rows.uuid(deal, "legal_entity_id")))) {
             throw ApiException.unprocessable("value_date_not_reached", "The deal settles on " + valueDate);
         }
         ObjectNode v = rows.object();
@@ -318,7 +318,7 @@ public class MoneyMarketService {
         if (maturity == null) {
             throw ApiException.unprocessable("not_called", "Call the deal before processing its maturity");
         }
-        LocalDate ref = asOf == null ? rows.today() : asOf;
+        LocalDate ref = asOf == null ? rows.today(Rows.uuid(deal, "legal_entity_id")) : asOf;
         if (maturity.isAfter(ref)) {
             throw ApiException.unprocessable("not_due", "The deal matures on " + maturity);
         }
@@ -372,7 +372,7 @@ public class MoneyMarketService {
         ObjectNode deal = rows.lock(TABLE, id);
         Support.transition(Lifecycle.DEAL, deal, "MATURED", "deal");
         LocalDate maturity = Rows.date(deal, "maturity_date");
-        LocalDate ref = asOf == null ? rows.today() : asOf;
+        LocalDate ref = asOf == null ? rows.today(Rows.uuid(deal, "legal_entity_id")) : asOf;
         if (maturity == null || maturity.isAfter(ref)) {
             throw ApiException.unprocessable("not_due", "Only deals at maturity can be rolled over");
         }
@@ -409,7 +409,8 @@ public class MoneyMarketService {
         n.put("id", newId.toString());
         n.put("principal", (capitalise ? p.add(interest) : p).toPlainString());
         n.put("interest_rate", newRate.toPlainString());
-        n.put("trade_date", rows.today().isBefore(maturity) ? rows.today().toString() : maturity.toString());
+        LocalDate today = rows.today(Rows.uuid(deal, "legal_entity_id"));
+        n.put("trade_date", today.isBefore(maturity) ? today.toString() : maturity.toString());
         n.put("value_date", maturity.toString());
         if (!Rows.bool(deal, "is_call")) {
             n.put("maturity_date", (newMaturity == null ? maturity.plusDays(tenor) : newMaturity).toString());

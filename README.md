@@ -125,6 +125,36 @@ npm run test:e2e     # Playwright smoke with a mocked/absent backend (uses the l
 - The platform has no customer-scoped ("me") API or customer identity yet; scoping is client-side only. The precise
   gap list is in `web/customer-web/README.md`.
 
+## Agent app (PWA, works offline)
+
+`web/agent-app` is the cash-in/cash-out agent outlet app (same stack as the console; installable PWA, English and
+Swahili) on http://localhost:13400:
+
+```bash
+cd web/agent-app
+npm install
+npm run dev            # or: npm run build && npm start (the service worker registers in production builds)
+npm run gen:api        # typed clients for wallet, agent-network, commission, biller, onboarding, document services
+npm test               # outbox unit tests (ordering, idempotency keys, reconciliation, encryption, limits)
+npm run test:e2e       # Playwright smoke against the build with the API mocked (offline toggling, PWA shell)
+```
+
+- Sign in with Keycloak (realm `meridian`, client `meridian-console` by default; `NEXT_PUBLIC_OIDC_*` to change) or dev
+  mode (`X-Tenant-Id` / `X-User` + a till-operator user id), then pick the agent profile and outlet; the device is
+  registered and a 6-digit app PIN is set.
+- Screens: home (float and commission balances, today's KPIs, alerts such as low float), cash-in, cash-out (new or by
+  reference/QR, customer confirms with PIN or OTP), bills, airtime, assisted onboarding (ID photo from the camera),
+  float top-up / rebalance and cash delivery/pickup requests, till open/close with cash count, commission statement,
+  history with printable/shareable receipts, sync queue, settings (device heartbeat, language, training offline mode).
+- Offline: the service worker serves the app shell and reference data (billers, journeys, agent profile). Cash-in,
+  bills, airtime, float requests and onboarding are captured into an outbox in IndexedDB encrypted with AES-GCM under
+  a key derived (PBKDF2) from the app PIN and bound to tenant + agent; the key and the agent's wallet PIN live only in
+  memory, customer PINs are never stored. Each operation gets its `Idempotency-Key` at capture and is replayed in
+  capture order when back online (online event, Background Sync, timer, or "Sync now"); server answers reconcile to
+  synced (including idempotent replays), rejected (problem+json shown), or needs-review. Cash-out and anything needing
+  live verification is refused offline. Limits (`NEXT_PUBLIC_OFFLINE_MAX_AMOUNT` / `_MAX_TOTAL` / `_MAX_COUNT` /
+  `_MAX_HOURS`, defaults 5000 / 20000 / 10 / 12 h) and the last known float bound what can be queued.
+
 ## Deploying to Kubernetes
 
 One Helm chart deploys a Meridian cell: all 63 domain services plus the edge gateway

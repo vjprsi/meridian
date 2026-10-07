@@ -57,6 +57,9 @@ class FakeDownstream {
     }
 
     synchronized JsonNode get(String service, String path) {
+        if ("business-day-service".equals(service)) {
+            return null; // no business day opened: the service clock / database date applies
+        }
         calls.add(new Call(service, "GET", path, null, null));
         String[] pq = path.split("\\?", 2);
         Map<String, String> q = new HashMap<>();

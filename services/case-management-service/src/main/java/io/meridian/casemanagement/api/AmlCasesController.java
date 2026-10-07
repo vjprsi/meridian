@@ -9,11 +9,11 @@ import io.meridian.casemanagement.api.generated.model.AmlCaseDisposition;
 import io.meridian.casemanagement.api.generated.model.AmlCaseNote;
 import io.meridian.casemanagement.api.generated.model.AmlCaseNotePage;
 import io.meridian.casemanagement.api.generated.model.AmlCaseUpdate;
-import io.meridian.casemanagement.api.generated.model.AmlCasesAlertsRequest;
+import io.meridian.casemanagement.api.generated.model.AmlCasesAddAlertsRequest;
 import io.meridian.casemanagement.api.generated.model.AmlCasesAssignRequest;
 import io.meridian.casemanagement.api.generated.model.AmlCasesCloseRequest;
 import io.meridian.casemanagement.api.generated.model.AmlCasesEscalateRequest;
-import io.meridian.casemanagement.api.generated.model.AmlCasesNotesRequest;
+import io.meridian.casemanagement.api.generated.model.AmlCasesAddNotesRequest;
 import io.meridian.casemanagement.api.generated.model.AmlCasesReopenRequest;
 import io.meridian.casemanagement.application.CaseService;
 import io.meridian.common.tenancy.TenantContext;
@@ -86,7 +86,7 @@ public class AmlCasesController implements AmlCasesApi {
     }
 
     @Override
-    public ResponseEntity<AmlCaseAlert> amlCasesAddAlerts(UUID id, String idempotencyKey, AmlCasesAlertsRequest body) {
+    public ResponseEntity<AmlCaseAlert> amlCasesAddAlerts(UUID id, String idempotencyKey, AmlCasesAddAlertsRequest body) {
         return http.once(idempotencyKey, body, AmlCaseAlert.class,
                 () -> http.ok(cases.linkAlert(id, http.tree(body)), AmlCaseAlert.class));
     }
@@ -99,7 +99,7 @@ public class AmlCasesController implements AmlCasesApi {
     }
 
     @Override
-    public ResponseEntity<AmlCaseNote> amlCasesAddNotes(UUID id, String idempotencyKey, AmlCasesNotesRequest body) {
+    public ResponseEntity<AmlCaseNote> amlCasesAddNotes(UUID id, String idempotencyKey, AmlCasesAddNotesRequest body) {
         JsonNode req = http.tree(body);
         return http.once(idempotencyKey, body, AmlCaseNote.class, () -> http.ok(cases.addNote(id, Http.text(req, "body"),
                 Http.text(req, "visibility"), req.get("attachments")), AmlCaseNote.class));

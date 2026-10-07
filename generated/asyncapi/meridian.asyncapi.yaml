@@ -481,6 +481,8 @@ channels:
         $ref: '#/components/messages/LendingLoanFeeWaived'
       LendingLoanDelinquencyChanged:
         $ref: '#/components/messages/LendingLoanDelinquencyChanged'
+      LendingLoanStatusChanged:
+        $ref: '#/components/messages/LendingLoanStatusChanged'
       LendingLoanRestructureProposed:
         $ref: '#/components/messages/LendingLoanRestructureProposed'
       LendingLoanRestructureApproved:
@@ -721,6 +723,8 @@ channels:
         $ref: '#/components/messages/PartyCustomerCredentialLocked'
       PartyCustomerContactVerified:
         $ref: '#/components/messages/PartyCustomerContactVerified'
+      PartyCustomerContactRemoved:
+        $ref: '#/components/messages/PartyCustomerContactRemoved'
       PartyContactVerificationLocked:
         $ref: '#/components/messages/PartyContactVerificationLocked'
       PartyConsentGiven:
@@ -6698,6 +6702,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/LoanStatusHistory'
+    LendingLoanStatusChanged:
+      name: lending.loan.status_changed
+      title: The loan status changed (any transition, incl. arrears and cure); payload is the loan after the change
+      summary: The loan status changed (any transition, incl. arrears and cure); payload is the loan after the change
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: lending.loan.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Loan'
     LendingLoanRestructureProposed:
       name: lending.loan.restructure_proposed
       title: A restructure was proposed
@@ -9186,14 +9212,38 @@ components:
         $ref: '#/components/schemas/CustomerCredential'
     PartyCustomerContactVerified:
       name: party.customer_contact.verified
-      title: A contact point was verified with a one-time code
-      summary: A contact point was verified with a one-time code
+      title: A contact point was verified with a one-time code (payload carries masked_value and lookup_hash, never the phone
+        or e-mail)
+      summary: A contact point was verified with a one-time code (payload carries masked_value and lookup_hash, never the
+        phone or e-mail)
       headers:
         type: object
         properties:
           ce_type:
             type: string
             const: party.customer_contact.verified
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerContact'
+    PartyCustomerContactRemoved:
+      name: party.customer_contact.removed
+      title: A verified contact point was deleted, changed (no longer verified) or erased (masked payload)
+      summary: A verified contact point was deleted, changed (no longer verified) or erased (masked payload)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.customer_contact.removed
           ce_source:
             type: string
           ce_id:
@@ -29626,7 +29676,8 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who opened the thread
+          description: 'Who opened the thread (server-set from the caller: CUSTOMER when relayed for a customer, else STAFF)'
+          readOnly: true
         work_queue_id:
           type:
           - string
@@ -29786,13 +29837,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who sent it
+          description: Who sent it (server-set from the caller)
+          readOnly: true
         sender_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff sender
+          description: Staff sender (the calling staff user; null for customers)
+          readOnly: true
         body:
           type: string
           description: Message text
@@ -29888,13 +29941,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Customer or staff
+          description: Customer or staff (server-set from the caller)
+          readOnly: true
         reader_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff reader
+          description: Staff reader (the calling staff user; null for customers)
+          readOnly: true
         read_at:
           type: string
           format: date-time
@@ -41851,6 +41906,7 @@ components:
           - FRAUD_ALERT
           - CARD_DISPUTE
           - COMPLAINT
+          - CUSTOMER_CONTACT
           description: Entity indexed
         alias_name:
           type: string
@@ -43608,6 +43664,21 @@ components:
           format: email
           maxLength: 320
           description: Email address for email-type contacts
+        masked_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search
+          readOnly: true
+        lookup_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match
+            search; key shared with search-service, never reversible
+          readOnly: true
         label:
           type:
           - string
@@ -44253,7 +44324,9 @@ components:
         definition:
           type: object
           additionalProperties: true
-          description: Steps, branching conditions and screens (server-driven UI)
+          description: Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions
+            {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key,
+            required, pattern, enum, min_length, max_length, min, max}
         decision_rules:
           type:
           - object
@@ -44264,6 +44337,13 @@ components:
           type: integer
           format: int32
           description: Days before an idle application expires
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service
+            ones)
         published_at:
           type:
           - string
@@ -44383,7 +44463,8 @@ components:
         application_number:
           type: string
           maxLength: 32
-          description: Human-readable reference
+          description: Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>)
+          readOnly: true
         onboarding_journey_id:
           type: string
           format: uuid

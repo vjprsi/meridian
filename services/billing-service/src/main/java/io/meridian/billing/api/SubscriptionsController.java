@@ -23,8 +23,11 @@ public class SubscriptionsController implements SubscriptionsApi {
     private final SubscriptionService subscriptions;
     private final CrudEngine crud;
     private final Idempotency idempotency;
+    private final io.meridian.web.time.BusinessDates businessDates;
 
-    public SubscriptionsController(SubscriptionService subscriptions, CrudEngine crud, Idempotency idempotency) {
+    public SubscriptionsController(SubscriptionService subscriptions, CrudEngine crud, Idempotency idempotency,
+                                   io.meridian.web.time.BusinessDates businessDates) {
+        this.businessDates = businessDates;
         this.subscriptions = subscriptions;
         this.crud = crud;
         this.idempotency = idempotency;
@@ -62,6 +65,7 @@ public class SubscriptionsController implements SubscriptionsApi {
         TenantContext.require();
         return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "cancel", "id", id.toString(), "body", body),
                 TenantSubscription.class, () -> ResponseEntity.ok(crud.read(
-                        subscriptions.cancel(id, body.getReason(), LocalDate.now(ZoneOffset.UTC)), TenantSubscription.class)));
+                        subscriptions.cancel(id, body.getReason(), businessDates.today(() -> LocalDate.now(ZoneOffset.UTC))),
+                        TenantSubscription.class)));
     }
 }

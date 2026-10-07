@@ -4,7 +4,7 @@ import io.meridian.customerchannel.api.generated.MyKycApi;
 import io.meridian.customerchannel.api.generated.model.KycDocument;
 import io.meridian.customerchannel.api.generated.model.KycDocumentPage;
 import io.meridian.customerchannel.api.generated.model.KycProfile;
-import io.meridian.customerchannel.api.generated.model.MyKycDocumentsRequest;
+import io.meridian.customerchannel.api.generated.model.MyKycAddDocumentsRequest;
 import io.meridian.customerchannel.application.DocumentService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,7 +31,7 @@ public class MyKycController implements MyKycApi {
     }
 
     @Override
-    public ResponseEntity<KycDocument> myKycAddDocuments(String idempotencyKey, MyKycDocumentsRequest body) {
+    public ResponseEntity<KycDocument> myKycAddDocuments(String idempotencyKey, MyKycAddDocumentsRequest body) {
         return http.ok(documents.submitKycDocument(http.body(body), idempotencyKey), KycDocument.class);
     }
 }

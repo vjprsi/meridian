@@ -367,6 +367,8 @@ CREATE TABLE customer_contact (
   contact_type                 varchar(40) NOT NULL CHECK (contact_type IN ('MOBILE', 'LANDLINE', 'EMAIL', 'WHATSAPP', 'FAX')),
   phone                        varchar(20),
   email                        varchar(320),
+  masked_value                 varchar(80),
+  lookup_hash                  varchar(64),
   label                        varchar(40),
   is_primary                   boolean NOT NULL DEFAULT false,
   is_verified                  boolean NOT NULL DEFAULT false,
@@ -393,6 +395,8 @@ COMMENT ON COLUMN customer_contact.customer_id IS 'Customer';
 COMMENT ON COLUMN customer_contact.contact_type IS 'Contact type';
 COMMENT ON COLUMN customer_contact.phone IS 'Phone number (E.164) for phone-type contacts [PII]';
 COMMENT ON COLUMN customer_contact.email IS 'Email address for email-type contacts [PII]';
+COMMENT ON COLUMN customer_contact.masked_value IS 'Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search';
+COMMENT ON COLUMN customer_contact.lookup_hash IS 'Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match search; key shared with search-service, never reversible';
 COMMENT ON COLUMN customer_contact.label IS 'Free label, e.g. Work';
 COMMENT ON COLUMN customer_contact.is_primary IS 'Primary contact of this type';
 COMMENT ON COLUMN customer_contact.is_verified IS 'Verified by OTP or link';
@@ -410,6 +414,7 @@ CREATE INDEX ix_customer_contact_tenant ON customer_contact (tenant_id, created_
 CREATE INDEX ix_customer_contact_customer_id ON customer_contact (customer_id);
 CREATE INDEX ix_customer_contact_phone ON customer_contact (phone);
 CREATE INDEX ix_customer_contact_email ON customer_contact (email);
+CREATE INDEX ix_customer_contact_lookup_hash ON customer_contact (lookup_hash);
 ALTER TABLE customer_contact ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customer_contact USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_customer_contact_touch BEFORE UPDATE ON customer_contact FOR EACH ROW EXECUTE FUNCTION touch_row();

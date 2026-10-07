@@ -53,6 +53,22 @@ mappings:
     closed_statuses: [CLOSED, DECEASED]
     delete_when_present: [erased_at]          # right to erasure: drop the document
 
+  # Verified contact points (e-mail, phone): find a customer by exact e-mail or phone without indexing either. The
+  # payload carries only the masked value and lookup_hash (keyed HMAC of the normalised contact, key shared with
+  # customer-service: meridian.contact-lookup.key); SearchService hashes a query that looks like an e-mail or phone
+  # with the same key and matches the identifier. Hits name the customer (customer_id).
+  - doc_kind: customer_contact
+    entity_type: CUSTOMER_CONTACT
+    topic: meridian.party.v1
+    schema: CustomerContact
+    events: [party.customer_contact.verified, party.customer_contact.removed]
+    title: [masked_value, "{contact_type} contact"]
+    subtitle: [contact_type, masked_value]
+    identifiers: [lookup_hash]
+    customer: customer_id
+    attributes: [contact_type, is_primary]
+    delete_events: [party.customer_contact.removed]
+
   - doc_kind: deposit_account
     entity_type: DEPOSIT_ACCOUNT
     topic: meridian.accounts.v1
@@ -108,7 +124,8 @@ mappings:
     entity_type: LOAN
     topic: meridian.lending.v1
     schema: Loan
-    events: [lending.loan.created, lending.loan.paid_off, lending.loan.closed, lending.loan.cancelled]
+    events: [lending.loan.created, lending.loan.status_changed, lending.loan.paid_off, lending.loan.closed,
+             lending.loan.cancelled]
     reference: [loan_number]
     title: ["{loan_type} loan {loan_number}"]
     subtitle: ["{principal_amount} {currency}", status]

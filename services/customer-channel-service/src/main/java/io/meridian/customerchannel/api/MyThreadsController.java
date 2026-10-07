@@ -2,7 +2,7 @@ package io.meridian.customerchannel.api;
 
 import io.meridian.customerchannel.api.generated.MyThreadsApi;
 import io.meridian.customerchannel.api.generated.model.MyThreadsCreateRequest;
-import io.meridian.customerchannel.api.generated.model.MyThreadsMessagesRequest;
+import io.meridian.customerchannel.api.generated.model.MyThreadsAddMessagesRequest;
 import io.meridian.customerchannel.api.generated.model.SecureMessage;
 import io.meridian.customerchannel.api.generated.model.SecureMessagePage;
 import io.meridian.customerchannel.api.generated.model.SecureMessageThread;
@@ -45,7 +45,7 @@ public class MyThreadsController implements MyThreadsApi {
 
     @Override
     public ResponseEntity<SecureMessage> myThreadsAddMessages(UUID threadId, String idempotencyKey,
-                                                              MyThreadsMessagesRequest body) {
+                                                              MyThreadsAddMessagesRequest body) {
         return http.ok(inbox.send(threadId, http.body(body), idempotencyKey), SecureMessage.class);
     }
 

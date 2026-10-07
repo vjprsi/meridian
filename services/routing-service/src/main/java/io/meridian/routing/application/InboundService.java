@@ -256,7 +256,7 @@ public class InboundService {
             UUID batch = null;
             if (o.creditBatch() && !alreadyCredited(replayOf == null ? id : replayOf)) {
                 LocalDate d = o.date() != null ? o.date()
-                        : rows.scalar("select current_date", LocalDate.class).orElseThrow();
+                        : rows.today();
                 batch = settlement.add(rail, o.currency(), d, o.credits(), false);
             }
             String e2e = parsed.transactions().isEmpty() ? null : first(parsed.first(), "end_to_end_id",

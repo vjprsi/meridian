@@ -86,8 +86,9 @@ public class MessageService {
         if (settlementDate == null) {
             settlementDate = date(payment, "requested_execution_date");
         }
-        if (settlementDate == null || settlementDate.isBefore(now.toLocalDate())) {
-            settlementDate = now.toLocalDate();
+        LocalDate today = rows.today();
+        if (settlementDate == null || settlementDate.isBefore(today)) {
+            settlementDate = today;
         }
         UUID id = Ids.newId();
         String msgId = "M" + id.toString().replace("-", "").toUpperCase().substring(0, 31);

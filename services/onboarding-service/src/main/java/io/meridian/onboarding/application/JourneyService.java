@@ -28,7 +28,7 @@ public class JourneyService {
     static final String T = "onboarding_journey";
     public static final Set<String> CHANNELS = Set.of("MOBILE_APP", "WEB", "USSD", "AGENT", "BRANCH", "API");
     private static final List<String> COPY = List.of("code", "name", "customer_type", "country", "channels", "product_ids",
-            "target_tier", "definition", "decision_rules", "expiry_days");
+            "target_tier", "definition", "decision_rules", "expiry_days", "legal_entity_id");
 
     private final Rows rows;
     private final CrudEngine crud;
@@ -157,7 +157,7 @@ public class JourneyService {
             p.put("required", s.required());
             p.put("kyc_check", s.hasKycCheck());
             ArrayNode missing = p.putArray("missing_fields");
-            s.fields().stream().filter(f -> JsonValues.blank(data.get(f))).forEach(missing::add);
+            s.fields().stream().filter(f -> f.required() && JsonValues.blank(data.get(f.name()))).forEach(f -> missing.add(f.name()));
             if (s.required() && !missing.isEmpty()) {
                 complete = false;
             }

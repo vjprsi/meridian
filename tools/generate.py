@@ -999,14 +999,18 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     req = None
                     req_name = ""
                     if act.body:
-                        req_name = (f"{pascal(a.resource)}"
-                                    f"{pascal('-'.join(segs)) or aname[len(camel(a.resource)):] or 'Action'}Request")
+                        # named after the (unique) operation id: actions sharing a last path segment on one resource
+                        # (e.g. /{id}/eod and /eod) must not overwrite each other's request schema
+                        req_name = aname[0].upper() + aname[1:] + "Request"
                         bprops = dict((c.name, oa_type(c, enums)) for c in act.body)
                         breq = [c.name for c in act.body if c.nn]
                         sch = {"type": "object", "properties": bprops}
                         if breq:
                             sch["required"] = breq
                         for target in (doc, bundle):
+                            prev = target["components"]["schemas"].get(req_name)
+                            if prev is not None and prev != sch:
+                                raise SpecError(f"[{d.id}] request schema {req_name} defined twice with different bodies")
                             target["components"]["schemas"][req_name] = sch
                         req = ref(req_name)
                     resp_tbl = act.response or t.name

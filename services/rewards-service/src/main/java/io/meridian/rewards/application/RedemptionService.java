@@ -168,7 +168,7 @@ public class RedemptionService {
         long points = r.path("points_spent").asLong();
         ledger.append(account, new PointsLedger.Move("REVERSE", points, "redeem-cancel:" + id)
                 .reverses(Json.uuid(r, "points_ledger_entry_id")).source("REDEMPTION", id).reason(reason)
-                .expires(PointsLedger.expiry(program, rows.now().toLocalDate())).event("engagement.points.reversed"));
+                .expires(PointsLedger.expiry(program, rows.today())).event("engagement.points.reversed"));
         rows.execute("update reward_catalog_item set stock = stock + ? where id = ? and stock is not null",
                 r.path("quantity").asInt(1), Json.uuid(r, "reward_catalog_item_id"));
         ObjectNode v = rows.object();

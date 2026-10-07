@@ -8,7 +8,7 @@ import io.meridian.customerchannel.api.generated.model.CardPage;
 import io.meridian.customerchannel.api.generated.model.CardSpendLimit;
 import io.meridian.customerchannel.api.generated.model.CardSpendLimitPage;
 import io.meridian.customerchannel.api.generated.model.MyCardsChannelsRequest;
-import io.meridian.customerchannel.api.generated.model.MyCardsLimitsRequest;
+import io.meridian.customerchannel.api.generated.model.MyCardsReplaceLimitsRequest;
 import io.meridian.customerchannel.api.generated.model.MyCardsReportLostRequest;
 import io.meridian.customerchannel.application.CardService;
 import java.util.UUID;
@@ -70,7 +70,7 @@ public class MyCardsController implements MyCardsApi {
 
     @Override
     public ResponseEntity<CardSpendLimit> myCardsReplaceLimits(UUID cardId, String idempotencyKey,
-                                                               MyCardsLimitsRequest body) {
+                                                               MyCardsReplaceLimitsRequest body) {
         return http.ok(cards.setLimit(cardId, http.body(body), idempotencyKey), CardSpendLimit.class);
     }
 }

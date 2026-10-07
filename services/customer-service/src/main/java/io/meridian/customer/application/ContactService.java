@@ -7,6 +7,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.customer.api.generated.model.ContactVerification;
 import io.meridian.customer.api.generated.model.CustomerContact;
 import io.meridian.customer.domain.Normalizer;
+import io.meridian.customer.infrastructure.ContactLookup;
 import io.meridian.customer.infrastructure.Crypto;
 import io.meridian.customer.infrastructure.ExternalServices;
 import io.meridian.customer.infrastructure.Rows;
@@ -24,6 +25,11 @@ import tools.jackson.databind.node.ObjectNode;
  * Contact points and their verification by one-time password. Each code is a contact_verification challenge: 6
  * random digits, stored only as a salted hash, valid for 10 minutes; five wrong attempts lock the challenge for 30
  * minutes; a new code can be requested after 30 seconds and supersedes the pending one.
+ *
+ * <p>Search: every contact carries {@code masked_value} and {@code lookup_hash} ({@link ContactLookup}). A verified
+ * contact is announced with {@code party.customer_contact.verified}, and its deletion, change of value or erasure with
+ * {@code party.customer_contact.removed}; both payloads carry the masked value and the hash, never the phone or e-mail,
+ * so search-service can find a customer by exact contact without indexing it.
  */
 @Service
 public class ContactService {
@@ -41,9 +47,12 @@ public class ContactService {
     private final Crypto crypto;
     private final ExternalServices external;
     private final Events events;
+    private final ContactLookup lookup;
 
-    public ContactService(Rows rows, CrudEngine crud, Guards guards, Crypto crypto, ExternalServices external, Events events) {
+    public ContactService(Rows rows, CrudEngine crud, Guards guards, Crypto crypto, ExternalServices external, Events events,
+                          ContactLookup lookup) {
         this.rows = rows;
+        this.lookup = lookup;
         this.crud = crud;
         this.guards = guards;
         this.crypto = crypto;
@@ -57,6 +66,7 @@ public class ContactService {
         ObjectNode v = crud.toColumns(T, body);
         v.put("customer_id", customerId.toString());
         normalise(v);
+        searchFields(v, v);
         if (v.path("is_primary").asBoolean()) {
             clearPrimary(customerId, text(v, "contact_type"), null);
         }
@@ -80,6 +90,10 @@ public class ContactService {
         boolean pointChanged = !java.util.Objects.equals(text(current, "phone"), text(merged, "phone"))
                 || !java.util.Objects.equals(text(current, "email"), text(merged, "email"));
         if (pointChanged) {
+            searchFields(merged, v);
+            if (current.path("is_verified").asBoolean()) {
+                removed(current);
+            }
             v.put("is_verified", false);
             v.putNull("verified_at");
             rows.execute("""
@@ -127,9 +141,65 @@ public class ContactService {
     /** Removes a contact point together with its verification history. */
     @Transactional
     public void delete(UUID customerId, UUID id) {
-        guards.child(T, customerId, id, true);
+        ObjectNode contact = guards.child(T, customerId, id, true);
+        if (contact.path("is_verified").asBoolean()) {
+            removed(contact);
+        }
         rows.execute("delete from contact_verification where customer_contact_id = ?", id);
         rows.execute("delete from customer_contact where id = ?", id);
+    }
+
+    /** Announces the removal of every verified contact of a customer (erasure), before the rows are deleted. */
+    public void removeAllFromSearch(UUID customerId) {
+        verified(customerId).forEach(this::removed);
+    }
+
+    /** The customer's verified contacts (rows), e.g. before a merge moves or drops them. */
+    public java.util.List<ObjectNode> verified(UUID customerId) {
+        return rows.query("select row_to_json(t)::text from customer_contact t where t.customer_id = ? and t.is_verified", customerId);
+    }
+
+    /** After a merge: verified contacts that moved to the survivor are announced again, the dropped copies removed. */
+    public void afterMerge(java.util.List<ObjectNode> verifiedBefore) {
+        for (ObjectNode c : verifiedBefore) {
+            UUID id = UUID.fromString(c.get("id").asString());
+            Optional<ObjectNode> moved = rows.query("select row_to_json(t)::text from customer_contact t where t.id = ?", id)
+                    .stream().findFirst();
+            if (moved.isPresent()) {
+                events.publishPayload("party.customer_contact.verified", T, id, eventPayload(moved.get()));
+            } else {
+                removed(c);
+            }
+        }
+    }
+
+    /** Masked display value and lookup hash of the contact point in {@code source}, written into {@code target}. */
+    private void searchFields(ObjectNode source, ObjectNode target) {
+        String value = text(source, "email") != null ? text(source, "email") : text(source, "phone");
+        if (value == null) {
+            target.putNull("masked_value");
+            target.putNull("lookup_hash");
+            return;
+        }
+        target.put("masked_value", mask(value));
+        String hash = lookup.hash(value);
+        if (hash == null) {
+            target.putNull("lookup_hash");
+        } else {
+            target.put("lookup_hash", hash);
+        }
+    }
+
+    private void removed(ObjectNode contact) {
+        events.publishPayload("party.customer_contact.removed", T, UUID.fromString(contact.get("id").asString()), eventPayload(contact));
+    }
+
+    /** The contact's API representation without the phone number or e-mail address (masked value and hash only). */
+    private Object eventPayload(ObjectNode contact) {
+        ObjectNode p = rows.toTree(rows.read(contact, CustomerContact.class));
+        p.remove("phone");
+        p.remove("email");
+        return p;
     }
 
     // ------------------------------------------------------------------ OTP verification
@@ -231,8 +301,11 @@ public class ContactService {
         ObjectNode v = rows.object();
         v.put("is_verified", true);
         v.put("verified_at", now.toString());
+        if (text(contact, "masked_value") == null || text(contact, "lookup_hash") == null) {
+            searchFields(contact, v); // contacts created before the search fields existed
+        }
         ObjectNode verified = rows.update(T, contactId, v);
-        events.publish("party.customer_contact.verified", T, verified, CustomerContact.class);
+        events.publishPayload("party.customer_contact.verified", T, contactId, eventPayload(verified));
         return verified;
     }
 

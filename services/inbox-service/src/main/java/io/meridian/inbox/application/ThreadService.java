@@ -52,13 +52,19 @@ public class ThreadService {
     }
 
     @Transactional
-    public ObjectNode open(Object body, String idempotencyKey) {
+    public ObjectNode open(Object body, String idempotencyKey, Caller caller) {
         JsonNode req = rows.toTree(body);
         ObjectNode v = crud.toColumns(THREAD, body);
         if (text(v, "subject") == null || text(v, "subject").isBlank()) {
             throw ApiException.badRequest("validation_failed", "subject is required");
         }
-        String openedBy = text(v, "opened_by") == null ? "CUSTOMER" : text(v, "opened_by");
+        UUID customer = caller.customerFor(Json.uuid(v, "customer_id"));
+        if (customer == null) {
+            throw ApiException.badRequest("validation_failed", "customer_id is required");
+        }
+        v.put("customer_id", customer.toString());
+        // Who opened the thread is the caller, never a body value.
+        String openedBy = caller.customer() ? "CUSTOMER" : "STAFF";
         String initial = text(req, "initial_message");
         List<UUID> attachments = uuids(req.get("initial_attachment_document_ids"));
         if (initial == null && !attachments.isEmpty()) {
@@ -84,14 +90,15 @@ public class ThreadService {
             m.put("sender_type", openedBy);
             ArrayNode a = m.putArray("attachment_document_ids");
             attachments.forEach(x -> a.add(x.toString()));
-            send(id, m, idempotencyKey == null ? null : "inbox-initial:" + idempotencyKey);
+            send(id, m, idempotencyKey == null ? null : "inbox-initial:" + idempotencyKey, caller);
             thread = rows.get(THREAD, id);
         }
         return thread;
     }
 
     @Transactional
-    public ObjectNode update(UUID id, Object body, int expectedVersion) {
+    public ObjectNode update(UUID id, Object body, int expectedVersion, Caller caller) {
+        caller.requireStaff();
         ObjectNode current = rows.get(THREAD, id);
         ObjectNode v = crud.toColumns(THREAD, body);
         for (String f : IMMUTABLE_ON_UPDATE) {
@@ -114,15 +121,22 @@ public class ThreadService {
      * moves the status, updates the counters and alerts the customer for bank-side messages.
      */
     @Transactional
-    public ObjectNode send(UUID threadId, JsonNode req, String key) {
+    public ObjectNode send(UUID threadId, JsonNode req, String key, Caller caller) {
         ObjectNode thread = rows.lock(THREAD, threadId);
+        caller.requireOwner("secure message thread", threadId, text(thread, "customer_id"));
         String body = text(req, "body");
         if (body == null || body.isBlank()) {
             throw ApiException.badRequest("validation_failed", "body is required");
         }
-        String sender = text(req, "sender_type");
+        String sender = ThreadRules.senderFor(caller.customer(), text(req, "sender_type"));
         if (sender == null) {
-            throw ApiException.badRequest("validation_failed", "sender_type is required");
+            throw ApiException.unprocessable("sender_mismatch", "sender_type must match the caller ("
+                    + (caller.customer() ? "CUSTOMER" : "STAFF, SYSTEM or BOT") + ")");
+        }
+        UUID senderUser = caller.userId();
+        UUID claimedUser = Json.uuid(req, "sender_user_id");
+        if (claimedUser != null && !claimedUser.equals(senderUser)) {
+            throw ApiException.unprocessable("sender_mismatch", "sender_user_id must be the calling staff user");
         }
         boolean internal = Json.bool(req, "is_internal_note");
         String clientId = text(req, "client_message_id");
@@ -150,8 +164,8 @@ public class ThreadService {
         ObjectNode m = rows.object();
         m.put("secure_message_thread_id", threadId.toString());
         m.put("sender_type", sender);
-        if (text(req, "sender_user_id") != null) {
-            m.put("sender_user_id", text(req, "sender_user_id"));
+        if (senderUser != null && !"CUSTOMER".equals(sender)) {
+            m.put("sender_user_id", senderUser.toString());
         }
         m.put("body", body);
         ArrayNode att = m.putArray("attachment_document_ids");
@@ -186,13 +200,22 @@ public class ThreadService {
 
     /** Marks every unread message of the other party read for the caller; one immutable receipt per message. */
     @Transactional
-    public ObjectNode read(UUID threadId, String readerType, UUID readerUserId) {
+    public ObjectNode read(UUID threadId, String readerType, UUID readerUserId, Caller caller) {
         ObjectNode thread = rows.lock(THREAD, threadId);
-        if (!ThreadRules.SENDERS.contains(readerType)) {
+        caller.requireOwner("secure message thread", threadId, text(thread, "customer_id"));
+        if (readerType != null && !ThreadRules.SENDERS.contains(readerType)) {
             throw ApiException.badRequest("validation_failed", "reader_type must be one of " + ThreadRules.SENDERS);
         }
-        String reader = "CUSTOMER".equals(readerType) ? "CUSTOMER" : "STAFF";
-        String user = readerUserId == null ? null : readerUserId.toString();
+        // The reader is the caller; a body value may only confirm it.
+        String reader = caller.customer() ? "CUSTOMER" : "STAFF";
+        if (readerType != null && !reader.equals("CUSTOMER".equals(readerType) ? "CUSTOMER" : "STAFF")) {
+            throw ApiException.unprocessable("reader_mismatch", "reader_type must match the caller (" + reader + ")");
+        }
+        UUID readerUser = caller.userId();
+        if (readerUserId != null && !readerUserId.equals(readerUser)) {
+            throw ApiException.unprocessable("reader_mismatch", "reader_user_id must be the calling staff user");
+        }
+        String user = readerUser == null ? null : readerUser.toString();
         List<ObjectNode> messages = rows.query("""
                 select row_to_json(t)::text from secure_message t where t.secure_message_thread_id = ?
                 order by t.created_at, t.id""", threadId);
@@ -218,7 +241,8 @@ public class ThreadService {
     }
 
     @Transactional
-    public ObjectNode assign(UUID id, UUID userId) {
+    public ObjectNode assign(UUID id, UUID userId, Caller caller) {
+        caller.requireStaff();
         ObjectNode thread = rows.lock(THREAD, id);
         ThreadRules.Check c = ThreadRules.canAssign(text(thread, "status"));
         if (!c.allowed()) {
@@ -234,8 +258,9 @@ public class ThreadService {
     }
 
     @Transactional
-    public ObjectNode close(UUID id, String reason) {
+    public ObjectNode close(UUID id, String reason, Caller caller) {
         ObjectNode thread = rows.lock(THREAD, id);
+        caller.requireOwner("secure message thread", id, text(thread, "customer_id"));
         ThreadRules.Check c = ThreadRules.canClose(text(thread, "status"));
         if (!c.allowed()) {
             throw ApiException.conflict(c.error(), c.detail());
@@ -252,8 +277,9 @@ public class ThreadService {
     }
 
     @Transactional
-    public ObjectNode reopen(UUID id, String reason) {
+    public ObjectNode reopen(UUID id, String reason, Caller caller) {
         ObjectNode thread = rows.lock(THREAD, id);
+        caller.requireOwner("secure message thread", id, text(thread, "customer_id"));
         ThreadRules.Check c = ThreadRules.canReopen(text(thread, "status"), Json.ts(thread, "closed_at"), rows.now(),
                 reopenWindowDays);
         if (!c.allowed()) {
@@ -269,12 +295,23 @@ public class ThreadService {
         return row;
     }
 
-    public JsonNode messages(UUID threadId, boolean includeInternal, Integer limit, String cursor) {
-        rows.get(THREAD, threadId);
+    public JsonNode messages(UUID threadId, boolean includeInternal, Integer limit, String cursor, Caller caller) {
+        ObjectNode thread = rows.get(THREAD, threadId);
+        caller.requireOwner("secure message thread", threadId, text(thread, "customer_id"));
+        if (includeInternal) {
+            caller.requireStaff(); // internal notes are staff-only
+        }
         List<Object> args = new ArrayList<>();
         args.add(threadId);
         return rows.page("select row_to_json(t)::text from secure_message t where t.secure_message_thread_id = ?"
                 + (includeInternal ? "" : " and not t.is_internal_note"), args, limit, cursor);
+    }
+
+    /** A thread as seen by the caller: another customer's thread is 404 for a customer. */
+    public ObjectNode get(UUID id, Caller caller) {
+        ObjectNode thread = rows.get(THREAD, id);
+        caller.requireOwner("secure message thread", id, text(thread, "customer_id"));
+        return thread;
     }
 
     public JsonNode receipts(UUID messageId, Integer limit, String cursor) {

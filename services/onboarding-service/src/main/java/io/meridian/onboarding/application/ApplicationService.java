@@ -92,7 +92,7 @@ public class ApplicationService {
     @Transactional
     public ObjectNode create(Object body) {
         ObjectNode v = crud.toColumns(T_APP, body);
-        v.remove(List.of("status", "progress_percent", "decision", "risk_score", "risk_level"));
+        v.remove(List.of("status", "progress_percent", "decision", "risk_score", "risk_level", "application_number"));
         return createFrom(v);
     }
 
@@ -122,6 +122,12 @@ public class ApplicationService {
         JourneyDefinition def = JourneyDefinition.of(journey.get("definition"));
         if (!v.hasNonNull("collected_data") || !v.get("collected_data").isObject()) {
             v.putObject("collected_data");
+        }
+        if (JsonValues.blank(v.get("application_number"))) {
+            v.put("application_number", ApplicationNumbers.next());
+        }
+        if (JsonValues.blank(v.get("legal_entity_id")) && !JsonValues.blank(journey.get("legal_entity_id"))) {
+            v.put("legal_entity_id", journey.get("legal_entity_id").asString());
         }
         v.put("status", "STARTED");
         v.put("current_step", def.start());
@@ -188,7 +194,19 @@ public class ApplicationService {
         if (next == null) {
             throw new ApiException(404, "no_next_step", "All steps are complete; submit the application");
         }
-        return ctx.steps().get(next);
+        ObjectNode step = ctx.steps().get(next).deepCopy();
+        ArrayNode fields = step.putArray("fields");
+        ctx.def().step(next).orElseThrow().fields().forEach(f -> fields.add(f.toJson()));
+        return step;
+    }
+
+    /** The journey's definition of a step of the application (404 when the journey has no such step). */
+    @Transactional(readOnly = true)
+    public StepDef stepDef(UUID id, String code) {
+        ObjectNode app = rows.get(T_APP, id);
+        JourneyDefinition def = JourneyDefinition.of(rows.get(T_JOURNEY, Events.uuid(app, "onboarding_journey_id"))
+                .get("definition"));
+        return def.step(code).orElseThrow(() -> ApiException.notFound("onboarding step", code));
     }
 
     @Transactional
@@ -201,11 +219,12 @@ public class ApplicationService {
             throw ApiException.conflict("step_out_of_order", "Step " + code + " is not reachable yet; complete the next step first");
         }
         ObjectNode in = input != null && input.isObject() ? ((ObjectNode) input).deepCopy() : JsonNodeFactory.instance.objectNode();
-        List<FieldError> missing = new ArrayList<>();
-        sd.fields().stream().filter(f -> JsonValues.blank(in.get(f)))
-                .forEach(f -> missing.add(new FieldError("input." + f, "required", f + " is required for this step")));
-        if (!missing.isEmpty()) {
-            throw new ApiException(422, "missing_fields", "Step " + code + " is missing required fields", missing);
+        List<FieldError> errors = new ArrayList<>();
+        sd.fields().forEach(f -> f.validate(in.get(f.name()), errors));
+        if (!errors.isEmpty()) {
+            boolean onlyMissing = errors.stream().allMatch(e -> "required".equals(e.code()));
+            throw new ApiException(422, onlyMissing ? "missing_fields" : "invalid_fields", "Step " + code
+                    + (onlyMissing ? " is missing required fields" : " has invalid fields"), errors);
         }
         ObjectNode stepRow = ctx.steps().get(code);
         int attempts = stepRow.path("attempts").asInt(0) + 1;
@@ -281,6 +300,24 @@ public class ApplicationService {
         return client.post("kyc-service", "/v1/kyc/checks", body, "onb:" + appId + ":" + sd.code() + ":" + attempts);
     }
 
+    /**
+     * Completes a contact verification step after its one-time code was verified: the verified destination becomes
+     * the step input (its first field) and the application's phone or email.
+     */
+    @Transactional
+    public ObjectNode completeVerifiedContact(UUID id, String code, String destination, boolean phone) {
+        StepDef sd = stepDef(id, code);
+        ObjectNode in = JsonNodeFactory.instance.objectNode();
+        String field = sd.fields().isEmpty() ? (phone ? "phone_number" : "email") : sd.fields().getFirst().name();
+        in.put(field, destination);
+        sd.fields().stream().skip(1).filter(f -> "BOOLEAN".equals(f.type())).forEach(f -> in.put(f.name(), true));
+        ObjectNode step = submitStep(id, code, in);
+        ObjectNode v = JsonNodeFactory.instance.objectNode();
+        v.put(phone ? "phone" : "email", destination);
+        rows.update(T_APP, id, v);
+        return step;
+    }
+
     // ------------------------------------------------------------------ decision
 
     @Transactional
@@ -316,6 +353,14 @@ public class ApplicationService {
         facts.put("inconclusive_checks", waiting);
         facts.put("channel", channel);
         DecisionEngine.Decision d = DecisionEngine.decide(ctx.journey().get("decision_rules"), facts, failed, waiting);
+        if ("AUTO_APPROVE".equals(d.decision()) && JsonValues.blank(ctx.app().get("customer_id"))
+                && JsonValues.blank(ctx.app().get("legal_entity_id"))) {
+            // No bank entity to open the relationship with (e.g. a self-service application on a journey without
+            // one): a reviewer assigns it and approves.
+            List<String> reasons = new ArrayList<>(d.reasons());
+            reasons.add("LEGAL_ENTITY_REQUIRED");
+            d = new DecisionEngine.Decision("REFER", reasons);
+        }
 
         ObjectNode v = JsonNodeFactory.instance.objectNode();
         v.put("status", "SUBMITTED");

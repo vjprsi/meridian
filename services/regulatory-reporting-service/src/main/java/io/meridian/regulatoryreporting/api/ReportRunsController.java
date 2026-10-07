@@ -8,7 +8,7 @@ import io.meridian.regulatoryreporting.api.generated.model.ReportCellPage;
 import io.meridian.regulatoryreporting.api.generated.model.ReportOutputPage;
 import io.meridian.regulatoryreporting.api.generated.model.ReportRun;
 import io.meridian.regulatoryreporting.api.generated.model.ReportRunCreate;
-import io.meridian.regulatoryreporting.api.generated.model.ReportRunsAdjustmentsRequest;
+import io.meridian.regulatoryreporting.api.generated.model.ReportRunsAddAdjustmentsRequest;
 import io.meridian.regulatoryreporting.api.generated.model.ReportRunsCancelRequest;
 import io.meridian.regulatoryreporting.api.generated.model.ReportRunsRerunRequest;
 import io.meridian.regulatoryreporting.api.generated.model.ReportValidationResultPage;
@@ -81,7 +81,7 @@ public class ReportRunsController implements ReportRunsApi {
 
     @Override
     public ResponseEntity<ReportAdjustment> reportRunsAddAdjustments(UUID id, String idempotencyKey,
-                                                                    ReportRunsAdjustmentsRequest body) {
+                                                                    ReportRunsAddAdjustmentsRequest body) {
         TenantContext.require();
         JsonNode req = json.valueToTree(body);
         String cell = Fields.requireText(req, "cell_ref");

@@ -57,6 +57,9 @@ class FeedMappingsTest {
                 }
             }
             for (String path : m.fieldPaths()) {
+                if ("status".equals(path) && "CustomerContact".equals(m.schema())) {
+                    continue; // a contact point has no lifecycle status: its documents are upserted or deleted
+                }
                 if (!props.containsKey(path.split("\\.")[0])) {
                     problems.add(m.docKind() + ": " + m.schema() + " has no field " + path);
                 }
@@ -72,7 +75,15 @@ class FeedMappingsTest {
     void coversTheOperatorEntities() {
         assertThat(MAPPINGS.all()).extracting(FeedMappings.Mapping::docKind).contains("customer", "deposit_account",
                 "payment", "card", "loan", "loan_application", "wallet", "merchant", "agent", "aml_case", "fraud_alert",
-                "card_dispute", "service_case", "complaint", "wallet_transaction", "document", "ledger_account");
+                "card_dispute", "service_case", "complaint", "wallet_transaction", "document", "ledger_account",
+                "customer_contact");
+        // loans follow every status transition (arrears, cure, write-off)
+        FeedMappings.Mapping loan = MAPPINGS.resolve("lending.loan.status_changed").orElseThrow();
+        assertThat(loan.docKind()).isEqualTo("loan");
+        assertThat(loan.operation("lending.loan.status_changed", json.readTree("{\"status\":\"IN_ARREARS\"}")))
+                .isEqualTo(FeedMappings.Operation.UPSERT);
+        assertThat(loan.operation("lending.loan.status_changed", json.readTree("{\"status\":\"WRITTEN_OFF\"}")))
+                .isEqualTo(FeedMappings.Operation.CLOSE);
         assertThat(MAPPINGS.resolve("party.customer.created")).get().extracting(FeedMappings.Mapping::entityType)
                 .isEqualTo("CUSTOMER");
         assertThat(MAPPINGS.resolve("treasury.alm_gap_run.completed")).isEmpty();
@@ -107,6 +118,22 @@ class FeedMappingsTest {
         assertThat(doc.get("reference").asString()).isEqualTo("CUS-1");
         assertThat(doc.get("subtitle").asString()).isEqualTo("CUS-1 · INDIVIDUAL · ACTIVE");
         assertThat(doc.toString()).doesNotContain("1990-01-01", "90000", "salary", "is_pep");
+    }
+
+    @Test
+    void contactDocumentsHoldTheMaskedValueAndLookupHashOnly() throws Exception {
+        FeedMappings.Mapping m = MAPPINGS.resolve("party.customer_contact.verified").orElseThrow();
+        assertThat(m.entityType()).isEqualTo("CUSTOMER_CONTACT");
+        // even if a producer leaked the raw contact, the allow-list keeps it out of the document
+        JsonNode payload = json.readTree("""
+                {"id":"k-1","customer_id":"u-1","contact_type":"EMAIL","email":"amina@example.com","phone":"+254712345678",
+                 "label":"Work","masked_value":"a***a@example.com","lookup_hash":"abc123","is_primary":true}""");
+        ObjectNode doc = m.document("party.customer_contact.verified", payload, m.operation("party.customer_contact.verified", payload));
+        assertThat(doc.toString()).doesNotContain("amina@example.com", "254712345678", "Work");
+        assertThat(doc.get("title").asString()).isEqualTo("a***a@example.com");
+        assertThat(doc.get("identifiers").toString()).isEqualTo("[\"abc123\"]");
+        assertThat(doc.get("customer_id").asString()).isEqualTo("u-1");
+        assertThat(m.operation("party.customer_contact.removed", payload)).isEqualTo(FeedMappings.Operation.DELETE);
     }
 
     @Test

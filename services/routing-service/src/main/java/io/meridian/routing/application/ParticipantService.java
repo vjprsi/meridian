@@ -5,6 +5,7 @@ import static io.meridian.routing.infrastructure.Rows.str;
 import io.meridian.common.error.ApiException;
 import io.meridian.routing.domain.BankCodes;
 import io.meridian.routing.infrastructure.Rows;
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,9 @@ import tools.jackson.databind.node.ObjectNode;
 /** Bank directory lookups (global directory, valid today): by BIC, by national clearing id, or derived from an IBAN. */
 @Service
 public class ParticipantService {
-    private static final String VALID = " and (valid_from is null or valid_from <= current_date)"
-            + " and (valid_to is null or valid_to >= current_date)";
+    /** Valid on the business date: binds the date twice. */
+    private static final String VALID = " and (valid_from is null or valid_from <= ?::date)"
+            + " and (valid_to is null or valid_to >= ?::date)";
 
     private final Rows rows;
 
@@ -45,8 +47,10 @@ public class ParticipantService {
                 throw ApiException.unprocessable("invalid_bic", "bic must be an ISO 9362 BIC");
             }
             String bic8 = bic.substring(0, 8);
+            LocalDate today = rows.today();
             found = rows.queryOne("select row_to_json(t)::text from rail_participant t where (bic = ? or bic = ? or bic = ?)"
-                    + VALID + " order by (bic = ?) desc, length(bic) desc limit 1", bic, bic8, bic8 + "XXX", bic);
+                    + VALID + " order by (bic = ?) desc, length(bic) desc limit 1",
+                    bic, bic8, bic8 + "XXX", today, today, bic);
             derivedFrom = "bic";
         } else if (iban != null) {
             Optional<String> err = BankCodes.ibanError(iban);
@@ -59,11 +63,12 @@ public class ParticipantService {
             found = bank.bankCode() == null ? Optional.empty() : rows.queryOne("""
                     select row_to_json(t)::text from rail_participant t where country = ? and clearing_id = ?"""
                     + VALID + " order by (clearing_system = ?) desc limit 1",
-                    bank.country(), bank.bankCode(), bank.clearingSystem());
+                    bank.country(), bank.bankCode(), rows.today(), rows.today(), bank.clearingSystem());
             derivedFrom = "iban";
         } else if (clearingId != null) {
             found = rows.queryOne("select row_to_json(t)::text from rail_participant t where clearing_id = ?"
-                    + " and (?::varchar is null or clearing_system = ?)" + VALID + " limit 1", clearingId, system, system);
+                    + " and (?::varchar is null or clearing_system = ?)" + VALID + " limit 1", clearingId, system, system,
+                    rows.today(), rows.today());
             derivedFrom = "clearing_id";
         } else {
             throw ApiException.unprocessable("lookup_key_required", "Provide bic, iban or clearing_id");

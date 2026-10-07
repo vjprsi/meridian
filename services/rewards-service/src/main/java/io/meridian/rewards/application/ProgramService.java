@@ -106,7 +106,7 @@ public class ProgramService {
             }
         }
         LocalDate ends = Json.date(r, "ends_on");
-        if (ends != null && ends.isBefore(rows.now().toLocalDate())) {
+        if (ends != null && ends.isBefore(rows.today())) {
             throw ApiException.unprocessable("program_ended", "The program ended on " + ends);
         }
         v.putNull("status_reason");

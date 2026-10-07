@@ -100,6 +100,47 @@ people) and `TenantContext.via()` names the relaying service client. Without `X-
 `svc:<client>`. Never compare principals with `startsWith("svc:")` to grant rights; use `via()` for "a service relayed
 this" decisions.
 
+### Acting for a customer (`X-On-Behalf-Of-Customer`)
+
+The customer channel service (BFF) relays customer requests with its internal token, `X-Tenant-Id` and
+`X-On-Behalf-Of-Customer: <customer id>`. A domain service treats the caller as that customer **only** when
+`TenantContext.via()` is present (internal token); the same header from any other token is refused with 403
+`on_behalf_not_allowed` (a staff or customer token can never pick a customer). In dev mode (no tokens) the header is
+taken as the relay would send it, which is how flow tests act as a customer.
+
+- Who is speaking is derived, never read from the body: fields such as `sender_type`, `opened_by`, `reader_type`
+  and the staff user ids are `ro` in the spec; a body value that disagrees with the caller is 422 (`sender_mismatch`,
+  `reader_mismatch`, `customer_mismatch`).
+- Customer callers are deny-by-default: an interceptor allows only the operations meant for customers; each of them
+  checks ownership and answers 404 for another customer's object. Staff-only data (internal notes,
+  `include_internal=true`) is 403 `staff_only`.
+- Put the caller identity in idempotency fingerprints so a key replay never crosses callers.
+- Reference implementation: inbox-service (`Callers`, `Caller`, `CustomerAccess`).
+
+### Public applicant surface (onboarding-service)
+
+Unauthenticated prospects use `/v1/onboarding/public/applications/*` (`[public]` actions, tenant from `?tenant_id`).
+
+- `start` takes a published journey code, a `device_fingerprint` and an optional `attestation_token`
+  (`meridian.onboarding.public.attestation-required` makes it mandatory; the verdict check itself is a placeholder).
+  Starts are rate-limited per client IP and per device fingerprint per tenant (429 `rate_limited`); behind the
+  gateway set `meridian.onboarding.public.client-ip-header=X-Forwarded-For` (the gateway must overwrite that header).
+- It returns an opaque applicant token (`oat_…`, 32 random bytes) once; only its SHA-256 is stored
+  (`onboarding_applicant_token`). Send it as `X-Applicant-Token` (not `Authorization`, which the resource server
+  would try to parse as a JWT). Tokens are short-lived, bound to one application (404 for any other), rotated by
+  `token/refresh` and revoked on submit. Check the token before anything else.
+- Contact steps (PHONE_ / EMAIL_VERIFICATION) complete only through `otp/send` + `otp/verify`: 6-digit code sent via
+  notification-service, HMAC-SHA256 at rest (`onboarding_otp`), expiry, attempt limit with lockout, resend cooldown
+  and a per-application send limit. Failed attempts are returned (not thrown) from the transactional method so the
+  counter commits before the 422.
+- Applicant step input accepts only the step's declared fields; bank-managed values (`kyc_profile_id`,
+  `kyc_document_id`, `customer_id`) are never accepted from the applicant. Documents go through document-service
+  with owner `ONBOARDING_APPLICATION`/<application id>; DOCUMENT fields must reference the application's own documents.
+- Typed step fields in the journey definition (`{name, type, label_key, required, pattern, enum, min_length,
+  max_length, min, max}`; plain names stay valid) are returned by next-step and validated server-side for staff
+  and applicants (422 `invalid_fields` / `missing_fields` with `input.<field>` errors).
+- `application_number` is server-generated (`APP-<yyyymmdd>-<8 base32>`); client values are ignored.
+
 ## Per-tenant ledger settings (config-service namespace `ledger`)
 
 Ledger books, internal (GL / clearing / income / funding) accounts, treasury wallets and similar ids are tenant
@@ -162,6 +203,22 @@ creates them through the owning services' public APIs. Packs live in `services/t
   run; `POST /v1/starter-pack-runs/{id}/resume` continues it.
 - A new pack item must pass `StarterPackDefinitionTest`: the route must exist in `generated/routes.json` and the
   rendered body must match the request schema in `generated/openapi`.
+- Data-driven keys and repetition: object keys may hold placeholders (`"${param.currency}": ...`). An item with
+  `for_each: "${param.<list>}"` becomes one item per value (key `<key>.<value lower case>`, `${each}` / `${each.lower}`
+  inside, also in references such as `${ref.ledger_book/fx_position.${each.lower}}`); an object with a
+  `$for_each: "${param.<list>}"` entry becomes one copy of its other entries per value, so maps keyed by currency can be
+  rendered (fx-service `position_accounts.<CCY>` from `fx_currencies`). Repetition is expanded with the run's
+  parameters before the run; the catalog validates packs expanded with the defaults.
+
+## Contact search (party.customer_contact.*)
+
+Customer events never carry e-mail addresses or phone numbers. A contact point has `masked_value` and `lookup_hash`
+(HMAC-SHA256 of the normalised value: e-mail lower-cased, phone digits only without a leading `00`) under the key
+`meridian.contact-lookup.key` (`MERIDIAN_CONTACT_LOOKUP_KEY`), shared by customer-service and search-service only.
+Verified contacts are published with `party.customer_contact.verified`; deletion, a changed value, merge and erasure
+publish `party.customer_contact.removed`; both payloads drop `phone` / `email`. search-service indexes doc kind
+`customer_contact` (masked title, hash as identifier, `customer_id`) and hashes a query that is an e-mail or phone with
+the same key, so exact contact search works without indexing the contact.
 
 ## Time
 
@@ -177,8 +234,13 @@ creates them through the owning services' public APIs. Packs live in `services/t
 "Today" for value dates, due dates and accruals is the business date from business-day-service, not the UTC
 calendar date: inject `io.meridian.web.time.BusinessDates` and call `today(legalEntityId, fallback)` when the
 record has a legal entity, else `today(fallback)` (tenant-wide, used when all entities agree). Pass the service's own
-clock as the fallback so tests keep controlling dates. Timestamps stay `Clocks.now()`. Adopted in payment-service
-and deposit-service; others to follow when they touch date logic.
+clock as the fallback so tests keep controlling dates. Timestamps stay `Clocks.now()`. Pattern: one `today()` helper
+per service (`Rows.today()` or the service's support class) wrapping the old clock / `select current_date`, plus a
+`today(legalEntityId)` / `today(record)` overload where the record has a legal entity (loan-service, treasury-deal);
+SQL validity filters bind the date (`valid_from <= :today`) instead of using `current_date`. Tests that stub
+business-day-service clear the cache with `BusinessDates.invalidate()`; a test without a mocked `ServiceClient` sets
+`meridian.business-date.source=clock`. Adopted in payment, deposit, loan, wallet, billing, collections, treasury-deal,
+statement, fx, routing, rewards, insights and campaign services.
 
 ## Tests (required per service)
 

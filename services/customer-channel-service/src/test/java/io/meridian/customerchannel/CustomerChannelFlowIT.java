@@ -347,7 +347,7 @@ class CustomerChannelFlowIT {
                  "attachment_document_ids":["%s"],"customer_id":"%s","opened_by":"STAFF","work_queue_id":"%s"}"""
                 .formatted(card[0], document[0], B, UUID.randomUUID()));
         assertThat(opened.path("customer_id").asString()).isEqualTo(A);
-        assertThat(opened.path("opened_by").asString()).isEqualTo("CUSTOMER");
+        assertThat(opened.has("opened_by")).isFalse();                    // inbox-service derives the opener
         assertThat(opened.has("work_queue_id")).isFalse();
         JsonNode msg = post(A, "/v1/me/inbox/threads/" + thread[0] + "/messages",
                 "{\"body\":\"thanks\",\"sender_type\":\"STAFF\",\"is_internal_note\":true}");

@@ -237,7 +237,8 @@ paths:
   /v1/inbox/threads/{id}/messages:
     get:
       operationId: secureMessageThreadsMessages
-      summary: Messages in the thread (internal notes only when include_internal=true)
+      summary: 'Messages in the thread (internal notes only when include_internal=true, staff callers only: 403 staff_only
+        for customers)'
       tags:
       - Secure Message Threads
       security:
@@ -278,7 +279,8 @@ paths:
       x-table: secure_message_thread
     post:
       operationId: secureMessageThreadsAddMessages
-      summary: Send a message in the thread
+      summary: Send a message in the thread as the caller. sender_type is derived (CUSTOMER for a relayed customer, STAFF
+        otherwise; bank-side callers may declare SYSTEM or BOT); a disagreeing sender_type or sender_user_id is 422 sender_mismatch
       tags:
       - Secure Message Threads
       security:
@@ -314,7 +316,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SecureMessageThreadsMessagesRequest'
+              $ref: '#/components/schemas/SecureMessageThreadsAddMessagesRequest'
       x-requirements:
       - ENG-05
       x-service: inbox-service
@@ -324,7 +326,8 @@ paths:
   /v1/inbox/threads/{id}/read:
     post:
       operationId: secureMessageThreadsRead
-      summary: Mark all messages from the other party read for the caller
+      summary: Mark all messages from the other party read for the caller (reader derived from the caller; a disagreeing reader_type
+        or reader_user_id is 422 reader_mismatch)
       tags:
       - Secure Message Threads
       security:
@@ -370,7 +373,7 @@ paths:
   /v1/inbox/threads/{id}/assign:
     post:
       operationId: secureMessageThreadsAssign
-      summary: Assign to a staff member (and its CRM work item)
+      summary: Assign to a staff member (and its CRM work item); staff only
       tags:
       - Secure Message Threads
       security:
@@ -973,7 +976,7 @@ paths:
   /v1/inbox/announcements/{id}/dismiss:
     post:
       operationId: announcementsDismiss
-      summary: The customer dismissed the announcement
+      summary: 'The customer dismissed the announcement (a relayed customer may only dismiss for itself: 422 customer_mismatch)'
       tags:
       - Announcements
       security:
@@ -1016,7 +1019,8 @@ paths:
   /v1/inbox/announcements/active:
     get:
       operationId: announcementsActive
-      summary: Announcements active for the customer and app (segments, schedule, dismissals)
+      summary: Announcements active for the customer and app (segments, schedule, dismissals); a relayed customer may only
+        ask for itself
       tags:
       - Announcements
       security:
@@ -1188,7 +1192,7 @@ components:
       required:
       - data
       - has_more
-    SecureMessageThreadsMessagesRequest:
+    SecureMessageThreadsAddMessagesRequest:
       type: object
       properties:
         body:
@@ -1215,7 +1219,6 @@ components:
           maxLength: 64
       required:
       - body
-      - sender_type
     SecureMessageThreadsReadRequest:
       type: object
       properties:
@@ -1229,8 +1232,6 @@ components:
         reader_user_id:
           type: string
           format: uuid
-      required:
-      - reader_type
     SecureMessageThreadsAssignRequest:
       type: object
       properties:
@@ -1691,13 +1692,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who sent it
+          description: Who sent it (server-set from the caller)
+          readOnly: true
         sender_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff sender
+          description: Staff sender (the calling staff user; null for customers)
+          readOnly: true
         body:
           type: string
           description: Message text
@@ -1793,13 +1796,15 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Customer or staff
+          description: Customer or staff (server-set from the caller)
+          readOnly: true
         reader_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff reader
+          description: Staff reader (the calling staff user; null for customers)
+          readOnly: true
         read_at:
           type: string
           format: date-time
@@ -1908,7 +1913,8 @@ components:
           - STAFF
           - SYSTEM
           - BOT
-          description: Who opened the thread
+          description: 'Who opened the thread (server-set from the caller: CUSTOMER when relayed for a customer, else STAFF)'
+          readOnly: true
         work_queue_id:
           type:
           - string
@@ -2051,14 +2057,6 @@ components:
           type: string
           maxLength: 64
           description: Topic code (CARDS, PAYMENTS, LOANS, GENERAL)
-        opened_by:
-          type: string
-          enum:
-          - CUSTOMER
-          - STAFF
-          - SYSTEM
-          - BOT
-          description: Who opened the thread
         work_queue_id:
           type: string
           format: uuid
@@ -2093,7 +2091,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
         initial_message:
           type: string
-          description: First message of the thread, sent by opened_by (write-only; not stored as a column)
+          description: First message of the thread, sent as the caller (write-only; not stored as a column)
           writeOnly: true
         initial_attachment_document_ids:
           type: array
@@ -2120,14 +2118,6 @@ components:
           type: string
           maxLength: 64
           description: Topic code (CARDS, PAYMENTS, LOANS, GENERAL)
-        opened_by:
-          type: string
-          enum:
-          - CUSTOMER
-          - STAFF
-          - SYSTEM
-          - BOT
-          description: Who opened the thread
         work_queue_id:
           type: string
           format: uuid

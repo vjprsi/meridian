@@ -45,6 +45,12 @@ tags:
   description: Versioned onboarding journey definition built in the no-code flow builder
 - name: Onboarding Applications
   description: One customer's run through an onboarding journey
+- name: Onboarding Applicant
+  description: 'Public applicant surface for unauthenticated prospects. Every action except start needs the applicant token
+    in X-Applicant-Token (401 applicant_token_required / applicant_token_invalid / applicant_token_expired); a token only
+    opens its own application (404 for any other id). Risk and review fields are never returned.
+
+    '
 - name: Onboarding Offline Batches
   description: Batch of applications captured offline by an agent device and synced later
 - name: Kyc Providers
@@ -2285,7 +2291,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerGroupsMembersRequest'
+              $ref: '#/components/schemas/CustomerGroupsAddMembersRequest'
       x-requirements:
       - CIF-05
       x-service: customer-service
@@ -5097,6 +5103,500 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
       x-required-scope: party:write
       x-table: onboarding_application
+  /v1/onboarding/public/applications/start:
+    post:
+      operationId: onboardingApplicantStart
+      summary: Start an application on the tenant's PUBLISHED journey with this code (channel MOBILE_APP or WEB, allowed by
+        the journey). Rate-limited per client IP and per device_fingerprint (429 rate_limited); attestation_token carries
+        the CAPTCHA / app attestation verdict (422 attestation_required when it is required). The application_number is server-generated.
+        Returns the applicant token (once)
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplicantToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantStartRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}:
+    get:
+      operationId: onboardingApplicantGetGet
+      summary: The applicant's own application (no risk, decision or review fields)
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/next-step:
+    get:
+      operationId: onboardingApplicantNextStep
+      summary: The current step with its typed field definitions
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/steps/{step_code}:
+    post:
+      operationId: onboardingApplicantSteps
+      summary: Submit a step; input is validated against the step's typed fields (422 invalid_fields with input.<field> errors).
+        Contact verification steps complete only through otp/verify
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: step_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantStepsRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/otp/send:
+    post:
+      operationId: onboardingApplicantOtpSend
+      summary: Send a one-time code for a PHONE_VERIFICATION or EMAIL_VERIFICATION step through notification-service; a new
+        code supersedes the previous one; resend cooldown and a per-application send limit (429 otp_send_limit)
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOtp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantOtpSendRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/otp/verify:
+    post:
+      operationId: onboardingApplicantOtpVerify
+      summary: Verify the code (422 otp_invalid, otp_expired, otp_locked after max_attempts wrong codes); completes the contact
+        step and records the verified phone or email
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantOtpVerifyRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/documents:
+    post:
+      operationId: onboardingApplicantDocuments
+      summary: Register a document with document-service for the applicant (owner ONBOARDING_APPLICATION) and return its pre-signed
+        upload (document_id, method, url, headers, expires_at)
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantDocumentsRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/documents/{document_id}/complete:
+    post:
+      operationId: onboardingApplicantDocumentsComplete
+      summary: Confirm the uploaded content of one of the application's documents (starts virus scanning in document-service)
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicantDocumentsCompleteRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/submit:
+    post:
+      operationId: onboardingApplicantSubmit
+      summary: Submit the application for decision; the applicant token is revoked
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
+  /v1/onboarding/public/applications/{id}/token/refresh:
+    post:
+      operationId: onboardingApplicantTokenRefresh
+      summary: 'Rotate the applicant token: the presented token is revoked and a new one is issued'
+      tags:
+      - Onboarding Applicant
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplicantToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: onboarding_application
   /v1/onboarding/offline-batches:
     get:
       operationId: onboardingOfflineBatchesList
@@ -7484,7 +7984,7 @@ components:
       required:
       - data
       - has_more
-    CustomerGroupsMembersRequest:
+    CustomerGroupsAddMembersRequest:
       type: object
       properties:
         customer_id:
@@ -7801,6 +8301,101 @@ components:
           items: {}
       required:
       - message
+    OnboardingApplicantStartRequest:
+      type: object
+      properties:
+        journey_code:
+          type: string
+          maxLength: 64
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+        device_fingerprint:
+          type: string
+          maxLength: 128
+        attestation_token:
+          type: string
+          maxLength: 4096
+        product_ids:
+          type: array
+          items: {}
+        utm:
+          type: object
+          additionalProperties: true
+      required:
+      - journey_code
+      - channel
+      - device_fingerprint
+    OnboardingApplicantStepsRequest:
+      type: object
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+      required:
+      - input
+    OnboardingApplicantOtpSendRequest:
+      type: object
+      properties:
+        step_code:
+          type: string
+          maxLength: 64
+        destination:
+          type: string
+          maxLength: 254
+      required:
+      - step_code
+      - destination
+    OnboardingApplicantOtpVerifyRequest:
+      type: object
+      properties:
+        step_code:
+          type: string
+          maxLength: 64
+        code:
+          type: string
+          maxLength: 12
+      required:
+      - step_code
+      - code
+    OnboardingApplicantDocumentsRequest:
+      type: object
+      properties:
+        step_code:
+          type: string
+          maxLength: 64
+        document_type:
+          type: string
+          maxLength: 40
+        file_name:
+          type: string
+          maxLength: 255
+        content_type:
+          type: string
+          maxLength: 120
+      required:
+      - step_code
+      - document_type
+      - file_name
+      - content_type
+    OnboardingApplicantDocumentsCompleteRequest:
+      type: object
+      properties:
+        size_bytes:
+          type: integer
+          format: int64
+        checksum:
+          type: string
+          maxLength: 64
+      required:
+      - size_bytes
+      - checksum
     OnboardingOfflineBatchPage:
       type: object
       description: One page of OnboardingOfflineBatch results (newest first)
@@ -9865,6 +10460,21 @@ components:
           format: email
           maxLength: 320
           description: Email address for email-type contacts
+        masked_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 80
+          description: Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search
+          readOnly: true
+        lookup_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match
+            search; key shared with search-service, never reversible
+          readOnly: true
         label:
           type:
           - string
@@ -13784,6 +14394,109 @@ components:
       - trigger
       - screened_name
       - status
+    OnboardingApplicantToken:
+      type: object
+      description: Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        onboarding_application_id:
+          type: string
+          format: uuid
+          description: Application the token is bound to
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry (short-lived; rotate with token/refresh)
+          readOnly: true
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Revocation time (rotated, application closed)
+          readOnly: true
+        revoked_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: ROTATED, SUBMITTED, CLOSED
+          readOnly: true
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last authenticated request
+          readOnly: true
+        issued_ip:
+          type:
+          - string
+          - 'null'
+          description: Client IP at issue (IPv4 or IPv6 address)
+          readOnly: true
+        device_fingerprint:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Device fingerprint at issue
+          readOnly: true
+        applicant_token:
+          type: string
+          maxLength: 128
+          description: The token, returned once when issued; send it as X-Applicant-Token (returned once; never stored)
+          readOnly: true
+        application_number:
+          type: string
+          maxLength: 32
+          description: Server-generated application reference (returned once; never stored)
+          readOnly: true
+        current_step:
+          type: string
+          maxLength: 64
+          description: Code of the current step (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - onboarding_application_id
+      - expires_at
     OnboardingApplication:
       type: object
       description: One customer's run through an onboarding journey
@@ -13825,7 +14538,8 @@ components:
         application_number:
           type: string
           maxLength: 32
-          description: Human-readable reference
+          description: Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>)
+          readOnly: true
         onboarding_journey_id:
           type: string
           format: uuid
@@ -14104,10 +14818,6 @@ components:
     OnboardingApplicationCreate:
       type: object
       properties:
-        application_number:
-          type: string
-          maxLength: 32
-          description: Human-readable reference
         onboarding_journey_id:
           type: string
           format: uuid
@@ -14203,16 +14913,11 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - application_number
       - onboarding_journey_id
       - channel
     OnboardingApplicationUpdate:
       type: object
       properties:
-        application_number:
-          type: string
-          maxLength: 32
-          description: Human-readable reference
         onboarding_journey_id:
           type: string
           format: uuid
@@ -14405,7 +15110,9 @@ components:
         definition:
           type: object
           additionalProperties: true
-          description: Steps, branching conditions and screens (server-driven UI)
+          description: Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions
+            {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key,
+            required, pattern, enum, min_length, max_length, min, max}
         decision_rules:
           type:
           - object
@@ -14416,6 +15123,13 @@ components:
           type: integer
           format: int32
           description: Days before an idle application expires
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service
+            ones)
         published_at:
           type:
           - string
@@ -14540,7 +15254,9 @@ components:
         definition:
           type: object
           additionalProperties: true
-          description: Steps, branching conditions and screens (server-driven UI)
+          description: Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions
+            {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key,
+            required, pattern, enum, min_length, max_length, min, max}
         decision_rules:
           type: object
           additionalProperties: true
@@ -14549,6 +15265,11 @@ components:
           type: integer
           format: int32
           description: Days before an idle application expires
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service
+            ones)
         approval_request_id:
           type: string
           format: uuid
@@ -14626,7 +15347,9 @@ components:
         definition:
           type: object
           additionalProperties: true
-          description: Steps, branching conditions and screens (server-driven UI)
+          description: Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions
+            {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key,
+            required, pattern, enum, min_length, max_length, min, max}
         decision_rules:
           type: object
           additionalProperties: true
@@ -14635,6 +15358,11 @@ components:
           type: integer
           format: int32
           description: Days before an idle application expires
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service
+            ones)
         approval_request_id:
           type: string
           format: uuid
@@ -14851,6 +15579,118 @@ components:
       - application_count
       - payload_uri
       - payload_signature
+    OnboardingOtp:
+      type: object
+      description: One-time code sent to verify the applicant's phone or email for a contact step (hashes only)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        onboarding_application_id:
+          type: string
+          format: uuid
+          description: Application
+        step_code:
+          type: string
+          maxLength: 64
+          description: PHONE_VERIFICATION or EMAIL_VERIFICATION step
+        channel:
+          type: string
+          maxLength: 16
+          description: SMS or EMAIL
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - VERIFIED
+          - EXPIRED
+          - LOCKED
+          - SUPERSEDED
+          description: Status
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Wrong attempts so far
+          readOnly: true
+        max_attempts:
+          type: integer
+          format: int32
+          description: Wrong attempts before the code is locked
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Code expiry
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Notification that delivered the code
+          readOnly: true
+        destination_masked:
+          type: string
+          maxLength: 254
+          description: Masked destination, e.g. +2547******01 (returned once; never stored)
+          readOnly: true
+        resend_after:
+          type: string
+          format: date-time
+          description: Earliest time a new code can be requested (returned once; never stored)
+          readOnly: true
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - onboarding_application_id
+      - step_code
+      - channel
+      - status
+      - attempts
+      - max_attempts
+      - expires_at
     OnboardingStep:
       type: object
       description: Execution state of one step of an application
@@ -14996,6 +15836,12 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        fields:
+          type: array
+          items: {}
+          description: Typed field definitions of the step from the journey ({name, type, label_key, required, pattern, enum,
+            min_length, max_length, min, max}), returned by next-step (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at

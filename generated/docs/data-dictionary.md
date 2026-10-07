@@ -3157,7 +3157,7 @@ API: /v1/campaign-job-runs · Requirements: ENG-04, OPS-01
 
 ### Service `inbox-service` — database `inbox_db`
 
-Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners.
+Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners. Who is speaking is never taken from the request body: the caller is CUSTOMER only when an internal service token (the customer channel service) relays the call with the X-On-Behalf-Of-Customer header (customer id; ignored for any other caller, 403 when a non-internal token sends it); every other authenticated principal is bank-side (STAFF). Customer callers are confined to their own threads (404 otherwise), never see internal notes and cannot assign, edit or read the message/receipt resources; opened_by, sender_type, sender_user_id, reader_type and reader_user_id are server-set.
 
 
 #### `secure_message_thread`
@@ -3179,7 +3179,7 @@ API: /v1/inbox/threads · Requirements: ENG-05
 | subject | varchar(200) | no |  | subject | Subject |
 | topic | varchar(64) | yes |  | topic | Topic code (CARDS, PAYMENTS, LOANS, GENERAL) |
 | status | varchar(40) (SecureThreadStatus) | no |  | status (read-only) | Status (changes through messages and close / reopen) |
-| opened_by | varchar(40) (SecureMessageSender) | no |  | opened_by | Who opened the thread |
+| opened_by | varchar(40) (SecureMessageSender) | no |  | opened_by (read-only) | Who opened the thread (server-set from the caller: CUSTOMER when relayed for a customer, else STAFF) |
 | work_queue_id | uuid | yes | ref → work_queue | work_queue_id | CRM work queue the thread is routed to |
 | work_item_id | uuid | yes | ref → work_item | work_item_id (read-only) | CRM work item tracking the thread |
 | assigned_user_id | uuid | yes | ref → app_user | assigned_user_id (read-only) | Staff member handling it (set through assign) |
@@ -3212,8 +3212,8 @@ API: /v1/inbox/messages · Requirements: ENG-05
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | secure_message_thread_id | uuid | no | FK → secure_message_thread | secure_message_thread_id | Thread |
-| sender_type | varchar(40) (SecureMessageSender) | no |  | sender_type | Who sent it |
-| sender_user_id | uuid | yes | ref → app_user | sender_user_id | Staff sender |
+| sender_type | varchar(40) (SecureMessageSender) | no |  | sender_type (read-only) | Who sent it (server-set from the caller) |
+| sender_user_id | uuid | yes | ref → app_user | sender_user_id (read-only) | Staff sender (the calling staff user; null for customers) |
 | body | text | no |  | body | Message text PII |
 | attachment_document_ids | jsonb | yes |  | attachment_document_ids | Attached documents (document-service ids, verified AVAILABLE) |
 | is_internal_note | boolean | no |  | is_internal_note | Staff-only note, hidden from the customer |
@@ -3238,8 +3238,8 @@ API: internal only · Requirements: ENG-05
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | secure_message_id | uuid | no | FK → secure_message | secure_message_id | Message |
-| reader_type | varchar(40) (SecureMessageSender) | no |  | reader_type | Customer or staff |
-| reader_user_id | uuid | yes | ref → app_user | reader_user_id | Staff reader |
+| reader_type | varchar(40) (SecureMessageSender) | no |  | reader_type (read-only) | Customer or staff (server-set from the caller) |
+| reader_user_id | uuid | yes | ref → app_user | reader_user_id (read-only) | Staff reader (the calling staff user; null for customers) |
 | read_at | timestamptz | no |  | read_at | Read time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -7318,6 +7318,8 @@ API: /v1/customers/{customer_id}/contacts · Requirements: CIF-01, NOT-02
 | contact_type | varchar(40) (CustomerContactType) | no |  | contact_type | Contact type |
 | phone | varchar(20) | yes |  | phone | Phone number (E.164) for phone-type contacts PII |
 | email | varchar(320) | yes |  | email | Email address for email-type contacts PII |
+| masked_value | varchar(80) | yes |  | masked_value (read-only) | Masked contact point (+44*******123, a***e@example.com); the only contact form in events and search |
+| lookup_hash | varchar(64) | yes |  | lookup_hash (read-only) | Keyed HMAC-SHA256 of the normalised contact (e-mail lower-cased; phone digits only) for exact-match search; key shared with search-service, never reversible |
 | label | varchar(40) | yes |  | label | Free label, e.g. Work |
 | is_primary | boolean | no |  | is_primary | Primary contact of this type |
 | is_verified | boolean | no |  | is_verified (read-only) | Verified by OTP or link |
@@ -7671,7 +7673,7 @@ API: /v1/privacy-requests · Requirements: CIF-04
 
 ### Service `onboarding-service` — database `onboarding_db`
 
-No-code onboarding journeys per product, segment and country; runs applications step by step across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and syncs offline agent-assisted applications.
+No-code onboarding journeys per product, segment and country; runs applications step by step across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and syncs offline agent-assisted applications. Unauthenticated prospects use the public applicant surface (/v1/onboarding/public/applications): start on a published journey by code (rate-limited, attestation token), then act with a short-lived opaque applicant token sent as X-Applicant-Token, stored only as a SHA-256 hash and bound to one application (any other application answers 404), rotated through token/refresh.
 
 
 #### `onboarding_journey`
@@ -7698,9 +7700,10 @@ API: /v1/onboarding/journeys · Requirements: ONB-01
 | channels | jsonb | no |  | channels | Allowed channels (OnboardingChannel values) |
 | product_ids | jsonb | yes |  | product_ids | Products that can be opened at the end of the journey |
 | target_tier | varchar(40) (CustomerKycTier) | no |  | target_tier | KYC tier granted on approval |
-| definition | jsonb | no |  | definition | Steps, branching conditions and screens (server-driven UI) |
+| definition | jsonb | no |  | definition | Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max} |
 | decision_rules | jsonb | yes |  | decision_rules | Auto-approve / refer / reject rules |
 | expiry_days | integer | no |  | expiry_days | Days before an idle application expires |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones) |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
 | published_by | varchar(64) | yes |  | published_by (read-only) | Checker who published the version |
 | retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
@@ -7716,7 +7719,7 @@ API: /v1/onboarding/journeys · Requirements: ONB-01
 
 One customer's run through an onboarding journey
 
-API: /v1/onboarding/applications · Requirements: ONB-01, ONB-05
+API: /v1/onboarding/applications, /v1/onboarding/public/applications · Requirements: ONB-01, ONB-05
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -7727,7 +7730,7 @@ API: /v1/onboarding/applications · Requirements: ONB-01, ONB-05
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| application_number | varchar(32) | no | UQ | application_number | Human-readable reference |
+| application_number | varchar(32) | no | UQ | application_number (read-only) | Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>) |
 | onboarding_journey_id | uuid | no | FK → onboarding_journey | onboarding_journey_id | Journey version |
 | customer_id | uuid | yes | ref → customer | customer_id | Customer created or matched |
 | legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Bank entity that will hold the relationship (needed to create the customer) |
@@ -7799,6 +7802,57 @@ API: internal only · Requirements: ONB-01
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `onboarding_applicant_token`
+
+Short-lived opaque token of an unauthenticated applicant, bound to one application (hash at rest)
+
+API: internal only · Requirements: ONB-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| onboarding_application_id | uuid | no | FK → onboarding_application | onboarding_application_id | Application the token is bound to |
+| token_hash | varchar(64) | no | UQ | — | SHA-256 of the token (the token itself is never stored) |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Expiry (short-lived; rotate with token/refresh) |
+| revoked_at | timestamptz | yes |  | revoked_at (read-only) | Revocation time (rotated, application closed) |
+| revoked_reason | varchar(32) | yes |  | revoked_reason (read-only) | ROTATED, SUBMITTED, CLOSED |
+| last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last authenticated request |
+| issued_ip | inet | yes |  | issued_ip (read-only) | Client IP at issue |
+| device_fingerprint | varchar(128) | yes |  | device_fingerprint (read-only) | Device fingerprint at issue |
+
+#### `onboarding_otp`
+
+One-time code sent to verify the applicant's phone or email for a contact step (hashes only)
+
+API: internal only · Requirements: ONB-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| onboarding_application_id | uuid | no | FK → onboarding_application | onboarding_application_id | Application |
+| step_code | varchar(64) | no |  | step_code | PHONE_VERIFICATION or EMAIL_VERIFICATION step |
+| channel | varchar(16) | no |  | channel (read-only) | SMS or EMAIL |
+| destination | varchar(254) | no |  | — | Phone or email the code was sent to PII |
+| code_hash | varchar(64) | no |  | — | HMAC-SHA256 of the code (the code itself is never stored) |
+| status | varchar(40) (OnboardingOtpStatus) | no |  | status (read-only) | Status |
+| attempts | integer | no |  | attempts (read-only) | Wrong attempts so far |
+| max_attempts | integer | no |  | max_attempts (read-only) | Wrong attempts before the code is locked |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Code expiry |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
+| notification_id | uuid | yes | ref → notification | notification_id (read-only) | Notification that delivered the code |
 
 #### `onboarding_offline_batch`
 
