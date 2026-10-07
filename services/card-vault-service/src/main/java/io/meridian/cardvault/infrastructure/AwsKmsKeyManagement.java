@@ -23,6 +23,10 @@ import software.amazon.awssdk.services.kms.model.ReEncryptResponse;
  * each data key is the ARN of the key that wrapped it. With KMS automatic (yearly) rotation the ARN stays the same
  * and old ciphertexts stay decryptable; a manual rotation (the alias re-pointed to a new key) changes
  * {@link #currentMasterRef()} and the re-wrap job then moves every data key to the new key.
+ *
+ * <p>DR: a multi-region key (primary cell) and its replica (standby cell) share key material and the {@code mrk-} key
+ * id, so the reference of such a key is the region-independent key id: data keys replicated with the database unwrap
+ * in either region and a failover needs no re-wrap.
  */
 public class AwsKmsKeyManagement implements KeyManagement {
     private final KmsClient kms;
@@ -40,12 +44,24 @@ public class AwsKmsKeyManagement implements KeyManagement {
         this.keyId = keyId.trim();
     }
 
+    private static final java.util.regex.Pattern MRK =
+            java.util.regex.Pattern.compile("arn:aws[\\w-]*:kms:[^:]+:\\d+:key/(mrk-[0-9a-f]+)");
+
+    /** Master key reference of a KMS key: its ARN, or the region-independent key id of a multi-region key. */
+    static String ref(String arnOrId) {
+        if (arnOrId == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = MRK.matcher(arnOrId);
+        return m.matches() ? m.group(1) : arnOrId;
+    }
+
     @Override
     public DataKey generateDataKey(Map<String, String> context) {
         try {
             GenerateDataKeyResponse r = kms.generateDataKey(b -> b.keyId(keyId).keySpec(DataKeySpec.AES_256)
                     .encryptionContext(context));
-            return new DataKey(r.plaintext().asByteArray(), new WrappedKey(r.keyId(), r.ciphertextBlob().asByteArray()));
+            return new DataKey(r.plaintext().asByteArray(), new WrappedKey(ref(r.keyId()), r.ciphertextBlob().asByteArray()));
         } catch (KmsException e) {
             throw new IllegalStateException("KMS GenerateDataKey failed: " + code(e), e);
         }
@@ -71,7 +87,7 @@ public class AwsKmsKeyManagement implements KeyManagement {
         try {
             EncryptResponse r = kms.encrypt(b -> b.keyId(keyId).plaintext(SdkBytes.fromByteArray(plaintext))
                     .encryptionContext(context));
-            return new WrappedKey(r.keyId(), r.ciphertextBlob().asByteArray());
+            return new WrappedKey(ref(r.keyId()), r.ciphertextBlob().asByteArray());
         } catch (KmsException e) {
             throw new IllegalStateException("KMS Encrypt failed: " + code(e), e);
         }
@@ -89,7 +105,7 @@ public class AwsKmsKeyManagement implements KeyManagement {
                     b.sourceKeyId(wrapped.masterRef());
                 }
             });
-            return new WrappedKey(r.keyId(), r.ciphertextBlob().asByteArray());
+            return new WrappedKey(ref(r.keyId()), r.ciphertextBlob().asByteArray());
         } catch (KmsException e) {
             throw new IllegalStateException("KMS ReEncrypt failed: " + code(e), e);
         }
@@ -102,7 +118,7 @@ public class AwsKmsKeyManagement implements KeyManagement {
         java.time.OffsetDateTime now = io.meridian.common.time.Clocks.now();
         if (arn == null || resolvedAt == null || resolvedAt.plus(RESOLVE_TTL).isBefore(now)) {
             try {
-                arn = kms.describeKey(b -> b.keyId(keyId)).keyMetadata().arn();
+                arn = ref(kms.describeKey(b -> b.keyId(keyId)).keyMetadata().arn());
             } catch (KmsException e) {
                 throw new IllegalStateException("KMS DescribeKey failed: " + code(e), e);
             }

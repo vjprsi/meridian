@@ -67,6 +67,7 @@ module "primary" {
   global_db_rpo_seconds     = var.global_db_rpo_seconds
   kafka_multi_vpc           = var.replicate_kafka
   secret_replicas           = [{ region = data.aws_region.secondary.region, kms_key_id = aws_kms_key.dr_secrets.arn }]
+  cde_kms_multi_region      = true # GAP-01: the standby must unwrap the replicated card data keys
   tags                      = local.tags
 }
 
@@ -83,6 +84,7 @@ module "secondary" {
   db_role                   = "secondary"
   global_cluster_identifier = aws_rds_global_cluster.pg.id
   kafka_multi_vpc           = false
+  cde_kms_replica_of        = module.primary.cde_kms_key_arn
   tags                      = local.tags
 
   # the secondary cluster can only join once the primary cluster is in the global database

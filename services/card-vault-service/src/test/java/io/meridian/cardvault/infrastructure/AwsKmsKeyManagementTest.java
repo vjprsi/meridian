@@ -215,6 +215,34 @@ class AwsKmsKeyManagementTest {
     }
 
     @Test
+    void multiRegionKeysAreReferencedByTheirRegionIndependentId() throws Exception {
+        String mrkEuw1 = "arn:aws:kms:eu-west-1:111122223333:key/mrk-0123456789abcdef0123456789abcdef";
+        String mrkEuw2 = "arn:aws:kms:eu-west-2:111122223333:key/mrk-0123456789abcdef0123456789abcdef";
+        assertThat(AwsKmsKeyManagement.ref(mrkEuw1)).isEqualTo("mrk-0123456789abcdef0123456789abcdef")
+                .isEqualTo(AwsKmsKeyManagement.ref(mrkEuw2));
+        assertThat(AwsKmsKeyManagement.ref(ARN_1)).isEqualTo(ARN_1);
+
+        FakeKms primary = new FakeKms();
+        primary.keys.put(mrkEuw1, primary.keys.get(ARN_1));
+        primary.keyOrder.set(0, mrkEuw1);
+        primary.aliasTarget = mrkEuw1;
+        EnvelopeHsm cellA = new EnvelopeHsm(new AwsKmsKeyManagement(primary, ALIAS), null, Duration.ZERO, 10);
+        Hsm.KeyRef pek = new Hsm.KeyRef("PIN_KEY", "pin-key@" + TENANT, 1, null, null);
+        Hsm.KeyMaterial m = as(() -> cellA.createKey(pek));
+        assertThat(m.masterRef()).isEqualTo("mrk-0123456789abcdef0123456789abcdef");
+
+        // the standby region's replica: same key material, other ARN; the stored reference is already current
+        FakeKms standby = new FakeKms();
+        standby.keys.put(mrkEuw2, primary.keys.get(mrkEuw1));
+        standby.keyOrder.set(0, mrkEuw2);
+        standby.aliasTarget = mrkEuw2;
+        EnvelopeHsm cellB = new EnvelopeHsm(new AwsKmsKeyManagement(standby, ALIAS), null, Duration.ZERO, 10);
+        assertThat(cellB.currentMasterRef()).isEqualTo(m.masterRef());
+        Hsm.KeyRef stored = new Hsm.KeyRef("PIN_KEY", pek.label(), 1, m.wrapped(), m.masterRef());
+        assertThat(as(() -> cellB.kcv(stored))).isEqualTo(m.kcv());
+    }
+
+    @Test
     void legacyKeysAreAdoptedWithEncryptAndAKeyIdIsRequired() throws Exception {
         FakeKms kms = new FakeKms();
         byte[] legacyMaster = "legacy-software-master-key-32-by".getBytes(StandardCharsets.US_ASCII);

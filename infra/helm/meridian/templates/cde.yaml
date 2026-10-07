@@ -1,0 +1,58 @@
+{{- $c := .Values.cde -}}
+{{- if and $c.enabled $c.namespace }}
+{{- if eq $c.namespace .Release.Namespace }}{{ fail "cde.namespace must differ from the release namespace (or be empty)" }}{{ end }}
+{{- $cm := include (print $.Template.BasePath "/config.yaml") . | fromYaml }}
+{{- $data := $cm.data }}
+{{- $_ := set $data "MERIDIAN_SERVICES_URL_TEMPLATE" (printf "http://{name}.%s.svc.cluster.local" .Release.Namespace) }}
+{{- $_ := set $data "MERIDIAN_GATEWAY_URL_TEMPLATE" (printf "http://{name}.%s.svc.cluster.local" .Release.Namespace) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meridian-common
+  namespace: {{ $c.namespace }}
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    meridian.io/zone: cde
+data:
+  {{- range $k, $v := $data }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- if .Values.global.networkPolicy.enabled }}
+---
+# default deny for everything in the CDE namespace; the per-service policies open the named callers only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: meridian-cde-default-deny
+  namespace: {{ $c.namespace }}
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    meridian.io/zone: cde
+spec:
+  podSelector: {}
+  policyTypes: [Ingress{{ if $c.egress.enabled }}, Egress{{ end }}]
+{{- end }}
+{{- range $svc := .Values.services }}
+{{- if and $svc.enabled (eq ($svc.zone | default "") "cde") }}
+---
+# callers in the release namespace reach {{ $svc.name }} under its usual name
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    app.kubernetes.io/name: {{ $svc.name }}
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    meridian.io/zone: cde
+spec:
+  type: ExternalName
+  externalName: {{ printf "%s.%s.svc.cluster.local" $svc.name $c.namespace }}
+  ports:
+    - name: http
+      port: 80
+{{- end }}
+{{- end }}
+{{- end }}

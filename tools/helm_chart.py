@@ -7,8 +7,13 @@ Prometheus ServiceMonitor, plus one schema-migration Job per service (Helm pre-i
 place the schema-owner credentials are mounted - GAP-22); global.cell.* names the cell (S20). infra/helm/meridian-router deploys the cell router, the
 regional entry tier in front of the cells. Infrastructure (PostgreSQL, Kafka, Keycloak, OTel collector) is external and
 referenced through values. Secrets are referenced by name, never rendered. Run after tools/generate.py.
+
+GAP-02: the services that store, process or transmit card data (CDE_SERVICES) form the cardholder data environment:
+values group `cde` (optional dedicated namespace, default-deny NetworkPolicies admitting only the callers found in the
+code, optional default-deny egress, dedicated PostgreSQL host / credentials, card-vault key management via KMS / HSM).
 """
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -75,6 +80,53 @@ SHARED_SECRETS = {
     "search-service": {"MERIDIAN_CONTACT_LOOKUP_KEY": ("meridian-contact-lookup", "key")},
 }
 
+# GAP-02: cardholder data environment. Services that store (vault), process (PAN generation, PIN blocks) or transmit
+# (authorisation SAD, 3DS / token-provisioning PANs) card data. card-clearing refuses PAN files and card-dispute sees
+# card ids only: both stay outside.
+CDE_SERVICES = ["card-vault-service", "card-service", "card-authorization-service", "card-tokenization-service",
+                "card-threeds-service"]
+# Callers that do not appear as a service-name literal in the caller's code: the GAP-08 data-lifecycle API (archive
+# jobs, DSAR fan-out from customer-service). The vault is never archived or exported through it.
+CDE_LIFECYCLE_CALLERS = ["archive-service", "customer-service"]
+CDE_NO_LIFECYCLE = {"card-vault-service"}
+# Name mentions that are not calls: the vault's access policy lists its callers, workflow-service maps approval resource
+# types to their owning service (it never calls them).
+CDE_NOT_CALLERS = {("card-vault-service", "*"), ("workflow-service", "card-service")}
+
+
+def cde_callers(routes):
+    """{CDE service: sorted callers}: every service whose main code or resources name the CDE service (ServiceClient
+    targets are string literals; job packs and service lists are resources), the edge gateway when the service has
+    routes in generated/routes.json (internal APIs have none, so the gateway never reaches the vault), and the
+    data-lifecycle callers. Tested by tools/helm_chart.py itself: a caller missing here is a blocked call in the CDE."""
+    found = {c: set() for c in CDE_SERVICES}
+    for svc_dir in sorted((ROOT / "services").iterdir()):
+        main = svc_dir / "src" / "main"
+        if not main.is_dir():
+            continue
+        for f in main.rglob("*"):
+            if f.suffix not in (".java", ".json", ".yml", ".yaml") or not f.is_file():
+                continue
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            if f.suffix != ".java":
+                text = "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+            for cde in CDE_SERVICES:
+                if (cde == svc_dir.name or (svc_dir.name, "*") in CDE_NOT_CALLERS
+                        or (svc_dir.name, cde) in CDE_NOT_CALLERS):
+                    continue
+                pattern = (rf'"{re.escape(cde)}"' if f.suffix == ".java"
+                           else rf'(?<![\w-]){re.escape(cde)}(?![\w-])')
+                if re.search(pattern, text):
+                    found[cde].add(svc_dir.name)
+    routed = {r["service"] for r in routes}
+    for cde in CDE_SERVICES:
+        if cde in routed:
+            found[cde].add("edge-gateway")
+        if cde not in CDE_NO_LIFECYCLE:
+            found[cde].update(CDE_LIFECYCLE_CALLERS)
+    return {k: sorted(v) for k, v in found.items()}
+
+
 HELPERS = r'''{{/* Common labels for a Meridian component. */}}
 {{- define "meridian.labels" -}}
 app.kubernetes.io/name: {{ .name }}
@@ -91,6 +143,14 @@ app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 {{- end }}
 
+{{- define "meridian.cdeMembers" -}}
+{{- $m := list -}}
+{{- range $svc := .Values.services -}}
+{{- if and $svc.enabled (eq ($svc.zone | default "") "cde") -}}{{- $m = append $m $svc.name -}}{{- end -}}
+{{- end -}}
+{{- join ", " $m -}}
+{{- end }}
+
 {{- define "meridian.image" -}}
 {{- $g := .root.Values.global.image -}}
 {{ printf "%s/%s:%s" $g.registry .name ($g.tag | default .root.Chart.AppVersion) }}
@@ -103,18 +163,34 @@ SERVICES_TPL = r'''{{- $root := . -}}
 {{- if $svc.enabled }}
 {{- $ctx := dict "root" $root "name" $svc.name "domain" $svc.domain }}
 {{- $replicas := $svc.replicas | default $g.replicas }}
+{{- /* GAP-02: CDE members may live in their own namespace and use the CDE database host and credentials */ -}}
+{{- $cde := and $root.Values.cde.enabled (eq ($svc.zone | default "") "cde") }}
+{{- $ns := ternary ($root.Values.cde.namespace | default "") "" $cde }}
+{{- $pgHost := ternary ($root.Values.cde.postgres.host | default $g.postgres.host) $g.postgres.host $cde }}
+{{- $pgPort := ternary ($root.Values.cde.postgres.port | default $g.postgres.port) $g.postgres.port $cde }}
+{{- $appSecret := ternary $root.Values.cde.postgres.appSecret $g.postgres.appSecret $cde }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+  {{- if and $svc.keyManagement $root.Values.cde.keys.serviceAccountRoleArn }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}   # IRSA: CDE KMS key use
+  {{- end }}
 automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   type: ClusterIP
@@ -133,6 +209,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   {{- if not $g.autoscaling.enabled }}
@@ -146,7 +225,11 @@ spec:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "meridian.labels" $ctx | nindent 8 }}
+      labels:
+        {{- include "meridian.labels" $ctx | nindent 8 }}
+        {{- if $cde }}
+        meridian.io/zone: cde
+        {{- end }}
       annotations:
         checksum/config: {{ include (print $root.Template.BasePath "/config.yaml") $root | sha256sum }}
     spec:
@@ -192,11 +275,11 @@ spec:
               value: "8080"
             {{- if $svc.database }}
             - name: SPRING_DATASOURCE_URL
-              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $pgHost $pgPort $svc.database $svc.schema $g.postgres.sslMode | quote }}
             - name: SPRING_DATASOURCE_USERNAME
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: username}}
+              valueFrom: {secretKeyRef: {name: {{ $appSecret }}, key: username}}
             - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: password}}
+              valueFrom: {secretKeyRef: {name: {{ $appSecret }}, key: password}}
             # GAP-22: the long-lived pod holds the runtime role only; migrations run as the schema owner in the
             # pre-install / pre-upgrade Job (templates/migrations.yaml), never in the Deployment
             - name: SPRING_FLYWAY_ENABLED
@@ -226,6 +309,32 @@ spec:
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
+            {{- if $svc.keyManagement }}
+            {{- $keys := $root.Values.cde.keys }}
+            # GAP-01: card key management (software | aws-kms | pkcs11)
+            - name: MERIDIAN_CARDS_VAULT_KEY_MANAGEMENT
+              value: {{ $keys.mode | quote }}
+            {{- if eq $keys.mode "aws-kms" }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_KEY_ID
+              value: {{ required "cde.keys.kmsKeyId is required with cde.keys.mode=aws-kms" $keys.kmsKeyId | quote }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_REGION
+              value: {{ $keys.kmsRegion | default $g.cell.region | quote }}
+            {{- with $keys.kmsEndpoint }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $keys.mode "pkcs11" }}
+            - name: MERIDIAN_CARDS_VAULT_PKCS11_CONFIG
+              value: /etc/meridian/pkcs11/pkcs11.cfg
+            - name: MERIDIAN_CARDS_VAULT_PKCS11_PIN
+              valueFrom: {secretKeyRef: {name: {{ $keys.pkcs11.pinSecret }}, key: pin}}
+            {{- end }}
+            {{- with $root.Values.cde.allowedClients }}
+            - name: MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS     # azp of the clients that may call the vault (GAP-16)
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
           resources:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
             limits: {memory: {{ $svc.memory | default $g.resources.memory | quote }}}
@@ -248,15 +357,25 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            {{- if and $svc.keyManagement (eq $root.Values.cde.keys.mode "pkcs11") }}
+            - {name: pkcs11, mountPath: /etc/meridian/pkcs11, readOnly: true}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {sizeLimit: 256Mi}
+        {{- if and $svc.keyManagement (eq $root.Values.cde.keys.mode "pkcs11") }}
+        - name: pkcs11
+          configMap: {name: {{ required "cde.keys.pkcs11.configMap is required with cde.keys.mode=pkcs11" $root.Values.cde.keys.pkcs11.configMap }}}
+        {{- end }}
 {{- if $g.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ $svc.name }}}
@@ -274,13 +393,86 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   minAvailable: 1
   selector:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
 {{- end }}
-{{- if $g.networkPolicy.enabled }}
+{{- if and $g.networkPolicy.enabled $cde }}
+---
+# GAP-02: CDE member - default deny; only the named callers (found in the code by tools/helm_chart.py) and the
+# metrics scraper may connect; egress denied too when cde.egress.enabled (DNS, Meridian pods and allowedCidrs only)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+  policyTypes: [Ingress{{ if $root.Values.cde.egress.enabled }}, Egress{{ end }}]
+  ingress:
+    {{- if $svc.allowedCallers }}
+    - from:
+        {{- range $caller := $svc.allowedCallers }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $caller.name }}
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+          {{- if $ns }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ ternary $ns $root.Release.Namespace (eq ($caller.zone | default "") "cde") }}
+          {{- end }}
+        {{- end }}
+      ports:
+        - {port: http, protocol: TCP}
+    {{- end }}
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}, protocol: TCP}
+    {{- end }}
+  {{- if $root.Values.cde.egress.enabled }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: meridian
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+    {{- end }}
+    {{- with $root.Values.cde.egress.allowedCidrs }}
+    - to:
+        {{- range . }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if and $g.networkPolicy.enabled (not $cde) }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -297,6 +489,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: meridian
+        {{- if and $root.Values.cde.enabled $root.Values.cde.namespace }}
+        # GAP-02: CDE members in their own namespace call ledger, fraud, notification ...
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.cde.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: meridian
+        {{- end }}
         {{- with $g.networkPolicy.monitoringNamespace }}
         - namespaceSelector:
             matchLabels:
@@ -322,6 +523,9 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   selector:
@@ -349,11 +553,19 @@ never migrates: its database is a read-only replica of the primary, which alread
 {{- range $svc := .Values.services }}
 {{- if and $svc.enabled $svc.database }}
 {{- $ctx := dict "root" $root "name" (printf "%s-migrate" $svc.name) "domain" $svc.domain }}
+{{- $cde := and $root.Values.cde.enabled (eq ($svc.zone | default "") "cde") }}
+{{- $ns := ternary ($root.Values.cde.namespace | default "") "" $cde }}
+{{- $pgHost := ternary ($root.Values.cde.postgres.host | default $g.postgres.host) $g.postgres.host $cde }}
+{{- $pgPort := ternary ($root.Values.cde.postgres.port | default $g.postgres.port) $g.postgres.port $cde }}
+{{- $ownerSecret := ternary $root.Values.cde.postgres.migrationSecret $g.postgres.migrationSecret $cde }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ printf "%s-migrate" $svc.name | trunc 63 | trimSuffix "-" }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels:
     {{- include "meridian.labels" $ctx | nindent 4 }}
     app.kubernetes.io/component: db-migration
@@ -391,11 +603,11 @@ spec:
             - name: MERIDIAN_MIGRATE_ONLY
               value: "true"
             - name: SPRING_DATASOURCE_URL
-              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $pgHost $pgPort $svc.database $svc.schema $g.postgres.sslMode | quote }}
             - name: SPRING_FLYWAY_USER
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
+              valueFrom: {secretKeyRef: {name: {{ $ownerSecret }}, key: username}}
             - name: SPRING_FLYWAY_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+              valueFrom: {secretKeyRef: {name: {{ $ownerSecret }}, key: password}}
           resources:
             requests: {cpu: {{ $g.migrations.resources.cpu | quote }}, memory: {{ $g.migrations.resources.memory | quote }}}
             limits: {memory: {{ $g.migrations.resources.memory | quote }}}
@@ -493,6 +705,69 @@ spec:
 {{- end }}
 '''
 
+# GAP-02: CDE namespace plumbing. With cde.namespace set, the CDE members run there: the namespace gets its own copy of
+# the common configuration (service URLs pointing back into the release namespace), a default-deny policy for every
+# pod in it, and the release namespace gets ExternalName services so callers keep using http://<service>.
+CDE_TPL = r'''{{- $c := .Values.cde -}}
+{{- if and $c.enabled $c.namespace }}
+{{- if eq $c.namespace .Release.Namespace }}{{ fail "cde.namespace must differ from the release namespace (or be empty)" }}{{ end }}
+{{- $cm := include (print $.Template.BasePath "/config.yaml") . | fromYaml }}
+{{- $data := $cm.data }}
+{{- $_ := set $data "MERIDIAN_SERVICES_URL_TEMPLATE" (printf "http://{name}.%s.svc.cluster.local" .Release.Namespace) }}
+{{- $_ := set $data "MERIDIAN_GATEWAY_URL_TEMPLATE" (printf "http://{name}.%s.svc.cluster.local" .Release.Namespace) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meridian-common
+  namespace: {{ $c.namespace }}
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    meridian.io/zone: cde
+data:
+  {{- range $k, $v := $data }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- if .Values.global.networkPolicy.enabled }}
+---
+# default deny for everything in the CDE namespace; the per-service policies open the named callers only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: meridian-cde-default-deny
+  namespace: {{ $c.namespace }}
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    meridian.io/zone: cde
+spec:
+  podSelector: {}
+  policyTypes: [Ingress{{ if $c.egress.enabled }}, Egress{{ end }}]
+{{- end }}
+{{- range $svc := .Values.services }}
+{{- if and $svc.enabled (eq ($svc.zone | default "") "cde") }}
+---
+# callers in the release namespace reach {{ $svc.name }} under its usual name
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    app.kubernetes.io/name: {{ $svc.name }}
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    meridian.io/zone: cde
+spec:
+  type: ExternalName
+  externalName: {{ printf "%s.%s.svc.cluster.local" $svc.name $c.namespace }}
+  ports:
+    - name: http
+      port: 80
+{{- end }}
+{{- end }}
+{{- end }}
+'''
+
 # GAP-10: rules and dashboards from tools/observability.py, copied into the chart's files/observability/
 OBSERVABILITY_TPL = r'''{{- $o := .Values.observability -}}
 {{- if $o.prometheusRule.enabled }}
@@ -567,6 +842,15 @@ Required secrets in the namespace (not created by this chart):
 {{- end }}
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.
+{{- if .Values.cde.enabled }}
+
+Cardholder data environment (GAP-02): namespace {{ .Values.cde.namespace | default .Release.Namespace }}
+  members: {{ include "meridian.cdeMembers" . }}
+  {{ .Values.cde.postgres.appSecret }} / {{ .Values.cde.postgres.migrationSecret }}  CDE database credentials (runtime role /
+      schema owner){{ with .Values.cde.postgres.host }} on the dedicated CDE cluster {{ . }}{{ end }}
+  Secrets and the service-client Secret must exist in the CDE namespace too when it is separate.
+  card key management: {{ .Values.cde.keys.mode }}{{ if eq .Values.cde.keys.mode "software" }} (development only: use aws-kms or pkcs11 for card data, GAP-01){{ end }}
+{{- end }}
 '''
 
 
@@ -908,7 +1192,8 @@ kubeVersion: ">=1.30.0-0"
         (ROUTER_OUT / name).write_text(text, encoding="utf-8", newline="\n")
 
 
-def services_values(manifest):
+def services_values(manifest, callers=None):
+    callers = callers or {}
     rows = []
     for s in manifest:
         r = {"name": s["name"], "domain": s["domain"], "enabled": True,
@@ -923,6 +1208,12 @@ def services_values(manifest):
             r["sharedSecretEnv"] = dict(sorted(SHARED_SECRETS[s["name"]].items()))
         if s["name"] in SERVICE_ENV:
             r["env"] = dict(sorted(SERVICE_ENV[s["name"]].items()))
+        if s["name"] in CDE_SERVICES:
+            r["zone"] = "cde"
+            r["allowedCallers"] = [{"name": c, "zone": "cde" if c in CDE_SERVICES else ""}
+                                   for c in callers.get(s["name"], [])]
+        if s["name"] == "card-vault-service":
+            r["keyManagement"] = True
         rows.append(r)
     rows.append({"name": "edge-gateway", "domain": "platform", "enabled": True, "database": None, "schema": None,
                  "replicas": 3, "cpu": "500m", "memory": "512Mi",
@@ -1008,6 +1299,31 @@ def values_yaml(rows, app_version):
         '    labels: {grafana_dashboard: "1"}   # label watched by the Grafana sidecar',
         '    folder: "Meridian"',
         "",
+        "# GAP-02: cardholder data environment (services with zone: cde). Members get default-deny NetworkPolicies that",
+        "# admit only their allowedCallers; optionally their own namespace, default-deny egress, a dedicated PostgreSQL",
+        "# cluster / credentials and the CDE KMS key (infra/tofu cell outputs cde_kms_key_arn, cde_db_endpoint).",
+        "cde:",
+        "  enabled: true",
+        '  namespace: ""              # e.g. meridian-cde (must exist, with the Secrets below); empty: release namespace',
+        "  egress:",
+        "    enabled: false           # true: CDE pods may reach only DNS, Meridian pods, monitoring and allowedCidrs",
+        "    allowedCidrs: []         # CDE database, Kafka brokers, IdP, KMS / HSM endpoints",
+        "  postgres:",
+        '    host: ""                 # dedicated CDE cluster endpoint (empty: global.postgres.host)',
+        "    port: 5432",
+        '    appSecret: "meridian-cde-db-app"          # CDE runtime role (not the shared meridian-db-app)',
+        '    migrationSecret: "meridian-cde-db-owner"  # CDE schema owner, mounted only by the CDE migration Jobs',
+        "  keys:                      # GAP-01: card-vault-service key management",
+        "    mode: software           # software (development) | aws-kms | pkcs11",
+        '    kmsKeyId: ""             # aws-kms: CDE key ARN or alias (tofu cell output cde_kms_key_arn)',
+        '    kmsRegion: ""            # default: global.cell.region',
+        '    kmsEndpoint: ""          # optional KMS VPC interface endpoint',
+        '    serviceAccountRoleArn: "" # IRSA role allowed kms:GenerateDataKey/Decrypt/Encrypt/ReEncrypt* on the key',
+        "    pkcs11:",
+        '      configMap: ""          # SunPKCS11 configuration (pkcs11.cfg: library, slot, key attribute template)',
+        '      pinSecret: "meridian-card-vault-hsm"     # Secret with key pin (HSM crypto-user PIN)',
+        '  allowedClients: ""         # card-vault-service accepted azp values (comma separated); empty: service default',
+        "",
         "# One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,",
         "# managementPort (actuator on its own port: probes and the ServiceMonitor use it),",
         "# secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),",
@@ -1016,9 +1332,14 @@ def values_yaml(rows, app_version):
     ]
     for r in rows:
         lines.append(f"  - name: {r['name']}")
-        for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory", "managementPort"):
+        for k in ("domain", "enabled", "database", "schema", "replicas", "cpu", "memory", "managementPort", "zone",
+                  "keyManagement"):
             if k in r:
                 lines.append(f"    {k}: {yaml_value(r[k])}")
+        if "allowedCallers" in r:
+            lines.append("    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)")
+            for c in r["allowedCallers"]:
+                lines.append(f"      - {{name: {yaml_value(c['name'])}, zone: {yaml_value(c['zone'])}}}")
         if "secretEnv" in r:
             lines.append(f"    secretName: {yaml_value(r['secretName'])}")
             lines.append("    secretEnv:")
@@ -1049,7 +1370,9 @@ def copy_observability():
 
 def main():
     manifest = json.loads((ROOT / "generated" / "services.json").read_text(encoding="utf-8"))
-    rows = services_values(manifest)
+    routes = json.loads((ROOT / "generated" / "routes.json").read_text(encoding="utf-8"))
+    callers = cde_callers(routes)
+    rows = services_values(manifest, callers)
     app_version = "0.1.0"
     (OUT / "templates").mkdir(parents=True, exist_ok=True)
     files = {
@@ -1068,6 +1391,7 @@ kubeVersion: ">=1.30.0-0"
         "templates/migrations.yaml": MIGRATIONS_TPL,
         "templates/ingress.yaml": INGRESS_TPL,
         "templates/observability.yaml": OBSERVABILITY_TPL,
+        "templates/cde.yaml": CDE_TPL,
         "templates/NOTES.txt": NOTES,
         ".helmignore": ".git/\n*.md.bak\n",
     }
@@ -1075,6 +1399,8 @@ kubeVersion: ">=1.30.0-0"
         (OUT / name).write_text(text, encoding="utf-8", newline="\n")
     copy_observability()
     print(f"helm chart: {len(rows)} components -> {OUT.relative_to(ROOT)}")
+    for svc, who in callers.items():
+        print(f"  CDE {svc}: callers {', '.join(who) or '(none)'}")
     write_router_chart(app_version)
     print(f"helm chart: cell router -> {ROUTER_OUT.relative_to(ROOT)}")
 

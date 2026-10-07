@@ -28,3 +28,12 @@ Required secrets in the namespace (not created by this chart):
 {{- end }}
 Secret values must be random (>= 32 characters; the card-vault master key 32 random bytes, base64) and come from the
 KMS / vault: services refuse to start when one is missing or a committed development default.
+{{- if .Values.cde.enabled }}
+
+Cardholder data environment (GAP-02): namespace {{ .Values.cde.namespace | default .Release.Namespace }}
+  members: {{ include "meridian.cdeMembers" . }}
+  {{ .Values.cde.postgres.appSecret }} / {{ .Values.cde.postgres.migrationSecret }}  CDE database credentials (runtime role /
+      schema owner){{ with .Values.cde.postgres.host }} on the dedicated CDE cluster {{ . }}{{ end }}
+  Secrets and the service-client Secret must exist in the CDE namespace too when it is separate.
+  card key management: {{ .Values.cde.keys.mode }}{{ if eq .Values.cde.keys.mode "software" }} (development only: use aws-kms or pkcs11 for card data, GAP-01){{ end }}
+{{- end }}

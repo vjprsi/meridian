@@ -12,11 +12,19 @@ never migrates: its database is a read-only replica of the primary, which alread
 {{- range $svc := .Values.services }}
 {{- if and $svc.enabled $svc.database }}
 {{- $ctx := dict "root" $root "name" (printf "%s-migrate" $svc.name) "domain" $svc.domain }}
+{{- $cde := and $root.Values.cde.enabled (eq ($svc.zone | default "") "cde") }}
+{{- $ns := ternary ($root.Values.cde.namespace | default "") "" $cde }}
+{{- $pgHost := ternary ($root.Values.cde.postgres.host | default $g.postgres.host) $g.postgres.host $cde }}
+{{- $pgPort := ternary ($root.Values.cde.postgres.port | default $g.postgres.port) $g.postgres.port $cde }}
+{{- $ownerSecret := ternary $root.Values.cde.postgres.migrationSecret $g.postgres.migrationSecret $cde }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ printf "%s-migrate" $svc.name | trunc 63 | trimSuffix "-" }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels:
     {{- include "meridian.labels" $ctx | nindent 4 }}
     app.kubernetes.io/component: db-migration
@@ -54,11 +62,11 @@ spec:
             - name: MERIDIAN_MIGRATE_ONLY
               value: "true"
             - name: SPRING_DATASOURCE_URL
-              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $pgHost $pgPort $svc.database $svc.schema $g.postgres.sslMode | quote }}
             - name: SPRING_FLYWAY_USER
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
+              valueFrom: {secretKeyRef: {name: {{ $ownerSecret }}, key: username}}
             - name: SPRING_FLYWAY_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+              valueFrom: {secretKeyRef: {name: {{ $ownerSecret }}, key: password}}
           resources:
             requests: {cpu: {{ $g.migrations.resources.cpu | quote }}, memory: {{ $g.migrations.resources.memory | quote }}}
             limits: {memory: {{ $g.migrations.resources.memory | quote }}}

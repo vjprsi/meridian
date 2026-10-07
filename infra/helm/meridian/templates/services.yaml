@@ -4,18 +4,34 @@
 {{- if $svc.enabled }}
 {{- $ctx := dict "root" $root "name" $svc.name "domain" $svc.domain }}
 {{- $replicas := $svc.replicas | default $g.replicas }}
+{{- /* GAP-02: CDE members may live in their own namespace and use the CDE database host and credentials */ -}}
+{{- $cde := and $root.Values.cde.enabled (eq ($svc.zone | default "") "cde") }}
+{{- $ns := ternary ($root.Values.cde.namespace | default "") "" $cde }}
+{{- $pgHost := ternary ($root.Values.cde.postgres.host | default $g.postgres.host) $g.postgres.host $cde }}
+{{- $pgPort := ternary ($root.Values.cde.postgres.port | default $g.postgres.port) $g.postgres.port $cde }}
+{{- $appSecret := ternary $root.Values.cde.postgres.appSecret $g.postgres.appSecret $cde }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+  {{- if and $svc.keyManagement $root.Values.cde.keys.serviceAccountRoleArn }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ $root.Values.cde.keys.serviceAccountRoleArn | quote }}   # IRSA: CDE KMS key use
+  {{- end }}
 automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   type: ClusterIP
@@ -34,6 +50,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   {{- if not $g.autoscaling.enabled }}
@@ -47,7 +66,11 @@ spec:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
   template:
     metadata:
-      labels: {{- include "meridian.labels" $ctx | nindent 8 }}
+      labels:
+        {{- include "meridian.labels" $ctx | nindent 8 }}
+        {{- if $cde }}
+        meridian.io/zone: cde
+        {{- end }}
       annotations:
         checksum/config: {{ include (print $root.Template.BasePath "/config.yaml") $root | sha256sum }}
     spec:
@@ -93,11 +116,11 @@ spec:
               value: "8080"
             {{- if $svc.database }}
             - name: SPRING_DATASOURCE_URL
-              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $pgHost $pgPort $svc.database $svc.schema $g.postgres.sslMode | quote }}
             - name: SPRING_DATASOURCE_USERNAME
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: username}}
+              valueFrom: {secretKeyRef: {name: {{ $appSecret }}, key: username}}
             - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: password}}
+              valueFrom: {secretKeyRef: {name: {{ $appSecret }}, key: password}}
             # GAP-22: the long-lived pod holds the runtime role only; migrations run as the schema owner in the
             # pre-install / pre-upgrade Job (templates/migrations.yaml), never in the Deployment
             - name: SPRING_FLYWAY_ENABLED
@@ -127,6 +150,32 @@ spec:
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
+            {{- if $svc.keyManagement }}
+            {{- $keys := $root.Values.cde.keys }}
+            # GAP-01: card key management (software | aws-kms | pkcs11)
+            - name: MERIDIAN_CARDS_VAULT_KEY_MANAGEMENT
+              value: {{ $keys.mode | quote }}
+            {{- if eq $keys.mode "aws-kms" }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_KEY_ID
+              value: {{ required "cde.keys.kmsKeyId is required with cde.keys.mode=aws-kms" $keys.kmsKeyId | quote }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_REGION
+              value: {{ $keys.kmsRegion | default $g.cell.region | quote }}
+            {{- with $keys.kmsEndpoint }}
+            - name: MERIDIAN_CARDS_VAULT_KMS_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $keys.mode "pkcs11" }}
+            - name: MERIDIAN_CARDS_VAULT_PKCS11_CONFIG
+              value: /etc/meridian/pkcs11/pkcs11.cfg
+            - name: MERIDIAN_CARDS_VAULT_PKCS11_PIN
+              valueFrom: {secretKeyRef: {name: {{ $keys.pkcs11.pinSecret }}, key: pin}}
+            {{- end }}
+            {{- with $root.Values.cde.allowedClients }}
+            - name: MERIDIAN_CARD_VAULT_ALLOWED_CLIENTS     # azp of the clients that may call the vault (GAP-16)
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
           resources:
             requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
             limits: {memory: {{ $svc.memory | default $g.resources.memory | quote }}}
@@ -149,15 +198,25 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            {{- if and $svc.keyManagement (eq $root.Values.cde.keys.mode "pkcs11") }}
+            - {name: pkcs11, mountPath: /etc/meridian/pkcs11, readOnly: true}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {sizeLimit: 256Mi}
+        {{- if and $svc.keyManagement (eq $root.Values.cde.keys.mode "pkcs11") }}
+        - name: pkcs11
+          configMap: {name: {{ required "cde.keys.pkcs11.configMap is required with cde.keys.mode=pkcs11" $root.Values.cde.keys.pkcs11.configMap }}}
+        {{- end }}
 {{- if $g.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ $svc.name }}}
@@ -175,13 +234,86 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   minAvailable: 1
   selector:
     matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
 {{- end }}
-{{- if $g.networkPolicy.enabled }}
+{{- if and $g.networkPolicy.enabled $cde }}
+---
+# GAP-02: CDE member - default deny; only the named callers (found in the code by tools/helm_chart.py) and the
+# metrics scraper may connect; egress denied too when cde.egress.enabled (DNS, Meridian pods and allowedCidrs only)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+  policyTypes: [Ingress{{ if $root.Values.cde.egress.enabled }}, Egress{{ end }}]
+  ingress:
+    {{- if $svc.allowedCallers }}
+    - from:
+        {{- range $caller := $svc.allowedCallers }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $caller.name }}
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+          {{- if $ns }}
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ ternary $ns $root.Release.Namespace (eq ($caller.zone | default "") "cde") }}
+          {{- end }}
+        {{- end }}
+      ports:
+        - {port: http, protocol: TCP}
+    {{- end }}
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+      ports:
+        - {port: {{ if $svc.managementPort }}management{{ else }}http{{ end }}, protocol: TCP}
+    {{- end }}
+  {{- if $root.Values.cde.egress.enabled }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: meridian
+              app.kubernetes.io/instance: {{ $root.Release.Name }}
+    {{- with $g.networkPolicy.monitoringNamespace }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+    {{- end }}
+    {{- with $root.Values.cde.egress.allowedCidrs }}
+    - to:
+        {{- range . }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if and $g.networkPolicy.enabled (not $cde) }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -198,6 +330,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: meridian
+        {{- if and $root.Values.cde.enabled $root.Values.cde.namespace }}
+        # GAP-02: CDE members in their own namespace call ledger, fraud, notification ...
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.cde.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: meridian
+        {{- end }}
         {{- with $g.networkPolicy.monitoringNamespace }}
         - namespaceSelector:
             matchLabels:
@@ -223,6 +364,9 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ $svc.name }}
+  {{- with $ns }}
+  namespace: {{ . }}
+  {{- end }}
   labels: {{- include "meridian.labels" $ctx | nindent 4 }}
 spec:
   selector:

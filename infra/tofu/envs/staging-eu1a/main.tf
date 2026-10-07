@@ -34,5 +34,8 @@ output "helm_values" {
       postgres = { host = module.cell.postgres_endpoint }
       kafka    = { bootstrapServers = module.cell.kafka_bootstrap_brokers }
     }
+    cde = {
+      keys = { mode = "aws-kms", kmsKeyId = module.cell.cde_kms_alias, serviceAccountRoleArn = module.cell.cde_vault_role_arn }
+    }
   }
 }

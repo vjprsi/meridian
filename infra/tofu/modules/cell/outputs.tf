@@ -63,8 +63,30 @@ output "kms_key_arn" {
 
 output "secret_arns" {
   description = "Secrets Manager entries to sync into the namespace (External Secrets)"
-  value = {
+  value = merge({
     meridian-db-app   = aws_secretsmanager_secret.db_app.arn
     meridian-db-owner = aws_secretsmanager_secret.db_owner.arn
-  }
+    }, var.cde_dedicated_db ? {
+    meridian-cde-db-app   = aws_secretsmanager_secret.cde_db_app[0].arn
+    meridian-cde-db-owner = aws_secretsmanager_secret.cde_db_owner[0].arn
+  } : {})
+}
+
+output "cde_kms_key_arn" {
+  description = "Helm cde.keys.kmsKeyId (card-vault-service key-management=aws-kms); the alias works too"
+  value       = local.cde_key_arn
+}
+
+output "cde_kms_alias" {
+  value = aws_kms_alias.cde.name
+}
+
+output "cde_vault_role_arn" {
+  description = "Helm cde.keys.serviceAccountRoleArn (IRSA role of card-vault-service)"
+  value       = aws_iam_role.cde_vault.arn
+}
+
+output "cde_db_endpoint" {
+  description = "Helm cde.postgres.host (null: the CDE shares the cell cluster)"
+  value       = var.cde_dedicated_db ? aws_rds_cluster.cde[0].endpoint : null
 }

@@ -140,3 +140,39 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+# ---------------------------------------------------------------- cardholder data environment (GAP-01 / GAP-02)
+
+variable "cde_dedicated_db" {
+  description = "Run card_vault_db on its own Aurora cluster encrypted with the CDE KMS key (recommended for PCI DSS)"
+  type        = bool
+  default     = false
+}
+
+variable "cde_postgres_min_acu" {
+  type    = number
+  default = 0.5
+}
+
+variable "cde_postgres_max_acu" {
+  type    = number
+  default = 8
+}
+
+variable "cde_kms_multi_region" {
+  description = "Create the CDE KMS key as a multi-region key (primary cell of a cross-region DR pair)"
+  type        = bool
+  default     = false
+}
+
+variable "cde_kms_replica_of" {
+  description = "ARN of the primary cell's multi-region CDE key: this (standby) cell replicates it instead of creating its own"
+  type        = string
+  default     = null
+}
+
+variable "cde_namespaces" {
+  description = "Kubernetes namespaces whose card-vault-service service account may assume the CDE KMS role (Helm release namespace and/or cde.namespace)"
+  type        = list(string)
+  default     = ["meridian", "meridian-cde"]
+}

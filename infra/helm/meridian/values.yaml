@@ -63,6 +63,31 @@ observability:
     labels: {grafana_dashboard: "1"}   # label watched by the Grafana sidecar
     folder: "Meridian"
 
+# GAP-02: cardholder data environment (services with zone: cde). Members get default-deny NetworkPolicies that
+# admit only their allowedCallers; optionally their own namespace, default-deny egress, a dedicated PostgreSQL
+# cluster / credentials and the CDE KMS key (infra/tofu cell outputs cde_kms_key_arn, cde_db_endpoint).
+cde:
+  enabled: true
+  namespace: ""              # e.g. meridian-cde (must exist, with the Secrets below); empty: release namespace
+  egress:
+    enabled: false           # true: CDE pods may reach only DNS, Meridian pods, monitoring and allowedCidrs
+    allowedCidrs: []         # CDE database, Kafka brokers, IdP, KMS / HSM endpoints
+  postgres:
+    host: ""                 # dedicated CDE cluster endpoint (empty: global.postgres.host)
+    port: 5432
+    appSecret: "meridian-cde-db-app"          # CDE runtime role (not the shared meridian-db-app)
+    migrationSecret: "meridian-cde-db-owner"  # CDE schema owner, mounted only by the CDE migration Jobs
+  keys:                      # GAP-01: card-vault-service key management
+    mode: software           # software (development) | aws-kms | pkcs11
+    kmsKeyId: ""             # aws-kms: CDE key ARN or alias (tofu cell output cde_kms_key_arn)
+    kmsRegion: ""            # default: global.cell.region
+    kmsEndpoint: ""          # optional KMS VPC interface endpoint
+    serviceAccountRoleArn: "" # IRSA role allowed kms:GenerateDataKey/Decrypt/Encrypt/ReEncrypt* on the key
+    pkcs11:
+      configMap: ""          # SunPKCS11 configuration (pkcs11.cfg: library, slot, key attribute template)
+      pinSecret: "meridian-card-vault-hsm"     # Secret with key pin (HSM crypto-user PIN)
+  allowedClients: ""         # card-vault-service accepted azp values (comma separated); empty: service default
+
 # One entry per component. Per-service overrides: enabled, replicas, maxReplicas, cpu, memory, dbPool, env,
 # managementPort (actuator on its own port: probes and the ServiceMonitor use it),
 # secretName / secretEnv (ENV_VAR: key of the service's Secret; values come from the KMS / vault, never git),
@@ -86,6 +111,21 @@ services:
     enabled: true
     database: "card_db"
     schema: "card"
+    zone: "cde"
+    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)
+      - {name: "archive-service", zone: ""}
+      - {name: "business-channel-service", zone: ""}
+      - {name: "business-day-service", zone: ""}
+      - {name: "card-authorization-service", zone: "cde"}
+      - {name: "card-clearing-service", zone: ""}
+      - {name: "card-dispute-service", zone: ""}
+      - {name: "card-threeds-service", zone: "cde"}
+      - {name: "card-tokenization-service", zone: "cde"}
+      - {name: "customer-channel-service", zone: ""}
+      - {name: "customer-service", zone: ""}
+      - {name: "edge-gateway", zone: ""}
+      - {name: "insights-service", zone: ""}
+      - {name: "regulatory-reporting-service", zone: ""}
     secretName: "meridian-card-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"
@@ -94,6 +134,13 @@ services:
     enabled: true
     database: "card_vault_db"
     schema: "card_vault"
+    zone: "cde"
+    keyManagement: true
+    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)
+      - {name: "card-authorization-service", zone: "cde"}
+      - {name: "card-service", zone: "cde"}
+      - {name: "card-threeds-service", zone: "cde"}
+      - {name: "card-tokenization-service", zone: "cde"}
     secretName: "meridian-card-vault-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_VAULT_MASTER_KEY: "master-key"
@@ -105,6 +152,14 @@ services:
     replicas: 3
     cpu: "1"
     memory: "1Gi"
+    zone: "cde"
+    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)
+      - {name: "archive-service", zone: ""}
+      - {name: "business-day-service", zone: ""}
+      - {name: "card-clearing-service", zone: ""}
+      - {name: "card-service", zone: "cde"}
+      - {name: "customer-service", zone: ""}
+      - {name: "edge-gateway", zone: ""}
     secretName: "meridian-card-authorization-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_AUTH_JIT_SECRET: "jit-secret"
@@ -113,6 +168,12 @@ services:
     enabled: true
     database: "card_token_db"
     schema: "card_token"
+    zone: "cde"
+    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)
+      - {name: "archive-service", zone: ""}
+      - {name: "card-service", zone: "cde"}
+      - {name: "customer-service", zone: ""}
+      - {name: "edge-gateway", zone: ""}
     secretName: "meridian-card-tokenization-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"
@@ -123,6 +184,11 @@ services:
     enabled: true
     database: "card_3ds_db"
     schema: "card_3ds"
+    zone: "cde"
+    allowedCallers:          # GAP-02: who may connect (from the code; tools/helm_chart.py)
+      - {name: "archive-service", zone: ""}
+      - {name: "customer-service", zone: ""}
+      - {name: "edge-gateway", zone: ""}
     secretName: "meridian-card-threeds-service-secrets"
     secretEnv:
       MERIDIAN_CARDS_CALLBACK_SECRET: "callback-secret"

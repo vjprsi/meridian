@@ -34,12 +34,18 @@ output "helm_values" {
         postgres = { host = module.primary.postgres_endpoint }
         kafka    = { bootstrapServers = module.primary.kafka_bootstrap_brokers }
       }
+      cde = {
+        keys = { mode = "aws-kms", kmsKeyId = module.primary.cde_kms_alias, serviceAccountRoleArn = module.primary.cde_vault_role_arn }
+      }
     }
     secondary = {
       global = {
         cell     = { id = var.secondary.cell, region = data.aws_region.secondary.region, role = "standby" }
         postgres = { host = module.secondary.postgres_endpoint }
         kafka    = { bootstrapServers = module.secondary.kafka_bootstrap_brokers }
+      }
+      cde = {
+        keys = { mode = "aws-kms", kmsKeyId = module.secondary.cde_kms_alias, serviceAccountRoleArn = module.secondary.cde_vault_role_arn }
       }
     }
   }
