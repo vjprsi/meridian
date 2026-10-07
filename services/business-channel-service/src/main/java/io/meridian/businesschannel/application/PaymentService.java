@@ -48,6 +48,8 @@ public class PaymentService {
     static final Set<String> SINGLE_KINDS = Set.of("OWN_TRANSFER", "DOMESTIC", "INTERNATIONAL");
     static final Set<String> BATCH_KINDS = Set.of("BULK", "PAYROLL");
     static final Set<String> COUNTED_FOR_LIMIT = Set.of("PENDING_APPROVAL", "APPROVED", "RELEASED", "RELEASE_FAILED");
+    /** Kinds the daily limit counts (payments; not the non-payment operations held by the matrix). */
+    static final Set<String> PAYMENT_KINDS = Set.of("OWN_TRANSFER", "DOMESTIC", "INTERNATIONAL", "BULK", "PAYROLL");
 
     private final Rows rows;
     private final Access access;
@@ -59,10 +61,12 @@ public class PaymentService {
     private final ReleaseService release;
     private final Downstream down;
     private final BusinessChannelProperties props;
+    private final BusinessDay days;
 
     public PaymentService(Rows rows, Access access, StepUp stepUp, ActionAudit audit, OutboxWriter outbox,
                           TransactionTemplate tx, ApprovalRuleService rules, ReleaseService release, Downstream down,
-                          BusinessChannelProperties props) {
+                          BusinessChannelProperties props, BusinessDay days) {
+        this.days = days;
         this.rows = rows;
         this.access = access;
         this.stepUp = stepUp;
@@ -139,6 +143,11 @@ public class PaymentService {
         } else if (p.hasNonNull("bulk_payment_id")) {
             out.put("type", "BULK_PAYMENT");
             out.set("bulk_payment", down.get("payment-service", "/v1/bulk-payments/" + p.path("bulk_payment_id").asString()));
+        } else if (p.hasNonNull("operation") && "RELEASED".equals(p.path("status").asString())) {
+            out.put("type", "OPERATION");
+            out.put("kind", p.path("kind").asString());
+            out.put("result_id", p.path("result_id").asString(null));
+            out.put("downstream_status", p.path("downstream_status").asString(null));
         } else {
             throw ApiException.conflict("not_released", "The payment has not been released to the bank yet");
         }
@@ -186,7 +195,7 @@ public class PaymentService {
                 .put("initiated_by", userId().toString());
         LocalDate date = Req.date(req, "requested_execution_date");
         if (date != null) {
-            if (date.isBefore(LocalDate.now(ZoneOffset.UTC))) {
+            if (date.isBefore(days.today(debtor))) {
                 throw ApiException.unprocessable("execution_date_in_past", "requested_execution_date is in the past");
             }
             p.put("requested_execution_date", date.toString());
@@ -279,7 +288,7 @@ public class PaymentService {
                 .put("initiated_by", userId().toString());
         LocalDate date = Req.date(req, "requested_execution_date");
         if (date != null) {
-            if (date.isBefore(LocalDate.now(ZoneOffset.UTC))) {
+            if (date.isBefore(days.today(debtor))) {
                 throw ApiException.unprocessable("execution_date_in_past", "requested_execution_date is in the past");
             }
             p.put("requested_execution_date", date.toString());
@@ -317,7 +326,8 @@ public class PaymentService {
         }
         requireStatus(p, Set.of("DRAFT"), "Only a DRAFT can be submitted");
         UUID debtorId = UUID.fromString(p.path("debtor_account_id").asString());
-        access.account(debtorId, Need.INITIATE, action);
+        JsonNode debtor = access.account(debtorId, Need.INITIATE, action);
+        LocalDate businessDate = days.today(debtor);
         BigDecimal amount = Req.rowDecimal(p, "amount");
         requireWithinCap(debtorId, amount, action);
         String kind = p.path("kind").asString();
@@ -341,10 +351,11 @@ public class PaymentService {
                     .orElseThrow(() -> new ApiException(403, "business_user_unknown", "Unknown portal user"));
             ObjectNode locked = rows.lock(TABLE, business(), id).orElseThrow(() -> Access.notFound("PAYMENT", id));
             requireStatus(locked, Set.of("DRAFT"), "Only a DRAFT can be submitted");
-            requireDailyLimit(me, locked, action);
+            requireDailyLimit(me, locked, businessDate, action);
             ObjectNode c = rows.object()
                     .put("status", "PENDING_APPROVAL")
                     .put("submitted_at", Clocks.now().toString())
+                    .put("business_date", businessDate.toString())
                     .put("approval_rule_id", plan.ruleId() == null ? null : plan.ruleId().toString())
                     .put("required_approvals", plan.required())
                     .put("approval_order", plan.order())
@@ -359,7 +370,11 @@ public class PaymentService {
         return saved;
     }
 
-    private void requireDailyLimit(ObjectNode me, ObjectNode p, String action) {
+    /**
+     * The initiator's submissions on the business date of the debit account's legal entity (not the UTC day), in the
+     * limit currency, payments only, plus this one, must stay within the user's daily limit.
+     */
+    private void requireDailyLimit(ObjectNode me, ObjectNode p, LocalDate businessDate, String action) {
         BigDecimal limit = Req.rowDecimal(me, "daily_limit");
         if (limit == null) {
             return;
@@ -371,11 +386,12 @@ public class PaymentService {
             throw ApiException.unprocessable("daily_limit_currency_mismatch", "Your daily limit is in " + ccy
                     + "; payments in " + currency + " need an administrator to change it");
         }
-        OffsetDateTime dayStart = LocalDate.now(ZoneOffset.UTC).atStartOfDay().atOffset(ZoneOffset.UTC);
         BigDecimal used = rows.scalar("select coalesce(sum(amount), 0) from business_payment where business_customer_id = ? "
-                        + "and initiated_by = ? and currency = ? and submitted_at >= ? and status = any(?::text[])",
-                BigDecimal.class, business(), userId(), currency, dayStart,
-                "{" + String.join(",", COUNTED_FOR_LIMIT) + "}").orElse(BigDecimal.ZERO);
+                        + "and initiated_by = ? and currency = ? and business_date = ? and status = any(?::text[]) "
+                        + "and kind = any(?::text[])",
+                BigDecimal.class, business(), userId(), currency, businessDate,
+                "{" + String.join(",", COUNTED_FOR_LIMIT) + "}", "{" + String.join(",", PAYMENT_KINDS) + "}")
+                .orElse(BigDecimal.ZERO);
         BigDecimal amount = Req.rowDecimal(p, "amount");
         if (used.add(amount).compareTo(limit) > 0) {
             audit.denied(action, "PAYMENT", p.path("id").asString(), "daily_limit_exceeded");
@@ -576,8 +592,31 @@ public class PaymentService {
                 yield d == null ? null : d.toPlainString();
             }
             case "items" -> p.hasNonNull("items") ? PaymentContent.lines(lines(p.get("items"))) : null;
+            case "operation" -> p.hasNonNull("operation") ? canonical(p.get("operation")) : null;
             default -> Req.text(p, f);
         });
+    }
+
+    /** JSON with object keys sorted at every level (stable whatever order the database returns them in). */
+    static String canonical(JsonNode n) {
+        if (n == null || n.isNull()) {
+            return "null";
+        }
+        if (n.isObject()) {
+            StringBuilder sb = new StringBuilder("{");
+            n.propertyNames().stream().sorted().forEach(k -> sb.append(sb.length() > 1 ? "," : "")
+                    .append(tools.jackson.databind.node.JsonNodeFactory.instance.textNode(k)).append(':')
+                    .append(canonical(n.get(k))));
+            return sb.append('}').toString();
+        }
+        if (n.isArray()) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < n.size(); i++) {
+                sb.append(i > 0 ? "," : "").append(canonical(n.get(i)));
+            }
+            return sb.append(']').toString();
+        }
+        return n.toString();
     }
 
     static List<Map<String, String>> lines(JsonNode items) {

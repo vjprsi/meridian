@@ -5,6 +5,7 @@ import static io.meridian.businesschannel.application.CurrentUser.business;
 import io.meridian.businesschannel.application.Access.Need;
 import io.meridian.businesschannel.application.Downstream.Query;
 import io.meridian.common.error.ApiException;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -12,8 +13,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * Business loans and credit lines. Every user of the business may see them; repaying needs a MAKER or ADMIN entitled
  * to initiate on the debited account, drawing on a credit line (new debt) needs an ADMIN, into an account of the
- * business the admin may initiate on. Money movement needs a recent authentication. These act immediately (the
- * business's approval matrix covers payments leaving the bank, not repayments of the bank's own facilities).
+ * business the admin may initiate on. Money movement needs a recent authentication. Repayments and draws go through the
+ * business's approval matrix when a rule of their type (LOAN_REPAYMENT, CREDIT_LINE_REPAYMENT, CREDIT_LINE_DRAW)
+ * covers the amount ({@link OperationApprovals}); otherwise they act immediately.
  */
 @Service
 public class LendingService {
@@ -23,12 +25,14 @@ public class LendingService {
     private final Access access;
     private final StepUp stepUp;
     private final ActionAudit audit;
+    private final OperationApprovals approvals;
 
-    public LendingService(Downstream down, Access access, StepUp stepUp, ActionAudit audit) {
+    public LendingService(Downstream down, Access access, StepUp stepUp, ActionAudit audit, OperationApprovals approvals) {
         this.down = down;
         this.access = access;
         this.stepUp = stepUp;
         this.audit = audit;
+        this.approvals = approvals;
     }
 
     public JsonNode loans(Integer limit, String cursor) {
@@ -45,17 +49,19 @@ public class LendingService {
         return down.get(LOANS, "/v1/loans/" + id + "/schedule", Query.none().paging(limit, cursor));
     }
 
-    public JsonNode repayLoan(UUID id, JsonNode req, String key) {
+    public OperationApprovals.Outcome repayLoan(UUID id, JsonNode req, String key) {
         String action = "businessLoansRepay";
         access.requireRole(action, "LOAN", id, "ADMIN", "MAKER");
-        access.loan(id, action);
+        JsonNode loan = access.loan(id, action);
         UUID source = Req.uuid(req, "source_account_id", true);
-        access.account(source, Need.INITIATE, action);
-        String amount = Req.amount(req, "amount").toPlainString();
+        JsonNode account = access.account(source, Need.INITIATE, action);
+        BigDecimal amount = Req.amount(req, "amount");
         stepUp.require(action, "LOAN", id);
-        JsonNode r = down.post(LOANS, "/v1/loans/" + id + "/repay", down.json().createObjectNode()
-                .put("amount", amount).put("source", "MANUAL").put("source_account_id", source.toString()), key, "repay");
-        audit.succeeded(action, "LOAN", id, r.path("id").asString(null));
+        OperationApprovals.Outcome r = approvals.run("LOAN_REPAYMENT", account, amount,
+                "Loan repayment " + loan.path("loan_number").asString(id.toString()), LOANS, "/v1/loans/" + id + "/repay",
+                down.json().createObjectNode().put("amount", amount.toPlainString()).put("source", "MANUAL")
+                        .put("source_account_id", source.toString()), key, "repay");
+        audit.succeeded(action, "LOAN", id, r.body().path("id").asString(null));
         return r;
     }
 
@@ -74,7 +80,7 @@ public class LendingService {
                 r -> !r.has("credit_line_id") || id.toString().equals(r.path("credit_line_id").asString(null)));
     }
 
-    public JsonNode draw(UUID id, JsonNode req, String key) {
+    public OperationApprovals.Outcome draw(UUID id, JsonNode req, String key) {
         String action = "businessCreditLinesDraw";
         access.requireAdmin(action, "CREDIT_LINE", id);
         JsonNode line = access.creditLine(id, action);
@@ -83,26 +89,29 @@ public class LendingService {
         if (!account.path("currency").asString("").equals(line.path("currency").asString(""))) {
             throw ApiException.unprocessable("currency_mismatch", "The account must be in the credit line currency");
         }
-        String amount = Req.amount(req, "amount").toPlainString();
+        BigDecimal amount = Req.amount(req, "amount");
         stepUp.require(action, "CREDIT_LINE", id);
-        JsonNode r = down.post(LOANS, "/v1/credit-lines/" + id + "/draw", down.json().createObjectNode()
-                .put("draw_type", "TRANSFER_TO_ACCOUNT").put("amount", amount)
-                .put("destination_account_id", destination.toString()), key, "draw");
-        audit.succeeded(action, "CREDIT_LINE", id, r.path("id").asString(null));
+        OperationApprovals.Outcome r = approvals.run("CREDIT_LINE_DRAW", account, amount, "Credit line draw",
+                LOANS, "/v1/credit-lines/" + id + "/draw", down.json().createObjectNode()
+                        .put("draw_type", "TRANSFER_TO_ACCOUNT").put("amount", amount.toPlainString())
+                        .put("destination_account_id", destination.toString()), key, "draw");
+        audit.succeeded(action, "CREDIT_LINE", id, r.body().path("id").asString(null));
         return r;
     }
 
-    public JsonNode repayLine(UUID id, JsonNode req, String key) {
+    public OperationApprovals.Outcome repayLine(UUID id, JsonNode req, String key) {
         String action = "businessCreditLinesRepay";
         access.requireRole(action, "CREDIT_LINE", id, "ADMIN", "MAKER");
         access.creditLine(id, action);
         UUID source = Req.uuid(req, "source_account_id", true);
-        access.account(source, Need.INITIATE, action);
-        String amount = Req.amount(req, "amount").toPlainString();
+        JsonNode account = access.account(source, Need.INITIATE, action);
+        BigDecimal amount = Req.amount(req, "amount");
         stepUp.require(action, "CREDIT_LINE", id);
-        JsonNode r = down.post(LOANS, "/v1/credit-lines/" + id + "/repay", down.json().createObjectNode()
-                .put("amount", amount).put("source", "MANUAL").put("source_account_id", source.toString()), key, "repay");
-        audit.succeeded(action, "CREDIT_LINE", id, r.path("id").asString(null));
+        OperationApprovals.Outcome r = approvals.run("CREDIT_LINE_REPAYMENT", account, amount, "Credit line repayment",
+                LOANS, "/v1/credit-lines/" + id + "/repay", down.json().createObjectNode()
+                        .put("amount", amount.toPlainString()).put("source", "MANUAL")
+                        .put("source_account_id", source.toString()), key, "repay");
+        audit.succeeded(action, "CREDIT_LINE", id, r.body().path("id").asString(null));
         return r;
     }
 }

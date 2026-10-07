@@ -9,6 +9,8 @@ import { Badge, DateTime, Money, Table, shortId } from "./ui";
 
 export const KIND_LABEL: Record<BusinessPayment["kind"], string> = {
   OWN_TRANSFER: "Own transfer", DOMESTIC: "Domestic", INTERNATIONAL: "International", BULK: "Bulk", PAYROLL: "Payroll",
+  LOAN_REPAYMENT: "Loan repayment", CREDIT_LINE_DRAW: "Credit line draw", CREDIT_LINE_REPAYMENT: "Credit line repayment",
+  MANDATE: "Mandate", COLLECTION: "Collection", VIRTUAL_ACCOUNT: "Virtual account", PAYMENT_LINK: "Payment link",
 };
 
 export function Approvals({ p }: { p: BusinessPayment }) {

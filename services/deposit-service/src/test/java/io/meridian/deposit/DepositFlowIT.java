@@ -725,6 +725,11 @@ class DepositFlowIT {
                 {"master_account_id":"%s","purpose":"COLLECTION","currency":"EUR","owner_reference":"INV-1"}"""
                 .formatted(a), "ops", 201);
         assertThat(AccountNumbers.isValidLuhn(va.get("virtual_account_number").asString())).isTrue();
+        // the event names the master account's holder (webhook subscriptions filter on customer_id)
+        assertThat(asTenant(() -> jdbc.sql("""
+                select payload->>'customer_id' from outbox where event_type = 'accounts.virtual_account.created'
+                  and aggregate_id = ?::uuid""").param(va.get("id").asString()).query(String.class).single()))
+                .isEqualTo(CUSTOMER);
         UUID vaLedger = UUID.fromString(va.get("ledger_account_id").asString());
         assertThat(ledger.accountRow(vaLedger).get("parent_id").asString()).isEqualTo(aLedger.toString());
         HttpResponse<String> bulk = send("POST", "/v1/virtual-accounts/bulk", """

@@ -278,7 +278,7 @@ public class MandateService {
                 mc.put("status", "EXPIRED");
             }
             rows.update(MANDATE, uuid(m, "id"), mc);
-            events.publish("payments.direct_debit_collection.collected", COLLECTION, collected);
+            publishCollection("payments.direct_debit_collection.collected", collected);
             return collected;
         });
     }
@@ -329,6 +329,19 @@ public class MandateService {
         });
     }
 
+    /**
+     * Collection events carry the mandate's customer_id (payload field only): webhook subscriptions filtered on the
+     * owning customer (e.g. business portal endpoints) then receive their collections.
+     */
+    private void publishCollection(String type, ObjectNode collection) {
+        ObjectNode payload = collection.deepCopy();
+        UUID mandateId = uuid(collection, "mandate_id");
+        if (mandateId != null) {
+            rows.find(MANDATE, mandateId).map(m -> str(m, "customer_id")).ifPresent(c -> payload.put("customer_id", c));
+        }
+        events.publish(type, COLLECTION, payload);
+    }
+
     private ObjectNode fail(UUID collectionId, String code, String reason, UUID paymentId) {
         return tx.execute(s -> {
             ObjectNode cc = rows.object();
@@ -341,7 +354,7 @@ public class MandateService {
                 cc.put("payment_id", paymentId.toString());
             }
             ObjectNode failed = rows.update(COLLECTION, collectionId, cc);
-            events.publish("payments.direct_debit_collection.failed", COLLECTION, failed);
+            publishCollection("payments.direct_debit_collection.failed", failed);
             return failed;
         });
     }
@@ -358,7 +371,7 @@ public class MandateService {
                 cc.put("failure_reason", PaymentProcessor.truncate(reason, 255));
             }
             ObjectNode r = rows.update(COLLECTION, collectionId, cc);
-            events.publish("payments.direct_debit_collection.cancelled", COLLECTION, r);
+            publishCollection("payments.direct_debit_collection.cancelled", r);
             return r;
         });
     }
@@ -408,7 +421,7 @@ public class MandateService {
             cc.put("return_reason_code", PaymentProcessor.truncate(reasonCode, 8));
             ObjectNode returned = rows.update(COLLECTION, collectionId, cc);
             events.publish("payments.payment_return.completed", "payment_return", ret);
-            events.publish("payments.direct_debit_collection.failed", COLLECTION, returned);
+            publishCollection("payments.direct_debit_collection.failed", returned);
             return ret;
         });
     }

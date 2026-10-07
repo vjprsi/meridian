@@ -6,19 +6,28 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * The business's approval matrix, without Spring or SQL.
  *
  * <p>A rule is an amount band {@code [min, max]} (inclusive; no max = unbounded) of one currency for single payments,
- * bulk/payroll batches or both ({@code ALL}). A payment uses the matching rule with the highest lower bound (a
- * scope-specific rule beats {@code ALL} at the same bound); when none matches, a default of N approvers in any order.
+ * bulk/payroll batches or both ({@code ALL}), or for one non-payment operation type ({@link #OPERATION_TYPES}: loan
+ * repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link; {@code ALL} never
+ * covers these). A payment uses the matching rule with the highest lower bound (a scope-specific rule beats
+ * {@code ALL} at the same bound); when none matches, a default of N approvers in any order. An operation needs
+ * approval only when a rule of its type covers it ({@link #covering}); otherwise it runs immediately.
  * It needs {@code required} distinct approvers, never its initiator. {@code ANY_ORDER}: any entitled approver, or only
  * those of the rule's pool when it names approvers. {@code SEQUENTIAL}: exactly the rule's approvers, in that order.
  */
 public final class ApprovalPolicy {
     public static final int MAX_APPROVALS = 10;
+    /** Payment scopes, covered by {@code ALL} rules. */
+    public static final Set<String> PAYMENT_SCOPES = Set.of("SINGLE", "BULK");
+    /** Non-payment operation types, covered only by rules naming them. */
+    public static final Set<String> OPERATION_TYPES = Set.of("LOAN_REPAYMENT", "CREDIT_LINE_DRAW",
+            "CREDIT_LINE_REPAYMENT", "MANDATE", "COLLECTION", "VIRTUAL_ACCOUNT", "PAYMENT_LINK");
 
     /** One rule of the matrix. */
     public record Rule(UUID id, String appliesTo, String currency, BigDecimal min, BigDecimal max, int required,
@@ -31,7 +40,7 @@ public final class ApprovalPolicy {
         }
 
         boolean covers(String scope, String ccy, BigDecimal amount) {
-            return currency.equals(ccy) && ("ALL".equals(appliesTo) || appliesTo.equals(scope))
+            return currency.equals(ccy) && (appliesTo.equals(scope) || "ALL".equals(appliesTo) && PAYMENT_SCOPES.contains(scope))
                     && amount.compareTo(min) >= 0 && (max == null || amount.compareTo(max) <= 0);
         }
     }
@@ -51,12 +60,17 @@ public final class ApprovalPolicy {
 
     /** The plan of a payment: its matching rule, else the default. */
     public static Plan plan(List<Rule> rules, String scope, String currency, BigDecimal amount, int defaultRequired) {
-        Optional<Rule> rule = rules.stream().filter(r -> r.covers(scope, currency, amount))
+        return covering(rules, scope, currency, amount)
+                .orElseGet(() -> new Plan(null, Math.max(1, defaultRequired), "ANY_ORDER", List.of()));
+    }
+
+    /** The plan of the matching rule, if any rule covers the scope (payment scope or operation type), currency and amount. */
+    public static Optional<Plan> covering(List<Rule> rules, String scope, String currency, BigDecimal amount) {
+        return rules.stream().filter(r -> r.covers(scope, currency, amount))
                 .max(Comparator.comparing(Rule::min)
                         .thenComparing(r -> "ALL".equals(r.appliesTo()) ? 0 : 1)
-                        .thenComparingInt(Rule::required));
-        return rule.map(r -> new Plan(r.id(), r.required(), r.order(), r.approvers()))
-                .orElseGet(() -> new Plan(null, Math.max(1, defaultRequired), "ANY_ORDER", List.of()));
+                        .thenComparingInt(Rule::required))
+                .map(r -> new Plan(r.id(), r.required(), r.order(), r.approvers()));
     }
 
     /**
@@ -148,7 +162,9 @@ public final class ApprovalPolicy {
         if (!a.currency().equals(b.currency())) {
             return false;
         }
-        boolean scopes = "ALL".equals(a.appliesTo()) || "ALL".equals(b.appliesTo()) || a.appliesTo().equals(b.appliesTo());
+        boolean scopes = a.appliesTo().equals(b.appliesTo())
+                || "ALL".equals(a.appliesTo()) && (PAYMENT_SCOPES.contains(b.appliesTo()))
+                || "ALL".equals(b.appliesTo()) && (PAYMENT_SCOPES.contains(a.appliesTo()));
         if (!scopes) {
             return false;
         }

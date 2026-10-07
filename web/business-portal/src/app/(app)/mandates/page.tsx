@@ -6,12 +6,13 @@ import { accountLabel, accountOptions, today, useAccounts, usePermissions } from
 import { api, idem, unwrap } from "@/api/client";
 import type { PaymentMandate } from "@/api/types";
 import { ActionButton, isoInstant, opt } from "@/components/actions";
+import { useHeldNotice } from "@/components/held";
 import { Async, Badge, Button, Card, DateTime, Empty, Money, PageHeader, Table } from "@/components/ui";
 
 const SCHEMES: PaymentMandate["scheme"][] = ["INTERNAL", "SEPA_CORE", "SEPA_B2B", "BACS", "ACH", "PIX_AUTOMATICO", "UPI_AUTOPAY", "NACH", "BECS"];
 const FREQUENCIES: PaymentMandate["frequency"][] = ["MONTHLY", "ONE_OFF", "DAILY", "WEEKLY", "QUARTERLY", "YEARLY", "ADHOC"];
 
-function Collections({ mandate, canMake }: { mandate: PaymentMandate; canMake: boolean }) {
+function Collections({ mandate, canMake, onDone }: { mandate: PaymentMandate; canMake: boolean; onDone: (r: unknown) => void }) {
   const q = useQuery({
     queryKey: ["collections", mandate.id],
     queryFn: async () => unwrap(await api.GET("/v1/business/mandates/{mandate_id}/collections",
@@ -28,7 +29,8 @@ function Collections({ mandate, canMake }: { mandate: PaymentMandate; canMake: b
           ]}
           run={async (v, key) => unwrap(await api.POST("/v1/business/mandates/{mandate_id}/collections", {
             params: { path: { mandate_id: mandate.id }, header: idem(key) },
-            body: { amount: v.amount, due_date: v.due_date, sequence_type: opt(v.sequence_type) } }))} />
+            body: { amount: v.amount, due_date: v.due_date, sequence_type: opt(v.sequence_type) } }))}
+          onDone={onDone} />
       )}
       <Async q={q} empty={<Empty title="No collections under this mandate" />}>
         {(rows) => (
@@ -49,6 +51,7 @@ export default function MandatesPage() {
   const perms = usePermissions();
   const accounts = useAccounts();
   const [open, setOpen] = useState<string | null>(null);
+  const [held, onDone] = useHeldNotice();
   const q = useQuery({
     queryKey: ["mandates"],
     queryFn: async () => unwrap(await api.GET("/v1/business/mandates", { params: { query: { limit: 200 } } })).data,
@@ -79,8 +82,10 @@ export default function MandatesPage() {
                 mandate_reference: v.mandate_reference, debtor_name: v.debtor_name, debtor_account_number: v.debtor_account_number,
                 debtor_agent_bic: opt(v.debtor_agent_bic), frequency: opt(v.frequency) as PaymentMandate["frequency"] | undefined,
                 max_amount: opt(v.max_amount), first_collection_date: opt(v.first_collection_date),
-                final_collection_date: opt(v.final_collection_date), signed_at: isoInstant(v.signed_at) } }))} />
+                final_collection_date: opt(v.final_collection_date), signed_at: isoInstant(v.signed_at) } }))}
+            onDone={onDone} />
         ) : undefined} />
+      {held}
       <Card flush>
         <Async q={q} empty={<div className="p-4"><Empty title="No mandates yet" /></div>}>
           {(rows) => (
@@ -111,7 +116,7 @@ export default function MandatesPage() {
       </Card>
       {open && q.data?.find((m) => m.id === open) && (
         <Card className="mt-5" title={`Collections · ${q.data.find((m) => m.id === open)!.mandate_reference}`}>
-          <Collections mandate={q.data.find((m) => m.id === open)!} canMake={perms.canMake} />
+          <Collections mandate={q.data.find((m) => m.id === open)!} canMake={perms.canMake} onDone={onDone} />
         </Card>
       )}
     </>

@@ -146,6 +146,21 @@ final class FakeBank {
             bulk.put("status", "VALIDATED").put("failed_count", 0);
             return create(rows(service, "/v1/bulk-payments"), bulk);
         }
+        java.util.regex.Matcher step = java.util.regex.Pattern.compile("/v1/onboarding/applications/([^/]+)/steps/([^/]+)")
+                .matcher(path);
+        if (method.equals("POST") && step.matches()) {
+            // onboarding-service: submit one step of an application
+            ObjectNode app = rows(service, "/v1/onboarding/applications").get(step.group(1));
+            for (ObjectNode s : rows(service, "/v1/onboarding/applications/" + step.group(1) + "/steps").values()) {
+                if (step.group(2).equals(s.path("step_code").asString())) {
+                    s.set("input", b.path("input"));
+                    s.put("status", "COMPLETED");
+                    app.put("status", "IN_PROGRESS");
+                    return s;
+                }
+            }
+            throw ApiException.unprocessable("unknown_step", step.group(2));
+        }
         String collection = collectionOf(service, path);
         if (collection == null) {
             throw new IllegalStateException("fake has no collection for " + service + " " + path);
@@ -264,6 +279,11 @@ final class FakeBank {
                 }
             }
             case "/v1/cards" -> row.put("status", "ACTIVE").put("last4", "4242");
+            case "/v1/api-clients" -> row.put("client_id", "cli_" + UUID.randomUUID().toString().replace("-", ""))
+                    .put("status", "ACTIVE");
+            case "/v1/onboarding/applications" -> row.put("status", "STARTED").put("application_number", "APP-1")
+                    .put("risk_score", 420).put("decision", "REFER").put("reviewed_by", "staff:checker");
+            case "/v1/documents" -> row.put("status", "UPLOADING");
             default -> {
                 if (collection.endsWith("/keys")) {
                     row.put("key_prefix", "mk_test_1234").put("api_key", "mk_test_1234_secret_shown_once");
@@ -294,6 +314,11 @@ final class FakeBank {
                 case "drawdowns" -> list(rows(service, "/v1/credit-line-drawdowns"), Map.of("credit_line_id", id));
                 case "keys" -> list(rows(service, collection + "/" + id + "/keys"), Map.of());
                 case "approvals" -> page(List.of());
+                case "steps" -> list(rows(service, collection + "/" + id + "/steps"), Map.of());
+                case "next-step" -> rows(service, collection + "/" + id + "/steps").values().stream()
+                        .filter(s -> !"COMPLETED".equals(s.path("status").asString())).findFirst()
+                        .map(s -> (JsonNode) s).orElse(json.createObjectNode());
+                case "relationships" -> list(rows(service, "/v1/customer-relationships"), Map.of("customer_id", id));
                 default -> throw new IllegalStateException("GET sub-resource " + name);
             };
         }
@@ -305,7 +330,17 @@ final class FakeBank {
             case "disable" -> row.put("status", "DISABLED");
             case "suspend" -> row.put("status", "SUSPENDED");
             case "revoke" -> row.put("status", "REVOKED");
+            case "upload-url" -> {
+                return json.readTree("{\"method\":\"PUT\",\"url\":\"https://objects.test/" + id
+                        + "\",\"expires_at\":\"2030-01-01T00:00:00Z\"}");
+            }
+            case "complete-upload" -> row.put("status", "SCANNING").put("size_bytes", body.path("size_bytes").asLong())
+                    .put("checksum", body.path("checksum").asString());
             case "submit" -> {
+                if (service.equals("onboarding-service")) {
+                    row.put("status", "SUBMITTED");
+                    return row;
+                }
                 row.put("status", "PENDING_APPROVAL").put("submitted_by", TenantContext.principal());
                 row.put("bank_approvals_needed", bankApprovals);
                 row.putArray("bank_approved_by");

@@ -35,6 +35,15 @@ public final class BusinessContext {
     public static final String BUSINESS_USER_CLAIM = "business_user_id";
     public static final String BUSINESS_CUSTOMER_HEADER = "X-Business-Customer-Id";
     public static final String BUSINESS_USER_HEADER = "X-Business-User-Id";
+    /**
+     * Machine-to-machine marker: {@code true} on client-credentials tokens of an API client owned by a business (a
+     * hardcoded claim of that client in the identity provider; never a user attribute). Such a token acts as the
+     * business's TECHNICAL user named by {@value #BUSINESS_USER_CLAIM}; it has no interactive authentication, so its
+     * issue time ({@code iat}) stands for the authentication time (client authentication happens at every issue).
+     */
+    public static final String M2M_CLAIM = "m2m";
+    /** Dev mode only: the API client id of a machine-to-machine business request (sets the m2m marker). */
+    public static final String BUSINESS_M2M_HEADER = "X-Business-M2M-Client";
 
     /**
      * The business, the portal user and the strength and age of their authentication.
@@ -45,9 +54,17 @@ public final class BusinessContext {
      * @param authTime           time of the last interactive authentication ({@code auth_time}); null if unknown
      * @param acr                authentication context class ({@code acr}); null if absent
      * @param username           {@code preferred_username}; may be null
+     * @param m2m                machine-to-machine token of a business API client ({@value #M2M_CLAIM} marker)
+     * @param clientId           OAuth client of the token ({@code azp}, else {@code client_id}); may be null
      */
     public record BusinessPrincipal(UUID businessCustomerId, UUID businessUserId, String subject, Instant authTime,
-                                    String acr, String username) {
+                                    String acr, String username, boolean m2m, String clientId) {
+        /** An interactive (portal) business user. */
+        public BusinessPrincipal(UUID businessCustomerId, UUID businessUserId, String subject, Instant authTime,
+                                 String acr, String username) {
+            this(businessCustomerId, businessUserId, subject, authTime, acr, username, false, null);
+        }
+
         /** Age of the last authentication, empty when the token does not say when it happened. */
         public Optional<Duration> authAge(Instant now) {
             return authTime == null ? Optional.empty() : Optional.of(Duration.between(authTime, now));
@@ -118,23 +135,38 @@ public final class BusinessContext {
         if (business == null || user == null) {
             return Optional.empty();
         }
-        return Optional.of(new BusinessPrincipal(business, user, jwt.getSubject(),
-                epoch(jwt.getClaims().get("auth_time")), jwt.getClaimAsString("acr"),
-                jwt.getClaimAsString("preferred_username")));
+        boolean m2m = flag(jwt.getClaims().get(M2M_CLAIM));
+        String client = jwt.getClaimAsString("azp") != null ? jwt.getClaimAsString("azp") : jwt.getClaimAsString("client_id");
+        // client credentials authenticate at every issue: the issue time is the authentication time of an m2m token
+        Instant authTime = m2m ? jwt.getIssuedAt() : epoch(jwt.getClaims().get("auth_time"));
+        return Optional.of(new BusinessPrincipal(business, user, jwt.getSubject(), authTime, jwt.getClaimAsString("acr"),
+                jwt.getClaimAsString("preferred_username"), m2m, client));
     }
 
     /** Dev security mode: business and user from the X-Business-* headers, auth time from X-Auth-Time. */
     public static Optional<BusinessPrincipal> fromDevHeaders(String businessHeader, String userIdHeader,
                                                              String subjectHeader, String authTimeHeader,
                                                              String acrHeader) {
+        return fromDevHeaders(businessHeader, userIdHeader, subjectHeader, authTimeHeader, acrHeader, null);
+    }
+
+    /** Dev security mode, with {@value #BUSINESS_M2M_HEADER} (an API client id) marking a machine-to-machine request. */
+    public static Optional<BusinessPrincipal> fromDevHeaders(String businessHeader, String userIdHeader,
+                                                             String subjectHeader, String authTimeHeader,
+                                                             String acrHeader, String m2mClientHeader) {
         UUID business = parseUuid(businessHeader);
         UUID user = parseUuid(userIdHeader);
         if (business == null || user == null) {
             return Optional.empty();
         }
         String subject = subjectHeader == null || subjectHeader.isBlank() ? null : subjectHeader.trim();
+        String client = m2mClientHeader == null || m2mClientHeader.isBlank() ? null : m2mClientHeader.trim();
         return Optional.of(new BusinessPrincipal(business, user, subject, epoch(authTimeHeader),
-                acrHeader == null || acrHeader.isBlank() ? null : acrHeader.trim(), subject));
+                acrHeader == null || acrHeader.isBlank() ? null : acrHeader.trim(), subject, client != null, client));
+    }
+
+    private static boolean flag(Object value) {
+        return value instanceof Boolean b ? b : value instanceof String s && "true".equalsIgnoreCase(s.trim());
     }
 
     static Set<String> scopes(Jwt jwt) {

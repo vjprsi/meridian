@@ -18,7 +18,8 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The business's approval matrix (ADMIN; step-up). Rules are never edited in place: a replacement deactivates the old
+ * The business's approval matrix (ADMIN; step-up). Rules cover payments ({@code ALL}, {@code SINGLE}, {@code BULK}) or
+ * one non-payment operation type ({@link ApprovalPolicy#OPERATION_TYPES}). Rules are never edited in place: a replacement deactivates the old
  * version (kept, because submitted payments reference the rule they were planned with) and inserts a new one. Bands of
  * one currency and overlapping scope must not overlap; named approvers must be ACTIVE APPROVER or ADMIN users of the
  * business. Matrix changes apply to payments submitted afterwards (a pending payment keeps its snapshot).
@@ -26,7 +27,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class ApprovalRuleService {
     static final String RULES = "business_approval_rule";
-    static final Set<String> SCOPES = Set.of("ALL", "SINGLE", "BULK");
+    static final Set<String> SCOPES = java.util.stream.Stream.concat(Set.of("ALL", "SINGLE", "BULK").stream(),
+            ApprovalPolicy.OPERATION_TYPES.stream()).collect(java.util.stream.Collectors.toUnmodifiableSet());
     static final Set<String> ORDERS = Set.of("ANY_ORDER", "SEQUENTIAL");
 
     private final Rows rows;

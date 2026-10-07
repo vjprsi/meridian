@@ -168,6 +168,10 @@ public class ApiClientService {
         v.set("allowed_scopes", JsonItems.canonical(json, scopes));
         String type = v.get("client_type").asString();
         String auth = v.get("auth_method").asString();
+        io.meridian.identity.domain.BusinessClientBinding.problem(text(v, "business_customer_id"),
+                text(v, "business_user_id"), type, scopes).ifPresent(p -> {
+            throw ApiException.unprocessable(p[0], p[1]);
+        });
         if ("PUBLIC_APP".equals(type) != "NONE".equals(auth)) {
             throw ApiException.unprocessable("invalid_auth_method",
                     "Public apps use auth_method NONE (PKCE); confidential clients must authenticate");
@@ -190,6 +194,10 @@ public class ApiClientService {
                         "TPP clients must use the FAPI 2.0 profile with private_key_jwt or tls_client_auth");
             }
         }
+    }
+
+    private static String text(JsonNode v, String field) {
+        return v.hasNonNull(field) && !v.get(field).asString().isBlank() ? v.get(field).asString() : null;
     }
 
     private static void requireStatus(JsonNode c, String expected) {

@@ -32,6 +32,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { href: "/admin/users", label: "Users", show: (p) => p.isAdmin },
     { href: "/admin/rules", label: "Approval rules", show: (p) => p.isAdmin },
     { href: "/integrations", label: "Integrations", show: (p) => p.isAdmin },
+    { href: "/onboarding", label: "Business verification", show: (p) => p.isAdmin },
     { href: "/activity", label: "Security log" },
   ] },
 ];

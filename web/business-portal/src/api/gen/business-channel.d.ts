@@ -618,7 +618,7 @@ export interface paths {
         /** Mandates of the business */
         get: operations["businessMandatesList"];
         put?: never;
-        /** Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up; matrix type MANDATE, amount max_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessMandatesCreate"];
         delete?: never;
         options?: never;
@@ -670,7 +670,7 @@ export interface paths {
         /** Collections under one mandate */
         get: operations["businessMandatesCollections"];
         put?: never;
-        /** Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up) */
+        /** Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up; matrix type COLLECTION). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessMandatesAddCollections"];
         delete?: never;
         options?: never;
@@ -688,7 +688,7 @@ export interface paths {
         /** Virtual accounts on accounts the user may see */
         get: operations["businessVirtualAccountsList"];
         put?: never;
-        /** Open a virtual account on an account the user may initiate on (MAKER or ADMIN) */
+        /** Open a virtual account on an account the user may initiate on (MAKER or ADMIN; matrix type VIRTUAL_ACCOUNT, amount expected_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessVirtualAccountsCreate"];
         delete?: never;
         options?: never;
@@ -757,7 +757,7 @@ export interface paths {
         /** Payment links of the business on accounts the user may see */
         get: operations["businessPaymentLinksList"];
         put?: never;
-        /** Create a payment link crediting an account the user may initiate on (MAKER or ADMIN) */
+        /** Create a payment link crediting an account the user may initiate on (MAKER or ADMIN; matrix type PAYMENT_LINK, amount amount, else max_amount, else 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessPaymentLinksCreate"];
         delete?: never;
         options?: never;
@@ -1048,7 +1048,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type LOAN_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessLoansRepay"];
         delete?: never;
         options?: never;
@@ -1116,7 +1116,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Draw funds into an account of the business the user may initiate on (ADMIN; step-up) */
+        /** Draw funds into an account of the business the user may initiate on (ADMIN; step-up; matrix type CREDIT_LINE_DRAW). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessCreditLinesDraw"];
         delete?: never;
         options?: never;
@@ -1133,7 +1133,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Repay from an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Repay from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type CREDIT_LINE_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessCreditLinesRepay"];
         delete?: never;
         options?: never;
@@ -1151,7 +1151,7 @@ export interface paths {
         /** API clients of the business */
         get: operations["businessApiClientsList"];
         put?: never;
-        /** Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations */
+        /** Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations. The client is tagged with the business and a TECHNICAL portal user (role technical_role: MAKER or VIEWER, default VIEWER; entitlements are set like any user's) whose id its machine-to-machine tokens carry as business_user_id with the m2m marker. auth_method CLIENT_SECRET_BASIC (default; the secret is returned once) or PRIVATE_KEY_JWT with an https jwks_uri */
         post: operations["businessApiClientsCreate"];
         delete?: never;
         options?: never;
@@ -1333,6 +1333,212 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/business/onboarding/journeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published business (non-individual) onboarding journeys open to the WEB channel */
+        get: operations["businessOnboardingJourneys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** KYB applications of the business */
+        get: operations["businessOnboardingApplications"];
+        put?: never;
+        /** Start a KYB application for the business on a published business journey (ADMIN; step-up); the business and the bank entity come from the customer record */
+        post: operations["businessOnboardingAddApplications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One application of the business */
+        get: operations["businessOnboardingGetApplicationsById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Steps of one application and their states */
+        get: operations["businessOnboardingApplicationsSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/next-step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The next step to complete, with its typed fields */
+        get: operations["businessOnboardingApplicationsNextStep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/steps/{step_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit data for one step, e.g. directors and UBOs on a UBO_DECLARATION step (ADMIN) */
+        post: operations["businessOnboardingAddApplicationsSteps"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents registered for one application */
+        get: operations["businessOnboardingApplicationsDocuments"];
+        put?: never;
+        /** Register a document of one step (owner ONBOARDING_APPLICATION) and get its pre-signed upload (document_id, method, url, headers, expires_at) (ADMIN) */
+        post: operations["businessOnboardingAddApplicationsDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/documents/{document_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the uploaded content of one of the application's documents (ADMIN) */
+        post: operations["businessOnboardingApplicationsDocumentsComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the application for the bank's decision (ADMIN; step-up) */
+        post: operations["businessOnboardingApplicationsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/related-parties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Directors, shareholders, UBOs and signatories the bank holds for the business */
+        get: operations["businessOnboardingRelatedParties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-provisioning/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Provision the first ADMIN of a business customer (active, not an individual) that has no active ADMIN; returns the user whose id is set as business_user_id in the identity provider */
+        post: operations["businessProvisioningAdmins"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-provisioning/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Portal users of one business (support view) */
+        get: operations["businessProvisioningUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/business/activity": {
         parameters: {
             query?: never;
@@ -1441,6 +1647,34 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
+        /** @description One page of Document results (newest first) */
+        DocumentPage: {
+            data: components["schemas"]["Document"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of OnboardingJourney results (newest first) */
+        OnboardingJourneyPage: {
+            data: components["schemas"]["OnboardingJourney"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of OnboardingApplication results (newest first) */
+        OnboardingApplicationPage: {
+            data: components["schemas"]["OnboardingApplication"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of OnboardingStep results (newest first) */
+        OnboardingStepPage: {
+            data: components["schemas"]["OnboardingStep"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
         /** @description One page of BusinessUser results (newest first) */
         BusinessUserPage: {
             data: components["schemas"]["BusinessUser"][];
@@ -1507,7 +1741,7 @@ export interface components {
         BusinessApprovalRulesCreateRequest: {
             name: string;
             /** @enum {string} */
-            applies_to?: "ALL" | "SINGLE" | "BULK";
+            applies_to?: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description ISO 4217 */
             currency: string;
             /**
@@ -1529,7 +1763,7 @@ export interface components {
         BusinessApprovalRulesReplaceRequest: {
             name: string;
             /** @enum {string} */
-            applies_to?: "ALL" | "SINGLE" | "BULK";
+            applies_to?: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description ISO 4217 */
             currency: string;
             /**
@@ -1579,7 +1813,7 @@ export interface components {
         };
         BusinessPaymentsCreateRequest: {
             /** @enum {string} */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** Format: uuid */
             debtor_account_id: string;
             /** Format: uuid */
@@ -1617,7 +1851,7 @@ export interface components {
         };
         BusinessBulkPaymentsCreateRequest: {
             /** @enum {string} */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** Format: uuid */
             debtor_account_id: string;
             name: string;
@@ -1860,6 +2094,10 @@ export interface components {
             environment?: "SANDBOX" | "PRODUCTION";
             /** Format: email */
             owner_email?: string;
+            /** @enum {string} */
+            technical_role?: "ADMIN" | "MAKER" | "APPROVER" | "VIEWER";
+            auth_method?: string;
+            jwks_uri?: string;
         };
         BusinessApiClientsSuspendRequest: {
             reason: string;
@@ -1913,6 +2151,41 @@ export interface components {
             /** @description Pass as ?cursor= to fetch the next page */
             next_cursor?: string | null;
             has_more: boolean;
+        };
+        BusinessOnboardingAddApplicationsRequest: {
+            /** Format: uuid */
+            onboarding_journey_id: string;
+            product_ids?: string[];
+        };
+        BusinessOnboardingAddApplicationsStepsRequest: {
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        BusinessOnboardingAddApplicationsDocumentsRequest: {
+            step_code: string;
+            document_type: string;
+            file_name: string;
+            content_type: string;
+        };
+        BusinessOnboardingApplicationsDocumentsCompleteRequest: {
+            /** Format: int64 */
+            size_bytes: number;
+            checksum: string;
+        };
+        /** @description One page of CustomerRelationship results (newest first) */
+        CustomerRelationshipPage: {
+            data: components["schemas"]["CustomerRelationship"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        BusinessProvisioningAdminsRequest: {
+            /** Format: uuid */
+            business_customer_id: string;
+            display_name: string;
+            /** Format: email */
+            email: string;
         };
         /** @description One page of BusinessAction results (newest first) */
         BusinessActionPage: {
@@ -2097,6 +2370,16 @@ export interface components {
              * @description Expiry
              */
             expires_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)
+             */
+            business_customer_id?: string | null;
+            /**
+             * Format: uuid
+             * @description TECHNICAL business portal user (business-channel-service) the client's tokens act as
+             */
+            business_user_id?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -2278,10 +2561,10 @@ export interface components {
             /** @description Rule name */
             name: string;
             /**
-             * @description Single payments, bulk/payroll batches or both
+             * @description Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming that type; without such a rule the operation runs immediately)
              * @enum {string}
              */
-            applies_to: "ALL" | "SINGLE" | "BULK";
+            applies_to: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description Currency of the band (payments in other currencies use other rules) (ISO 4217) */
             currency: string;
             /**
@@ -2397,10 +2680,10 @@ export interface components {
              */
             business_customer_id: string;
             /**
-             * @description Own transfer, domestic payee payment, international payment, bulk or payroll batch
+             * @description Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment operation held for approval by a matrix rule of its type
              * @enum {string}
              */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /**
              * @description Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED)
              * @enum {string}
@@ -2408,7 +2691,7 @@ export interface components {
             readonly status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "RELEASED" | "RELEASE_FAILED" | "REJECTED" | "CANCELLED";
             /**
              * Format: uuid
-             * @description Business account debited
+             * @description Business account debited (operations: the account involved, whose approve entitlement approvers need)
              */
             debtor_account_id: string;
             /**
@@ -2547,6 +2830,20 @@ export interface components {
              * @description User that cancelled it
              */
             readonly cancelled_by?: string | null;
+            /** @description Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key bzp-release:<id>, as the initiator); part of the approved content */
+            readonly operation?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: uuid
+             * @description Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual account, payment link)
+             */
+            readonly result_id?: string | null;
+            /**
+             * Format: date
+             * @description Business date of the submission (legal entity of the debit account, business-day-service); daily limits count per business date
+             */
+            readonly business_date?: string | null;
         };
         /** @description One approver's decision on a business payment. Append-only. */
         BusinessPaymentApproval: {
@@ -2660,6 +2957,20 @@ export interface components {
             readonly last_login_at?: string | null;
             /** @description Reason of the last suspension or removal */
             readonly status_reason?: string | null;
+            /**
+             * @description HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)
+             * @enum {string}
+             */
+            readonly user_type: "HUMAN" | "TECHNICAL";
+            /** @description Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp) */
+            readonly client_id?: string | null;
+            /**
+             * Format: uuid
+             * @description identity-service API client a TECHNICAL user stands for
+             */
+            readonly api_client_id?: string | null;
+            /** @description Bank staff principal that provisioned the user (first admin, staff operation) */
+            readonly provisioned_by?: string | null;
         };
         /** @description A payment card. Holds only tokens and masked data; PAN and CVV live in the vault. */
         Card: {
@@ -3663,6 +3974,98 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
         };
+        /** @description Relationship between two customers (director, UBO, guardian, joint holder, signatory, spouse) */
+        CustomerRelationship: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Subject customer (e.g. the company or the minor)
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Related customer (e.g. the director or guardian)
+             */
+            related_customer_id: string;
+            /**
+             * @description Relationship type
+             * @enum {string}
+             */
+            relationship_type: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
+            /**
+             * Format: decimal
+             * @description Direct ownership share 0..100 (shareholders and UBOs)
+             * @example 125.50
+             */
+            ownership_percentage?: string | null;
+            /**
+             * Format: decimal
+             * @description Indirect ownership share through chains
+             * @example 125.50
+             */
+            indirect_ownership_percentage?: string | null;
+            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
+            control_type?: string | null;
+            /** @description Title, e.g. CEO, Company Secretary */
+            position_title?: string | null;
+            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
+            signing_authority?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum amount this signatory may approve alone
+             * @example 125.50
+             */
+            signing_limit?: string | null;
+            /** @description Currency of the signing limit (ISO 4217) */
+            limit_currency?: string | null;
+            /**
+             * Format: date
+             * @description Start date
+             */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description End date
+             */
+            valid_to?: string | null;
+            /** @description Verified by registry or documents */
+            readonly verified: boolean;
+            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
+            source?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
         /** @description A customer or internal deposit account (current, savings, call, notice, escrow, settlement) */
         DepositAccount: {
             /**
@@ -3938,6 +4341,121 @@ export interface components {
             readonly collected_at?: string | null;
             /** @description Failure reason */
             readonly failure_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description A stored file (KYC document, statement, contract, report) owned by a business object */
+        Document: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Owning object type, e.g. CUSTOMER, LOAN, ACCOUNT */
+            owner_type: string;
+            /**
+             * Format: uuid
+             * @description Owning object id
+             */
+            owner_id: string;
+            /**
+             * @description Document type
+             * @enum {string}
+             */
+            document_type: "ID_CARD" | "PASSPORT" | "DRIVING_LICENSE" | "RESIDENCE_PERMIT" | "PROOF_OF_ADDRESS" | "SELFIE" | "VIDEO" | "BANK_STATEMENT" | "ACCOUNT_STATEMENT" | "CONTRACT" | "LOAN_AGREEMENT" | "INVOICE" | "RECEIPT" | "REPORT" | "CERTIFICATE" | "CORPORATE_DOCUMENT" | "LOGO" | "EXPORT" | "OTHER";
+            /** @description Original file name */
+            file_name: string;
+            /** @description MIME type */
+            content_type: string;
+            /**
+             * Format: int64
+             * @description Size
+             */
+            readonly size_bytes: number;
+            /** @description SHA-256 */
+            readonly checksum: string;
+            /**
+             * @description Data classification
+             * @enum {string}
+             */
+            classification: "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "UPLOADING" | "SCANNING" | "AVAILABLE" | "QUARANTINED" | "ARCHIVED" | "DELETED";
+            /** @description CLEAN, INFECTED, ERROR */
+            readonly virus_scan_result?: string | null;
+            /** @description Issuing country for identity documents (ISO 3166-1 alpha-2) */
+            issuing_country?: string | null;
+            /** @description Number printed on the document */
+            document_number?: string | null;
+            /**
+             * Format: date
+             * @description Issue date
+             */
+            issued_on?: string | null;
+            /**
+             * Format: date
+             * @description Expiry date
+             */
+            expires_on?: string | null;
+            /**
+             * Format: date
+             * @description Earliest deletion date
+             */
+            retention_until?: string | null;
+            /** @description Deletion blocked by legal hold (set via /legal-hold) */
+            readonly legal_hold: boolean;
+            /** @description Reason for the current legal hold */
+            readonly legal_hold_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description When the hold was last placed or lifted
+             */
+            readonly legal_hold_changed_at?: string | null;
+            /** @description Who last placed or lifted the hold */
+            readonly legal_hold_changed_by?: string | null;
+            /** @description API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM */
+            uploaded_via?: string | null;
+            /**
+             * Format: date-time
+             * @description When the document moved to archive storage
+             */
+            readonly archived_at?: string | null;
+            /** @description Object storage class, e.g. STANDARD, GLACIER_IR */
+            readonly storage_class?: string | null;
+            /** @description Extra attributes (OCR fields, page count) */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -4569,8 +5087,8 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
         };
-        /** @description A repayment received, with its allocation across components and instalments. Append-only. */
-        LoanRepayment: {
+        /** @description One customer's run through an onboarding journey */
+        OnboardingApplication: {
             /**
              * Format: uuid
              * @description Unique id (UUIDv7, time-ordered)
@@ -4584,116 +5102,149 @@ export interface components {
             /** @description Principal that created the row */
             readonly created_by?: string | null;
             /**
-             * Format: uuid
-             * @description Loan (empty for credit-line payments)
+             * Format: date-time
+             * @description Last update time
              */
-            loan_id?: string | null;
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Human-readable reference, server-generated (APP-<yyyymmdd>-<8 random base32 characters>) */
+            readonly application_number: string;
             /**
              * Format: uuid
-             * @description Credit line paid (revolving facilities)
+             * @description Journey version
              */
-            credit_line_id?: string | null;
+            onboarding_journey_id: string;
             /**
-             * Format: decimal
-             * @description Amount received
-             * @example 125.50
+             * Format: uuid
+             * @description Customer created or matched
              */
-            amount: string;
-            /** @description Currency (ISO 4217) */
-            currency: string;
+            customer_id?: string | null;
             /**
-             * @description Source of funds
+             * Format: uuid
+             * @description Bank entity that will hold the relationship (needed to create the customer)
+             */
+            legal_entity_id?: string | null;
+            /**
+             * @description Status (changes through the application actions)
              * @enum {string}
              */
-            source: "AUTO_DEBIT" | "MANUAL" | "WALLET" | "CARD" | "EXTERNAL_TRANSFER" | "CASH" | "COLLATERAL_LIQUIDATION" | "RECOVERY" | "PAYROLL";
+            readonly status: "STARTED" | "IN_PROGRESS" | "SUBMITTED" | "UNDER_REVIEW" | "REFERRED" | "APPROVED" | "REJECTED" | "ABANDONED" | "EXPIRED";
             /**
-             * Format: date
-             * @description Value date
+             * @description Channel
+             * @enum {string}
              */
-            value_date: string;
+            channel: "MOBILE_APP" | "WEB" | "USSD" | "AGENT" | "BRANCH" | "API";
+            /**
+             * Format: uuid
+             * @description Agent assisting (agent channel)
+             */
+            agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Branch (branch channel)
+             */
+            branch_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Staff member assisting
+             */
+            staff_user_id?: string | null;
+            /** @description Phone used to start the application (E.164) */
+            phone?: string | null;
+            /**
+             * Format: email
+             * @description Email used to start the application
+             */
+            email?: string | null;
+            /** @description Code of the current step */
+            current_step?: string | null;
+            /**
+             * Format: int32
+             * @description Completion percentage
+             */
+            readonly progress_percent: number;
+            /** @description Data captured so far (encrypted) */
+            collected_data?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: int32
+             * @description Onboarding risk score 0..1000
+             */
+            readonly risk_score?: number | null;
+            /**
+             * @description Risk level
+             * @enum {string|null}
+             */
+            readonly risk_level?: "LOW" | "MEDIUM" | "HIGH" | "PROHIBITED" | null;
+            /**
+             * @description Automated decision
+             * @enum {string|null}
+             */
+            readonly decision?: "AUTO_APPROVE" | "REFER" | "REJECT" | null;
+            /** @description Rule outcomes and reason codes */
+            readonly decision_reasons?: unknown[] | null;
+            /** @description Factor contributions of the onboarding risk score */
+            readonly risk_factors?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Principal that submitted the application */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Manual reviewer
+             */
+            readonly reviewer_id?: string | null;
+            /** @description Principal that approved or rejected after referral */
+            readonly reviewed_by?: string | null;
+            /** @description Checker comment on approval */
+            readonly review_comment?: string | null;
             /**
              * Format: date-time
-             * @description Receipt time
+             * @description Review time
              */
-            received_at: string;
+            readonly reviewed_at?: string | null;
+            /** @description Requests for more information ({message, step_codes, requested_by, requested_at}) */
+            readonly info_requests?: unknown[] | null;
+            /** @description Products requested */
+            product_ids?: unknown[] | null;
+            /** @description Accounts / wallets / cards opened on approval */
+            readonly created_product_refs?: unknown[] | null;
+            /** @description Device used */
+            device_fingerprint?: string | null;
+            /** @description IP address at start (IPv4 or IPv6 address) */
+            ip_address?: string | null;
+            /** @description Coarse location at start */
+            geo_location?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Marketing attribution */
+            utm?: {
+                [key: string]: unknown;
+            } | null;
             /**
-             * Format: decimal
-             * @description Allocated to principal
-             * @example 125.50
+             * Format: date-time
+             * @description Submission time
              */
-            allocated_principal: string;
+            readonly submitted_at?: string | null;
             /**
-             * Format: decimal
-             * @description Allocated to interest
-             * @example 125.50
+             * Format: date-time
+             * @description Completion time
              */
-            allocated_interest: string;
+            readonly completed_at?: string | null;
             /**
-             * Format: decimal
-             * @description Allocated to fees
-             * @example 125.50
+             * Format: date-time
+             * @description Expiry of an idle application
              */
-            allocated_fees: string;
-            /**
-             * Format: decimal
-             * @description Allocated to penalties
-             * @example 125.50
-             */
-            allocated_penalties: string;
-            /**
-             * Format: decimal
-             * @description Unallocated excess
-             * @example 125.50
-             */
-            excess_amount: string;
-            /** @description Allocation per instalment and component */
-            allocation_detail: unknown[];
-            /**
-             * Format: uuid
-             * @description Waterfall used
-             */
-            allocation_rule_id?: string | null;
-            /**
-             * @description Posted or reversed (reversal is a new row)
-             * @enum {string}
-             */
-            status: "POSTED" | "REVERSED";
-            /**
-             * Format: uuid
-             * @description Repayment this row reverses
-             */
-            reversal_of_id?: string | null;
-            /** @description Reversal reason */
-            reason?: string | null;
-            /**
-             * Format: uuid
-             * @description Underlying payment
-             */
-            payment_id?: string | null;
-            /**
-             * Format: uuid
-             * @description Deposit account debited
-             */
-            source_account_id?: string | null;
-            /**
-             * Format: uuid
-             * @description Promise this repayment fulfils
-             */
-            promise_to_pay_id?: string | null;
-            /**
-             * Format: uuid
-             * @description Prepayment quote this repayment settled
-             */
-            prepayment_quote_id?: string | null;
-            /**
-             * Format: uuid
-             * @description Ledger posting
-             */
-            journal_entry_id?: string | null;
-            /** @description Payer reference */
-            external_reference?: string | null;
-            /** @description Client key */
-            readonly idempotency_key: string;
+            expires_at?: string | null;
+            /** @description Reason when rejected */
+            readonly rejection_reason?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -4704,6 +5255,196 @@ export interface components {
             custom_field_4?: string | null;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
+        };
+        /** @description Versioned onboarding journey definition built in the no-code flow builder */
+        OnboardingJourney: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Journey code, e.g. RETAIL_WALLET_KE */
+            code: string;
+            /**
+             * Format: int32
+             * @description Version number (server-managed; see new-version)
+             */
+            readonly version: number;
+            /** @description Journey name */
+            name: string;
+            /**
+             * @description Status (changes through publish / retire)
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PUBLISHED" | "RETIRED";
+            /**
+             * @description Individual or business journey
+             * @enum {string}
+             */
+            customer_type: "INDIVIDUAL" | "SOLE_TRADER" | "COMPANY" | "PARTNERSHIP" | "TRUST" | "NON_PROFIT" | "GOVERNMENT" | "GROUP";
+            /** @description Country the journey applies to (ISO 3166-1 alpha-2) */
+            country?: string | null;
+            /** @description Allowed channels (OnboardingChannel values) */
+            channels: unknown[];
+            /** @description Products that can be opened at the end of the journey */
+            product_ids?: unknown[] | null;
+            /**
+             * @description KYC tier granted on approval
+             * @enum {string}
+             */
+            target_tier: "TIER_0" | "TIER_1" | "TIER_2" | "TIER_3";
+            /** @description Steps, branching conditions and screens (server-driven UI). Step fields are names or typed definitions {name, type (STRING, TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, EMAIL, PHONE, COUNTRY, ENUM, DOCUMENT), label_key, required, pattern, enum, min_length, max_length, min, max} */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** @description Auto-approve / refer / reject rules */
+            decision_rules?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: int32
+             * @description Days before an idle application expires
+             */
+            expiry_days: number;
+            /**
+             * Format: uuid
+             * @description Bank entity holding relationships opened through this journey (default for its applications, e.g. self-service ones)
+             */
+            legal_entity_id?: string | null;
+            /**
+             * Format: date-time
+             * @description Publication time
+             */
+            readonly published_at?: string | null;
+            /** @description Checker who published the version */
+            readonly published_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Retirement time
+             */
+            readonly retired_at?: string | null;
+            /** @description Reason given when retired */
+            readonly retirement_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval for publication
+             */
+            approval_request_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description Execution state of one step of an application */
+        OnboardingStep: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Application
+             */
+            onboarding_application_id: string;
+            /** @description Step code from the journey definition */
+            step_code: string;
+            /**
+             * @description Step type
+             * @enum {string}
+             */
+            step_type: "PHONE_VERIFICATION" | "EMAIL_VERIFICATION" | "PERSONAL_DETAILS" | "BUSINESS_DETAILS" | "ADDRESS" | "DOCUMENT_CAPTURE" | "SELFIE_LIVENESS" | "SCREENING" | "RISK_ASSESSMENT" | "UBO_DECLARATION" | "TAX_DECLARATION" | "PRODUCT_SELECTION" | "TERMS_ACCEPTANCE" | "SIGNATURE" | "CREDENTIAL_SETUP" | "MANUAL_REVIEW" | "CUSTOM";
+            /**
+             * Format: int32
+             * @description Order
+             */
+            sequence: number;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "SKIPPED" | "WAITING_REVIEW";
+            /** @description Data submitted for the step */
+            input?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Results, e.g. check ids and outcomes */
+            output?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: int32
+             * @description Attempts
+             */
+            attempts: number;
+            /**
+             * Format: date-time
+             * @description Start
+             */
+            started_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Completion
+             */
+            completed_at?: string | null;
+            /** @description Last error */
+            error?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+            /** @description Typed field definitions of the step from the journey ({name, type, label_key, required, pattern, enum, min_length, max_length, min, max}), returned by next-step (returned once; never stored) */
+            readonly fields?: unknown[];
         };
         /** @description Saved beneficiary in a customer's payee book */
         Payee: {
@@ -5074,6 +5815,21 @@ export interface components {
             readonly fraud_alert_id?: string | null;
             /** @description Fraud scoring timed out or was unavailable; the configured fallback decided */
             readonly fraud_degraded: boolean;
+            /**
+             * Format: int32
+             * @description Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+             */
+            readonly fraud_rescore_attempts: number;
+            /**
+             * Format: date-time
+             * @description Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+             */
+            readonly fraud_next_rescore_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token
+             */
+            readonly upstream_fraud_score_id?: string | null;
             /** @description Why the payment is ON_HOLD (FRAUD_REVIEW) */
             readonly hold_reason?: string | null;
             /** @description Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) */
@@ -6885,7 +7641,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "RELEASED" | "RELEASE_FAILED" | "REJECTED" | "CANCELLED";
-                kind?: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+                kind?: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
                 account_id?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
@@ -7460,7 +8216,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentMandate"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -7589,7 +8347,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DirectDebitCollection"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -7652,7 +8412,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VirtualAccount"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -7807,7 +8569,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentLink"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -8401,7 +9165,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoanRepayment"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -8522,7 +9288,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreditLineDrawdown"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -8558,7 +9326,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoanRepayment"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -9072,6 +9842,447 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebhookDeliveryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingJourneys: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingJourneyPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplications: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplications: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingGetApplicationsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsSteps: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStepPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsNextStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplicationsSteps: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+                step_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsStepsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsDocuments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplicationsDocuments: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsDocumentsComplete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingApplicationsDocumentsCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingRelatedParties: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRelationshipPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessProvisioningAdmins: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessProvisioningAdminsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessProvisioningUsers: {
+        parameters: {
+            query: {
+                business_customer_id: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUserPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

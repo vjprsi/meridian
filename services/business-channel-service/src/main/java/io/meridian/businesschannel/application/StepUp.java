@@ -37,7 +37,8 @@ public class StepUp {
         Duration max = props.stepUpMaxAge();
         Optional<Duration> age = user.authAge(clock.instant());
         boolean recent = age.isPresent() && !age.get().isNegative() && age.get().compareTo(max) <= 0;
-        boolean strong = props.stepUpAcr().isEmpty() || props.stepUpAcr().contains(user.acr());
+        // a machine-to-machine token authenticates the client at issue (no user acr): only its age counts
+        boolean strong = user.m2m() || props.stepUpAcr().isEmpty() || props.stepUpAcr().contains(user.acr());
         if (recent && strong) {
             return;
         }

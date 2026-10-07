@@ -107,8 +107,8 @@ public class TenantFilter extends OncePerRequestFilter {
             } else if (props.devMode()) {
                 business = BusinessContext.fromDevHeaders(req.getHeader(BusinessContext.BUSINESS_CUSTOMER_HEADER),
                         req.getHeader(BusinessContext.BUSINESS_USER_HEADER), req.getHeader(USER_HEADER),
-                        req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER))
-                        .orElse(null);
+                        req.getHeader(CustomerContext.AUTH_TIME_HEADER), req.getHeader(CustomerContext.ACR_HEADER),
+                        req.getHeader(BusinessContext.BUSINESS_M2M_HEADER)).orElse(null);
             }
         }
         if (business != null) {

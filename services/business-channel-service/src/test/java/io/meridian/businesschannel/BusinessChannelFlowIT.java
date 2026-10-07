@@ -1,11 +1,17 @@
 package io.meridian.businesschannel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
+import io.meridian.web.time.BusinessDates;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -16,6 +22,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
@@ -58,6 +65,11 @@ class BusinessChannelFlowIT {
     static final String PERSON = "0199a000-0000-7000-8000-0000000c00c1";
     static final String ADMIN_A = "0199a000-0000-7000-8000-0000000ba001";
     static final String ADMIN_B = "0199a000-0000-7000-8000-0000000bb001";
+    /** A business without portal users, whose first ADMIN bank staff provision. */
+    static final String BIZ_C = "0199a000-0000-7000-8000-0000000b00c1";
+    /** Booking legal entity of every account (business dates are per entity). */
+    static final String ENTITY = "0199a000-0000-7000-8000-0000000e0001";
+    static final String ONB = "onboarding-service";
 
     static final String DEP = "deposit-service";
     static final String PAY = "payment-service";
@@ -73,6 +85,11 @@ class BusinessChannelFlowIT {
 
     @MockitoBean
     ServiceClient serviceClient;
+
+    /** Business dates per legal entity; null = the clock (UTC) fallback. */
+    @MockitoBean
+    BusinessDates businessDates;
+    volatile LocalDate businessDate;
 
     FakeBank bank;
     final HttpClient http = HttpClient.newHttpClient();
@@ -120,6 +137,24 @@ class BusinessChannelFlowIT {
                 .formatted(BIZ_B));
         bank.add("customer-service", "/v1/customers", """
                 {"id":"%s","customer_type":"INDIVIDUAL","status":"ACTIVE","display_name":"Jane"}""".formatted(PERSON));
+        bank.add("customer-service", "/v1/customers", """
+                {"id":"%s","customer_type":"PARTNERSHIP","status":"ACTIVE","display_name":"Gamma LLP",
+                 "legal_entity_id":"%s"}""".formatted(BIZ_C, ENTITY));
+        bank.rows("customer-service", "/v1/customer-relationships");
+        bank.add("customer-service", "/v1/customer-relationships", """
+                {"customer_id":"%s","related_customer_id":"%s","relationship_type":"DIRECTOR","position_title":"CEO"}"""
+                .formatted(BIZ_A, PERSON));
+        bank.add("customer-service", "/v1/customer-relationships", """
+                {"customer_id":"%s","related_customer_id":"%s","relationship_type":"ULTIMATE_BENEFICIAL_OWNER"}"""
+                .formatted(BIZ_B, PERSON));
+        bank.add(ONB, "/v1/onboarding/journeys", """
+                {"id":"0199a000-0000-7000-8000-00000000a0b1","code":"KYB_KE","status":"PUBLISHED","customer_type":"COMPANY",
+                 "channels":["WEB","BRANCH"],"name":"Business onboarding","decision_rules":{"x":1}}""");
+        bank.add(ONB, "/v1/onboarding/journeys", """
+                {"id":"0199a000-0000-7000-8000-00000000a0b2","code":"RETAIL","status":"PUBLISHED","customer_type":"INDIVIDUAL",
+                 "channels":["WEB"],"name":"Retail onboarding"}""");
+        bank.rows(ONB, "/v1/onboarding/applications");
+        bank.rows("document-service", "/v1/documents");
         a1 = account(BIZ_A, "100001", "KES");
         a2 = account(BIZ_A, "100002", "KES");
         usd = account(BIZ_A, "100003", "USD");
@@ -181,14 +216,18 @@ class BusinessChannelFlowIT {
     }
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void wire() {
         bank.wire(serviceClient);
+        when(businessDates.today(any(UUID.class), any(Supplier.class))).thenAnswer(i -> businessDate != null
+                ? businessDate : ((Supplier<LocalDate>) i.getArgument(1)).get());
+        when(businessDates.today(any(Supplier.class))).thenAnswer(i -> ((Supplier<LocalDate>) i.getArgument(0)).get());
     }
 
     private String account(String business, String number, String ccy) {
         return id(bank.add(DEP, "/v1/deposit-accounts", """
-                {"customer_id":"%s","account_number":"%s","currency":"%s","status":"ACTIVE","ledger_account_id":"%s"}"""
-                .formatted(business, number, ccy, UUID.randomUUID())));
+                {"customer_id":"%s","account_number":"%s","currency":"%s","status":"ACTIVE","ledger_account_id":"%s",
+                 "legal_entity_id":"%s"}""".formatted(business, number, ccy, UUID.randomUUID(), ENTITY)));
     }
 
     // ------------------------------------------------------------------ identity
@@ -495,10 +534,26 @@ class BusinessChannelFlowIT {
         assertProblem(call(approver1, "POST", "/v1/business/payments/" + onA2 + "/approve", "{}"), 403, "not_entitled");
         // daily limit of the maker: 75,000 KES; 5,000 + 999.99 + 60,000 + 2,000 + 3,000 count today (the cancelled
         // 1,000 and the rejected 1,200 do not): 70,999.99 + 5,000 is above it
-        assertProblem(call(maker, "POST", "/v1/business/payments/" + draft(maker, "5000") + "/submit", null), 422,
+        String over = draft(maker, "5000");
+        assertProblem(call(maker, "POST", "/v1/business/payments/" + over + "/submit", null), 422,
                 "daily_limit_exceeded");
         assertThat(rows("select count(*) from business_action where outcome = 'DENIED' and error_code = 'daily_limit_exceeded'"))
                 .isEqualTo(1);
+        // the limit counts per business date of the debit account's legal entity, not per UTC day: once the entity
+        // has rolled to its next business date, the maker starts from zero again
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        assertThat(rows("select count(*) from business_payment where initiated_by = '" + maker.user()
+                + "' and business_date = '" + today + "'")).isGreaterThanOrEqualTo(5);
+        businessDate = today.plusDays(1);
+        try {
+            JsonNode next = ok(call(maker, "POST", "/v1/business/payments/" + over + "/submit", null));
+            assertThat(next.path("status").asString()).isEqualTo("PENDING_APPROVAL");
+            assertThat(next.path("business_date").asString()).isEqualTo(today.plusDays(1).toString());
+            verify(businessDates, atLeastOnce()).today(eq(UUID.fromString(ENTITY)), any());
+            ok(call(maker, "POST", "/v1/business/payments/" + over + "/cancel", "{}"));
+        } finally {
+            businessDate = null;
+        }
     }
 
     // ------------------------------------------------------------------ bulk and payroll
@@ -754,6 +809,239 @@ class BusinessChannelFlowIT {
         assertThat(ok(call(adminA, "GET", "/v1/business/webhook-endpoints", null)).path("data")).hasSize(1);
     }
 
+    @Test
+    @Order(41)
+    void operationsGoThroughTheApprovalMatrixWhenARuleOfTheirTypeCoversThem() throws Exception {
+        // operation rules do not overlap the payment bands (ALL rules never cover operations)
+        ok(call(adminA, "POST", "/v1/business/approval-rules", """
+                {"name":"Repayments","applies_to":"LOAN_REPAYMENT","currency":"KES","min_amount":"100","required_approvals":1}"""));
+        ok(call(adminA, "POST", "/v1/business/approval-rules", """
+                {"name":"Links","applies_to":"PAYMENT_LINK","currency":"KES","min_amount":"0","required_approvals":2}"""));
+        ok(call(adminA, "POST", "/v1/business/approval-rules", """
+                {"name":"Draws","applies_to":"CREDIT_LINE_DRAW","currency":"KES","min_amount":"0","required_approvals":1}"""));
+        assertProblem(call(adminA, "POST", "/v1/business/approval-rules", """
+                {"name":"Clash","applies_to":"LOAN_REPAYMENT","currency":"KES","min_amount":"500","required_approvals":1}"""),
+                409, "approval_rule_overlap");
+
+        // below the band: immediate, as before
+        int repaysBefore = bank.writes("loan-service", "/v1/loans/" + loanA + "/repay").size();
+        HttpResponse<String> small = call(maker, "POST", "/v1/business/loans/" + loanA + "/repay",
+                "{\"amount\":\"50\",\"source_account_id\":\"%s\"}".formatted(a1));
+        assertThat(small.statusCode()).as(small.body()).isEqualTo(200);
+        assertThat(bank.writes("loan-service", "/v1/loans/" + loanA + "/repay")).hasSize(repaysBefore + 1);
+
+        // covered: held for approval (202), nothing reaches loan-service until the final approval
+        String key = UUID.randomUUID().toString();
+        String body = "{\"amount\":\"500\",\"source_account_id\":\"%s\"}".formatted(a1);
+        HttpResponse<String> held = send(maker, "POST", "/v1/business/loans/" + loanA + "/repay", body, true, key);
+        assertThat(held.statusCode()).as(held.body()).isEqualTo(202);
+        JsonNode op = json.readTree(held.body());
+        String opId = id(op);
+        assertThat(op.path("kind").asString()).isEqualTo("LOAN_REPAYMENT");
+        assertThat(op.path("status").asString()).isEqualTo("PENDING_APPROVAL");
+        assertThat(op.path("required_approvals").asInt()).isEqualTo(1);
+        assertThat(op.path("operation").path("path").asString()).isEqualTo("/v1/loans/" + loanA + "/repay");
+        assertThat(bank.writes("loan-service", "/v1/loans/" + loanA + "/repay")).hasSize(repaysBefore + 1);
+        // a retry with the same key replays the hold, never a second one
+        HttpResponse<String> replay = send(maker, "POST", "/v1/business/loans/" + loanA + "/repay", body, true, key);
+        assertThat(replay.statusCode()).isEqualTo(202);
+        assertThat(id(json.readTree(replay.body()))).isEqualTo(opId);
+        assertThat(ok(call(approver1, "GET", "/v1/business/approval-queue", null)).path("data").toString()).contains(opId);
+        // the maker never approves; payment-only actions refuse it
+        assertProblem(call(maker, "POST", "/v1/business/payments/" + opId + "/approve", "{}"), 403, "role_not_allowed");
+        JsonNode released = ok(call(approver1, "POST", "/v1/business/payments/" + opId + "/approve", "{}"));
+        assertThat(released.path("status").asString()).isEqualTo("RELEASED");
+        assertThat(released.path("result_id").asString()).isNotBlank();
+        FakeBank.Call repay = bank.lastWrite("loan-service", "/v1/loans/" + loanA + "/repay");
+        assertThat(repay.key()).isEqualTo("bzp-release:" + opId);
+        assertThat(repay.principal()).isEqualTo("business-user:" + maker.user());
+        assertThat(repay.body().path("amount").asString()).isEqualTo("500");
+        assertThat(repay.body().path("source_account_id").asString()).isEqualTo(a1);
+        // released exactly once: a retry returns the released row and calls nothing
+        ok(call(adminA, "POST", "/v1/business/payments/" + opId + "/release", null));
+        assertThat(bank.writes("loan-service", "/v1/loans/" + loanA + "/repay")).hasSize(repaysBefore + 2);
+        assertThat(ok(call(maker, "GET", "/v1/business/payments/" + opId + "/downstream", null)).path("type").asString())
+                .isEqualTo("OPERATION");
+
+        // two approvers for payment links; the link is created only after the second, for the business
+        int linksBefore = bank.writes(PAY, "/v1/payment-links").size();
+        HttpResponse<String> link = call(maker, "POST", "/v1/business/payment-links",
+                "{\"credit_account_id\":\"%s\",\"title\":\"Invoice 10\",\"amount\":\"10.00\",\"customer_id\":\"%s\"}"
+                        .formatted(a1, BIZ_B));
+        assertThat(link.statusCode()).as(link.body()).isEqualTo(202);
+        String linkOp = id(json.readTree(link.body()));
+        assertThat(ok(call(approver1, "POST", "/v1/business/payments/" + linkOp + "/approve", "{}")).path("status")
+                .asString()).isEqualTo("PENDING_APPROVAL");
+        assertThat(bank.writes(PAY, "/v1/payment-links")).hasSize(linksBefore);
+        assertThat(ok(call(approver2, "POST", "/v1/business/payments/" + linkOp + "/approve", "{}")).path("status")
+                .asString()).isEqualTo("RELEASED");
+        FakeBank.Call created = bank.lastWrite(PAY, "/v1/payment-links");
+        assertThat(created.body().path("customer_id").asString()).isEqualTo(BIZ_A);
+        assertThat(created.key()).isEqualTo("bzp-release:" + linkOp);
+
+        // a draw by the admin needs another approver (never self-approval)
+        HttpResponse<String> draw = call(adminA, "POST", "/v1/business/credit-lines/" + lineA + "/draw",
+                "{\"amount\":\"70\",\"destination_account_id\":\"%s\"}".formatted(a1));
+        assertThat(draw.statusCode()).as(draw.body()).isEqualTo(202);
+        String drawOp = id(json.readTree(draw.body()));
+        assertProblem(call(adminA, "POST", "/v1/business/payments/" + drawOp + "/approve", "{}"), 403,
+                "self_approval_forbidden");
+        assertThat(ok(call(approver3, "POST", "/v1/business/payments/" + drawOp + "/approve", "{}")).path("status")
+                .asString()).isEqualTo("RELEASED");
+        assertThat(bank.lastWrite("loan-service", "/v1/credit-lines/" + lineA + "/draw").key())
+                .isEqualTo("bzp-release:" + drawOp);
+        // operations are not counted against the daily limit and keep their own kind in the list
+        assertThat(ok(call(maker, "GET", "/v1/business/payments?kind=LOAN_REPAYMENT", null)).path("data")).hasSize(1);
+    }
+
+    // ------------------------------------------------------------------ bank staff provisioning
+
+    @Test
+    @Order(42)
+    void bankStaffProvisionTheFirstAdminOfABusiness() throws Exception {
+        String req = "{\"business_customer_id\":\"%s\",\"display_name\":\"Gina Gamma\",\"email\":\"Gina@Gamma.test\"}";
+        // never with a business identity (dev mode has no scopes: the service refuses channel identities itself)
+        assertProblem(call(adminA, "POST", "/v1/business-provisioning/admins", req.formatted(BIZ_C)), 403,
+                "staff_identity_required");
+        assertProblem(staff("POST", "/v1/business-provisioning/admins", req.formatted(PERSON)), 403, "business_not_eligible");
+        JsonNode admin = ok(staff("POST", "/v1/business-provisioning/admins", req.formatted(BIZ_C)));
+        assertThat(admin.path("role").asString()).isEqualTo("ADMIN");
+        assertThat(admin.path("user_type").asString()).isEqualTo("HUMAN");
+        assertThat(admin.path("email").asString()).isEqualTo("gina@gamma.test");
+        assertThat(admin.path("provisioned_by").asString()).isEqualTo("staff:ops");
+        assertProblem(staff("POST", "/v1/business-provisioning/admins", req.formatted(BIZ_C)), 409, "business_has_admin");
+        assertProblem(staff("POST", "/v1/business-provisioning/admins", req.formatted(BIZ_A)), 409, "business_has_admin");
+        // the returned id is the business_user_id of the person's sign-in
+        Who gina = new Who(BIZ_C, id(admin));
+        assertThat(ok(call(gina, "GET", "/v1/business/me", null)).path("user").path("role").asString()).isEqualTo("ADMIN");
+        assertThat(ok(staff("GET", "/v1/business-provisioning/users?business_customer_id=" + BIZ_C, null)).path("data"))
+                .hasSize(1);
+        assertThat(ok(call(gina, "GET", "/v1/business/activity", null)).path("data").toString())
+                .contains("businessProvisioningAdmins");
+        assertThat(events("channels.business_user.changed")).isGreaterThanOrEqualTo(1);
+    }
+
+    // ------------------------------------------------------------------ machine-to-machine
+
+    @Test
+    @Order(43)
+    void apiClientsActAsTheirTechnicalUserWithItsRoleAndEntitlements() throws Exception {
+        assertProblem(call(adminA, "POST", "/v1/business/api-clients",
+                "{\"name\":\"Treasury bot\",\"technical_role\":\"APPROVER\"}"), 422, "technical_role_not_allowed");
+        assertProblem(call(adminA, "POST", "/v1/business/api-clients",
+                "{\"name\":\"Treasury bot\",\"auth_method\":\"PRIVATE_KEY_JWT\"}"), 422, "jwks_uri_required");
+        JsonNode client = ok(call(adminA, "POST", "/v1/business/api-clients",
+                "{\"name\":\"Treasury bot\",\"technical_role\":\"MAKER\"}"));
+        FakeBank.Call reg = bank.lastWrite("identity-service", "/v1/api-clients");
+        String technical = reg.body().path("business_user_id").asString();
+        assertThat(reg.body().path("business_customer_id").asString()).isEqualTo(BIZ_A);
+        assertThat(reg.body().path("auth_method").asString()).isEqualTo("CLIENT_SECRET_BASIC");
+        assertThat(reg.body().path("allowed_scopes").toString()).isEqualTo("[\"channels:business\"]");
+        JsonNode tech = ok(call(adminA, "GET", "/v1/business/users/" + technical, null));
+        assertThat(tech.path("user_type").asString()).isEqualTo("TECHNICAL");
+        assertThat(tech.path("role").asString()).isEqualTo("MAKER");
+        String clientId = client.path("client_id").asString();
+        assertThat(tech.path("client_id").asString()).isEqualTo(clientId);
+
+        Who bot = new Who(BIZ_A, technical);
+        assertThat(ok(m2m(bot, clientId, "GET", "/v1/business/me", null)).path("user").path("user_type").asString())
+                .isEqualTo("TECHNICAL");
+        // a technical user never signs in interactively; a token of another client, or for a human user, is refused
+        assertProblem(call(bot, "GET", "/v1/business/me", null), 403, "business_user_type_mismatch");
+        assertProblem(m2m(bot, "cli_other", "GET", "/v1/business/me", null), 403, "business_user_type_mismatch");
+        assertProblem(m2m(maker, clientId, "GET", "/v1/business/me", null), 403, "business_user_type_mismatch");
+        // the admin entitles it like any user; it drafts and submits, approvals stay with people
+        assertProblem(m2m(bot, clientId, "POST", "/v1/business/payments",
+                "{\"kind\":\"DOMESTIC\",\"debtor_account_id\":\"%s\",\"payee_id\":\"%s\",\"amount\":\"15\"}"
+                        .formatted(a1, payeeA)), 404, "not_found");
+        entitle(bot, a1, true, true, false, null);
+        String botPayment = id(ok(m2m(bot, clientId, "POST", "/v1/business/payments",
+                "{\"kind\":\"DOMESTIC\",\"debtor_account_id\":\"%s\",\"payee_id\":\"%s\",\"amount\":\"15\"}"
+                        .formatted(a1, payeeA))));
+        assertThat(ok(m2m(bot, clientId, "POST", "/v1/business/payments/" + botPayment + "/submit", null))
+                .path("status").asString()).isEqualTo("PENDING_APPROVAL");
+        assertProblem(m2m(bot, clientId, "POST", "/v1/business/payments/" + botPayment + "/approve", "{}"), 403,
+                "role_not_allowed");
+        assertProblem(call(adminA, "PATCH", "/v1/business/users/" + technical, "{\"role\":\"ADMIN\"}"), 422,
+                "technical_role_not_allowed");
+        assertThat(ok(call(approver1, "POST", "/v1/business/payments/" + botPayment + "/approve", "{}")).path("status")
+                .asString()).isEqualTo("RELEASED");
+        // suspending the client suspends its technical user at once
+        ok(call(adminA, "POST", "/v1/business/api-clients/" + id(client) + "/suspend", "{\"reason\":\"rotated\"}"));
+        assertProblem(m2m(bot, clientId, "GET", "/v1/business/me", null), 403, "business_user_inactive");
+    }
+
+    // ------------------------------------------------------------------ KYB through the channel
+
+    @Test
+    @Order(44)
+    void kybRunsThroughTheChannelForTheBusinessOwnApplicationsOnly() throws Exception {
+        JsonNode journeys = ok(call(adminA, "GET", "/v1/business/onboarding/journeys", null));
+        assertThat(journeys.path("data")).hasSize(1);
+        assertThat(journeys.path("data").get(0).has("decision_rules")).isFalse();
+        assertProblem(call(maker, "GET", "/v1/business/onboarding/journeys", null), 403, "role_not_allowed");
+        assertProblem(call(adminA, "POST", "/v1/business/onboarding/applications",
+                "{\"onboarding_journey_id\":\"0199a000-0000-7000-8000-00000000a0b2\"}"), 422, "journey_not_available");
+        JsonNode app = ok(call(adminA, "POST", "/v1/business/onboarding/applications",
+                "{\"onboarding_journey_id\":\"0199a000-0000-7000-8000-00000000a0b1\",\"customer_id\":\"%s\"}"
+                        .formatted(BIZ_B)));
+        FakeBank.Call start = bank.lastWrite(ONB, "/v1/onboarding/applications");
+        assertThat(start.body().path("customer_id").asString()).isEqualTo(BIZ_A);
+        assertThat(start.body().path("channel").asString()).isEqualTo("WEB");
+        // risk and review data are never shown to the business
+        assertThat(app.has("risk_score")).isFalse();
+        assertThat(app.has("decision")).isFalse();
+        assertThat(app.has("reviewed_by")).isFalse();
+        String appId = id(app);
+        for (String[] s : new String[][] {{"COMPANY", "BUSINESS_DETAILS", "1"}, {"UBO", "UBO_DECLARATION", "2"},
+                {"DOCS", "DOCUMENT_CAPTURE", "3"}}) {
+            bank.add(ONB, "/v1/onboarding/applications/" + appId + "/steps", """
+                    {"onboarding_application_id":"%s","step_code":"%s","step_type":"%s","sequence":%s,"status":"PENDING"}"""
+                    .formatted(appId, s[0], s[1], s[2]));
+        }
+        assertThat(ok(call(adminA, "GET", "/v1/business/onboarding/applications/" + appId + "/steps", null)).path("data"))
+                .hasSize(3);
+        JsonNode ubo = ok(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/steps/UBO", """
+                {"input":{"ubos":[{"name":"Jane Doe","ownership_percentage":"60","country":"KE"}],
+                          "directors":[{"name":"Jane Doe","position":"CEO"}]}}"""));
+        assertThat(ubo.path("status").asString()).isEqualTo("COMPLETED");
+        assertThat(bank.lastWrite(ONB, "/v1/onboarding/applications/" + appId + "/steps/UBO").body().path("input")
+                .path("ubos").get(0).path("name").asString()).isEqualTo("Jane Doe");
+        assertProblem(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/steps/NOPE",
+                "{\"input\":{}}"), 422, "unknown_step");
+        JsonNode upload = ok(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/documents", """
+                {"step_code":"DOCS","document_type":"CORPORATE_DOCUMENT","file_name":"coi.pdf",
+                 "content_type":"application/pdf"}"""));
+        String docId = upload.path("document_id").asString();
+        assertThat(upload.path("url").asString()).startsWith("https://");
+        FakeBank.Call doc = bank.writes("document-service", "/v1/documents").get(0);
+        assertThat(doc.body().path("owner_type").asString()).isEqualTo("ONBOARDING_APPLICATION");
+        assertThat(doc.body().path("owner_id").asString()).isEqualTo(appId);
+        ok(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/documents/" + docId + "/complete",
+                "{\"size_bytes\":1234,\"checksum\":\"%s\"}".formatted("a".repeat(64))));
+        assertThat(ok(call(adminA, "GET", "/v1/business/onboarding/applications/" + appId + "/documents", null))
+                .path("data")).hasSize(1);
+        assertThat(ok(call(adminA, "GET", "/v1/business/onboarding/applications", null)).path("data")).hasSize(1);
+        assertThat(ok(call(adminA, "GET", "/v1/business/onboarding/related-parties", null)).path("data")).hasSize(1);
+
+        // another business never sees, changes or submits A's application
+        int writes = bank.writes().size();
+        assertProblem(call(adminB, "GET", "/v1/business/onboarding/applications/" + appId, null), 404, "not_found");
+        assertProblem(call(adminB, "POST", "/v1/business/onboarding/applications/" + appId + "/steps/UBO",
+                "{\"input\":{}}"), 404, "not_found");
+        assertProblem(call(adminB, "POST", "/v1/business/onboarding/applications/" + appId + "/submit", null), 404,
+                "not_found");
+        assertThat(ok(call(adminB, "GET", "/v1/business/onboarding/applications", null)).path("data")).isEmpty();
+        assertThat(bank.writes()).hasSize(writes);
+
+        assertProblem(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/submit", null, false), 401,
+                "step_up_required");
+        assertThat(ok(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/submit", null))
+                .path("status").asString()).isEqualTo("SUBMITTED");
+        assertProblem(call(adminA, "POST", "/v1/business/onboarding/applications/" + appId + "/steps/UBO",
+                "{\"input\":{}}"), 409, "application_closed");
+    }
+
     // ------------------------------------------------------------------ reporting
 
     @Test
@@ -870,6 +1158,33 @@ class BusinessChannelFlowIT {
                 .header("X-Auth-Time", String.valueOf(authTime));
         if (!method.equals("GET")) {
             b.header("Idempotency-Key", key);
+        }
+        b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A bank staff request (dev mode: tenant and user headers, no channel identity). */
+    private HttpResponse<String> staff(String method, String path, String body) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(base() + path))
+                .header("Content-Type", "application/json").header("X-Tenant-Id", TENANT).header("X-User", "staff:ops");
+        if (!method.equals("GET")) {
+            b.header("Idempotency-Key", UUID.randomUUID().toString());
+        }
+        b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A machine-to-machine request of a business API client (dev mode: X-Business-M2M-Client). */
+    private HttpResponse<String> m2m(Who who, String clientId, String method, String path, String body) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(base() + path))
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-Id", TENANT)
+                .header("X-Business-Customer-Id", who.business())
+                .header("X-Business-User-Id", who.user())
+                .header("X-Business-M2M-Client", clientId)
+                .header("X-Auth-Time", String.valueOf(Instant.now().minusSeconds(5).getEpochSecond()));
+        if (!method.equals("GET")) {
+            b.header("Idempotency-Key", UUID.randomUUID().toString());
         }
         b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
         return http.send(b.build(), HttpResponse.BodyHandlers.ofString());

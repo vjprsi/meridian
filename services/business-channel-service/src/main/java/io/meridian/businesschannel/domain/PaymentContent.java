@@ -17,18 +17,22 @@ import java.util.function.Function;
 public final class PaymentContent {
     public static final List<String> FIELDS = List.of("kind", "debtor_account_id", "payee_id", "creditor_account_id",
             "amount", "currency", "instructed_amount", "instructed_currency", "fx_quote_id", "reference", "remittance",
-            "purpose_code", "requested_execution_date", "name", "items");
+            "purpose_code", "requested_execution_date", "name", "items", "operation");
 
     private PaymentContent() {}
 
     /**
      * Checksum over the content fields. {@code value} renders a field (null when absent); amounts are normalised so
-     * 100, 100.0 and 100.00 hash alike.
+     * 100, 100.0 and 100.00 hash alike. {@code operation} (the canonical downstream request of a non-payment operation)
+     * only counts when present, so checksums of payments stored before operations existed are unchanged.
      */
     public static String checksum(Function<String, String> value) {
         StringBuilder sb = new StringBuilder();
         for (String f : FIELDS) {
             String v = value.apply(f);
+            if (v == null && f.equals("operation")) {
+                continue;
+            }
             if (v != null && (f.equals("amount") || f.equals("instructed_amount"))) {
                 v = new BigDecimal(v).stripTrailingZeros().toPlainString();
             }

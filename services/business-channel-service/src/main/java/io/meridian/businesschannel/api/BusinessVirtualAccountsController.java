@@ -29,9 +29,9 @@ public class BusinessVirtualAccountsController implements BusinessVirtualAccount
     }
 
     @Override
-    public ResponseEntity<VirtualAccount> businessVirtualAccountsCreate(String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessVirtualAccountsCreate(String idempotencyKey,
                                                                        BusinessVirtualAccountsCreateRequest body) {
-        return http.ok(collections.createVirtualAccount(http.body(body), idempotencyKey), VirtualAccount.class);
+        return http.outcome(idempotencyKey, body, () -> collections.createVirtualAccount(http.body(body), idempotencyKey));
     }
 
     @Override

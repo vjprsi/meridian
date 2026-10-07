@@ -117,6 +117,11 @@ public class UserAdminService {
         String role = Req.text(req, "role");
         if (role != null && !role.equals(existing.path("role").asString())) {
             role(role);
+            if ("TECHNICAL".equals(existing.path("user_type").asString("HUMAN"))
+                    && !IntegrationService.TECHNICAL_ROLES.contains(role)) {
+                throw ApiException.unprocessable("technical_role_not_allowed",
+                        "An API client's technical user is a MAKER or a VIEWER (it never approves or administers)");
+            }
             if (id.equals(userId())) {
                 throw ApiException.unprocessable("own_role_change_forbidden", "Administrators cannot change their own role");
             }

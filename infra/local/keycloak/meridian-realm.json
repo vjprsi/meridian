@@ -400,6 +400,14 @@
       }
     },
     {
+      "name": "channels:admin",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
       "name": "meridian:internal",
       "protocol": "openid-connect",
       "attributes": {
@@ -610,7 +618,8 @@
         "wallets:read",
         "wallets:write",
         "wallets:*",
-        "meridian:admin"
+        "meridian:admin",
+        "channels:admin"
       ],
       "optionalClientScopes": [
         "platform:operator",
@@ -757,9 +766,93 @@
         "wallets:write",
         "wallets:*",
         "meridian:admin",
+        "channels:admin",
         "meridian:internal",
         "platform:operator"
       ]
+    },
+    {
+      "clientId": "meridian-business-m2m-demo",
+      "name": "Demo business API client (machine-to-machine)",
+      "publicClient": false,
+      "secret": "meridian-business-m2m-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "business_customer_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "business_customer_id",
+            "claim.value": "0199a000-0000-7000-8000-0000000b0001",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "business_user_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "business_user_id",
+            "claim.value": "0199a000-0000-7000-8000-0000000b0a03",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "m2m",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "m2m",
+            "claim.value": "true",
+            "jsonType.label": "boolean",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "0199a000-0000-7000-8000-00000000000a",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "meridian-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "channels:business"
+      ],
+      "optionalClientScopes": []
     },
     {
       "clientId": "meridian-cell-router",

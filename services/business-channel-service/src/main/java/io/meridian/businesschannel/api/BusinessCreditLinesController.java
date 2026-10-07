@@ -4,10 +4,8 @@ import io.meridian.businesschannel.api.generated.BusinessCreditLinesApi;
 import io.meridian.businesschannel.api.generated.model.BusinessCreditLinesDrawRequest;
 import io.meridian.businesschannel.api.generated.model.BusinessCreditLinesRepayRequest;
 import io.meridian.businesschannel.api.generated.model.CreditLine;
-import io.meridian.businesschannel.api.generated.model.CreditLineDrawdown;
 import io.meridian.businesschannel.api.generated.model.CreditLineDrawdownPage;
 import io.meridian.businesschannel.api.generated.model.CreditLinePage;
-import io.meridian.businesschannel.api.generated.model.LoanRepayment;
 import io.meridian.businesschannel.application.LendingService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -41,14 +39,14 @@ public class BusinessCreditLinesController implements BusinessCreditLinesApi {
     }
 
     @Override
-    public ResponseEntity<CreditLineDrawdown> businessCreditLinesDraw(UUID creditLineId, String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessCreditLinesDraw(UUID creditLineId, String idempotencyKey,
                                                                       BusinessCreditLinesDrawRequest body) {
-        return http.ok(lending.draw(creditLineId, http.body(body), idempotencyKey), CreditLineDrawdown.class);
+        return http.outcome(idempotencyKey, body, () -> lending.draw(creditLineId, http.body(body), idempotencyKey));
     }
 
     @Override
-    public ResponseEntity<LoanRepayment> businessCreditLinesRepay(UUID creditLineId, String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessCreditLinesRepay(UUID creditLineId, String idempotencyKey,
                                                                   BusinessCreditLinesRepayRequest body) {
-        return http.ok(lending.repayLine(creditLineId, http.body(body), idempotencyKey), LoanRepayment.class);
+        return http.outcome(idempotencyKey, body, () -> lending.repayLine(creditLineId, http.body(body), idempotencyKey));
     }
 }

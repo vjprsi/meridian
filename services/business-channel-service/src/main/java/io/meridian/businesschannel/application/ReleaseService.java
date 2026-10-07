@@ -40,6 +40,8 @@ public class ReleaseService {
     static final String PAY = "payment-service";
     static final String TABLE = PaymentService.TABLE;
     static final Set<String> RELEASABLE = Set.of("APPROVED", "RELEASE_FAILED");
+    /** Services a held operation may be released to (defence in depth: the request was built by the channel). */
+    static final Set<String> OPERATION_SERVICES = Set.of("loan-service", "payment-service", "deposit-service");
     private static final Logger log = LoggerFactory.getLogger(ReleaseService.class);
 
     private final Rows rows;
@@ -68,13 +70,16 @@ public class ReleaseService {
             UUID initiator = PaymentService.initiator(p);
             List<UUID> approvers = approvers(id);
             try {
-                ObjectNode c = PaymentService.BATCH_KINDS.contains(p.path("kind").asString())
-                        ? releaseBatch(id, p, initiator, approvers) : releaseSingle(id, p, initiator, approvers);
+                String kind = p.path("kind").asString();
+                ObjectNode c = p.hasNonNull("operation") ? releaseOperation(id, p, initiator)
+                        : PaymentService.BATCH_KINDS.contains(kind) ? releaseBatch(id, p, initiator, approvers)
+                        : releaseSingle(id, p, initiator, approvers);
                 c.put("status", "RELEASED").put("released_at", Clocks.now().toString()).putNull("release_error");
                 ObjectNode r = rows.update(TABLE, id, c);
                 outbox.publish("channels.business_payment.released", TABLE, id, r);
-                audit.succeeded("businessPaymentRelease", "PAYMENT", id,
-                        r.hasNonNull("payment_id") ? r.path("payment_id").asString() : r.path("bulk_payment_id").asString(null));
+                audit.succeeded("businessPaymentRelease", "PAYMENT", id, r.hasNonNull("payment_id")
+                        ? r.path("payment_id").asString() : r.hasNonNull("bulk_payment_id")
+                        ? r.path("bulk_payment_id").asString() : r.path("result_id").asString(null));
                 return r;
             } catch (ApiException e) {
                 log.warn("release of business payment {} failed: {} {}", id, e.code(), e.getMessage());
@@ -92,6 +97,30 @@ public class ReleaseService {
             status = relayApprovals(id, "/v1/payments/" + paymentId, approvers, status);
         }
         return rows.object().put("payment_id", paymentId).put("downstream_status", status);
+    }
+
+    /**
+     * A non-payment operation (repayment, draw, mandate, collection, virtual account, payment link): the stored request,
+     * approved with the business payment's checksum, sent once as the initiator with {@code bzp-release:<id>}.
+     */
+    private ObjectNode releaseOperation(UUID id, ObjectNode p, UUID initiator) {
+        JsonNode op = p.get("operation");
+        String service = op.path("service").asString();
+        String path = op.path("path").asString();
+        if (!OPERATION_SERVICES.contains(service) || !path.startsWith("/v1/")) {
+            throw ApiException.unprocessable("invalid_operation", "The stored operation is not releasable");
+        }
+        JsonNode created = down.postAs(initiator, service, path, op.get("body"), "bzp-release:" + id);
+        ObjectNode c = rows.object().put("downstream_status", created.path("status").asString(null));
+        String resultId = created.path("id").asString(null);
+        try {
+            if (resultId != null) {
+                c.put("result_id", UUID.fromString(resultId).toString());
+            }
+        } catch (IllegalArgumentException e) {
+            // not a uuid: nothing to record
+        }
+        return c;
     }
 
     private ObjectNode releaseBatch(UUID id, ObjectNode p, UUID initiator, List<UUID> approvers) {

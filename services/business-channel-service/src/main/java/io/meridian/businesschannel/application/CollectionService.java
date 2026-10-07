@@ -19,7 +19,8 @@ import tools.jackson.databind.node.ObjectNode;
  * Collections of the business: direct-debit mandates (the business collects as creditor) and their collections,
  * virtual accounts routing credits to its accounts, and payment links. Every write needs a MAKER or ADMIN entitled to
  * initiate on the account credited; bodies are rebuilt here (customer, currency and direction are never taken from the
- * request).
+ * request). Creating a mandate, a collection, a virtual account or a payment link goes through the approval matrix
+ * when a rule of its type covers it ({@link OperationApprovals}); otherwise it acts immediately.
  */
 @Service
 public class CollectionService {
@@ -31,12 +32,15 @@ public class CollectionService {
     private final Access access;
     private final StepUp stepUp;
     private final ActionAudit audit;
+    private final OperationApprovals approvals;
 
-    public CollectionService(Downstream down, Access access, StepUp stepUp, ActionAudit audit) {
+    public CollectionService(Downstream down, Access access, StepUp stepUp, ActionAudit audit,
+                             OperationApprovals approvals) {
         this.down = down;
         this.access = access;
         this.stepUp = stepUp;
         this.audit = audit;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ mandates
@@ -50,7 +54,7 @@ public class CollectionService {
         return access.mandate(id, "businessMandatesGet");
     }
 
-    public JsonNode createMandate(JsonNode req, String key) {
+    public OperationApprovals.Outcome createMandate(JsonNode req, String key) {
         String action = "businessMandatesCreate";
         access.requireRole(action, "MANDATE", null, "ADMIN", "MAKER");
         UUID creditorAccount = Req.uuid(req, "creditor_account_id", true);
@@ -85,8 +89,9 @@ public class CollectionService {
             body.put("signed_at", Req.text(req, "signed_at"));
         }
         stepUp.require(action, "ACCOUNT", creditorAccount);
-        JsonNode created = down.post(PAYMENTS, "/v1/payment-mandates", body, key, "create");
-        audit.succeeded(action, "ACCOUNT", creditorAccount, created.path("id").asString(null));
+        OperationApprovals.Outcome created = approvals.run("MANDATE", account, max, "Mandate "
+                + body.path("mandate_reference").asString(), PAYMENTS, "/v1/payment-mandates", body, key, "create");
+        audit.succeeded(action, "ACCOUNT", creditorAccount, created.body().path("id").asString(null));
         return created;
     }
 
@@ -107,11 +112,11 @@ public class CollectionService {
                 r -> id.toString().equals(r.path("mandate_id").asString(null)));
     }
 
-    public JsonNode addCollection(UUID id, JsonNode req, String key) {
+    public OperationApprovals.Outcome addCollection(UUID id, JsonNode req, String key) {
         String action = "businessMandatesAddCollections";
         access.requireRole(action, "MANDATE", id, "ADMIN", "MAKER");
         JsonNode m = access.mandate(id, action);
-        requireCreditorAccount(m, action);
+        JsonNode creditAccount = requireCreditorAccount(m, action);
         if (!"OUTBOUND".equals(m.path("direction").asString(""))) {
             throw ApiException.unprocessable("not_a_collection_mandate", "The business is not the creditor of this mandate");
         }
@@ -132,24 +137,30 @@ public class CollectionService {
             throw ApiException.unprocessable("invalid_value", "sequence_type must be one of " + SEQUENCE_TYPES);
         }
         stepUp.require(action, "MANDATE", id);
-        JsonNode created = down.post(PAYMENTS, "/v1/direct-debit-collections", down.json().createObjectNode()
+        ObjectNode body = down.json().createObjectNode()
                 .put("mandate_id", id.toString())
                 .put("amount", amount.toPlainString())
                 .put("currency", m.path("currency").asString())
                 .put("due_date", due.toString())
-                .put("sequence_type", seq), key, "collection");
-        audit.succeeded(action, "MANDATE", id, created.path("id").asString(null));
+                .put("sequence_type", seq);
+        OperationApprovals.Outcome created = creditAccount == null
+                ? new OperationApprovals.Outcome(down.post(PAYMENTS, "/v1/direct-debit-collections", body, key, "collection"), false)
+                : approvals.run("COLLECTION", creditAccount, amount, "Collection " + m.path("mandate_reference").asString(""),
+                        PAYMENTS, "/v1/direct-debit-collections", body, key, "collection");
+        audit.succeeded(action, "MANDATE", id, created.body().path("id").asString(null));
         return created;
     }
 
-    private void requireCreditorAccount(JsonNode mandate, String action) {
+    /** The mandate's credited account (the user must be entitled to initiate on it); null for an admin when none. */
+    private JsonNode requireCreditorAccount(JsonNode mandate, String action) {
         UUID account = Req.rowUuid(mandate, "creditor_account_id");
         if (account != null) {
-            access.account(account, Need.INITIATE, action);
+            return access.account(account, Need.INITIATE, action);
         } else if (!CurrentUser.admin()) {
             throw access.notEntitled(action, "MANDATE", Req.rowUuid(mandate, "id"),
                     "Only an administrator can manage a mandate without a credited account");
         }
+        return null;
     }
 
     // ------------------------------------------------------------------ virtual accounts
@@ -182,7 +193,7 @@ public class CollectionService {
         return down.get(DEPOSITS, "/v1/virtual-accounts/" + id + "/transactions", Query.none().paging(limit, cursor));
     }
 
-    public JsonNode createVirtualAccount(JsonNode req, String key) {
+    public OperationApprovals.Outcome createVirtualAccount(JsonNode req, String key) {
         String action = "businessVirtualAccountsCreate";
         access.requireRole(action, "VIRTUAL_ACCOUNT", null, "ADMIN", "MAKER");
         UUID master = Req.uuid(req, "master_account_id", true);
@@ -193,14 +204,16 @@ public class CollectionService {
                 .put("owner_reference", Req.text(req, "owner_reference"))
                 .put("currency", account.path("currency").asString())
                 .put("single_use", Req.bool(req, "single_use", false));
-        if (Req.decimal(req, "expected_amount") != null) {
-            body.put("expected_amount", Req.amount(req, "expected_amount").toPlainString());
+        BigDecimal expected = Req.decimal(req, "expected_amount") != null ? Req.amount(req, "expected_amount") : null;
+        if (expected != null) {
+            body.put("expected_amount", expected.toPlainString());
         }
         if (Req.text(req, "expires_at") != null) {
             body.put("expires_at", Req.text(req, "expires_at"));
         }
-        JsonNode created = down.post(DEPOSITS, "/v1/virtual-accounts", body, key, "create");
-        audit.succeeded(action, "ACCOUNT", master, created.path("id").asString(null));
+        OperationApprovals.Outcome created = approvals.run("VIRTUAL_ACCOUNT", account, expected, "Virtual account "
+                + Req.required(req, "purpose"), DEPOSITS, "/v1/virtual-accounts", body, key, "create");
+        audit.succeeded(action, "ACCOUNT", master, created.body().path("id").asString(null));
         return created;
     }
 
@@ -234,7 +247,7 @@ public class CollectionService {
         return down.get(PAYMENTS, "/v1/payment-links/" + id + "/payments", Query.none().paging(limit, cursor));
     }
 
-    public JsonNode createPaymentLink(JsonNode req, String key) {
+    public OperationApprovals.Outcome createPaymentLink(JsonNode req, String key) {
         String action = "businessPaymentLinksCreate";
         access.requireRole(action, "PAYMENT_LINK", null, "ADMIN", "MAKER");
         UUID credit = Req.uuid(req, "credit_account_id", true);
@@ -260,8 +273,11 @@ public class CollectionService {
         if (Req.text(req, "expires_at") != null) {
             body.put("expires_at", Req.text(req, "expires_at"));
         }
-        JsonNode created = down.post(PAYMENTS, "/v1/payment-links", body, key, "create");
-        audit.succeeded(action, "ACCOUNT", credit, created.path("id").asString(null));
+        BigDecimal value = body.hasNonNull("amount") ? new BigDecimal(body.get("amount").asString())
+                : body.hasNonNull("max_amount") ? new BigDecimal(body.get("max_amount").asString()) : null;
+        OperationApprovals.Outcome created = approvals.run("PAYMENT_LINK", account, value, "Payment link "
+                + body.path("title").asString(), PAYMENTS, "/v1/payment-links", body, key, "create");
+        audit.succeeded(action, "ACCOUNT", credit, created.body().path("id").asString(null));
         return created;
     }
 

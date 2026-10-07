@@ -41,12 +41,14 @@ meridian:
   business:
     step-up-max-age: PT5M     # approvals, money movement and administration need an authentication at most this old
     step-up-acr: []           # e.g. [gold] to also require a strong acr from the identity provider
-    bootstrap-first-admin: true   # the first portal user of a business without users becomes its ADMIN
+    # bootstrap-first-admin: unset = on in dev mode, off in jwt mode (bank staff provision the first ADMIN with
+    # POST /v1/business-provisioning/admins, scope channels:admin); true trusts the IdP's admin-only attributes alone
     default-required-approvals: 1 # when no rule of the business's approval matrix matches (never below 1)
     max-batch-lines: 5000
     max-batch-bytes: 2000000
     api-client-scopes: [channels:business]
-    webhook-event-types: [payments.payment.*, payments.bulk_payment.*, payments.payment_mandate.*]
+    webhook-event-types: [payments.payment.*, payments.bulk_payment.*, payments.payment_mandate.*,
+                          payments.direct_debit_collection.*, payments.payment_link.*, accounts.virtual_account.*]
   # JWT mode: the channel never forwards a business user's token; it calls the domain services with this service
   # identity for the business's tenant (required, else business requests fail with 503 service_identity_not_configured).
   # service-auth:

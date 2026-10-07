@@ -27,9 +27,10 @@ enums:
   CustomerLookupType: [MSISDN, WALLET_NUMBER]
   BusinessUserRole: [ADMIN, MAKER, APPROVER, VIEWER]
   BusinessUserStatus: [ACTIVE, SUSPENDED, REMOVED]
-  BusinessPaymentKind: [OWN_TRANSFER, DOMESTIC, INTERNATIONAL, BULK, PAYROLL]
+  BusinessPaymentKind: [OWN_TRANSFER, DOMESTIC, INTERNATIONAL, BULK, PAYROLL, LOAN_REPAYMENT, CREDIT_LINE_DRAW, CREDIT_LINE_REPAYMENT, MANDATE, COLLECTION, VIRTUAL_ACCOUNT, PAYMENT_LINK]
   BusinessPaymentStatus: [DRAFT, PENDING_APPROVAL, APPROVED, RELEASED, RELEASE_FAILED, REJECTED, CANCELLED]
-  BusinessPaymentScope: [ALL, SINGLE, BULK]
+  BusinessPaymentScope: [ALL, SINGLE, BULK, LOAN_REPAYMENT, CREDIT_LINE_DRAW, CREDIT_LINE_REPAYMENT, MANDATE, COLLECTION, VIRTUAL_ACCOUNT, PAYMENT_LINK]
+  BusinessUserType: [HUMAN, TECHNICAL]
   BusinessApprovalOrder: [ANY_ORDER, SEQUENTIAL]
   BusinessApprovalDecision: [APPROVED, REJECTED]
   BusinessActionOutcome: [SUCCEEDED, DENIED, STEP_UP_REQUIRED, FAILED]
@@ -573,7 +574,12 @@ services:
       identity and the business's tenant, checks that every referenced account, payee, payment, mandate, collection,
       virtual account, payment link, card, loan, credit line, FX quote, statement, API client and webhook endpoint
       belongs to the business (404 otherwise, audited and published), rebuilds request bodies server-side and
-      requires a recent authentication (step-up) for approvals, money movement and administration.
+      requires a recent authentication (step-up) for approvals, money movement and administration. Loan and credit-line
+      repayments, credit-line draws, mandates, collections, virtual accounts and payment links go through the approval
+      matrix when a rule names their type and covers the amount (released once after the final approval), else run
+      immediately. Machine-to-machine access: client-credentials tokens of an API client created for the business carry
+      the business, its TECHNICAL user and the m2m marker (docs/BUSINESS_M2M_API.md). Bank staff provision a business's
+      first ADMIN (/v1/business-provisioning, scope channels:admin).
     tables:
       - name: business_user
         prefix: bzu
@@ -589,6 +595,10 @@ services:
           - "limit_currency currency | Currency of daily_limit"
           - "last_login_at ts ro | Last time the user opened the portal"
           - "status_reason string(255) ro | Reason of the last suspension or removal"
+          - "user_type enum:BusinessUserType nn default=HUMAN ro | HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)"
+          - "client_id string(64) ro | Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp)"
+          - "api_client_id uuid ref=api_client ro | identity-service API client a TECHNICAL user stands for"
+          - "provisioned_by string(64) ro | Bank staff principal that provisioned the user (first admin, staff operation)"
         indexes: [[business_customer_id, status]]
 
       - name: business_entitlement
@@ -612,7 +622,7 @@ services:
         columns:
           - "business_customer_id uuid nn ref=customer idx | Business customer"
           - "name string(120) nn | Rule name"
-          - "applies_to enum:BusinessPaymentScope nn default=ALL | Single payments, bulk/payroll batches or both"
+          - "applies_to enum:BusinessPaymentScope nn default=ALL | Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming that type; without such a rule the operation runs immediately)"
           - "currency currency nn | Currency of the band (payments in other currencies use other rules)"
           - "min_amount amount nn default=0 | Band starts at this amount (inclusive)"
           - "max_amount amount | Band ends at this amount (inclusive; empty = no upper bound)"
@@ -628,9 +638,9 @@ services:
         ext: false
         columns:
           - "business_customer_id uuid nn ref=customer idx | Business customer"
-          - "kind enum:BusinessPaymentKind nn | Own transfer, domestic payee payment, international payment, bulk or payroll batch"
+          - "kind enum:BusinessPaymentKind nn | Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment operation held for approval by a matrix rule of its type"
           - "status enum:BusinessPaymentStatus nn default=DRAFT ro | Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED)"
-          - "debtor_account_id uuid nn ref=deposit_account idx | Business account debited"
+          - "debtor_account_id uuid nn ref=deposit_account idx | Business account debited (operations: the account involved, whose approve entitlement approvers need)"
           - "payee_id uuid ref=payee | Payee of the business (domestic and international)"
           - "creditor_account_id uuid ref=deposit_account | Other account of the business (own transfer)"
           - "creditor_name string(140) ro | Beneficiary name (from the payee or account)"
@@ -666,7 +676,10 @@ services:
           - "rejected_by uuid ro | Approver that rejected it"
           - "rejection_reason string(255) ro | Rejection reason"
           - "cancelled_by uuid ro | User that cancelled it"
-        indexes: [[business_customer_id, status], [initiated_by, submitted_at]]
+          - "operation json ro | Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key bzp-release:<id>, as the initiator); part of the approved content"
+          - "result_id uuid ro | Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual account, payment link)"
+          - "business_date date ro | Business date of the submission (legal entity of the debit account, business-day-service); daily limits count per business date"
+        indexes: [[business_customer_id, status], [initiated_by, submitted_at], [initiated_by, business_date]]
 
       - name: business_payment_approval
         prefix: bzpa
@@ -844,11 +857,11 @@ services:
         ops: []
         actions:
           - "GET / | Mandates of the business | | payment_mandate[]"
-          - "POST / | Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up) | scheme enum:MandateScheme nn, creditor_account_id uuid nn, creditor_id string(35) nn, mandate_reference string(35) nn, debtor_name string(140) nn, debtor_account_number string(64) nn, debtor_agent_bic string(11), frequency enum:MandateFrequency, max_amount amount, first_collection_date date, final_collection_date date, signed_at ts | payment_mandate"
+          - "POST / | Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up; matrix type MANDATE, amount max_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | scheme enum:MandateScheme nn, creditor_account_id uuid nn, creditor_id string(35) nn, mandate_reference string(35) nn, debtor_name string(140) nn, debtor_account_number string(64) nn, debtor_agent_bic string(11), frequency enum:MandateFrequency, max_amount amount, first_collection_date date, final_collection_date date, signed_at ts | object"
           - "GET /{mandate_id} | One mandate of the business | | payment_mandate"
           - "POST /{mandate_id}/cancel | Cancel a mandate (MAKER or ADMIN) | reason string(255) nn | payment_mandate"
           - "GET /{mandate_id}/collections | Collections under one mandate | | direct_debit_collection[]"
-          - "POST /{mandate_id}/collections | Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up) | amount amount nn, due_date date nn, sequence_type string(4) | direct_debit_collection"
+          - "POST /{mandate_id}/collections | Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up; matrix type COLLECTION). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | amount amount nn, due_date date nn, sequence_type string(4) | object"
 
       - resource: business-virtual-accounts
         path: /v1/business/virtual-accounts
@@ -857,7 +870,7 @@ services:
         ops: []
         actions:
           - "GET /?master_account_id:uuid | Virtual accounts on accounts the user may see | | virtual_account[]"
-          - "POST / | Open a virtual account on an account the user may initiate on (MAKER or ADMIN) | master_account_id uuid nn, purpose enum:VirtualAccountPurpose nn, owner_reference string(128), expected_amount amount, single_use bool, expires_at ts | virtual_account"
+          - "POST / | Open a virtual account on an account the user may initiate on (MAKER or ADMIN; matrix type VIRTUAL_ACCOUNT, amount expected_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | master_account_id uuid nn, purpose enum:VirtualAccountPurpose nn, owner_reference string(128), expected_amount amount, single_use bool, expires_at ts | object"
           - "GET /{virtual_account_id} | One virtual account | | virtual_account"
           - "GET /{virtual_account_id}/transactions | Credits routed through one virtual account | | ledger_entry[]"
           - "POST /{virtual_account_id}/close | Close a virtual account (MAKER or ADMIN) | reason string(255) | virtual_account"
@@ -869,7 +882,7 @@ services:
         ops: []
         actions:
           - "GET / | Payment links of the business on accounts the user may see | | payment_link[]"
-          - "POST / | Create a payment link crediting an account the user may initiate on (MAKER or ADMIN) | credit_account_id uuid nn, title string(140) nn, amount amount, min_amount amount, max_amount amount, reusable bool, max_payments int, expires_at ts | payment_link"
+          - "POST / | Create a payment link crediting an account the user may initiate on (MAKER or ADMIN; matrix type PAYMENT_LINK, amount amount, else max_amount, else 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | credit_account_id uuid nn, title string(140) nn, amount amount, min_amount amount, max_amount amount, reusable bool, max_payments int, expires_at ts | object"
           - "GET /{link_id} | One payment link | | payment_link"
           - "POST /{link_id}/disable | Disable a payment link (MAKER or ADMIN) | reason string(255) | payment_link"
           - "GET /{link_id}/payments | Payments received through one link | | payment[]"
@@ -909,7 +922,7 @@ services:
           - "GET / | Loans of the business | | loan[]"
           - "GET /{loan_id} | One loan | | loan"
           - "GET /{loan_id}/schedule | Repayment schedule of one loan | | schedule_installment[]"
-          - "POST /{loan_id}/repay | Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up) | amount amount nn, source_account_id uuid nn | loan_repayment"
+          - "POST /{loan_id}/repay | Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type LOAN_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | amount amount nn, source_account_id uuid nn | object"
 
       - resource: business-credit-lines
         path: /v1/business/credit-lines
@@ -920,8 +933,8 @@ services:
           - "GET / | Credit lines of the business | | credit_line[]"
           - "GET /{credit_line_id} | One credit line | | credit_line"
           - "GET /{credit_line_id}/drawdowns | Draws on one credit line | | credit_line_drawdown[]"
-          - "POST /{credit_line_id}/draw | Draw funds into an account of the business the user may initiate on (ADMIN; step-up) | amount amount nn, destination_account_id uuid nn | credit_line_drawdown"
-          - "POST /{credit_line_id}/repay | Repay from an account the user may initiate on (MAKER or ADMIN; step-up) | amount amount nn, source_account_id uuid nn | loan_repayment"
+          - "POST /{credit_line_id}/draw | Draw funds into an account of the business the user may initiate on (ADMIN; step-up; matrix type CREDIT_LINE_DRAW). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | amount amount nn, destination_account_id uuid nn | object"
+          - "POST /{credit_line_id}/repay | Repay from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type CREDIT_LINE_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) | amount amount nn, source_account_id uuid nn | object"
 
       - resource: business-api-clients
         path: /v1/business/api-clients
@@ -930,7 +943,7 @@ services:
         ops: []
         actions:
           - "GET / | API clients of the business | | api_client[]"
-          - "POST / | Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations | name string(120) nn, description string(500), environment enum:ApiEnvironment, owner_email email | api_client"
+          - "POST / | Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations. The client is tagged with the business and a TECHNICAL portal user (role technical_role: MAKER or VIEWER, default VIEWER; entitlements are set like any user's) whose id its machine-to-machine tokens carry as business_user_id with the m2m marker. auth_method CLIENT_SECRET_BASIC (default; the secret is returned once) or PRIVATE_KEY_JWT with an https jwks_uri | name string(120) nn, description string(500), environment enum:ApiEnvironment, owner_email email, technical_role enum:BusinessUserRole, auth_method string(32), jwks_uri string(500) | api_client"
           - "GET /{client_id} | One API client of the business | | api_client"
           - "POST /{client_id}/suspend | Suspend an API client (ADMIN) | reason string(255) nn | api_client"
           - "GET /{client_id}/keys | Keys of one API client | | api_key[]"
@@ -953,6 +966,40 @@ services:
           - "POST /{endpoint_id}/subscriptions | Subscribe to an allowed event type; the filter customer_id == <the business> is always added (ADMIN) | event_type string(128) nn | webhook_subscription"
           - "GET /{endpoint_id}/deliveries | Deliveries to one endpoint | | webhook_delivery[]"
 
+      - resource: business-onboarding
+        path: /v1/business/onboarding
+        table: business_action
+        description: KYB of the business through the channel (ADMIN users) - applications on the bank's published business onboarding journeys, their steps (company details, directors, shareholders and UBOs as declared), documents and submission; only the business's own applications, never risk or review fields
+        ops: []
+        actions:
+          - "GET /journeys | Published business (non-individual) onboarding journeys open to the WEB channel | | onboarding_journey[]"
+          - "GET /applications | KYB applications of the business | | onboarding_application[]"
+          - "POST /applications | Start a KYB application for the business on a published business journey (ADMIN; step-up); the business and the bank entity come from the customer record | onboarding_journey_id uuid nn, product_ids uuid[] | onboarding_application"
+          - "GET /applications/{application_id} | One application of the business | | onboarding_application"
+          - "GET /applications/{application_id}/steps | Steps of one application and their states | | onboarding_step[]"
+          - "GET /applications/{application_id}/next-step | The next step to complete, with its typed fields | | onboarding_step"
+          - "POST /applications/{application_id}/steps/{step_code} | Submit data for one step, e.g. directors and UBOs on a UBO_DECLARATION step (ADMIN) | input json nn | onboarding_step"
+          - "GET /applications/{application_id}/documents | Documents registered for one application | | document[]"
+          - "POST /applications/{application_id}/documents | Register a document of one step (owner ONBOARDING_APPLICATION) and get its pre-signed upload (document_id, method, url, headers, expires_at) (ADMIN) | step_code string(64) nn, document_type string(40) nn, file_name string(255) nn, content_type string(120) nn | object"
+          - "POST /applications/{application_id}/documents/{document_id}/complete | Confirm the uploaded content of one of the application's documents (ADMIN) | size_bytes bigint nn, checksum string(64) nn | object"
+          - "POST /applications/{application_id}/submit | Submit the application for the bank's decision (ADMIN; step-up) | | onboarding_application"
+          - "GET /related-parties | Directors, shareholders, UBOs and signatories the bank holds for the business | | customer_relationship[]"
+
+      - resource: business-provisioning
+        path: /v1/business-provisioning
+        table: business_user
+        description: >
+          Bank staff operations on business portal users (scope channels:admin, or meridian:admin; never business,
+          customer, agent or merchant tokens). Provisioning the first ADMIN of a business replaces trust in the identity
+          provider's attributes alone; the returned id is set as the person's business_user_id attribute.
+        ops: []
+        actions:
+          - "POST /admins | Provision the first ADMIN of a business customer (active, not an individual) that has no active ADMIN; returns the user whose id is set as business_user_id in the identity provider | business_customer_id uuid nn, display_name string(160) nn, email email nn | business_user"
+          - "GET /users?business_customer_id:uuid! | Portal users of one business (support view) | | business_user[]"
+        scopes:
+          "POST /admins": ["channels:admin"]
+          "GET /users": ["channels:admin"]
+
       - resource: business-activity
         path: /v1/business/activity
         table: business_action
@@ -963,7 +1010,7 @@ services:
 
     events:
       - "channels.business_action.denied | business_action | A business user referenced an object of another business, lacked the entitlement or role, or was refused step-up"
-      - "channels.business_user.changed | business_user | A business user was added, bootstrapped, changed, suspended, reactivated or removed"
+      - "channels.business_user.changed | business_user | A business user was added, provisioned by the bank, bootstrapped, changed, suspended, reactivated or removed"
       - "channels.business_entitlement.changed | business_entitlement | An account entitlement of a business user was set or removed"
       - "channels.business_approval_rule.changed | business_approval_rule | The business's approval matrix changed"
       - "channels.business_payment.submitted | business_payment | A business payment was submitted for approval"

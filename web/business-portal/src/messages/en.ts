@@ -12,6 +12,11 @@ export const PROBLEM_TITLES: Record<string, string> = {
   bulk_has_invalid_items: "The batch has invalid lines",
   step_up_required: "Please confirm it is you",
   not_found: "Not found",
+  approval_matrix_unsatisfiable: "Your approval rules cannot be met for this",
+  technical_role_not_allowed: "API clients can only read or draft",
+  application_closed: "The application was already submitted",
+  journey_not_available: "This journey is not open to businesses",
+  business_user_type_mismatch: "This identity cannot be used here",
 };
 
 export const PROBLEM_HINTS: Record<string, string> = {
@@ -22,6 +27,8 @@ export const PROBLEM_HINTS: Record<string, string> = {
   already_decided: "Refresh to see the latest status.",
   daily_limit_exceeded: "Ask an administrator to raise your daily limit, or split the payment.",
   bulk_has_invalid_items: "Fix the lines listed under validation errors and upload the file again.",
+  approval_matrix_unsatisfiable: "The rule names you as an approver, or too few other approvers. Ask an administrator to adjust the rule.",
+  technical_role_not_allowed: "A technical user of an API client is a MAKER or a VIEWER; approvals and administration stay with people.",
 };
 
 export const STATUS_HINTS: Record<number, string> = {

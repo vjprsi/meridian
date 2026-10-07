@@ -92,6 +92,26 @@ class BusinessContextTest {
     }
 
     @Test
+    void machineToMachineTokensCarryTheMarkerTheClientAndTheirIssueTimeAsAuthentication() {
+        Instant issued = Instant.now().minusSeconds(20).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Jwt m2m = Jwt.withTokenValue("t").header("alg", "none").subject("service-account-cli_1")
+                .claim("azp", "cli_1").claim("scope", "channels:business").claim("tenant_id", TENANT)
+                .claim("business_customer_id", BUSINESS).claim("business_user_id", USER).claim("m2m", true)
+                .issuedAt(issued).expiresAt(Instant.now().plusSeconds(60)).build();
+        BusinessContext.BusinessPrincipal p = BusinessContext.fromJwt(m2m).orElseThrow();
+        assertThat(p.m2m()).isTrue();
+        assertThat(p.clientId()).isEqualTo("cli_1");
+        assertThat(p.authTime()).isEqualTo(issued);
+        // a portal token is never m2m, whatever auth_time says; the marker as text counts too
+        BusinessContext.BusinessPrincipal portal = BusinessContext.fromJwt(
+                token("openid channels:business", BUSINESS, USER, issued.getEpochSecond())).orElseThrow();
+        assertThat(portal.m2m()).isFalse();
+        assertThat(portal.clientId()).isEqualTo("meridian-business-portal");
+        assertThat(BusinessContext.fromDevHeaders(BUSINESS, USER, null, null, null, "cli_9").orElseThrow().m2m()).isTrue();
+        assertThat(BusinessContext.fromDevHeaders(BUSINESS, USER, null, null, null, null).orElseThrow().m2m()).isFalse();
+    }
+
+    @Test
     void tenantFilterBindsTheBusinessUserFromClaimsNeverFromHeadersInJwtMode() throws Exception {
         TenantFilter filter = new TenantFilter(new MeridianProperties("jwt", "tenant_id"));
         MockHttpServletRequest req = new MockHttpServletRequest();

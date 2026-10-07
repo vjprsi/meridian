@@ -34,6 +34,27 @@ class ApprovalPolicyTest {
     }
 
     @Test
+    void operationsAreCoveredOnlyByRulesOfTheirType() {
+        Rule repayments = new Rule(UUID.randomUUID(), "LOAN_REPAYMENT", "KES", new BigDecimal("100"), null, 1, "ANY_ORDER",
+                List.of());
+        List<Rule> all = new java.util.ArrayList<>(rules);
+        all.add(repayments);
+        // ALL rules cover payments, never operations: without a rule of its type an operation runs immediately
+        assertThat(ApprovalPolicy.covering(rules, "LOAN_REPAYMENT", "KES", new BigDecimal("500"))).isEmpty();
+        assertThat(ApprovalPolicy.covering(all, "LOAN_REPAYMENT", "KES", new BigDecimal("50"))).isEmpty();
+        assertThat(ApprovalPolicy.covering(all, "LOAN_REPAYMENT", "KES", new BigDecimal("500")).map(Plan::ruleId))
+                .contains(repayments.id());
+        assertThat(ApprovalPolicy.covering(all, "PAYMENT_LINK", "KES", BigDecimal.ZERO)).isEmpty();
+        assertThat(ApprovalPolicy.plan(all, "SINGLE", "KES", new BigDecimal("500"), 1).ruleId()).isEqualTo(rules.get(0).id());
+        // an operation band never overlaps payment bands, only bands of the same type
+        assertThat(ApprovalPolicy.overlaps(repayments, rules.get(0))).isFalse();
+        assertThat(ApprovalPolicy.overlaps(repayments, new Rule(null, "LOAN_REPAYMENT", "KES", new BigDecimal("1000"), null,
+                1, "ANY_ORDER", List.of()))).isTrue();
+        assertThat(ApprovalPolicy.overlaps(repayments, new Rule(null, "CREDIT_LINE_REPAYMENT", "KES", BigDecimal.ZERO,
+                null, 1, "ANY_ORDER", List.of()))).isFalse();
+    }
+
+    @Test
     void approvalsAreDistinctNeverTheInitiatorAndInSequence() {
         Plan any = new Plan(null, 2, "ANY_ORDER", List.of());
         assertThat(ApprovalPolicy.refusal(any, maker, List.of(), maker)).contains("self_approval_forbidden");

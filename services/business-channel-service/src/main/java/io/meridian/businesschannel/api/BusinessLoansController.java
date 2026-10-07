@@ -4,7 +4,6 @@ import io.meridian.businesschannel.api.generated.BusinessLoansApi;
 import io.meridian.businesschannel.api.generated.model.BusinessLoansRepayRequest;
 import io.meridian.businesschannel.api.generated.model.Loan;
 import io.meridian.businesschannel.api.generated.model.LoanPage;
-import io.meridian.businesschannel.api.generated.model.LoanRepayment;
 import io.meridian.businesschannel.api.generated.model.ScheduleInstallmentPage;
 import io.meridian.businesschannel.application.LendingService;
 import java.util.UUID;
@@ -38,8 +37,8 @@ public class BusinessLoansController implements BusinessLoansApi {
     }
 
     @Override
-    public ResponseEntity<LoanRepayment> businessLoansRepay(UUID loanId, String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessLoansRepay(UUID loanId, String idempotencyKey,
                                                             BusinessLoansRepayRequest body) {
-        return http.ok(lending.repayLoan(loanId, http.body(body), idempotencyKey), LoanRepayment.class);
+        return http.outcome(idempotencyKey, body, () -> lending.repayLoan(loanId, http.body(body), idempotencyKey));
     }
 }

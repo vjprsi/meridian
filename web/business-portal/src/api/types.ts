@@ -36,6 +36,11 @@ export type ApiKey = S["ApiKey"];
 export type WebhookEndpoint = S["WebhookEndpoint"];
 export type WebhookSubscription = S["WebhookSubscription"];
 export type WebhookDelivery = S["WebhookDelivery"];
+export type OnboardingJourney = S["OnboardingJourney"];
+export type OnboardingApplication = S["OnboardingApplication"];
+export type OnboardingStep = S["OnboardingStep"];
+export type KybDocument = S["Document"];
+export type CustomerRelationship = S["CustomerRelationship"];
 
 export type PaymentKind = BusinessPayment["kind"];
 export type PaymentStatus = BusinessPayment["status"];

@@ -6,6 +6,7 @@ import { accountLabel, accountOptions, useAccounts, usePermissions } from "@/api
 import { api, idem, unwrap } from "@/api/client";
 import type { PaymentLink, VirtualAccount } from "@/api/types";
 import { ActionButton, isoInstant, opt } from "@/components/actions";
+import { useHeldNotice } from "@/components/held";
 import { Async, Badge, Button, Card, DateTime, Empty, Money, PageHeader, Table, Tabs } from "@/components/ui";
 
 const PURPOSES: VirtualAccount["purpose"][] = ["COLLECTION", "INVOICE", "SUB_LEDGER", "MARKETPLACE_SELLER", "ESCROW", "PAYROLL", "CLIENT_MONEY"];
@@ -65,6 +66,7 @@ export default function CollectionsPage() {
     queryFn: async () => unwrap(await api.GET("/v1/business/payment-links", { params: { query: { limit: 200 } } })).data,
   });
   const initiable = accountOptions(accounts.data, (a) => perms.initiateOn(a.id));
+  const [held, onDone] = useHeldNotice();
 
   return (
     <>
@@ -83,7 +85,8 @@ export default function CollectionsPage() {
               params: { header: idem(key) },
               body: { master_account_id: v.master_account_id, purpose: v.purpose as VirtualAccount["purpose"],
                 owner_reference: opt(v.owner_reference), expected_amount: opt(v.expected_amount), single_use: v.single_use === "true",
-                expires_at: isoInstant(v.expires_at) } }))} />
+                expires_at: isoInstant(v.expires_at) } }))}
+            onDone={onDone} />
         ) : (
           <ActionButton label="Create payment link" variant="primary" size="md" confirmLabel="Create"
             fields={[
@@ -100,8 +103,10 @@ export default function CollectionsPage() {
               params: { header: idem(key) },
               body: { credit_account_id: v.credit_account_id, title: v.title, amount: opt(v.amount), min_amount: opt(v.min_amount),
                 max_amount: opt(v.max_amount), reusable: v.reusable === "true",
-                max_payments: opt(v.max_payments) ? Number(v.max_payments) : undefined, expires_at: isoInstant(v.expires_at) } }))} />
+                max_payments: opt(v.max_payments) ? Number(v.max_payments) : undefined, expires_at: isoInstant(v.expires_at) } }))}
+            onDone={onDone} />
         )) : undefined} />
+      {held}
       <Tabs value={tab} onChange={setTab} tabs={[{ key: "va", label: "Virtual accounts" }, { key: "links", label: "Payment links" }]} />
 
       {tab === "va" ? (

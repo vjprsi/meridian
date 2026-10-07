@@ -731,6 +731,8 @@ services:
           - "fapi_profile bool nn default=false | Enforce FAPI 2.0 security profile"
           - "last_used_at ts ro | Last token issued"
           - "expires_at ts | Expiry"
+          - "business_customer_id uuid ref=customer idx | Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)"
+          - "business_user_id uuid | TECHNICAL business portal user (business-channel-service) the client's tokens act as"
         response_only:
           - "client_secret string(128) | Plaintext client secret for CLIENT_SECRET_* clients (on create and rotate-secret)"
 
@@ -862,7 +864,7 @@ services:
         path: /v1/api-clients
         table: api_client
         ops: [list, get, create, update]
-        filters: [client_type, environment, status]
+        filters: [client_type, environment, status, business_customer_id]
         actions:
           - "POST /{id}/rotate-secret | Rotate the client secret (returned once) | | api_client"
           - "POST /{id}/suspend | Suspend a client | reason string(255) nn"

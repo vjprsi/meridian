@@ -625,6 +625,12 @@ class PaymentFlowIT {
         BigDecimal before = bank.balance(a);
         JsonNode collected = post("/v1/direct-debit-collections/" + ddc.get("id").asString() + "/collect", null, "scheduler", 200);
         assertThat(collected.get("status").asString()).isEqualTo("COLLECTED");
+        // collection events carry the mandate's customer (webhook subscriptions filter on customer_id)
+        String owner = get("/v1/payment-mandates/" + mid).get("customer_id").asString();
+        assertThat(TenantContext.callAs(UUID.fromString(TENANT), "test", () -> jdbc.sql("""
+                select payload->>'customer_id' from outbox where event_type = 'payments.direct_debit_collection.collected'
+                  and aggregate_id = ?::uuid""").param(ddc.get("id").asString()).query(String.class).single()))
+                .isEqualTo(owner);
         assertThat(bank.balance(a)).isEqualByComparingTo(before.subtract(new BigDecimal("45.00")));
         assertThat(bank.journalsWithLine(DD_CLEARING)).hasSize(1);
         JsonNode payment = get("/v1/payments/" + collected.get("payment_id").asString());

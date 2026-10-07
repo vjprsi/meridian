@@ -49,6 +49,21 @@ class Http {
                 () -> ResponseEntity.ok(json.treeToValue(action.get(), type)));
     }
 
+    /**
+     * A write that either runs at once (200 with the downstream object) or is held by the approval matrix (202 with the
+     * business payment holding it); replayed for a repeated Idempotency-Key (status included), so a retry never holds
+     * the same operation twice.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    ResponseEntity<Map<String, Object>> outcome(String key, Object request,
+                                                Supplier<io.meridian.businesschannel.application.OperationApprovals.Outcome> action) {
+        Class<Map<String, Object>> type = (Class) Map.class;
+        return idempotency.execute(key, request == null ? Map.of() : request, type, () -> {
+            var o = action.get();
+            return ResponseEntity.status(o.pending() ? 202 : 200).body(json.treeToValue(o.body(), type));
+        });
+    }
+
     static ResponseEntity<Resource> binary(ServiceClient.Download d, String fallbackName) {
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(d.contentType()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")

@@ -6,6 +6,7 @@ import { accountOptions, useAccounts, usePermissions } from "@/api/business";
 import { api, idem, unwrap } from "@/api/client";
 import type { CreditLine, Loan } from "@/api/types";
 import { ActionButton } from "@/components/actions";
+import { useHeldNotice } from "@/components/held";
 import { Async, Badge, Button, Card, DateTime, Empty, Money, PageHeader, Table, Tabs } from "@/components/ui";
 
 function LoanSchedule({ loan }: { loan: Loan }) {
@@ -65,10 +66,12 @@ export default function CreditPage() {
     queryFn: async () => unwrap(await api.GET("/v1/business/credit-lines", { params: { query: { limit: 100 } } })).data,
   });
   const source = (currency: string) => accountOptions(accounts.data, (a) => a.currency === currency && perms.initiateOn(a.id));
+  const [held, onDone] = useHeldNotice();
 
   return (
     <>
       <PageHeader title="Loans & credit lines" subtitle="Business loans, working capital and overdraft facilities" />
+      {held}
       <Tabs value={tab} onChange={setTab} tabs={[{ key: "loans", label: "Loans" }, { key: "lines", label: "Credit lines" }]} />
       {tab === "loans" ? (
         <Card flush>
@@ -91,7 +94,8 @@ export default function CreditPage() {
                           { name: "amount", label: `Amount (${l.currency})`, type: "number", required: true },
                         ]}
                         run={async (v, key) => unwrap(await api.POST("/v1/business/loans/{loan_id}/repay", {
-                          params: { path: { loan_id: l.id }, header: idem(key) }, body: { amount: v.amount, source_account_id: v.source_account_id } }))} />
+                          params: { path: { loan_id: l.id }, header: idem(key) }, body: { amount: v.amount, source_account_id: v.source_account_id } }))}
+                        onDone={onDone} />
                     )}
                   </div>
                 ) },
@@ -121,7 +125,8 @@ export default function CreditPage() {
                         ]}
                         run={async (v, key) => unwrap(await api.POST("/v1/business/credit-lines/{credit_line_id}/draw", {
                           params: { path: { credit_line_id: l.id }, header: idem(key) },
-                          body: { amount: v.amount, destination_account_id: v.destination_account_id } }))} />
+                          body: { amount: v.amount, destination_account_id: v.destination_account_id } }))}
+                        onDone={onDone} />
                     )}
                     {perms.canMake && (
                       <ActionButton label="Repay" title={`Repay ${l.credit_line_number}`} confirmLabel="Repay"
@@ -131,7 +136,8 @@ export default function CreditPage() {
                         ]}
                         run={async (v, key) => unwrap(await api.POST("/v1/business/credit-lines/{credit_line_id}/repay", {
                           params: { path: { credit_line_id: l.id }, header: idem(key) },
-                          body: { amount: v.amount, source_account_id: v.source_account_id } }))} />
+                          body: { amount: v.amount, source_account_id: v.source_account_id } }))}
+                        onDone={onDone} />
                     )}
                   </div>
                 ) },

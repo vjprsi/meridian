@@ -3,6 +3,7 @@ package io.meridian.businesschannel.application;
 import io.meridian.businesschannel.config.BusinessChannelProperties;
 import io.meridian.common.error.ApiException;
 import io.meridian.events.OutboxWriter;
+import io.meridian.web.MeridianProperties;
 import io.meridian.web.security.BusinessContext;
 import io.meridian.web.security.BusinessContext.BusinessPrincipal;
 import java.util.Optional;
@@ -18,9 +19,14 @@ import tools.jackson.databind.node.ObjectNode;
  * provider attributes); this record is authoritative: the user must exist for that very business and be ACTIVE, else
  * 403 before any controller runs. The role and the entitlements always come from here, never from the token.
  *
- * <p>Bootstrap: when the business has no portal user at all and {@code meridian.business.bootstrap-first-admin} is on,
- * the first user who signs in becomes its ADMIN, provided the customer exists, is not an individual and is ACTIVE
- * (serialised per business with an advisory lock, so two first logins never make two admins).
+ * <p>Bootstrap: when the business has no portal user at all and {@code meridian.business.bootstrap-first-admin} is on
+ * (default: dev mode only; in JWT mode bank staff provision the first admin, {@link ProvisioningService}), the first
+ * user who signs in becomes its ADMIN, provided the customer exists, is not an individual and is ACTIVE (serialised
+ * per business with an advisory lock, so two first logins never make two admins). Machine-to-machine tokens are never
+ * bootstrapped.
+ *
+ * <p>Machine-to-machine: a token with the m2m marker must name a TECHNICAL user whose {@code client_id} is the token's
+ * client; an interactive token must name a HUMAN user. Anything else is 403 {@code business_user_type_mismatch}.
  */
 @Component
 public class CurrentUser {
@@ -34,15 +40,17 @@ public class CurrentUser {
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final BusinessChannelProperties props;
+    private final boolean devMode;
 
     public CurrentUser(Rows rows, Downstream down, ActionAudit audit, OutboxWriter outbox, TransactionTemplate tx,
-                       BusinessChannelProperties props) {
+                       BusinessChannelProperties props, MeridianProperties meridian) {
         this.rows = rows;
         this.down = down;
         this.audit = audit;
         this.outbox = outbox;
         this.tx = tx;
         this.props = props;
+        this.devMode = meridian.devMode();
     }
 
     /** The business of the request (from the token). */
@@ -72,6 +80,11 @@ public class CurrentUser {
         return "ADMIN".equals(role());
     }
 
+    /** Whether the request comes from a business API client (machine-to-machine token of a TECHNICAL user). */
+    public static boolean technical() {
+        return "TECHNICAL".equals(user().path("user_type").asString("HUMAN"));
+    }
+
     /** Resolves and binds the user record (web layer, before every /v1/business handler). */
     public void bind() {
         BusinessPrincipal p = BusinessContext.require();
@@ -83,6 +96,7 @@ public class CurrentUser {
             throw new ApiException(403, "business_user_inactive", "This portal user is " + status.toLowerCase()
                     + "; ask an administrator of the business");
         }
+        requireMatchingType(p, user);
         CURRENT.set(user);
     }
 
@@ -96,6 +110,19 @@ public class CurrentUser {
         rows.find(USERS, p.businessCustomerId(), p.businessUserId()).ifPresent(CURRENT::set);
     }
 
+    /** M2M tokens act only as TECHNICAL users of their own client; interactive tokens only as HUMAN users. */
+    private void requireMatchingType(BusinessPrincipal p, ObjectNode user) {
+        boolean technical = "TECHNICAL".equals(user.path("user_type").asString("HUMAN"));
+        String client = user.path("client_id").asString(null);
+        boolean ok = p.m2m() ? technical && client != null && client.equals(p.clientId()) : !technical;
+        if (!ok) {
+            audit.denied("businessSignIn", "USER", p.businessUserId(), "business_user_type_mismatch");
+            throw new ApiException(403, "business_user_type_mismatch", p.m2m()
+                    ? "This API client token does not belong to the business's technical user of this client"
+                    : "Technical users of API clients cannot sign in interactively");
+        }
+    }
+
     private ObjectNode bootstrapOrRefuse(BusinessPrincipal p) {
         Optional<ObjectNode> elsewhere = rows.one("select row_to_json(t)::text from business_user t where t.id = ?",
                 p.businessUserId());
@@ -104,7 +131,7 @@ public class CurrentUser {
             audit.denied("businessSignIn", "USER", p.businessUserId(), "business_user_mismatch");
             throw new ApiException(403, "business_user_unknown", "This portal user is not registered for this business");
         }
-        if (!props.bootstrapFirstAdmin()) {
+        if (!props.bootstrapFirstAdmin(devMode) || p.m2m()) {
             audit.denied("businessSignIn", "USER", p.businessUserId(), "business_user_unknown");
             throw new ApiException(403, "business_user_unknown", "This portal user is not registered for this business");
         }
@@ -123,6 +150,7 @@ public class CurrentUser {
             u.put("display_name", name.length() > 160 ? name.substring(0, 160) : name);
             u.put("role", "ADMIN");
             u.put("status", "ACTIVE");
+            u.put("user_type", "HUMAN");
             ObjectNode saved = rows.insert(USERS, u);
             outbox.publish("channels.business_user.changed", USERS, p.businessUserId(),
                     rows.object().put("change", "BOOTSTRAPPED").set("user", saved));
@@ -137,7 +165,7 @@ public class CurrentUser {
     }
 
     /** The business customer: must exist, be an organisation and be ACTIVE. */
-    JsonNode businessCustomer(UUID id) {
+    public JsonNode businessCustomer(UUID id) {
         JsonNode customer;
         try {
             customer = down.get("customer-service", "/v1/customers/" + id);

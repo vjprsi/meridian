@@ -4,7 +4,6 @@ import io.meridian.businesschannel.api.generated.BusinessMandatesApi;
 import io.meridian.businesschannel.api.generated.model.BusinessMandatesAddCollectionsRequest;
 import io.meridian.businesschannel.api.generated.model.BusinessMandatesCancelRequest;
 import io.meridian.businesschannel.api.generated.model.BusinessMandatesCreateRequest;
-import io.meridian.businesschannel.api.generated.model.DirectDebitCollection;
 import io.meridian.businesschannel.api.generated.model.DirectDebitCollectionPage;
 import io.meridian.businesschannel.api.generated.model.PaymentMandate;
 import io.meridian.businesschannel.api.generated.model.PaymentMandatePage;
@@ -30,8 +29,8 @@ public class BusinessMandatesController implements BusinessMandatesApi {
     }
 
     @Override
-    public ResponseEntity<PaymentMandate> businessMandatesCreate(String idempotencyKey, BusinessMandatesCreateRequest body) {
-        return http.ok(collections.createMandate(http.body(body), idempotencyKey), PaymentMandate.class);
+    public ResponseEntity<java.util.Map<String, Object>> businessMandatesCreate(String idempotencyKey, BusinessMandatesCreateRequest body) {
+        return http.outcome(idempotencyKey, body, () -> collections.createMandate(http.body(body), idempotencyKey));
     }
 
     @Override
@@ -52,8 +51,8 @@ public class BusinessMandatesController implements BusinessMandatesApi {
     }
 
     @Override
-    public ResponseEntity<DirectDebitCollection> businessMandatesAddCollections(UUID mandateId, String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessMandatesAddCollections(UUID mandateId, String idempotencyKey,
             BusinessMandatesAddCollectionsRequest body) {
-        return http.ok(collections.addCollection(mandateId, http.body(body), idempotencyKey), DirectDebitCollection.class);
+        return http.outcome(idempotencyKey, body, () -> collections.addCollection(mandateId, http.body(body), idempotencyKey));
     }
 }

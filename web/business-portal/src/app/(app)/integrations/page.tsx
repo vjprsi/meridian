@@ -122,10 +122,17 @@ export default function IntegrationsPage() {
               { name: "description", label: "Description" },
               { name: "environment", label: "Environment", type: "select", required: true, options: envOptions },
               { name: "owner_email", label: "Technical contact email", type: "email" },
+              { name: "technical_role", label: "Machine access (technical user role)", type: "select", required: true,
+                options: [{ value: "VIEWER", label: "Read only (VIEWER)" }, { value: "MAKER", label: "Draft and submit (MAKER)" }],
+                hint: "The client acts as a technical user with this role; grant it account entitlements under Users. It never approves." },
+              { name: "auth_method", label: "Authentication", type: "select", required: true,
+                options: [{ value: "CLIENT_SECRET_BASIC", label: "Client secret" }, { value: "PRIVATE_KEY_JWT", label: "Private key JWT (JWKS)" }] },
+              { name: "jwks_uri", label: "JWKS URL (private key JWT only)", type: "url", placeholder: "https://erp.example.com/.well-known/jwks.json" },
             ]}
             run={async (v, key) => unwrap(await api.POST("/v1/business/api-clients", {
               params: { header: idem(key) },
-              body: { name: v.name, description: opt(v.description), environment: v.environment as ApiClient["environment"], owner_email: opt(v.owner_email) } }))}
+              body: { name: v.name, description: opt(v.description), environment: v.environment as ApiClient["environment"], owner_email: opt(v.owner_email),
+                technical_role: v.technical_role as "VIEWER" | "MAKER", auth_method: v.auth_method, jwks_uri: opt(v.jwks_uri) } }))}
             onDone={(c) => c.client_secret && setSecret({ label: `Client secret of ${c.name} (client_id ${c.client_id})`, value: c.client_secret })} />
         ) : (
           <ActionButton<WebhookEndpoint> label="Add endpoint" variant="primary" size="md" confirmLabel="Add endpoint"
@@ -152,6 +159,7 @@ export default function IntegrationsPage() {
                   { header: "client_id", cell: (c) => <span className="font-mono text-xs">{c.client_id}</span> },
                   { header: "Environment", cell: (c) => c.environment },
                   { header: "Scopes", cell: (c) => <span className="text-xs">{(c.allowed_scopes as string[]).join(" ")}</span> },
+                  { header: "Technical user", cell: (c) => <span className="font-mono text-xs">{c.business_user_id ? c.business_user_id.slice(-8) : "—"}</span> },
                   { header: "Last used", cell: (c) => <DateTime value={c.last_used_at} /> },
                   { header: "Status", cell: (c) => <Badge value={c.status} /> },
                   { header: "", align: "right", cell: (c) => (

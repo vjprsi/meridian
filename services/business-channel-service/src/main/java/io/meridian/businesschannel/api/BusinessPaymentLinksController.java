@@ -28,9 +28,9 @@ public class BusinessPaymentLinksController implements BusinessPaymentLinksApi {
     }
 
     @Override
-    public ResponseEntity<PaymentLink> businessPaymentLinksCreate(String idempotencyKey,
+    public ResponseEntity<java.util.Map<String, Object>> businessPaymentLinksCreate(String idempotencyKey,
                                                                   BusinessPaymentLinksCreateRequest body) {
-        return http.ok(collections.createPaymentLink(http.body(body), idempotencyKey), PaymentLink.class);
+        return http.outcome(idempotencyKey, body, () -> collections.createPaymentLink(http.body(body), idempotencyKey));
     }
 
     @Override

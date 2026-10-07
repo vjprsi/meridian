@@ -90,7 +90,8 @@ public class VirtualAccountService {
                 "Virtual account " + number, str(v, "currency"), BigDecimal.ZERO, accounts.requireLedger(master),
                 "VIRTUAL_ACCOUNT", id).toString());
         ObjectNode row = rows.insert(TABLE, v);
-        events.publish("accounts.virtual_account.created", TABLE, row);
+        // the payload names the master account's holder, so webhook subscriptions filtered on customer_id receive it
+        events.publish("accounts.virtual_account.created", TABLE, row.deepCopy().put("customer_id", str(master, "customer_id")));
         return row;
     }
 

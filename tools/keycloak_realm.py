@@ -3,7 +3,8 @@
 
 Staff scopes: one client scope per domain and access level (<domain>:read, <domain>:write, <domain>:*) plus
 meridian:admin (the tenant's superuser) and platform:operator (platform-global writes, tenant registry, cross-tenant
-jobs; SEC-15). Customer scopes: a domain that declares `scope:` in its spec (channels -> channels:customer) gets
+jobs; SEC-15). channels:admin is the staff scope of the channel BFFs' operator endpoints (e.g. provisioning a
+business's first portal ADMIN, /v1/business-provisioning): console and service clients only, never a channel client. Customer scopes: a domain that declares `scope:` in its spec (channels -> channels:customer) gets
 only that scope, and only customer clients receive it; staff clients never do, and customer clients receive no
 staff scope (so a customer token is refused by every operator endpoint).
 
@@ -24,6 +25,11 @@ Clients (SEC-14: one per app, minimal scopes, no password grant for staff apps):
                              openid/profile; tokens carry business_customer_id, business_user_id and tenant_id from
                              admin-only user attributes and auth_time / acr (approvals and administration need a recent
                              authentication); no password grant
+  meridian-business-m2m-demo confidential, client credentials (a business's machine-to-machine API client); only
+                             channels:business; hardcoded claims business_customer_id, business_user_id (the
+                             business's TECHNICAL portal user, created with the API client in the portal) and m2m=true.
+                             Real business clients are provisioned the same way from identity-service api_client rows
+                             (business_customer_id / business_user_id tags; Keycloak clientId = identity client_id)
   meridian-merchant-app      public, authorization code + PKCE (merchant app PWA); only channels:merchant plus
                              openid/profile; tokens carry merchant_id, merchant_user_id and tenant_id from admin-only
                              user attributes and auth_time / acr (refund approvals, payout account changes and
@@ -44,8 +50,10 @@ Users:
   demo.agent         agent demo user (agent-app, Meridian#Agent2026); set its agent_id attribute to an ACTIVE agent of
                      the demo tenant
   demo.business.admin     business portal admin (Meridian#Business2026); business_customer_id = a business customer
-                          (customer_type not INDIVIDUAL) of the demo tenant. The first user who signs in for a business
-                          with no portal users becomes its ADMIN (meridian.business.bootstrap-first-admin).
+                          (customer_type not INDIVIDUAL) of the demo tenant. Dev mode: the first user who signs in for
+                          a business with no portal users becomes its ADMIN (meridian.business.bootstrap-first-admin,
+                          off by default in jwt mode); jwt mode: bank staff provision the first ADMIN (console / POST
+                          /v1/business-provisioning/admins, channels:admin) and set the returned id here.
   demo.business.approver  business portal approver (Meridian#Approver2026), same business. The admin adds the user in
                           the portal (Users, role APPROVER) and an IdP administrator sets the returned id as this
                           user's business_user_id attribute (the preset value is a placeholder until then).
@@ -86,6 +94,10 @@ BUSINESS_PORTAL_ORIGINS = ["http://localhost:13500"]
 # (merchant-channel-service merchant_user ids). Change the attributes (Users -> demo.merchant.* -> Attributes;
 # admin-only) to real values.
 DEMO_MERCHANT = "0199a000-0000-7000-8000-0000000d0001"
+# Staff scope of the channel BFFs' operator endpoints (spec `scopes:` overrides, e.g. business-provisioning).
+CHANNELS_ADMIN_SCOPE = "channels:admin"
+# The demo business's TECHNICAL portal user (placeholder until an API client is created in the portal).
+DEMO_BUSINESS_TECHNICAL = "0199a000-0000-7000-8000-0000000b0a03"
 DEMO_MERCHANT_OWNER = "0199a000-0000-7000-8000-0000000d0a01"
 DEMO_MERCHANT_CASHIER = "0199a000-0000-7000-8000-0000000d0a02"
 MERCHANT_APP_ORIGINS = ["http://localhost:13600"]
@@ -140,6 +152,14 @@ def user_profile() -> dict:
     }
 
 
+def hardcoded_claim(name: str, value: str, json_type: str = "String") -> dict:
+    """A fixed claim of every token of a client (never from a user attribute)."""
+    return {"name": name, "protocol": "openid-connect", "protocolMapper": "oidc-hardcoded-claim-mapper",
+            "config": {"claim.name": name, "claim.value": value, "jsonType.label": json_type,
+                       "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false",
+                       "introspection.token.claim": "true"}}
+
+
 def audience_mapper() -> dict:
     """SEC-14: every Meridian token is issued for the Meridian API (services validate aud)."""
     return {"name": "audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
@@ -179,7 +199,8 @@ def main():
     privileged = ["cards:pan_reveal", "cards:vault_admin"]
     scopes = [{"name": n, "protocol": "openid-connect",
                "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"}}
-              for n in scope_names + ["meridian:internal", operator, ROUTING_SCOPE] + channel_scopes + privileged]
+              for n in scope_names + [CHANNELS_ADMIN_SCOPE, "meridian:internal", operator, ROUTING_SCOPE]
+              + channel_scopes + privileged]
     tenant_mapper = {"name": "tenant_id", "protocol": "openid-connect",
                      "protocolMapper": "oidc-hardcoded-claim-mapper",
                      "config": {"claim.name": "tenant_id", "claim.value": DEMO_TENANT, "jsonType.label": "String",
@@ -218,7 +239,7 @@ def main():
                         attribute_mapper("merchant_user_id", "merchant_user_id")] + [
         m for m in customer_mappers if m["name"] != "customer_id"]
     read_scopes = [n for n in scope_names if n.endswith(":read")]
-    console_scopes = scope_names
+    console_scopes = scope_names + [CHANNELS_ADMIN_SCOPE]
     portal_scopes = ["platform:read", "platform:write"]
     realm = {
         "realm": "meridian",
@@ -246,7 +267,18 @@ def main():
              "secret": "meridian-service-secret", "serviceAccountsEnabled": True,
              "standardFlowEnabled": False, "directAccessGrantsEnabled": False,
              "protocolMappers": [tenant_mapper, audience_mapper()],
-             "defaultClientScopes": scope_names + ["meridian:internal", operator]},
+             "defaultClientScopes": scope_names + [CHANNELS_ADMIN_SCOPE, "meridian:internal", operator]},
+            # A business's machine-to-machine API client: client credentials, the business scope only, the business and
+            # its TECHNICAL portal user as hardcoded claims and the m2m marker (business-channel-service accepts it only
+            # for a TECHNICAL user whose client_id is this client).
+            {"clientId": "meridian-business-m2m-demo", "name": "Demo business API client (machine-to-machine)",
+             "publicClient": False, "secret": "meridian-business-m2m-secret", "serviceAccountsEnabled": True,
+             "standardFlowEnabled": False, "directAccessGrantsEnabled": False, "fullScopeAllowed": False,
+             "protocolMappers": [hardcoded_claim("business_customer_id", DEMO_BUSINESS),
+                                 hardcoded_claim("business_user_id", DEMO_BUSINESS_TECHNICAL),
+                                 hardcoded_claim("m2m", "true", "boolean"),
+                                 hardcoded_claim("tenant_id", DEMO_TENANT), audience_mapper()],
+             "defaultClientScopes": business_scopes, "optionalClientScopes": []},
             # The cell router (platform/cell-router): reads tenant routing and cells from the registry, nothing else.
             {"clientId": "meridian-cell-router", "name": "Meridian cell router", "publicClient": False,
              "secret": "meridian-cell-router-secret", "serviceAccountsEnabled": True,

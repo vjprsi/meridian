@@ -212,22 +212,39 @@ Done (2026-10-07): `business-channel-service` (/v1/business, scope channels:busi
 business_user_id claims, Keycloak client meridian-business-portal), business-user model in the channel (roles,
 entitlements, approval matrix, daily limits), multi-level approvals with release only after the final approval
 (idempotent), bulk / payroll CSV validation, FX binding, object-level authorization with denial audit/events,
-web/business-portal on /v1/business only. Remaining:
-- First admin is bootstrapped on first sign-in (trust in the IdP's admin-only attributes); a bank-side
-  "provision business admin" operation (staff scope) would remove that reliance.
-- API clients created for a business get only `meridian.business.api-client-scopes` (default channels:business, which
-  must exist in identity-service's scope catalogue); machine-to-machine business access (client-credentials tokens
-  bound to a business) needs a business-scoped API surface first.
-- Webhook subscriptions are filtered on the payload's `customer_id`; events without it (collections, virtual account
-  credits) are never delivered to business endpoints.
-- Loan repayments, credit-line draws, mandates, collections, virtual accounts and payment links act immediately (role +
-  entitlement + step-up) instead of going through the approval matrix.
-- The daily limit counts submissions per UTC day (not the business date) in the limit currency only.
+web/business-portal on /v1/business only.
+
+Done (2026-10-07, CHN-BUSINESS-FOLLOWUPS):
+- Bank staff provision a business's first ADMIN (`POST /v1/business-provisioning/admins`, scope channels:admin or
+  meridian:admin; channel identities refused even in dev mode; only while the business has no active ADMIN; published
+  as PROVISIONED and recorded in the business's activity). First-sign-in bootstrap is off by default in JWT mode, on in
+  dev mode (`meridian.business.bootstrap-first-admin` overrides). channels:admin is a staff client scope in the realm.
+- Loan repayments, credit-line draws and repayments, mandates, collections, virtual accounts and payment links go
+  through the approval matrix when a rule of their type (new `applies_to` values; ALL rules never cover operations)
+  covers the amount: 202 with a `business_payment` of that kind holding the rebuilt downstream request (part of the
+  checksum), approved like payments and released once (`bzp-release:<id>`, as the initiator); else immediate.
+- Daily limits count per business date of the debit account's legal entity (BusinessDates; stored as
+  `business_payment.business_date`), payments only; execution dates are checked against the same date.
+- Collection events (`payments.direct_debit_collection.*`) carry the mandate's customer_id and
+  `accounts.virtual_account.created` the master account holder's, so business webhook subscriptions (filter
+  customer_id) receive them; allowed business event types now include those and `payments.payment_link.*`.
+- KYB through the channel: `/v1/business/onboarding` (journeys, applications, steps incl. directors / UBO declarations,
+  documents via document-service, submit with step-up, related parties) with ownership checks; risk / review fields
+  never returned. The portal's KYB screen uses it.
+- Machine-to-machine business API (docs/BUSINESS_M2M_API.md): API clients are tagged in identity-service with
+  business_customer_id + business_user_id (TECHNICAL user, MAKER or VIEWER); m2m tokens (marker `m2m`, azp = client)
+  act only as that technical user; suspending the client suspends it.
+
+Remaining:
+- Virtual account credits post straight to the VA ledger sub-account and publish no deposit/payment event of their own
+  (only ledger postings); a `accounts.virtual_account.credited` event (owner customer_id) needs the ledger posting path.
+- IdP clients for business API clients are provisioned by an operator from the identity-service record (no automatic
+  sync yet); see docs/BUSINESS_M2M_API.md.
+- Daily limits are still per limit currency only (no FX conversion of other-currency submissions).
 - PAYROLL batches are sent as CSV, so payment-service does not get category purpose SALA; per-line execution status is
   only available through the report.
 - Payment-service approval levels the business's approvers cannot satisfy remain with the bank's staff; the portal
   shows `downstream_status`.
-- KYB onboarding screens still use the staff/public onboarding APIs (not the channel).
 
 ## Resume point (paused 2026-10-07)
 

@@ -17,6 +17,16 @@ type RuleBody = {
   required_approvals: number; approval_order: BusinessApprovalRule["approval_order"]; approver_ids?: string[];
 };
 
+/** Payment scopes, and the non-payment operations a rule may cover (ALL never covers operations). */
+const SCOPES: { value: BusinessApprovalRule["applies_to"]; label: string }[] = [
+  { value: "ALL", label: "All payments" }, { value: "SINGLE", label: "Single payments" }, { value: "BULK", label: "Bulk & payroll" },
+  { value: "LOAN_REPAYMENT", label: "Loan repayments" }, { value: "CREDIT_LINE_DRAW", label: "Credit line draws" },
+  { value: "CREDIT_LINE_REPAYMENT", label: "Credit line repayments" }, { value: "MANDATE", label: "New mandates" },
+  { value: "COLLECTION", label: "Direct debit collections" }, { value: "VIRTUAL_ACCOUNT", label: "New virtual accounts" },
+  { value: "PAYMENT_LINK", label: "New payment links" },
+];
+const scopeLabel = (v: string) => SCOPES.find((s) => s.value === v)?.label ?? v;
+
 function RuleDialog({ rule, open, onClose }: { rule?: BusinessApprovalRule; open: boolean; onClose: () => void }) {
   const users = useUsers(open);
   const r = useRun();
@@ -48,9 +58,9 @@ function RuleDialog({ rule, open, onClose }: { rule?: BusinessApprovalRule; open
         {rule && <p className="text-muted">The current version is deactivated and kept for payments that used it.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Field>
-          <Field label="Applies to">
+          <Field label="Applies to" hint="Operations need approval only when a rule of their type covers the amount (mandates, virtual accounts and links without an amount count as 0).">
             <Select value={f.applies_to} onChange={(e) => setF({ ...f, applies_to: e.target.value as RuleBody["applies_to"] })}
-              options={[{ value: "ALL", label: "All payments" }, { value: "SINGLE", label: "Single payments" }, { value: "BULK", label: "Bulk & payroll" }]} />
+              options={SCOPES} />
           </Field>
           <Field label="Currency"><Input value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })} required maxLength={3} /></Field>
           <Field label="Required approvals">
@@ -104,14 +114,14 @@ export default function RulesPage() {
 
   return (
     <AdminOnly>
-      <PageHeader title="Approval rules" subtitle="The approval matrix: amount bands per currency and scope decide how many approvals a payment needs"
+      <PageHeader title="Approval rules" subtitle="The approval matrix: amount bands per currency and scope decide how many approvals a payment or operation needs"
         actions={<Button onClick={() => setEditing("new")}>Add rule</Button>} />
       <Card flush>
-        <Async q={rules} empty={<div className="p-4"><Empty title="No rules">Without a matching rule a payment needs one approval.</Empty></div>}>
+        <Async q={rules} empty={<div className="p-4"><Empty title="No rules">Without a matching rule a payment needs one approval; other operations run at once.</Empty></div>}>
           {(rows) => (
             <Table rows={rows} rowKey={(r) => r.id} caption="Approval rules" columns={[
               { header: "Name", cell: (r) => r.name },
-              { header: "Applies to", cell: (r) => r.applies_to },
+              { header: "Applies to", cell: (r) => scopeLabel(r.applies_to) },
               { header: "Band", cell: (r) => <><Money amount={r.min_amount} currency={r.currency} /> – {r.max_amount ? <Money amount={r.max_amount} currency={r.currency} /> : "∞"}</> },
               { header: "Approvals", cell: (r) => r.required_approvals },
               { header: "Order", cell: (r) => <Badge value={r.approval_order} tone="muted" /> },
