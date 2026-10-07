@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+ * Meridian design tokens (same names as the ops console), tuned for outlets: higher contrast (WCAG AA+ on every
+ * text/background pair), bigger type and touch targets. Components use these via the theme mapping below.
+ */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #c9d0da;
+  --text: #0b1220;
+  --text-muted: #3f4a5a;
+  --accent: #1740b8;
+  --accent-fg: #ffffff;
+  --accent-soft: #e3ebfd;
+  --good: #035c42;
+  --good-soft: #dff4ea;
+  --warn: #8a3f00;
+  --warn-soft: #fdefd8;
+  --bad: #9b1414;
+  --bad-soft: #fde6e6;
+  --radius: 12px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f15;
+    --surface: #131a23;
+    --surface-2: #1b2430;
+    --border: #3a4656;
+    --text: #f2f5f9;
+    --text-muted: #b9c3d0;
+    --accent: #8db0ff;
+    --accent-fg: #0b1220;
+    --accent-soft: #1b2a47;
+    --good: #5ee0b0;
+    --good-soft: #10291f;
+    --warn: #ffcb5c;
+    --warn-soft: #2d2410;
+    --bad: #ff9b9b;
+    --bad-soft: #2f1416;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* Receipts print on narrow thermal paper; everything else is hidden. */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0 auto auto 0; width: 72mm; font-size: 11px; color: #000; background: #fff; }
+  .no-print { display: none !important; }
+}
