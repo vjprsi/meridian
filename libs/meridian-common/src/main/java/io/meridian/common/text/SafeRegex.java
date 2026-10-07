@@ -55,6 +55,36 @@ public final class SafeRegex {
         return run(regex, flags, input, false);
     }
 
+    /**
+     * Captured values of every match ({@code find}) within the limits: group 1 when the pattern has a group, else
+     * the whole match; at most {@code maxMatches}. The time limit covers the whole scan; on timeout the values
+     * found so far are returned. Invalid patterns and over-long inputs yield an empty list.
+     */
+    public static java.util.List<String> extract(String regex, int flags, String input, int maxMatches) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (regex == null || input == null || input.length() > MAX_INPUT || regex.length() > MAX_PATTERN) {
+            return out;
+        }
+        Pattern p;
+        try {
+            p = pattern(regex, flags);
+        } catch (PatternSyntaxException e) {
+            return out;
+        }
+        java.util.regex.Matcher m = p.matcher(new Deadline(input, System.nanoTime() + TIMEOUT_MS * 1_000_000));
+        try {
+            while (out.size() < maxMatches && m.find()) {
+                String v = m.groupCount() >= 1 ? m.group(1) : m.group();
+                if (v != null && !v.isEmpty()) {
+                    out.add(v);
+                }
+            }
+        } catch (TimedOut e) {
+            return out;
+        }
+        return out;
+    }
+
     private static boolean run(String regex, int flags, String input, boolean full) {
         if (regex == null || input == null || input.length() > MAX_INPUT || regex.length() > MAX_PATTERN) {
             return false;

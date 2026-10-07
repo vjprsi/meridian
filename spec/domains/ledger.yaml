@@ -27,7 +27,10 @@ enums:
   ReconMatchType: [ONE_TO_ONE, ONE_TO_MANY, MANY_TO_ONE, MANY_TO_MANY, MANUAL]
   ReconExceptionStatus: [OPEN, INVESTIGATING, RESOLVED, WRITTEN_OFF, IGNORED]
   ReconExceptionReason: [MISSING_INTERNAL, MISSING_EXTERNAL, AMOUNT_MISMATCH, DATE_MISMATCH, DUPLICATE,
-                         CURRENCY_MISMATCH, OTHER]
+                         CURRENCY_MISMATCH, AMBIGUOUS, OTHER]
+  ReconRuleSetStatus: [DRAFT, PENDING_APPROVAL, PUBLISHED, SUPERSEDED, REJECTED]
+  ReconAdjustmentKind: [ADJUSTMENT, WRITE_OFF]
+  ReconAdjustmentStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
 
 services:
   # ------------------------------------------------------------------ ledger-service
@@ -598,7 +601,11 @@ services:
           - "record_count int ro | Lines parsed"
           - "status enum:ReconFileStatus nn default=RECEIVED ro | Processing status"
           - "error text ro | Parsing error"
-        unique: [[tenant_id, checksum]]
+          - "statement_id string(64) ro | Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:)"
+          - "sequence_no string(32) ro | Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement"
+          - "account_id string(64) ro | Account identification stated in the file (IBAN, MT940 :25:)"
+          - "movements_total amount ro | Net of the parsed lines (credits - debits), checked against opening and closing balances"
+        unique: [[tenant_id, checksum], [tenant_id, recon_source_id, statement_id, sequence_no]]
 
       - name: recon_record
         prefix: rrc
@@ -618,6 +625,16 @@ services:
           - "counterparty string(255) | Counterparty name / account"
           - "narrative string(500) | Description"
           - "raw json | Original parsed line"
+          - "line_no int | Position of the line in the file"
+          - "instruction_id string(64) | Instruction id (ISO 20022 InstrId)"
+          - "uetr string(36) idx | Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR)"
+          - "counterparty_account string(64) | Counterparty IBAN / account number"
+          - "transaction_code string(32) | Bank transaction code (camt BkTxCd, MT940 transaction type)"
+          - "is_reversal bool nn default=false | Reversal of an earlier booking (camt RvslInd, MT940 RC / RD)"
+          - "charges_amount amount | Charges deducted by the bank, when stated"
+          - "original_amount amount | Instructed amount before charges / FX conversion, when stated"
+          - "original_currency currency | Currency of original_amount"
+          - "batch_count int | Transactions summarised by a batch booking"
 
       - name: recon_rule
         prefix: rrl
@@ -634,6 +651,33 @@ services:
           - "auto_confirm bool nn default=true | Confirm matches without review"
           - "is_active bool nn default=true | Active"
 
+      - name: recon_rule_set
+        prefix: rrs
+        description: >
+          Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many /
+          many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes
+          through central approvals; a published version is immutable and supersedes the previous one of its scope.
+        fr: [REC-02]
+        columns:
+          - "recon_source_id uuid fk=recon_source idx | Source (empty = tenant default for every source)"
+          - "name string(120) nn | Name"
+          - "version int nn default=1 ro | Version within the scope, assigned on create"
+          - "status enum:ReconRuleSetStatus nn default=DRAFT ro | Lifecycle"
+          - "auto_match_threshold rate nn default=0.9 | Minimum confidence to auto-confirm a match"
+          - "suggest_threshold rate nn default=0.5 | Minimum confidence to propose a match for review"
+          - "rules json[] | Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR"
+          - "description text | Notes"
+          - "checksum string(64) ro | SHA-256 of the configuration (approval fingerprint)"
+          - "submitted_by string(64) ro | Maker who submitted it"
+          - "submitted_at ts ro | Submission time"
+          - "approval_request_id uuid ro | Central approval request"
+          - "approved_by string(64) ro | Checker who published it"
+          - "published_at ts ro | Publication time"
+          - "superseded_at ts ro | When a newer version replaced it"
+          - "rejected_by string(64) ro | Checker who rejected it"
+          - "rejection_reason string(500) ro | Why it was rejected"
+        unique: [[tenant_id, recon_source_id, version]]
+
       - name: recon_run
         prefix: rrn
         description: A matching run over a source and date range
@@ -647,6 +691,12 @@ services:
           - "exception_count int ro | Breaks raised"
           - "started_at ts ro | Start"
           - "finished_at ts ro | End"
+          - "recon_rule_set_id uuid fk=recon_rule_set ro | Rule set version applied (empty = legacy rules)"
+          - "business_date date ro | Business date when started by end of day"
+          - "external_count int ro | External records considered"
+          - "suggested_count int ro | External records with a suggestion below the auto-match threshold"
+          - "auto_match_rate rate ro | Auto-matched / considered external records"
+          - "metrics json ro | Per-rule counts, confidence statistics and break reasons"
 
       - name: recon_match
         prefix: rmt
@@ -663,6 +713,9 @@ services:
           - "confidence rate | AI / rule confidence 0..1"
           - "confirmed_by string(64) | Who confirmed a manual or suggested match"
           - "unmatched_at ts | Set via a new compensating match record when undone"
+          - "recon_rule_set_id uuid fk=recon_rule_set ro | Rule set version that produced it"
+          - "rule_code string(64) ro | Rule of the rule set"
+          - "explanation json ro | Why: rule, matched keys and score components (amount, date, name, reference)"
 
       - name: recon_exception
         prefix: rex
@@ -681,6 +734,29 @@ services:
           - "suggested_match json ro | AI-suggested counterpart records with confidence"
           - "resolution_note text | How it was resolved"
           - "resolved_at ts ro | Resolution time"
+
+      - name: recon_adjustment
+        prefix: radj
+        description: >
+          A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
+          approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and
+          the break closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
+        fr: [REC-03]
+        columns:
+          - "recon_exception_id uuid nn fk=recon_exception idx | Break"
+          - "kind enum:ReconAdjustmentKind nn | Adjustment (books the missing side) or write-off"
+          - "status enum:ReconAdjustmentStatus nn default=PENDING_APPROVAL ro | Lifecycle"
+          - "amount amount nn | Amount adjusted or written off"
+          - "currency currency nn | Currency"
+          - "ledger_id uuid ref=ledger | Ledger to post into (empty: write-off without a posting)"
+          - "entries json[] | Balanced journal lines [{ledger_account_id, direction, amount, currency}]"
+          - "reason text nn | Justification"
+          - "requested_by string(64) ro | Maker"
+          - "approval_request_id uuid ro | Central approval request"
+          - "approved_by string(64) ro | Checker"
+          - "decided_at ts ro | Decision time"
+          - "rejection_reason string(500) ro | Why it was rejected"
+          - "journal_entry_id uuid ref=journal_entry ro | Posted journal entry"
 
     apis:
       - resource: recon-sources
@@ -702,11 +778,24 @@ services:
         table: recon_rule
         ops: [list, get, create, update, delete]
         filters: [recon_source_id, is_active]
+      - resource: recon-rule-sets
+        path: /v1/reconciliation/rule-sets
+        table: recon_rule_set
+        ops: [list, get, create, update]
+        filters: [recon_source_id, status]
+        actions:
+          - "POST /{id}/submit | Submit a DRAFT (or REJECTED) version for four-eyes approval through central approvals | | recon_rule_set"
+          - "POST /{id}/approve | Publish a submitted version (approver must differ from the submitter); the published version of the same scope is superseded | | recon_rule_set"
+          - "POST /{id}/reject | Reject a submitted version back to the maker | reason string(500) nn | recon_rule_set"
+          - "POST /{id}/simulate | Dry-run this version over a source and value-date range without storing anything: auto-match rate, suggestions and per-rule counts | recon_source_id uuid nn, from_date date nn, to_date date nn | object"
       - resource: recon-runs
         path: /v1/reconciliation/runs
         table: recon_run
         ops: [list, get, create]
-        filters: [recon_source_id, status]
+        filters: [recon_source_id, status, business_date]
+        actions:
+          - "POST /eod?business_date:date! | End of day - reconcile every active source linked to a ledger account over its look-back window ending on business_date (idempotent per business date and source); returns records_processed, records_failed, auto-match rate and breaks raised | | object"
+          - "GET /metrics?from_date:date!&to_date:date!&recon_source_id:uuid | Auto-match rate per run, source and rule, and open-break ageing (0-1, 2-7, 8-30, 31+ days) by reason | | object"
       - resource: recon-matches
         path: /v1/reconciliation/matches
         table: recon_match
@@ -721,8 +810,16 @@ services:
         filters: [recon_run_id, reason, status, assigned_to]
         actions:
           - "POST /{id}/assign | Assign to an investigator | assigned_to string(64) nn"
-          - "POST /{id}/resolve | Resolve with a note, optionally posting an adjustment | resolution_note text nn, adjustment json"
-          - "POST /{id}/accept-suggestion | Confirm the AI-suggested match | | recon_match"
+          - "POST /{id}/resolve | Resolve with a note, without a posting (adjustments and write-offs go through /v1/reconciliation/adjustments with four-eyes) | resolution_note text nn"
+          - "POST /{id}/accept-suggestion | Confirm the suggested match | | recon_match"
+      - resource: recon-adjustments
+        path: /v1/reconciliation/adjustments
+        table: recon_adjustment
+        ops: [list, get, create]
+        filters: [recon_exception_id, status, kind]
+        actions:
+          - "POST /{id}/approve | Approve (approver must differ from the requester): posts the journal entry and closes the break | | recon_adjustment"
+          - "POST /{id}/reject | Reject the request; the break stays open | reason string(500) nn | recon_adjustment"
 
     events:
       - "ledger.recon_file.parsed | recon_file | A statement file was parsed"
@@ -731,3 +828,10 @@ services:
       - "ledger.recon_match.unmatched | recon_match | A match was undone by a compensating record"
       - "ledger.recon_exception.raised | recon_exception | A reconciliation break was raised"
       - "ledger.recon_exception.resolved | recon_exception | A break was resolved"
+      - "ledger.recon_rule_set.submitted | recon_rule_set | A rule set version was submitted for approval"
+      - "ledger.recon_rule_set.published | recon_rule_set | A rule set version was approved and published"
+      - "ledger.recon_rule_set.rejected | recon_rule_set | A submitted rule set version was rejected"
+      - "ledger.recon_adjustment.requested | recon_adjustment | An adjustment or write-off was requested for a break"
+      - "ledger.recon_adjustment.approved | recon_adjustment | An adjustment or write-off was approved and posted"
+      - "ledger.recon_adjustment.rejected | recon_adjustment | An adjustment or write-off request was rejected"
+      - "ledger.recon_eod.completed | recon_run | End-of-day reconciliation finished for a business date (counts and auto-match rate)"

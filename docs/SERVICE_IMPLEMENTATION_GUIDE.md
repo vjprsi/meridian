@@ -405,7 +405,9 @@ limits, sanctions and product-catalog services.
   operation or user (422 `idempotency_key_reused`). Deterministic keys must embed the resource id.
 - **Four-eyes.** Use `io.meridian.common.tenancy.FourEyes.require(maker, checker, message)`; it fails closed when the
   maker is unknown (422 `four_eyes_maker_unknown`).
-- **Tenant regexes.** Match with `io.meridian.common.text.SafeRegex` and validate on save with `SafeRegex.problem`.
+- **Tenant regexes.** Match with `io.meridian.common.text.SafeRegex` and validate on save with `SafeRegex.problem`;
+  capture values (group 1) with `SafeRegex.extract(regex, flags, input, maxMatches)` (same input / time limits;
+  used by reconciliation remittance-reference rules).
 - **Check-then-act across replicas** (inbound messages, external callbacks): `AdvisoryLocks.withLock(key, wait, work)`.
 - **Body size.** `meridian.http.max-body-size` (16MB default); raise it only for upload services.
 

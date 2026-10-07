@@ -6,6 +6,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.reconciliation.domain.CamtStatementParser;
 import io.meridian.reconciliation.domain.CsvStatementParser;
+import io.meridian.reconciliation.domain.Mt940Parser;
 import io.meridian.reconciliation.domain.ParsedStatement;
 import io.meridian.reconciliation.domain.StatementLine;
 import io.meridian.reconciliation.infrastructure.FileStore;
@@ -33,10 +34,13 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Statement / settlement file intake. A file arrives with its {@code content} (CSV, camt.053/054 XML or a JSON
- * array, per the source's file_format) or as pre-parsed {@code records}; it is stored, de-duplicated by SHA-256,
- * parsed into immutable recon_records and checked (currency, opening + movements = closing). A file that fails to
- * parse is kept as FAILED and can be reprocessed after the source's parser_config is fixed.
+ * Statement / settlement file intake. A file arrives with its {@code content} (camt.052/053/054 XML, MT940/MT942,
+ * CSV statement or scheme settlement report, or a JSON array, per the source's file_format) or as pre-parsed
+ * {@code records}; it is stored, de-duplicated by SHA-256 and by the statement identification it states (statement
+ * id + sequence number per source: the same statement re-sent with different bytes is rejected), parsed into
+ * immutable recon_records and checked (currency, opening + movements = closing, MT942 declared debit / credit
+ * totals). A file that fails to parse is kept as FAILED and can be reprocessed after the source's parser_config is
+ * fixed.
  */
 @Service
 public class FileService {
@@ -111,12 +115,16 @@ public class FileService {
         try {
             parsed = parse(source, new String(bytes, StandardCharsets.UTF_8), preParsed);
             validate(parsed, source, file);
+            requireNewStatement(source, fileId, parsed);
         } catch (ParsedStatement.ParseException e) {
             store.update("update recon_file set status = 'FAILED', error = ?, record_count = 0, updated_by = ? where id = ?",
                     e.getMessage(), TenantContext.principal(), fileId);
             return store.require("recon_file", fileId).toString();
         }
+        int lineNo = 0;
         for (StatementLine l : parsed.lines()) {
+            lineNo++;
+            StatementLine.Details d = l.details();
             ObjectNode r = json.createObjectNode();
             r.put("recon_file_id", fileId.toString());
             r.put("recon_source_id", source.get("id").asString());
@@ -130,14 +138,28 @@ public class FileService {
             putIf(r, "counterparty", truncate(l.counterparty(), 255));
             putIf(r, "narrative", truncate(l.narrative(), 500));
             r.set("raw", json.valueToTree(l.raw()));
+            r.put("line_no", lineNo);
+            putIf(r, "instruction_id", truncate(d.instructionId(), 64));
+            putIf(r, "uetr", truncate(d.uetr(), 36));
+            putIf(r, "counterparty_account", truncate(d.counterpartyAccount(), 64));
+            putIf(r, "transaction_code", truncate(d.transactionCode(), 32));
+            r.put("is_reversal", d.reversal());
+            putIf(r, "charges_amount", d.charges() == null ? null : d.charges().toPlainString());
+            putIf(r, "original_amount", d.originalAmount() == null ? null : d.originalAmount().toPlainString());
+            putIf(r, "original_currency", d.originalAmount() == null ? null : d.originalCurrency());
+            if (d.batchCount() != null) {
+                r.put("batch_count", d.batchCount());
+            }
             crud.insert("recon_record", r);
         }
         store.update("""
                 update recon_file set status = 'PARSED', error = null, record_count = ?, updated_by = ?,
                        statement_date = coalesce(statement_date, ?), opening_balance = coalesce(opening_balance, ?),
-                       closing_balance = coalesce(closing_balance, ?)
+                       closing_balance = coalesce(closing_balance, ?), statement_id = ?, sequence_no = ?,
+                       account_id = ?, movements_total = ?
                 where id = ?""", parsed.lines().size(), TenantContext.principal(), parsed.statementDate(),
-                parsed.openingBalance(), parsed.closingBalance(), fileId);
+                parsed.openingBalance(), parsed.closingBalance(), truncate(parsed.statementId(), 64),
+                truncate(parsed.sequenceNo(), 32), truncate(parsed.accountId(), 64), parsed.movements(), fileId);
         JsonNode row = store.require("recon_file", fileId);
         outbox.publish("ledger.recon_file.parsed", "recon_file", fileId, row);
         return row.toString();
@@ -153,6 +175,7 @@ public class FileService {
         return switch (format) {
             case "CSV" -> CsvStatementParser.parse(content, csvConfig(source.path("parser_config"), sourceCcy));
             case "CAMT_053", "CAMT_054" -> CamtStatementParser.parse(content);
+            case "MT940", "MT942" -> Mt940Parser.parse(content);
             case "JSON" -> {
                 JsonNode n;
                 try {
@@ -167,28 +190,48 @@ public class FileService {
         };
     }
 
-    /** Checks currencies against the source and, when both balances are known, opening + movements = closing. */
+    /**
+     * Checks currencies against the source and the stated figures: opening + movements = closing when both balances
+     * are known (stated in the file or sent with the import), declared control totals (MT942).
+     */
     private static void validate(ParsedStatement p, JsonNode source, JsonNode file) {
         if (p.lines().isEmpty()) {
             throw new ParsedStatement.ParseException("The file contains no records");
         }
         String ccy = Fields.text(source, "currency");
-        BigDecimal net = BigDecimal.ZERO;
         for (StatementLine l : p.lines()) {
             if (ccy != null && !ccy.trim().equals(l.currency())) {
                 throw new ParsedStatement.ParseException("Record currency " + l.currency()
                         + " differs from the source currency " + ccy.trim());
             }
-            net = l.direction() == StatementLine.Direction.CREDIT ? net.add(l.amount()) : net.subtract(l.amount());
         }
         BigDecimal opening = Fields.decimal(file, "opening_balance") != null ? Fields.decimal(file, "opening_balance")
                 : p.openingBalance();
         BigDecimal closing = Fields.decimal(file, "closing_balance") != null ? Fields.decimal(file, "closing_balance")
                 : p.closingBalance();
-        if (opening != null && closing != null && opening.add(net).compareTo(closing) != 0) {
-            throw new ParsedStatement.ParseException("Balance check failed: opening " + opening.toPlainString()
-                    + " + movements " + net.toPlainString() + " != closing " + closing.toPlainString());
+        p.checkTotals(opening, closing);
+    }
+
+    /**
+     * Idempotency by statement identification: a file stating a statement id (and sequence) already imported for
+     * the source is a re-delivery (MT940 re-sent, camt.053 re-generated with a new creation time) and is rejected
+     * with 409 so its lines are never booked twice.
+     */
+    private void requireNewStatement(JsonNode source, UUID fileId, ParsedStatement p) {
+        if (p.statementId() == null) {
+            return;
         }
+        String id = truncate(p.statementId(), 64);
+        String seq = truncate(p.sequenceNo(), 32);
+        UUID sourceId = UUID.fromString(source.get("id").asString());
+        store.advisoryLock("recon_statement:" + TenantContext.require() + ":" + sourceId + ":" + id + ":" + seq);
+        store.row("""
+                select row_to_json(t)::text from recon_file t
+                where t.recon_source_id = ? and t.statement_id = ? and t.sequence_no is not distinct from ?
+                  and t.id <> ? and t.status <> 'FAILED'""", sourceId, id, seq, fileId).ifPresent(f -> {
+            throw ApiException.conflict("duplicate_statement", "Statement " + id + (seq == null ? "" : " sequence " + seq)
+                    + " was already received for this source as file " + f.get("id").asString());
+        });
     }
 
     private static ParsedStatement fromJson(JsonNode arr, String defaultCcy) {
@@ -216,9 +259,17 @@ public class FileService {
                 }
                 Map<String, String> raw = new HashMap<>();
                 n.propertyNames().forEach(k -> raw.put(k, n.get(k).asString()));
+                BigDecimal original = Fields.decimal(n, "original_amount");
+                String originalCcy = original == null ? null
+                        : Fields.text(n, "original_currency") == null ? ccy : Fields.text(n, "original_currency");
                 lines.add(new StatementLine(Fields.text(n, "external_ref"), Fields.text(n, "end_to_end_id"),
                         Fields.requireDate(n, "value_date"), Fields.date(n, "booking_date"), d, amount, ccy,
-                        Fields.text(n, "counterparty"), Fields.text(n, "narrative"), raw));
+                        Fields.text(n, "counterparty"), Fields.text(n, "narrative"), raw,
+                        new StatementLine.Details(Fields.text(n, "instruction_id"), Fields.text(n, "uetr"),
+                                Fields.text(n, "counterparty_account"), Fields.text(n, "transaction_code"),
+                                n.path("is_reversal").asBoolean(false), Fields.decimal(n, "charges_amount"), original,
+                                originalCcy, Fields.text(n, "batch_ref"),
+                                n.hasNonNull("batch_count") ? n.get("batch_count").asInt() : null)));
             } catch (ApiException e) {
                 throw new ParsedStatement.ParseException("Record " + i + ": " + e.getMessage());
             }
@@ -242,10 +293,21 @@ public class FileService {
         } catch (IllegalArgumentException e) {
             throw new ParsedStatement.ParseException("Invalid parser_config.date_format " + dateFormat);
         }
+        String preset = Fields.text(cfg, "preset");
+        Map<String, String> presetColumns = Map.of();
+        if (preset != null) {
+            if (!"SCHEME_SETTLEMENT".equals(preset)) {
+                throw new ParsedStatement.ParseException("Unknown parser_config.preset " + preset
+                        + "; supported: SCHEME_SETTLEMENT");
+            }
+            presetColumns = CsvStatementParser.SCHEME_SETTLEMENT;
+        }
         return new CsvStatementParser.Config(delimiter == null || delimiter.isEmpty() ? d.delimiter() : delimiter.charAt(0),
                 cfg.path("has_header").asBoolean(true), columns, fmt,
                 Fields.text(cfg, "currency") != null ? Fields.text(cfg, "currency") : defaultCcy,
-                values(cfg.path("credit_values"), d.creditValues()), values(cfg.path("debit_values"), d.debitValues()));
+                values(cfg.path("credit_values"), d.creditValues()), values(cfg.path("debit_values"), d.debitValues()),
+                ",".equals(Fields.text(cfg, "decimal_separator")) ? ',' : '.', Math.max(0, cfg.path("skip_lines").asInt(0)),
+                values(cfg.path("reversal_values"), d.reversalValues()), presetColumns);
     }
 
     private static Set<String> values(JsonNode arr, Set<String> fallback) {

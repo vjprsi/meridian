@@ -1,6 +1,6 @@
 {
   "pack_code": "MERIDIAN_STANDARD_EOD",
-  "version": "2026.10.2",
+  "version": "2026.10.3",
   "description": "Standard end-of-day job pack: every domain's per-tenant EOD, scan and expiry endpoint in banking order (cut-off and expiries -> postings -> accruals -> delinquency -> collections -> fees/dormancy -> ledger snapshot / GL -> treasury and liquidity -> reporting, statements, notifications). Derived from spec/domains/*.yaml; verified against generated/routes.json by StandardJobPackTest.",
   "stages": [
     "CUT_OFF",
@@ -666,6 +666,27 @@
       "is_critical": true,
       "failure_policy": "RETRY_THEN_CONTINUE",
       "timeout_minutes": 60,
+      "max_retries": 3,
+      "is_active": true,
+      "sequence": 70
+    },
+    {
+      "code": "RECON_DAILY",
+      "name": "Daily reconciliation: match statement lines to ledger entries for every linked source",
+      "stage": "LEDGER",
+      "job_type": "RECONCILIATION",
+      "cycle_types": [
+        "EOD"
+      ],
+      "owning_service": "reconciliation-service",
+      "http_method": "POST",
+      "http_path": "/v1/reconciliation/runs/eod?business_date={business_date}",
+      "depends_on": [
+        "LEDGER_EOD"
+      ],
+      "is_critical": false,
+      "failure_policy": "RETRY_THEN_CONTINUE",
+      "timeout_minutes": 120,
       "max_retries": 3,
       "is_active": true,
       "sequence": 70

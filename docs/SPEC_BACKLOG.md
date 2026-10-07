@@ -17,14 +17,18 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
 | G7 | Platform-global reference tables (fx_rate, holiday_calendar ownership) RLS semantics unclear | Decide global vs tenant-override model; add `tenant: false` + override tables | Open |
 | G8 | Scheduled jobs cannot enumerate tenants under RLS (workaround: tenants seen in idempotency_key) | Business-day-service drives per-tenant jobs; services expose job endpoints; or a tenant registry fed by `platform.tenant.*` events | Done (business-day-service, see note) |
 
-**G8 note.** business-day-service ships a versioned *standard EOD job pack* (`eod/standard-pack.json`, 53 jobs in banking
+**G8 note.** business-day-service ships a versioned *standard EOD job pack* (`eod/standard-pack.json`, 54 jobs in banking
 order, checked against `generated/routes.json` and the per-service OpenAPI by `StandardJobPackTest`), installed per tenant
 with `POST /v1/operations/eod-jobs/install-standard-pack` (idempotent upgrade; tenant-defined jobs never overwritten).
 A cross-tenant trigger (`eod_sweep`, `eod_trigger_policy`) lists ACTIVE tenants from tenant-service with the service token
 and starts EOD per legal entity once its local cut-off has passed (optional auto-roll after a fully successful EOD):
 scheduler `meridian.business-day.auto-eod.enabled` (off by default) or operator `POST /v1/operations/eod-sweeps/run`
 (`meridian:admin`). Ledger EOD is tenant-wide (`POST /v1/ledgers/end-of-day`, per legal entity of the EOD run; pack
-`LEDGER_EOD` ships active, an optional `parameters.ledger_id` still pins one book; done). Remaining: no tenant EOD endpoints yet for reconciliation runs, fee/billing charging or GL period close; most domain EOD endpoints
+`LEDGER_EOD` ships active, an optional `parameters.ledger_id` still pins one book; done). Reconciliation: done —
+`RECON_DAILY` (pack 2026.10.3, after `LEDGER_EOD`) calls `POST /v1/reconciliation/runs/eod?business_date=` which
+runs every active linked source over its look-back window, idempotent per business date and source, and returns
+`records_processed` / `records_failed` plus the auto-match rate. Remaining: no tenant EOD endpoints yet for
+fee/billing charging or GL period close; most domain EOD endpoints
 are tenant-wide, not per legal entity; the generator cannot express operator-only reads of global tables.
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Done ([public]) |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
@@ -53,6 +57,7 @@ duplicate resource names and ambiguous paths are now hard validation errors; wri
 |---|---|
 | Cross-cutting | Four-eyes is checked locally by principal everywhere; move to workflow-service approvals (G11). |
 | Cross-cutting | ~~EOD / scan / expiry endpoints exist per tenant but nothing schedules them yet~~ — done: standard EOD job pack + cross-tenant trigger in business-day-service (G8 note). |
+| Reconciliation | Matching engine (S19) is in place, but the internal side read from ledger-service carries only the journal `reference` and line description: payment-service posts without `reference` (should be the end-to-end id) and no posting carries UETR / instruction id / counterparty / batch id, so the UETR, name-based and keyed-batch rules cannot fire on nostro sources yet. Needed: payment-service and card-clearing set `reference` and journal `metadata` (uetr, instruction_id, counterparty_name/account, batch_ref), ledger-entries list exposes them; file-gateway route type to deliver inbound statements to `POST /v1/reconciliation/files/import`; BAI2 / Visa Base II / Mastercard T112 parsers. |
 | Cross-cutting | Simulated adapters only: credit bureau, e-signature, billers, interop switch, regulator gateway, data-share transport, HSM. |
 | Cross-cutting | Large jobs (disbursement batches, commission payouts, exports) run synchronously or in-memory; move to Temporal workflows. |
 | Cross-cutting | Report/export outputs stored inline; archive via document-service. Shared helpers duplicated in reporting services: move to libs. |
