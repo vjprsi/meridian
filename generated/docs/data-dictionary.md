@@ -27,10 +27,11 @@ API: /v1/deposit-accounts · Requirements: DEP-01, DEP-04, PRD-01, CIF-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| account_number | varchar(34) | no | UQ | account_number (read-only) | Bank account number (server-generated, check digit per country) |
+| account_number | varchar(34) | no | UQ | account_number (read-only) | Bank account number (server-generated in the booking legal entity's national format or IBAN account part, check digit per country) |
 | iban | varchar(34) | yes | UQ | iban | IBAN where applicable |
 | bban | varchar(34) | yes |  | bban | Basic bank account number |
-| routing_code | varchar(20) | yes |  | routing_code | Sort code / routing number / IFSC / CLABE prefix |
+| routing_code | varchar(20) | yes |  | routing_code | Sort code / routing number / IFSC / CLABE prefix (default: from the legal entity's numbering, e.g. KE bank + branch code) |
+| bic | varchar(11) | yes |  | bic (read-only) | BIC of the booking legal entity (numbering settings or the legal entity's swift_bic) |
 | account_type | varchar(40) (DepositAccountType) | no |  | account_type | Account type |
 | nickname | varchar(80) | yes |  | nickname | Customer-chosen name |
 | customer_id | uuid | no | ref → customer | customer_id | Primary customer |

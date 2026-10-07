@@ -359,9 +359,11 @@ def journey_setup(j: Journey):
     def activate_limits():
         items = api.get(f"/v1/starter-pack-items?pack_code={pack}&status=AWAITING_ACTIVATION&limit=200").get("data", [])
         for i in items:
-            api.post(f"{i['resource_path']}/{i['resource_id']}/activate", {"comment": "e2e checker activates"}, user=CHECKER)
-        return f"{len(items)} rules activated by the checker"
-    j.step("limits-service: checker activates the pack's limit rules (four-eyes)", activate_limits)
+            # onboarding journeys are published (four-eyes) rather than activated
+            action = "publish" if i["resource_path"].rstrip("/").endswith("/onboarding/journeys") else "activate"
+            api.post(f"{i['resource_path']}/{i['resource_id']}/{action}", {"comment": "e2e checker activates"}, user=CHECKER)
+        return f"{len(items)} items activated/published by the checker"
+    j.step("checker activates the pack's limit rules and publishes its sign-up journey (four-eyes)", activate_limits)
 
     def resume():
         cur = sh["starter_pack_run"]

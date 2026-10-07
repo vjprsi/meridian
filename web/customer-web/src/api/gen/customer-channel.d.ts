@@ -3183,14 +3183,16 @@ export interface components {
              * @description Optimistic lock version; send as If-Match
              */
             readonly row_version: number;
-            /** @description Bank account number (server-generated, check digit per country) */
+            /** @description Bank account number (server-generated in the booking legal entity's national format or IBAN account part, check digit per country) */
             readonly account_number: string;
             /** @description IBAN where applicable */
             iban?: string | null;
             /** @description Basic bank account number */
             bban?: string | null;
-            /** @description Sort code / routing number / IFSC / CLABE prefix */
+            /** @description Sort code / routing number / IFSC / CLABE prefix (default: from the legal entity's numbering, e.g. KE bank + branch code) */
             routing_code?: string | null;
+            /** @description BIC of the booking legal entity (numbering settings or the legal entity's swift_bic) */
+            readonly bic?: string | null;
             /**
              * @description Account type
              * @enum {string}

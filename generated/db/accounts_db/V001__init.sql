@@ -31,6 +31,7 @@ CREATE TABLE deposit_account (
   iban                         varchar(34),
   bban                         varchar(34),
   routing_code                 varchar(20),
+  bic                          varchar(11),
   account_type                 varchar(40) NOT NULL CHECK (account_type IN ('CURRENT', 'SAVINGS', 'CALL', 'NOTICE', 'MONEY_MARKET', 'ESCROW', 'BASIC', 'STUDENT', 'MINOR', 'PAYROLL', 'NOSTRO', 'VOSTRO', 'SUSPENSE', 'SETTLEMENT')),
   nickname                     varchar(80),
   customer_id                  uuid NOT NULL,
@@ -83,10 +84,11 @@ COMMENT ON COLUMN deposit_account.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN deposit_account.updated_at IS 'Last update time';
 COMMENT ON COLUMN deposit_account.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN deposit_account.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN deposit_account.account_number IS 'Bank account number (server-generated, check digit per country)';
+COMMENT ON COLUMN deposit_account.account_number IS 'Bank account number (server-generated in the booking legal entity''s national format or IBAN account part, check digit per country)';
 COMMENT ON COLUMN deposit_account.iban IS 'IBAN where applicable';
 COMMENT ON COLUMN deposit_account.bban IS 'Basic bank account number';
-COMMENT ON COLUMN deposit_account.routing_code IS 'Sort code / routing number / IFSC / CLABE prefix';
+COMMENT ON COLUMN deposit_account.routing_code IS 'Sort code / routing number / IFSC / CLABE prefix (default: from the legal entity''s numbering, e.g. KE bank + branch code)';
+COMMENT ON COLUMN deposit_account.bic IS 'BIC of the booking legal entity (numbering settings or the legal entity''s swift_bic)';
 COMMENT ON COLUMN deposit_account.account_type IS 'Account type';
 COMMENT ON COLUMN deposit_account.nickname IS 'Customer-chosen name';
 COMMENT ON COLUMN deposit_account.customer_id IS 'Primary customer';
