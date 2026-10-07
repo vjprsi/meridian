@@ -426,7 +426,7 @@ public class TransactionEngine {
 
     private static UUID gl(UUID account, String name) {
         if (account == null) {
-            throw new ApiException(500, "ledger_account_not_configured", "meridian.wallet.gl." + name + " is not configured");
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl." + name + " is not configured");
         }
         return account;
     }

@@ -69,7 +69,7 @@ public class LedgerClient {
                 continue;
             }
             if (l.account() == null) {
-                throw new ApiException(500, "ledger_account_not_configured",
+                throw new ApiException(422, "ledger_account_not_configured",
                         "A ledger account required for this posting is not configured");
             }
             ObjectNode e = entries.addObject();
@@ -169,7 +169,7 @@ public class LedgerClient {
 
     private UUID ledgerId() {
         if (props.ledgerId() == null) {
-            throw new ApiException(500, "ledger_not_configured", "meridian.wallet.ledger-id is not configured");
+            throw new ApiException(422, "ledger_not_configured", "meridian.wallet.ledger-id is not configured");
         }
         return props.ledgerId();
     }

@@ -301,7 +301,7 @@ public class FloatService {
 
     private UUID treasury() {
         if (props.treasuryWalletId() == null) {
-            throw new ApiException(500, "treasury_not_configured", "meridian.agent-network.treasury-wallet-id is not configured");
+            throw new ApiException(422, "treasury_not_configured", "meridian.agent-network.treasury-wallet-id is not configured");
         }
         return props.treasuryWalletId();
     }

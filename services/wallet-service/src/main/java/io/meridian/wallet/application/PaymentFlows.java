@@ -232,7 +232,7 @@ public class PaymentFlows {
             return UUID.fromString(ledgerAccount);
         }
         if (props.gl().bankClearing() == null) {
-            throw new ApiException(500, "ledger_account_not_configured", "meridian.wallet.gl.bank-clearing is not configured");
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.bank-clearing is not configured");
         }
         return props.gl().bankClearing();
     }

@@ -62,7 +62,7 @@ public class LedgerClient {
     public JsonNode capture(UUID holdId, BigDecimal amount, UUID counterAccount, String description,
                             boolean releaseRemainder, String key) {
         if (counterAccount == null) {
-            throw new ApiException(500, "ledger_account_not_configured",
+            throw new ApiException(422, "ledger_account_not_configured",
                     "A ledger account required for settlement is not configured");
         }
         ObjectNode body = json.createObjectNode();
@@ -102,7 +102,7 @@ public class LedgerClient {
     public UUID post(String key, String entryType, String description, String currency, String sourceType,
                      UUID sourceId, List<Leg> legs) {
         if (props.ledgerId() == null) {
-            throw new ApiException(500, "ledger_not_configured", "meridian.payment.ledger-id is not configured");
+            throw new ApiException(422, "ledger_not_configured", "meridian.payment.ledger-id is not configured");
         }
         ObjectNode body = json.createObjectNode();
         body.put("ledger_id", props.ledgerId().toString());
@@ -113,7 +113,7 @@ public class LedgerClient {
         ArrayNode entries = body.putArray("entries");
         for (Leg leg : legs) {
             if (leg.account() == null) {
-                throw new ApiException(500, "ledger_account_not_configured",
+                throw new ApiException(422, "ledger_account_not_configured",
                         "A ledger account required for this posting is not configured");
             }
             if (leg.amount().signum() == 0) {

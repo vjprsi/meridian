@@ -375,7 +375,7 @@ public class ReturnService {
         UUID fromRail = routing.rail(uuid(p, "rail_id")).map(r -> uuid(r, "settlement_account_id")).orElse(null);
         UUID account = fromRail != null ? fromRail : props.gl().clearing();
         if (account == null) {
-            throw new ApiException(500, "ledger_account_not_configured", "No rail settlement or clearing account configured");
+            throw new ApiException(422, "ledger_account_not_configured", "No rail settlement or clearing account configured");
         }
         return account;
     }
