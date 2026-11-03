@@ -96,9 +96,14 @@ public class TransactionEngine {
         }
         Prepared p = prepare(c);
         UUID id = Ids.newId();
+        // WE-LIMIT-1: for a wallet-to-wallet transfer, also reserve the payee (credit) side so the central engine
+        // counts the credit against the payee's cumulative/instrument TCP. Payee ledger balance enrichment (for a
+        // credit max-balance TCP) is a follow-up; absent, credit-side counting still applies.
         Downstream.LimitCheck limit = p.payer == null ? new Downstream.LimitCheck(true, null, null)
                 : downstream.reserveLimits("wtx-" + id + "-limits", Rows.uuid(p.payer, "id"),
-                        Rows.uuid(p.payer, "customer_id"), c.txnType(), c.channel(), p.total, c.currency(), c.key());
+                        Rows.uuid(p.payer, "customer_id"), c.txnType(), c.channel(), p.total, c.currency(), c.key(),
+                        p.payee == null ? null : Rows.uuid(p.payee, "id"),
+                        p.payee == null ? null : Rows.uuid(p.payee, "customer_id"), null);
         if (!limit.allowed()) {
             throw ApiException.unprocessable("limit_exceeded", limit.reason());
         }

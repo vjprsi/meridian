@@ -1497,6 +1497,15 @@ tags:
 - name: Risk Appetite Metrics
   description: Board-approved risk appetite metric with amber/red thresholds and its latest value
   x-domain: Risk, Fraud, AML and Limits
+- name: Transfer Control Profiles
+  description: Cumulative (Rank-1) Transfer Control Profiles, compiled into the limit engine on activation.
+  x-domain: Risk, Fraud, AML and Limits
+- name: Instrument Tcps
+  description: Instrument/grade (Rank-2) Transfer Control Profiles; Rank-2 must be a subset of Rank-1 (checked on activation).
+  x-domain: Risk, Fraud, AML and Limits
+- name: Transfer Rules
+  description: Transfer-rule matrix (allow/deny by sender/receiver attributes and hierarchy scope).
+  x-domain: Risk, Fraud, AML and Limits
 - name: Sla Policies
   description: Response and resolution targets per case type, priority or complaint category (incl. regulatory deadlines)
   x-domain: Servicing and CRM
@@ -125217,6 +125226,8 @@ paths:
           - WALLET
           - AGENT
           - MERCHANT
+          - REGULATORY_PROFILE
+          - INSTRUMENT_GRADE
       - name: scope_ref
         in: query
         schema:
@@ -126748,6 +126759,1248 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
       x-required-scope: risk:read
       x-table: risk_appetite_metric
+  /v1/risk/limits/tcp/cumulative:
+    get:
+      operationId: transferControlProfilesList
+      summary: List transfer control profiles
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: regulatory_profile_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+      - name: domain_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: category_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfilePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: transfer_control_profile
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: transferControlProfilesCreate
+      summary: Create transfer control profile
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfileCreate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/limits/tcp/cumulative/{id}:
+    get:
+      operationId: transferControlProfilesGet
+      summary: Retrieve transfer control profile
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id296
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: transfer_control_profile
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: transferControlProfilesUpdate
+      summary: Update transfer control profile
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id296
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfileUpdate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/limits/tcp/cumulative/{id}/submit:
+    post:
+      operationId: transferControlProfilesSubmit
+      summary: Submit the profile for activation (maker); a checker activates it or rejects the submission
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfilesSubmitRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+  /v1/risk/limits/tcp/cumulative/{id}/activate:
+    post:
+      operationId: transferControlProfilesActivate
+      summary: Activate the profile (maker-checker); validated before it is compiled
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfilesActivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+  /v1/risk/limits/tcp/cumulative/{id}/reject:
+    post:
+      operationId: transferControlProfilesReject
+      summary: Reject the pending activation submission (checker)
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfilesRejectRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+  /v1/risk/limits/tcp/cumulative/{id}/deactivate:
+    post:
+      operationId: transferControlProfilesDeactivate
+      summary: Deactivate the profile
+      tags:
+      - Transfer Control Profiles
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferControlProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferControlProfilesDeactivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_control_profile
+  /v1/risk/limits/tcp/instrument:
+    get:
+      operationId: instrumentTcpsList
+      summary: List instrument tcps
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_instrument
+        in: query
+        schema:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+      - name: grade_code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: service_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcpPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: instrument_tcp
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: instrumentTcpsCreate
+      summary: Create instrument tcp
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpCreate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/limits/tcp/instrument/{id}:
+    get:
+      operationId: instrumentTcpsGet
+      summary: Retrieve instrument tcp
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id297
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: instrument_tcp
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: instrumentTcpsUpdate
+      summary: Update instrument tcp
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id297
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpUpdate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/limits/tcp/instrument/{id}/submit:
+    post:
+      operationId: instrumentTcpsSubmit
+      summary: Submit the profile for activation (maker)
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpsSubmitRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+  /v1/risk/limits/tcp/instrument/{id}/activate:
+    post:
+      operationId: instrumentTcpsActivate
+      summary: Activate the profile (maker-checker); Rank-2 subset-of-Rank-1 validated here
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpsActivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+  /v1/risk/limits/tcp/instrument/{id}/reject:
+    post:
+      operationId: instrumentTcpsReject
+      summary: Reject the pending activation submission (checker)
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpsRejectRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+  /v1/risk/limits/tcp/instrument/{id}/deactivate:
+    post:
+      operationId: instrumentTcpsDeactivate
+      summary: Deactivate the profile
+      tags:
+      - Instrument Tcps
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTcp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentTcpsDeactivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: instrument_tcp
+  /v1/risk/limits/transfer-rules:
+    get:
+      operationId: transferRulesList
+      summary: List transfer rules
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: service_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+      - name: hierarchy_scope
+        in: query
+        schema:
+          type: string
+          enum:
+          - ANY
+          - WITHIN_HIERARCHY
+          - OUTSIDE_HIERARCHY
+      - name: sender_instrument
+        in: query
+        schema:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+      - name: receiver_instrument
+        in: query
+        schema:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: transfer_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: transferRulesCreate
+      summary: Create transfer rule
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRuleCreate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/limits/transfer-rules/{id}:
+    get:
+      operationId: transferRulesGet
+      summary: Retrieve transfer rule
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id298
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: transfer_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: transferRulesUpdate
+      summary: Update transfer rule
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id298
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRuleUpdate'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/limits/transfer-rules/{id}/submit:
+    post:
+      operationId: transferRulesSubmit
+      summary: Submit the rule for activation (maker)
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRulesSubmitRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+  /v1/risk/limits/transfer-rules/{id}/activate:
+    post:
+      operationId: transferRulesActivate
+      summary: Activate the rule (maker-checker)
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRulesActivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+  /v1/risk/limits/transfer-rules/{id}/reject:
+    post:
+      operationId: transferRulesReject
+      summary: Reject the pending activation submission (checker)
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRulesRejectRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+  /v1/risk/limits/transfer-rules/{id}/deactivate:
+    post:
+      operationId: transferRulesDeactivate
+      summary: Deactivate the rule
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRulesDeactivateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
+  /v1/risk/limits/transfer-rules/evaluate:
+    post:
+      operationId: transferRulesEvaluate
+      summary: Evaluate the transfer-rule matrix for a proposed transfer (allow/deny + the deciding rule)
+      tags:
+      - Transfer Rules
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRulesEvaluateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: transfer_rule
   /v1/servicing/sla-policies:
     get:
       operationId: slaPoliciesList
@@ -126915,8 +128168,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id297
-      - &id296
+      parameters: &id300
+      - &id299
         name: id
         in: path
         required: true
@@ -126953,7 +128206,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id296
+      - *id299
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -126994,7 +128247,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id297
+      parameters: *id300
       responses:
         '204':
           description: No content
@@ -127137,7 +128390,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id298
+      - &id301
         name: id
         in: path
         required: true
@@ -127174,7 +128427,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id298
+      - *id301
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -127427,7 +128680,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id299
+      - &id302
         name: id
         in: path
         required: true
@@ -127464,7 +128717,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id299
+      - *id302
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -127951,7 +129204,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id300
+      - &id303
         name: id
         in: path
         required: true
@@ -127989,7 +129242,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id300
+      - *id303
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -128779,7 +130032,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id301
+      - &id304
         name: id
         in: path
         required: true
@@ -128816,7 +130069,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id301
+      - *id304
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -129793,7 +131046,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id302
+      - &id305
         name: id
         in: path
         required: true
@@ -129831,7 +131084,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id302
+      - *id305
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -129987,8 +131240,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id304
-      - &id303
+      parameters: &id307
+      - &id306
         name: id
         in: path
         required: true
@@ -130026,7 +131279,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id303
+      - *id306
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -130068,7 +131321,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id304
+      parameters: *id307
       responses:
         '204':
           description: No content
@@ -130356,7 +131609,7 @@ paths:
       - oauth2:
         - servicing:read
       parameters:
-      - &id305
+      - &id308
         name: id
         in: path
         required: true
@@ -130393,7 +131646,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id305
+      - *id308
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -130857,8 +132110,8 @@ paths:
       security:
       - oauth2:
         - servicing:read
-      parameters: &id307
-      - &id306
+      parameters: &id310
+      - &id309
         name: id
         in: path
         required: true
@@ -130896,7 +132149,7 @@ paths:
       - oauth2:
         - servicing:write
       parameters:
-      - *id306
+      - *id309
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -130938,7 +132191,7 @@ paths:
       security:
       - oauth2:
         - servicing:write
-      parameters: *id307
+      parameters: *id310
       responses:
         '204':
           description: No content
@@ -131411,7 +132664,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id308
+      - &id311
         name: id
         in: path
         required: true
@@ -131449,7 +132702,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id308
+      - *id311
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -131783,7 +133036,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id309
+      - &id312
         name: id
         in: path
         required: true
@@ -131820,7 +133073,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id309
+      - *id312
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -132037,7 +133290,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id310
+      - &id313
         name: id
         in: path
         required: true
@@ -132074,7 +133327,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id310
+      - *id313
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -132508,7 +133761,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id311
+      - &id314
         name: id
         in: path
         required: true
@@ -132546,7 +133799,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id311
+      - *id314
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -133119,7 +134372,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id312
+      - &id315
         name: id
         in: path
         required: true
@@ -133157,7 +134410,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id312
+      - *id315
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -133809,7 +135062,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id313
+      - &id316
         name: id
         in: path
         required: true
@@ -133846,7 +135099,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id313
+      - *id316
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -136464,7 +137717,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id314
+      - &id317
         name: id
         in: path
         required: true
@@ -136501,7 +137754,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id314
+      - *id317
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -137190,7 +138443,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id315
+      - &id318
         name: id
         in: path
         required: true
@@ -137228,7 +138481,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id315
+      - *id318
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -137909,7 +139162,7 @@ paths:
       - oauth2:
         - treasury:read
       parameters:
-      - &id316
+      - &id319
         name: id
         in: path
         required: true
@@ -137946,7 +139199,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id316
+      - *id319
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138308,8 +139561,8 @@ paths:
       security:
       - oauth2:
         - treasury:read
-      parameters: &id318
-      - &id317
+      parameters: &id321
+      - &id320
         name: id
         in: path
         required: true
@@ -138346,7 +139599,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id317
+      - *id320
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138387,7 +139640,7 @@ paths:
       security:
       - oauth2:
         - treasury:write
-      parameters: *id318
+      parameters: *id321
       responses:
         '204':
           description: No content
@@ -138535,8 +139788,8 @@ paths:
       security:
       - oauth2:
         - treasury:read
-      parameters: &id320
-      - &id319
+      parameters: &id323
+      - &id322
         name: id
         in: path
         required: true
@@ -138573,7 +139826,7 @@ paths:
       - oauth2:
         - treasury:write
       parameters:
-      - *id319
+      - *id322
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -138614,7 +139867,7 @@ paths:
       security:
       - oauth2:
         - treasury:write
-      parameters: *id320
+      parameters: *id323
       responses:
         '204':
           description: No content
@@ -139017,7 +140270,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id321
+      - &id324
         name: id
         in: path
         required: true
@@ -139056,7 +140309,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id321
+      - *id324
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -141070,8 +142323,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id323
-      - &id322
+      parameters: &id326
+      - &id325
         name: id
         in: path
         required: true
@@ -141110,7 +142363,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id322
+      - *id325
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -141153,7 +142406,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id323
+      parameters: *id326
       responses:
         '204':
           description: No content
@@ -141335,8 +142588,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id325
-      - &id324
+      parameters: &id328
+      - &id327
         name: id
         in: path
         required: true
@@ -141374,7 +142627,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id324
+      - *id327
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -141416,7 +142669,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id325
+      parameters: *id328
       responses:
         '204':
           description: No content
@@ -141563,7 +142816,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id326
+      - &id329
         name: id
         in: path
         required: true
@@ -141601,7 +142854,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id326
+      - *id329
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -142140,8 +143393,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id328
-      - &id327
+      parameters: &id331
+      - &id330
         name: id
         in: path
         required: true
@@ -142179,7 +143432,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id327
+      - *id330
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -142221,7 +143474,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id328
+      parameters: *id331
       responses:
         '204':
           description: No content
@@ -142398,7 +143651,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id329
+      - &id332
         name: id
         in: path
         required: true
@@ -142437,7 +143690,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id329
+      - *id332
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -143146,7 +144399,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id330
+      - &id333
         name: id
         in: path
         required: true
@@ -143183,7 +144436,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id330
+      - *id333
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -143353,7 +144606,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id331
+      - &id334
         name: id
         in: path
         required: true
@@ -143391,7 +144644,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id331
+      - *id334
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -143661,7 +144914,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id332
+      - &id335
         name: id
         in: path
         required: true
@@ -143698,7 +144951,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id332
+      - *id335
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -144472,7 +145725,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id333
+      - &id336
         name: id
         in: path
         required: true
@@ -144510,7 +145763,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id333
+      - *id336
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -144807,7 +146060,7 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id334
+      parameters: &id337
       - name: id
         in: path
         required: true
@@ -144844,7 +146097,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id334
+      parameters: *id337
       responses:
         '204':
           description: No content
@@ -145040,7 +146293,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id335
+      - &id338
         name: id
         in: path
         required: true
@@ -145077,7 +146330,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id335
+      - *id338
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -145371,7 +146624,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id336
+      - &id339
         name: id
         in: path
         required: true
@@ -145409,7 +146662,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id336
+      - *id339
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -145799,7 +147052,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id337
+      - &id340
         name: id
         in: path
         required: true
@@ -145837,7 +147090,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id337
+      - *id340
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146294,8 +147547,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id339
-      - &id338
+      parameters: &id342
+      - &id341
         name: id
         in: path
         required: true
@@ -146333,7 +147586,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id338
+      - *id341
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146375,7 +147628,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id339
+      parameters: *id342
       responses:
         '204':
           description: No content
@@ -146525,8 +147778,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id341
-      - &id340
+      parameters: &id344
+      - &id343
         name: id
         in: path
         required: true
@@ -146564,7 +147817,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id340
+      - *id343
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146606,7 +147859,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id341
+      parameters: *id344
       responses:
         '204':
           description: No content
@@ -147040,8 +148293,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id343
-      - &id342
+      parameters: &id346
+      - &id345
         name: id
         in: path
         required: true
@@ -147079,7 +148332,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id342
+      - *id345
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -147121,7 +148374,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id343
+      parameters: *id346
       responses:
         '204':
           description: No content
@@ -147271,7 +148524,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id344
+      - &id347
         name: id
         in: path
         required: true
@@ -147308,7 +148561,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id344
+      - *id347
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -147799,8 +149052,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id346
-      - &id345
+      parameters: &id349
+      - &id348
         name: id
         in: path
         required: true
@@ -147837,7 +149090,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id345
+      - *id348
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -147878,7 +149131,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id346
+      parameters: *id349
       responses:
         '204':
           description: No content
@@ -148613,7 +149866,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id347
+      - &id350
         name: id
         in: path
         required: true
@@ -148650,7 +149903,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id347
+      - *id350
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148973,7 +150226,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id348
+      - &id351
         name: id
         in: path
         required: true
@@ -149010,7 +150263,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id348
+      - *id351
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150159,7 +151412,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id349
+      - &id352
         name: id
         in: path
         required: true
@@ -150197,7 +151450,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id349
+      - *id352
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150671,7 +151924,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id350
+      - &id353
         name: id
         in: path
         required: true
@@ -150708,7 +151961,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id350
+      - *id353
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150872,7 +152125,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id351
+      - &id354
         name: id
         in: path
         required: true
@@ -150909,7 +152162,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id351
+      - *id354
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -151396,7 +152649,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id352
+      - &id355
         name: id
         in: path
         required: true
@@ -151434,7 +152687,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id352
+      - *id355
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -151679,7 +152932,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id353
+      - &id356
         name: id
         in: path
         required: true
@@ -151717,7 +152970,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id353
+      - *id356
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -152446,7 +153699,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id354
+      - &id357
         name: id
         in: path
         required: true
@@ -152483,7 +153736,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id354
+      - *id357
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -152907,8 +154160,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id356
-      - &id355
+      parameters: &id359
+      - &id358
         name: id
         in: path
         required: true
@@ -152945,7 +154198,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id355
+      - *id358
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -152986,7 +154239,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id356
+      parameters: *id359
       responses:
         '204':
           description: No content
@@ -153368,8 +154621,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id358
-      - &id357
+      parameters: &id361
+      - &id360
         name: id
         in: path
         required: true
@@ -153406,7 +154659,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id357
+      - *id360
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -153447,7 +154700,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id358
+      parameters: *id361
       responses:
         '204':
           description: No content
@@ -153817,7 +155070,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id359
+      - &id362
         name: id
         in: path
         required: true
@@ -153854,7 +155107,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id359
+      - *id362
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -154808,7 +156061,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id360
+      - &id363
         name: id
         in: path
         required: true
@@ -154845,7 +156098,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id360
+      - *id363
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -155008,7 +156261,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id361
+      - &id364
         name: id
         in: path
         required: true
@@ -155045,7 +156298,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id361
+      - *id364
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -155321,7 +156574,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id362
+      - &id365
         name: id
         in: path
         required: true
@@ -155358,7 +156611,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id362
+      - *id365
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -276542,6 +277795,33 @@ components:
           format: decimal
           examples:
           - '125.50'
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+        domain_code:
+          type: string
+          maxLength: 64
+        category_code:
+          type: string
+          maxLength: 64
+        grade_code:
+          type: string
+          maxLength: 64
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
       required:
       - subject_type
       - subject_id
@@ -276694,6 +277974,63 @@ components:
           format: decimal
           examples:
           - '125.50'
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+        domain_code:
+          type: string
+          maxLength: 64
+        category_code:
+          type: string
+          maxLength: 64
+        grade_code:
+          type: string
+          maxLength: 64
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+        payee_subject_type:
+          type: string
+          maxLength: 32
+        payee_subject_id:
+          type: string
+          format: uuid
+        payee_customer_id:
+          type: string
+          format: uuid
+        payee_regulatory_profile_code:
+          type: string
+          maxLength: 64
+        payee_grade_code:
+          type: string
+          maxLength: 64
+        payee_payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+        payee_current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subject_type
       - subject_id
@@ -276759,6 +278096,197 @@ components:
       required:
       - data
       - has_more
+    TransferControlProfilePage:
+      type: object
+      description: One page of TransferControlProfile results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferControlProfile'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TransferControlProfilesSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    TransferControlProfilesActivateRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    TransferControlProfilesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    TransferControlProfilesDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    InstrumentTcpPage:
+      type: object
+      description: One page of InstrumentTcp results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstrumentTcp'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InstrumentTcpsSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    InstrumentTcpsActivateRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    InstrumentTcpsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    InstrumentTcpsDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    TransferRulePage:
+      type: object
+      description: One page of TransferRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TransferRulesSubmitRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    TransferRulesActivateRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    TransferRulesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    TransferRulesDeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    TransferRulesEvaluateRequest:
+      type: object
+      properties:
+        service_type:
+          type: string
+          maxLength: 40
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        hierarchy_scope:
+          type: string
+          enum:
+          - ANY
+          - WITHIN_HIERARCHY
+          - OUTSIDE_HIERARCHY
+        sender_domain_code:
+          type: string
+          maxLength: 64
+        sender_category_code:
+          type: string
+          maxLength: 64
+        sender_grade_code:
+          type: string
+          maxLength: 64
+        sender_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+        sender_bank_code:
+          type: string
+          maxLength: 64
+        receiver_domain_code:
+          type: string
+          maxLength: 64
+        receiver_category_code:
+          type: string
+          maxLength: 64
+        receiver_grade_code:
+          type: string
+          maxLength: 64
+        receiver_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+        receiver_bank_code:
+          type: string
+          maxLength: 64
     AmlCase:
       type: object
       description: An AML / fraud / sanctions investigation case consolidating related alerts
@@ -280691,6 +282219,615 @@ components:
       - reason_codes
       - latency_ms
       - degraded
+    InstrumentTcp:
+      type: object
+      description: 'WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade,
+        optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance, max transfer
+        %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile, validated at activation.
+        Maker-checker.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Instrument
+        grade_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Grade (empty = any grade)
+        domain_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Category (empty = any)
+        service_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Transaction type / service (empty = all)
+        bearer:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers)
+        direction:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side (empty = both)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        per_txn_min:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        min_remaining_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain after a debit
+        max_transfer_pct:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum % of the current balance a single transfer may move (0..1)
+        amount_multiple:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this
+        daily_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily amount cap
+        daily_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Daily count cap
+        monthly_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly amount cap
+        monthly_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Monthly count cap
+        max_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT side)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Maker-checker lifecycle status
+          readOnly: true
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the profile
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the profile was deactivated
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the profile for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - payment_instrument
+      - currency
+      - breach_action
+      - priority
+      - status
+    InstrumentTcpCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Instrument
+        grade_code:
+          type: string
+          maxLength: 64
+          description: Grade (empty = any grade)
+        domain_code:
+          type: string
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type: string
+          maxLength: 64
+          description: Category (empty = any)
+        service_type:
+          type: string
+          maxLength: 40
+          description: Transaction type / service (empty = all)
+        bearer:
+          type: string
+          maxLength: 16
+          description: Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side (empty = both)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        per_txn_min:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        min_remaining_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain after a debit
+        max_transfer_pct:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum % of the current balance a single transfer may move (0..1)
+        amount_multiple:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily amount cap
+        daily_count:
+          type: integer
+          format: int32
+          description: Daily count cap
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly amount cap
+        monthly_count:
+          type: integer
+          format: int32
+          description: Monthly count cap
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT side)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - payment_instrument
+      - currency
+    InstrumentTcpUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Instrument
+        grade_code:
+          type: string
+          maxLength: 64
+          description: Grade (empty = any grade)
+        domain_code:
+          type: string
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type: string
+          maxLength: 64
+          description: Category (empty = any)
+        service_type:
+          type: string
+          maxLength: 40
+          description: Transaction type / service (empty = all)
+        bearer:
+          type: string
+          maxLength: 16
+          description: Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side (empty = both)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        per_txn_min:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount per transaction
+        per_txn_max:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount per transaction
+        min_remaining_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum balance that must remain after a debit
+        max_transfer_pct:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum % of the current balance a single transfer may move (0..1)
+        amount_multiple:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily amount cap
+        daily_count:
+          type: integer
+          format: int32
+          description: Daily count cap
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly amount cap
+        monthly_count:
+          type: integer
+          format: int32
+          description: Monthly count cap
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT side)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     LimitCheck:
       type: object
       description: Result of a limit check; a reservation is committed or released when the transaction completes
@@ -280800,6 +282937,102 @@ components:
           examples:
           - '125.50'
           description: Balance before the transaction (BALANCE limits)
+        direction:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)'
+        regulatory_profile_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent'
+        domain_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1: distribution domain of the subject (empty = any)'
+        category_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1: category of the subject (empty = any)'
+        grade_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1: grade of the subject (empty = any)'
+        payment_instrument:
+          type:
+          - string
+          - 'null'
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: 'WE-LIMIT-1: instrument used (instrument TCP)'
+        payee_subject_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation)'
+        payee_subject_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-LIMIT-1 credit block: payee subject'
+        payee_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-LIMIT-1 credit block: payee customer'
+        payee_regulatory_profile_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1 credit block: payee cumulative-TCP key'
+        payee_grade_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'WE-LIMIT-1 credit block: payee grade'
+        payee_payment_instrument:
+          type:
+          - string
+          - 'null'
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: 'WE-LIMIT-1 credit block: payee instrument'
+        payee_current_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)'
         allowed:
           type: boolean
           description: Whether the transaction is within limits
@@ -280998,6 +283231,76 @@ components:
           examples:
           - '125.50'
           description: Balance before the transaction (BALANCE limits)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)'
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent'
+        domain_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1: distribution domain of the subject (empty = any)'
+        category_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1: category of the subject (empty = any)'
+        grade_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1: grade of the subject (empty = any)'
+        payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: 'WE-LIMIT-1: instrument used (instrument TCP)'
+        payee_subject_type:
+          type: string
+          maxLength: 32
+          description: 'WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation)'
+        payee_subject_id:
+          type: string
+          format: uuid
+          description: 'WE-LIMIT-1 credit block: payee subject'
+        payee_customer_id:
+          type: string
+          format: uuid
+          description: 'WE-LIMIT-1 credit block: payee customer'
+        payee_regulatory_profile_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1 credit block: payee cumulative-TCP key'
+        payee_grade_code:
+          type: string
+          maxLength: 64
+          description: 'WE-LIMIT-1 credit block: payee grade'
+        payee_payment_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: 'WE-LIMIT-1 credit block: payee instrument'
+        payee_current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)'
         correlation_id:
           type: string
           maxLength: 128
@@ -281312,6 +283615,8 @@ components:
           - WALLET
           - AGENT
           - MERCHANT
+          - REGULATORY_PROFILE
+          - INSTRUMENT_GRADE
           description: Level the limit applies to
         scope_ref:
           type:
@@ -281532,6 +283837,8 @@ components:
           - WALLET
           - AGENT
           - MERCHANT
+          - REGULATORY_PROFILE
+          - INSTRUMENT_GRADE
           description: Level the limit applies to
         scope_ref:
           type: string
@@ -281668,6 +283975,8 @@ components:
           - WALLET
           - AGENT
           - MERCHANT
+          - REGULATORY_PROFILE
+          - INSTRUMENT_GRADE
           description: Level the limit applies to
         scope_ref:
           type: string
@@ -281867,6 +284176,28 @@ components:
           - 'null'
           description: Reason of the last operational reset
           readOnly: true
+        direction:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-LIMIT-1: debit or credit side (empty = legacy direction-agnostic counter)'
+        tier:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CUMULATIVE
+          - INSTRUMENT
+          description: 'WE-LIMIT-1: TCP tier that compiled the counting rule (empty = classic limit_rule)'
+        source_profile_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-LIMIT-1: authoring TCP profile compiled into the counting rule'
         custom_field_1:
           type:
           - string
@@ -285767,6 +288098,1140 @@ components:
       - amount
       - currency
       - occurred_at
+    TransferControlProfile:
+      type: object
+      description: 'WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by regulatory
+        profile (KYC id), currency, direction and optional domain/category; it is compiled into synthetic, windowed limit
+        rules counted against the regulatory-profile id so usage aggregates across all of a customer''s account groups. Rank-1
+        is never superseded by an instrument TCP. Maker-checker.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+          description: Regulatory profile / KYC id the cumulative counters aggregate against
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+        domain_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Category (empty = any)
+        rule_mode:
+          type: string
+          enum:
+          - RULE1
+          - RULE2
+          - RULE3
+          description: MQ-TCP-4 granularity
+        services:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            maxLength: 255
+          description: Transaction types / services this profile counts (empty = all)
+        daily_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily cumulative amount cap
+        daily_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Daily cumulative count cap
+        weekly_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Weekly cumulative amount cap
+        weekly_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Weekly cumulative count cap
+        monthly_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly cumulative amount cap
+        monthly_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Monthly cumulative count cap
+        yearly_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Yearly cumulative amount cap (only when yearly_enabled)
+        yearly_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Yearly cumulative count cap (only when yearly_enabled)
+        yearly_enabled:
+          type: boolean
+          description: 'MQ-TCP-5: whether the yearly caps are enforced'
+        max_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT direction; MQ-TCP-1)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Maker-checker lifecycle status
+          readOnly: true
+        is_regulatory:
+          type: boolean
+          description: Cumulative TCP is regulatory by default (never superseded)
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the profile
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the profile was deactivated
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the profile for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - regulatory_profile_code
+      - currency
+      - direction
+      - rule_mode
+      - yearly_enabled
+      - breach_action
+      - priority
+      - status
+      - is_regulatory
+    TransferControlProfileCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+          description: Regulatory profile / KYC id the cumulative counters aggregate against
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+        domain_code:
+          type: string
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type: string
+          maxLength: 64
+          description: Category (empty = any)
+        rule_mode:
+          type: string
+          enum:
+          - RULE1
+          - RULE2
+          - RULE3
+          description: MQ-TCP-4 granularity
+        services:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: Transaction types / services this profile counts (empty = all)
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily cumulative amount cap
+        daily_count:
+          type: integer
+          format: int32
+          description: Daily cumulative count cap
+        weekly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Weekly cumulative amount cap
+        weekly_count:
+          type: integer
+          format: int32
+          description: Weekly cumulative count cap
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly cumulative amount cap
+        monthly_count:
+          type: integer
+          format: int32
+          description: Monthly cumulative count cap
+        yearly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Yearly cumulative amount cap (only when yearly_enabled)
+        yearly_count:
+          type: integer
+          format: int32
+          description: Yearly cumulative count cap (only when yearly_enabled)
+        yearly_enabled:
+          type: boolean
+          description: 'MQ-TCP-5: whether the yearly caps are enforced'
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT direction; MQ-TCP-1)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        is_regulatory:
+          type: boolean
+          description: Cumulative TCP is regulatory by default (never superseded)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - regulatory_profile_code
+      - currency
+      - direction
+    TransferControlProfileUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Profile code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        regulatory_profile_code:
+          type: string
+          maxLength: 64
+          description: Regulatory profile / KYC id the cumulative counters aggregate against
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+        domain_code:
+          type: string
+          maxLength: 64
+          description: Distribution domain (empty = any)
+        category_code:
+          type: string
+          maxLength: 64
+          description: Category (empty = any)
+        rule_mode:
+          type: string
+          enum:
+          - RULE1
+          - RULE2
+          - RULE3
+          description: MQ-TCP-4 granularity
+        services:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: Transaction types / services this profile counts (empty = all)
+        daily_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Daily cumulative amount cap
+        daily_count:
+          type: integer
+          format: int32
+          description: Daily cumulative count cap
+        weekly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Weekly cumulative amount cap
+        weekly_count:
+          type: integer
+          format: int32
+          description: Weekly cumulative count cap
+        monthly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Monthly cumulative amount cap
+        monthly_count:
+          type: integer
+          format: int32
+          description: Monthly cumulative count cap
+        yearly_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Yearly cumulative amount cap (only when yearly_enabled)
+        yearly_count:
+          type: integer
+          format: int32
+          description: Yearly cumulative count cap (only when yearly_enabled)
+        yearly_enabled:
+          type: boolean
+          description: 'MQ-TCP-5: whether the yearly caps are enforced'
+        max_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum balance (CREDIT direction; MQ-TCP-1)
+        breach_action:
+          type: string
+          enum:
+          - REJECT
+          - REVIEW
+          - STEP_UP
+          - ALLOW_AND_ALERT
+          description: Action on breach
+        priority:
+          type: integer
+          format: int32
+          description: Tie-breaker
+        is_regulatory:
+          type: boolean
+          description: Cumulative TCP is regulatory by default (never superseded)
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    TransferRule:
+      type: object
+      description: 'WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver
+        domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple validation. Evaluated
+        by POST /transfer-rules/evaluate. Maker-checker.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Rule code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        service_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Transaction type / service (empty = any)
+        sender_domain_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sender domain (empty = any)
+        sender_category_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sender category (empty = any)
+        sender_grade_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sender grade (empty = any)
+        sender_instrument:
+          type:
+          - string
+          - 'null'
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Sender instrument (empty = any)
+        sender_bank_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Sender bank (empty = any)
+        receiver_domain_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Receiver domain (empty = any)
+        receiver_category_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Receiver category (empty = any)
+        receiver_grade_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Receiver grade (empty = any)
+        receiver_instrument:
+          type:
+          - string
+          - 'null'
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Receiver instrument (empty = any)
+        receiver_bank_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Receiver bank (empty = any)
+        hierarchy_scope:
+          type: string
+          enum:
+          - ANY
+          - WITHIN_HIERARCHY
+          - OUTSIDE_HIERARCHY
+          description: 'MQ-TR-2: within / outside the sender''s hierarchy'
+        allow:
+          type: boolean
+          description: Allow (true) or deny (false) the matching transfer
+        min_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount (MQ-TR-3)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount (MQ-TR-3)
+        amount_multiple:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this (MQ-TR-3)
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of the amount bounds (ISO 4217)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several rules match
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - INACTIVE
+          description: Maker-checker lifecycle status
+          readOnly: true
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the rule
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the rule was deactivated
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the rule for activation
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time (empty when no activation is pending)
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the last submission
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the last submission was rejected
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - hierarchy_scope
+      - allow
+      - priority
+      - status
+    TransferRuleCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Rule code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        service_type:
+          type: string
+          maxLength: 40
+          description: Transaction type / service (empty = any)
+        sender_domain_code:
+          type: string
+          maxLength: 64
+          description: Sender domain (empty = any)
+        sender_category_code:
+          type: string
+          maxLength: 64
+          description: Sender category (empty = any)
+        sender_grade_code:
+          type: string
+          maxLength: 64
+          description: Sender grade (empty = any)
+        sender_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Sender instrument (empty = any)
+        sender_bank_code:
+          type: string
+          maxLength: 64
+          description: Sender bank (empty = any)
+        receiver_domain_code:
+          type: string
+          maxLength: 64
+          description: Receiver domain (empty = any)
+        receiver_category_code:
+          type: string
+          maxLength: 64
+          description: Receiver category (empty = any)
+        receiver_grade_code:
+          type: string
+          maxLength: 64
+          description: Receiver grade (empty = any)
+        receiver_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Receiver instrument (empty = any)
+        receiver_bank_code:
+          type: string
+          maxLength: 64
+          description: Receiver bank (empty = any)
+        hierarchy_scope:
+          type: string
+          enum:
+          - ANY
+          - WITHIN_HIERARCHY
+          - OUTSIDE_HIERARCHY
+          description: 'MQ-TR-2: within / outside the sender''s hierarchy'
+        allow:
+          type: boolean
+          description: Allow (true) or deny (false) the matching transfer
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount (MQ-TR-3)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount (MQ-TR-3)
+        amount_multiple:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this (MQ-TR-3)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the amount bounds (ISO 4217)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several rules match
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+    TransferRuleUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Rule code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        service_type:
+          type: string
+          maxLength: 40
+          description: Transaction type / service (empty = any)
+        sender_domain_code:
+          type: string
+          maxLength: 64
+          description: Sender domain (empty = any)
+        sender_category_code:
+          type: string
+          maxLength: 64
+          description: Sender category (empty = any)
+        sender_grade_code:
+          type: string
+          maxLength: 64
+          description: Sender grade (empty = any)
+        sender_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Sender instrument (empty = any)
+        sender_bank_code:
+          type: string
+          maxLength: 64
+          description: Sender bank (empty = any)
+        receiver_domain_code:
+          type: string
+          maxLength: 64
+          description: Receiver domain (empty = any)
+        receiver_category_code:
+          type: string
+          maxLength: 64
+          description: Receiver category (empty = any)
+        receiver_grade_code:
+          type: string
+          maxLength: 64
+          description: Receiver grade (empty = any)
+        receiver_instrument:
+          type: string
+          enum:
+          - WALLET
+          - BANK_ACCOUNT
+          - CARD
+          - CASH
+          - VOUCHER
+          - AGENT_FLOAT
+          - MERCHANT_TILL
+          description: Receiver instrument (empty = any)
+        receiver_bank_code:
+          type: string
+          maxLength: 64
+          description: Receiver bank (empty = any)
+        hierarchy_scope:
+          type: string
+          enum:
+          - ANY
+          - WITHIN_HIERARCHY
+          - OUTSIDE_HIERARCHY
+          description: 'MQ-TR-2: within / outside the sender''s hierarchy'
+        allow:
+          type: boolean
+          description: Allow (true) or deny (false) the matching transfer
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum amount (MQ-TR-3)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum amount (MQ-TR-3)
+        amount_multiple:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: The amount must be a whole multiple of this (MQ-TR-3)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the amount bounds (ISO 4217)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when several rules match
+        valid_from:
+          type: string
+          format: date-time
+          description: Effective from
+        valid_to:
+          type: string
+          format: date-time
+          description: Effective to
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Maker-checker approval
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     SlaPolicyPage:
       type: object
       description: One page of SlaPolicy results (newest first)

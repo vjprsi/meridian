@@ -928,6 +928,55 @@ steps:
           - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
         ready_status: [ACTIVE, INACTIVE]
 
+  # ------------------------------------------------------------------------------------------------ transfer control profiles
+  # WE-LIMIT-1: two-tier TCP. Cumulative (Rank-1) profiles count against the regulatory profile (KYC id) and
+  # aggregate across account groups; instrument (Rank-2) profiles cap per-wallet transfers. Both are created DRAFT
+  # and activated by a different user (checker), like the limit rules above. wallet_tier_limit rows are kept during
+  # cut-over as a local non-counting pre-check (authoritative reservation is central).
+  - code: transfer_control_profiles
+    title: Transfer control profiles (limits-service, checker activation)
+    items:
+      - key: tcp_tier0_debit
+        service: limits-service
+        path: /v1/risk/limits/tcp/cumulative
+        lookup: {query: {regulatory_profile_code: TIER_0, direction: DEBIT}, match: {code: SP-TCP-T0-DEBIT}}
+        body: {code: SP-TCP-T0-DEBIT, name: KYC tier 0 cumulative debit (DEFAULT), regulatory_profile_code: TIER_0,
+               currency: "${param.currency}", direction: DEBIT, daily_amount: "${param.limit_tier0_daily}",
+               max_balance: "${param.wallet_tier0_max_balance}", breach_action: REJECT, priority: 100, is_regulatory: true}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: tcp_tier1_debit
+        service: limits-service
+        path: /v1/risk/limits/tcp/cumulative
+        lookup: {query: {regulatory_profile_code: TIER_1, direction: DEBIT}, match: {code: SP-TCP-T1-DEBIT}}
+        body: {code: SP-TCP-T1-DEBIT, name: KYC tier 1 cumulative debit (DEFAULT), regulatory_profile_code: TIER_1,
+               currency: "${param.currency}", direction: DEBIT, daily_amount: "${param.limit_tier1_daily}",
+               max_balance: "${param.wallet_tier1_max_balance}", breach_action: REJECT, priority: 100, is_regulatory: true}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: tcp_tier1_credit
+        service: limits-service
+        path: /v1/risk/limits/tcp/cumulative
+        lookup: {query: {regulatory_profile_code: TIER_1, direction: CREDIT}, match: {code: SP-TCP-T1-CREDIT}}
+        body: {code: SP-TCP-T1-CREDIT, name: KYC tier 1 cumulative credit + max balance (DEFAULT), regulatory_profile_code: TIER_1,
+               currency: "${param.currency}", direction: CREDIT, monthly_amount: "50000",
+               max_balance: "${param.wallet_tier1_max_balance}", breach_action: REJECT, priority: 100, is_regulatory: true}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+      - key: tcp_instrument_wallet
+        service: limits-service
+        path: /v1/risk/limits/tcp/instrument
+        lookup: {query: {payment_instrument: WALLET}, match: {code: SP-ITC-WALLET}}
+        body: {code: SP-ITC-WALLET, name: Wallet instrument per-transaction (DEFAULT), payment_instrument: WALLET,
+               currency: "${param.currency}", per_txn_min: "0.10", per_txn_max: "5000", amount_multiple: "0.01",
+               daily_amount: "${param.limit_tier1_daily}", breach_action: REJECT, priority: 100}
+        actions:
+          - {name: activate, path: "/{id}/activate", manual: true, skip_status: [ACTIVE, INACTIVE], description: "checker activation in limits-service"}
+        ready_status: [ACTIVE, INACTIVE]
+
   # ------------------------------------------------------------------------------------------------ commissions
   - code: commissions
     title: Agent commission plan (commission-service, maker-checker)

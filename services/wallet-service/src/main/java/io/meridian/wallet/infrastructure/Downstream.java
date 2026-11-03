@@ -39,6 +39,20 @@ public class Downstream {
 
     public LimitCheck reserveLimits(String key, UUID walletId, UUID customerId, String txnType, String channel,
                                     BigDecimal amount, String currency, String correlationId) {
+        return reserveLimits(key, walletId, customerId, txnType, channel, amount, currency, correlationId,
+                null, null, null);
+    }
+
+    /**
+     * WE-LIMIT-1: reserves the payer (debit) side and, when a payee wallet is given (wallet-to-wallet), also the
+     * payee (credit) side so the central engine counts both against their own cumulative/instrument TCP. The wallet
+     * is always a {@code WALLET} instrument; all new fields are additive, so when no TCP is configured the request
+     * and result are identical to the single-sided debit check. {@code wallet_tier_limit} stays a local non-counting
+     * pre-check (authoritative reservation is central) to avoid double-counting during cut-over.
+     */
+    public LimitCheck reserveLimits(String key, UUID walletId, UUID customerId, String txnType, String channel,
+                                    BigDecimal amount, String currency, String correlationId, UUID payeeWalletId,
+                                    UUID payeeCustomerId, BigDecimal payeeBalance) {
         if (!props.risk().limitsEnabled()) {
             return new LimitCheck(true, null, null);
         }
@@ -56,6 +70,19 @@ public class Downstream {
         body.put("amount", amount.toPlainString());
         body.put("currency", currency);
         body.put("correlation_id", correlationId);
+        body.put("direction", "DEBIT");
+        body.put("payment_instrument", "WALLET");
+        if (payeeWalletId != null) {
+            body.put("payee_subject_type", "WALLET");
+            body.put("payee_subject_id", payeeWalletId.toString());
+            body.put("payee_payment_instrument", "WALLET");
+            if (payeeCustomerId != null) {
+                body.put("payee_customer_id", payeeCustomerId.toString());
+            }
+            if (payeeBalance != null) {
+                body.put("payee_current_balance", payeeBalance.toPlainString());
+            }
+        }
         body.put("allowed", true);
         body.put("status", "RESERVED");
         body.putObject("evaluated_rule_ids");

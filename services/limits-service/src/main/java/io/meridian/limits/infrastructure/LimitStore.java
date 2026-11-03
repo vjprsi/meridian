@@ -91,11 +91,18 @@ public class LimitStore {
                 with c as (
                   insert into limit_check (id, tenant_id, created_by, updated_by, subject_type, subject_id, customer_id,
                       kyc_tier, customer_segment, product_id, transaction_type, channel, amount, currency, current_balance,
+                      direction, regulatory_profile_code, domain_code, category_code, grade_code, payment_instrument,
+                      payee_subject_type, payee_subject_id, payee_customer_id, payee_regulatory_profile_code,
+                      payee_grade_code, payee_payment_instrument, payee_current_balance,
                       allowed, status, action, evaluated_rule_ids, breached_rule_ids, remaining, reservations,
                       idempotency_key, correlation_id, expires_at, latency_ms)
                   select r.id, current_setting('app.tenant_id')::uuid, cast(:principal as text), cast(:principal as text),
                       r.subject_type, r.subject_id, r.customer_id, r.kyc_tier, r.customer_segment, r.product_id,
-                      r.transaction_type, r.channel, r.amount, r.currency, r.current_balance, r.allowed, r.status, r.action,
+                      r.transaction_type, r.channel, r.amount, r.currency, r.current_balance,
+                      r.direction, r.regulatory_profile_code, r.domain_code, r.category_code, r.grade_code, r.payment_instrument,
+                      r.payee_subject_type, r.payee_subject_id, r.payee_customer_id, r.payee_regulatory_profile_code,
+                      r.payee_grade_code, r.payee_payment_instrument, r.payee_current_balance,
+                      r.allowed, r.status, r.action,
                       r.evaluated_rule_ids, r.breached_rule_ids, r.remaining, r.reservations, r.idempotency_key,
                       r.correlation_id, coalesce(r.expires_at, now() + interval '15 minutes'), r.latency_ms
                   from json_populate_record(null::limit_check, cast(:check as json)) r

@@ -29,7 +29,7 @@ CREATE TABLE limit_rule (
   row_version                  integer NOT NULL DEFAULT 1,
   code                         varchar(64) NOT NULL,
   name                         varchar(160) NOT NULL,
-  scope                        varchar(40) NOT NULL CHECK (scope IN ('GLOBAL', 'TENANT', 'PRODUCT', 'KYC_TIER', 'CUSTOMER_SEGMENT', 'CUSTOMER', 'ACCOUNT', 'CARD', 'WALLET', 'AGENT', 'MERCHANT')),
+  scope                        varchar(40) NOT NULL CHECK (scope IN ('GLOBAL', 'TENANT', 'PRODUCT', 'KYC_TIER', 'CUSTOMER_SEGMENT', 'CUSTOMER', 'ACCOUNT', 'CARD', 'WALLET', 'AGENT', 'MERCHANT', 'REGULATORY_PROFILE', 'INSTRUMENT_GRADE')),
   scope_ref                    varchar(128),
   transaction_type             varchar(40),
   channel                      varchar(40) CHECK (channel IN ('MOBILE_APP', 'WEB', 'API', 'USSD', 'AGENT', 'BRANCH', 'POS', 'ATM', 'ECOMMERCE', 'CONTACTLESS', 'OPEN_BANKING')),
@@ -123,6 +123,9 @@ CREATE TABLE limit_usage (
   reserved_count               integer NOT NULL DEFAULT 0,
   currency                     char(3),
   last_reset_reason            text,
+  direction                    varchar(40) CHECK (direction IN ('DEBIT', 'CREDIT')),
+  tier                         varchar(40) CHECK (tier IN ('CUMULATIVE', 'INSTRUMENT')),
+  source_profile_id            uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -149,6 +152,9 @@ COMMENT ON COLUMN limit_usage.reserved_amount IS 'Reserved, not yet committed';
 COMMENT ON COLUMN limit_usage.reserved_count IS 'Reserved count';
 COMMENT ON COLUMN limit_usage.currency IS 'Currency';
 COMMENT ON COLUMN limit_usage.last_reset_reason IS 'Reason of the last operational reset';
+COMMENT ON COLUMN limit_usage.direction IS 'WE-LIMIT-1: debit or credit side (empty = legacy direction-agnostic counter)';
+COMMENT ON COLUMN limit_usage.tier IS 'WE-LIMIT-1: TCP tier that compiled the counting rule (empty = classic limit_rule)';
+COMMENT ON COLUMN limit_usage.source_profile_id IS 'WE-LIMIT-1: authoring TCP profile compiled into the counting rule';
 COMMENT ON COLUMN limit_usage.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_usage.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_usage.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -157,6 +163,7 @@ COMMENT ON COLUMN limit_usage.custom_field_5 IS 'Tenant-defined custom field 5; 
 CREATE INDEX ix_limit_usage_tenant ON limit_usage (tenant_id, created_at);
 CREATE INDEX ix_limit_usage_limit_rule_id ON limit_usage (limit_rule_id);
 CREATE INDEX ix_limit_usage_subject_id ON limit_usage (subject_id);
+CREATE INDEX ix_limit_usage_source_profile_id ON limit_usage (source_profile_id);
 ALTER TABLE limit_usage ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON limit_usage USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_limit_usage_touch BEFORE UPDATE ON limit_usage FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -243,6 +250,19 @@ CREATE TABLE limit_check (
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   current_balance              numeric(28,8),
+  direction                    varchar(40) CHECK (direction IN ('DEBIT', 'CREDIT')),
+  regulatory_profile_code      varchar(64),
+  domain_code                  varchar(64),
+  category_code                varchar(64),
+  grade_code                   varchar(64),
+  payment_instrument           varchar(40) CHECK (payment_instrument IN ('WALLET', 'BANK_ACCOUNT', 'CARD', 'CASH', 'VOUCHER', 'AGENT_FLOAT', 'MERCHANT_TILL')),
+  payee_subject_type           varchar(32),
+  payee_subject_id             uuid,
+  payee_customer_id            uuid,
+  payee_regulatory_profile_code varchar(64),
+  payee_grade_code             varchar(64),
+  payee_payment_instrument     varchar(40) CHECK (payee_payment_instrument IN ('WALLET', 'BANK_ACCOUNT', 'CARD', 'CASH', 'VOUCHER', 'AGENT_FLOAT', 'MERCHANT_TILL')),
+  payee_current_balance        numeric(28,8),
   allowed                      boolean NOT NULL,
   status                       varchar(40) NOT NULL CHECK (status IN ('RESERVED', 'COMMITTED', 'RELEASED', 'REJECTED', 'DRY_RUN', 'EXPIRED')),
   action                       varchar(40) CHECK (action IN ('REJECT', 'REVIEW', 'STEP_UP', 'ALLOW_AND_ALERT')),
@@ -283,6 +303,19 @@ COMMENT ON COLUMN limit_check.channel IS 'Channel';
 COMMENT ON COLUMN limit_check.amount IS 'Amount';
 COMMENT ON COLUMN limit_check.currency IS 'Currency';
 COMMENT ON COLUMN limit_check.current_balance IS 'Balance before the transaction (BALANCE limits)';
+COMMENT ON COLUMN limit_check.direction IS 'WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)';
+COMMENT ON COLUMN limit_check.regulatory_profile_code IS 'WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent';
+COMMENT ON COLUMN limit_check.domain_code IS 'WE-LIMIT-1: distribution domain of the subject (empty = any)';
+COMMENT ON COLUMN limit_check.category_code IS 'WE-LIMIT-1: category of the subject (empty = any)';
+COMMENT ON COLUMN limit_check.grade_code IS 'WE-LIMIT-1: grade of the subject (empty = any)';
+COMMENT ON COLUMN limit_check.payment_instrument IS 'WE-LIMIT-1: instrument used (instrument TCP)';
+COMMENT ON COLUMN limit_check.payee_subject_type IS 'WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation)';
+COMMENT ON COLUMN limit_check.payee_subject_id IS 'WE-LIMIT-1 credit block: payee subject';
+COMMENT ON COLUMN limit_check.payee_customer_id IS 'WE-LIMIT-1 credit block: payee customer';
+COMMENT ON COLUMN limit_check.payee_regulatory_profile_code IS 'WE-LIMIT-1 credit block: payee cumulative-TCP key';
+COMMENT ON COLUMN limit_check.payee_grade_code IS 'WE-LIMIT-1 credit block: payee grade';
+COMMENT ON COLUMN limit_check.payee_payment_instrument IS 'WE-LIMIT-1 credit block: payee instrument';
+COMMENT ON COLUMN limit_check.payee_current_balance IS 'WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)';
 COMMENT ON COLUMN limit_check.allowed IS 'Whether the transaction is within limits';
 COMMENT ON COLUMN limit_check.status IS 'Reservation status (RESERVED until committed, released or expired)';
 COMMENT ON COLUMN limit_check.action IS 'Strictest action of the breached limits';
@@ -306,10 +339,316 @@ CREATE INDEX ix_limit_check_tenant ON limit_check (tenant_id, created_at);
 CREATE INDEX ix_limit_check_subject_id ON limit_check (subject_id);
 CREATE INDEX ix_limit_check_customer_id ON limit_check (customer_id);
 CREATE INDEX ix_limit_check_product_id ON limit_check (product_id);
+CREATE INDEX ix_limit_check_regulatory_profile_code ON limit_check (regulatory_profile_code);
+CREATE INDEX ix_limit_check_payee_subject_id ON limit_check (payee_subject_id);
 CREATE INDEX ix_limit_check_correlation_id ON limit_check (correlation_id);
 ALTER TABLE limit_check ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON limit_check USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_limit_check_touch BEFORE UPDATE ON limit_check FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- transfer_control_profile: WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by regulatory profile (KYC id), currency, direction and optional domain/category; it is compiled into synthetic, windowed limit rules counted against the regulatory-profile id so usage aggregates across all of a customer's account groups. Rank-1 is never superseded by an instrument TCP. Maker-checker.
+
+CREATE TABLE transfer_control_profile (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  code                         varchar(64) NOT NULL,
+  name                         varchar(160) NOT NULL,
+  regulatory_profile_code      varchar(64) NOT NULL,
+  currency                     char(3) NOT NULL,
+  direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
+  domain_code                  varchar(64),
+  category_code                varchar(64),
+  rule_mode                    varchar(40) NOT NULL DEFAULT 'RULE1' CHECK (rule_mode IN ('RULE1', 'RULE2', 'RULE3')),
+  services                     jsonb,
+  daily_amount                 numeric(28,8),
+  daily_count                  integer,
+  weekly_amount                numeric(28,8),
+  weekly_count                 integer,
+  monthly_amount               numeric(28,8),
+  monthly_count                integer,
+  yearly_amount                numeric(28,8),
+  yearly_count                 integer,
+  yearly_enabled               boolean NOT NULL DEFAULT false,
+  max_balance                  numeric(28,8),
+  breach_action                varchar(40) NOT NULL DEFAULT 'REJECT' CHECK (breach_action IN ('REJECT', 'REVIEW', 'STEP_UP', 'ALLOW_AND_ALERT')),
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'INACTIVE')),
+  is_regulatory                boolean NOT NULL DEFAULT true,
+  valid_from                   timestamptz,
+  valid_to                     timestamptz,
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  deactivation_reason          text,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_transfer_control_profile_code UNIQUE (tenant_id, code)
+);
+COMMENT ON TABLE transfer_control_profile IS 'WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by regulatory profile (KYC id), currency, direction and optional domain/category; it is compiled into synthetic, windowed limit rules counted against the regulatory-profile id so usage aggregates across all of a customer''s account groups. Rank-1 is never superseded by an instrument TCP. Maker-checker.
+';
+COMMENT ON COLUMN transfer_control_profile.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN transfer_control_profile.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN transfer_control_profile.created_at IS 'Creation time';
+COMMENT ON COLUMN transfer_control_profile.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN transfer_control_profile.updated_at IS 'Last update time';
+COMMENT ON COLUMN transfer_control_profile.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN transfer_control_profile.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN transfer_control_profile.code IS 'Profile code';
+COMMENT ON COLUMN transfer_control_profile.name IS 'Display name';
+COMMENT ON COLUMN transfer_control_profile.regulatory_profile_code IS 'Regulatory profile / KYC id the cumulative counters aggregate against';
+COMMENT ON COLUMN transfer_control_profile.currency IS 'Currency';
+COMMENT ON COLUMN transfer_control_profile.direction IS 'Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)';
+COMMENT ON COLUMN transfer_control_profile.domain_code IS 'Distribution domain (empty = any)';
+COMMENT ON COLUMN transfer_control_profile.category_code IS 'Category (empty = any)';
+COMMENT ON COLUMN transfer_control_profile.rule_mode IS 'MQ-TCP-4 granularity';
+COMMENT ON COLUMN transfer_control_profile.services IS 'Transaction types / services this profile counts (empty = all)';
+COMMENT ON COLUMN transfer_control_profile.daily_amount IS 'Daily cumulative amount cap';
+COMMENT ON COLUMN transfer_control_profile.daily_count IS 'Daily cumulative count cap';
+COMMENT ON COLUMN transfer_control_profile.weekly_amount IS 'Weekly cumulative amount cap';
+COMMENT ON COLUMN transfer_control_profile.weekly_count IS 'Weekly cumulative count cap';
+COMMENT ON COLUMN transfer_control_profile.monthly_amount IS 'Monthly cumulative amount cap';
+COMMENT ON COLUMN transfer_control_profile.monthly_count IS 'Monthly cumulative count cap';
+COMMENT ON COLUMN transfer_control_profile.yearly_amount IS 'Yearly cumulative amount cap (only when yearly_enabled)';
+COMMENT ON COLUMN transfer_control_profile.yearly_count IS 'Yearly cumulative count cap (only when yearly_enabled)';
+COMMENT ON COLUMN transfer_control_profile.yearly_enabled IS 'MQ-TCP-5: whether the yearly caps are enforced';
+COMMENT ON COLUMN transfer_control_profile.max_balance IS 'Maximum balance (CREDIT direction; MQ-TCP-1)';
+COMMENT ON COLUMN transfer_control_profile.breach_action IS 'Action on breach';
+COMMENT ON COLUMN transfer_control_profile.priority IS 'Tie-breaker';
+COMMENT ON COLUMN transfer_control_profile.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN transfer_control_profile.is_regulatory IS 'Cumulative TCP is regulatory by default (never superseded)';
+COMMENT ON COLUMN transfer_control_profile.valid_from IS 'Effective from';
+COMMENT ON COLUMN transfer_control_profile.valid_to IS 'Effective to';
+COMMENT ON COLUMN transfer_control_profile.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN transfer_control_profile.approved_by IS 'Checker who activated the profile';
+COMMENT ON COLUMN transfer_control_profile.deactivation_reason IS 'Why the profile was deactivated';
+COMMENT ON COLUMN transfer_control_profile.submitted_by IS 'Maker who submitted the profile for activation';
+COMMENT ON COLUMN transfer_control_profile.submitted_at IS 'Submission time (empty when no activation is pending)';
+COMMENT ON COLUMN transfer_control_profile.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN transfer_control_profile.rejection_reason IS 'Why the last submission was rejected';
+COMMENT ON COLUMN transfer_control_profile.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_control_profile.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_control_profile.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_control_profile.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_control_profile.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_transfer_control_profile_tenant ON transfer_control_profile (tenant_id, created_at);
+CREATE INDEX ix_transfer_control_profile_regulatory_profile_code ON transfer_control_profile (regulatory_profile_code);
+CREATE INDEX ix_transfer_control_profile_approval_request_id ON transfer_control_profile (approval_request_id);
+CREATE INDEX ix_transfer_control_profile_c1 ON transfer_control_profile (regulatory_profile_code, direction);
+ALTER TABLE transfer_control_profile ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON transfer_control_profile USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_transfer_control_profile_touch BEFORE UPDATE ON transfer_control_profile FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- instrument_tcp: WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade, optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance, max transfer %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile, validated at activation. Maker-checker.
+
+CREATE TABLE instrument_tcp (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  code                         varchar(64) NOT NULL,
+  name                         varchar(160) NOT NULL,
+  payment_instrument           varchar(40) NOT NULL CHECK (payment_instrument IN ('WALLET', 'BANK_ACCOUNT', 'CARD', 'CASH', 'VOUCHER', 'AGENT_FLOAT', 'MERCHANT_TILL')),
+  grade_code                   varchar(64),
+  domain_code                  varchar(64),
+  category_code                varchar(64),
+  service_type                 varchar(40),
+  bearer                       varchar(16),
+  direction                    varchar(40) CHECK (direction IN ('DEBIT', 'CREDIT')),
+  currency                     char(3) NOT NULL,
+  per_txn_min                  numeric(28,8),
+  per_txn_max                  numeric(28,8),
+  min_remaining_balance        numeric(28,8),
+  max_transfer_pct             numeric(18,10),
+  amount_multiple              numeric(28,8),
+  daily_amount                 numeric(28,8),
+  daily_count                  integer,
+  monthly_amount               numeric(28,8),
+  monthly_count                integer,
+  max_balance                  numeric(28,8),
+  breach_action                varchar(40) NOT NULL DEFAULT 'REJECT' CHECK (breach_action IN ('REJECT', 'REVIEW', 'STEP_UP', 'ALLOW_AND_ALERT')),
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'INACTIVE')),
+  valid_from                   timestamptz,
+  valid_to                     timestamptz,
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  deactivation_reason          text,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_instrument_tcp_code UNIQUE (tenant_id, code)
+);
+COMMENT ON TABLE instrument_tcp IS 'WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade, optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance, max transfer %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile, validated at activation. Maker-checker.
+';
+COMMENT ON COLUMN instrument_tcp.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN instrument_tcp.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN instrument_tcp.created_at IS 'Creation time';
+COMMENT ON COLUMN instrument_tcp.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN instrument_tcp.updated_at IS 'Last update time';
+COMMENT ON COLUMN instrument_tcp.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN instrument_tcp.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN instrument_tcp.code IS 'Profile code';
+COMMENT ON COLUMN instrument_tcp.name IS 'Display name';
+COMMENT ON COLUMN instrument_tcp.payment_instrument IS 'Instrument';
+COMMENT ON COLUMN instrument_tcp.grade_code IS 'Grade (empty = any grade)';
+COMMENT ON COLUMN instrument_tcp.domain_code IS 'Distribution domain (empty = any)';
+COMMENT ON COLUMN instrument_tcp.category_code IS 'Category (empty = any)';
+COMMENT ON COLUMN instrument_tcp.service_type IS 'Transaction type / service (empty = all)';
+COMMENT ON COLUMN instrument_tcp.bearer IS 'Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers)';
+COMMENT ON COLUMN instrument_tcp.direction IS 'Side (empty = both)';
+COMMENT ON COLUMN instrument_tcp.currency IS 'Currency';
+COMMENT ON COLUMN instrument_tcp.per_txn_min IS 'Minimum amount per transaction';
+COMMENT ON COLUMN instrument_tcp.per_txn_max IS 'Maximum amount per transaction';
+COMMENT ON COLUMN instrument_tcp.min_remaining_balance IS 'Minimum balance that must remain after a debit';
+COMMENT ON COLUMN instrument_tcp.max_transfer_pct IS 'Maximum % of the current balance a single transfer may move (0..1)';
+COMMENT ON COLUMN instrument_tcp.amount_multiple IS 'The amount must be a whole multiple of this';
+COMMENT ON COLUMN instrument_tcp.daily_amount IS 'Daily amount cap';
+COMMENT ON COLUMN instrument_tcp.daily_count IS 'Daily count cap';
+COMMENT ON COLUMN instrument_tcp.monthly_amount IS 'Monthly amount cap';
+COMMENT ON COLUMN instrument_tcp.monthly_count IS 'Monthly count cap';
+COMMENT ON COLUMN instrument_tcp.max_balance IS 'Maximum balance (CREDIT side)';
+COMMENT ON COLUMN instrument_tcp.breach_action IS 'Action on breach';
+COMMENT ON COLUMN instrument_tcp.priority IS 'Tie-breaker';
+COMMENT ON COLUMN instrument_tcp.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN instrument_tcp.valid_from IS 'Effective from';
+COMMENT ON COLUMN instrument_tcp.valid_to IS 'Effective to';
+COMMENT ON COLUMN instrument_tcp.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN instrument_tcp.approved_by IS 'Checker who activated the profile';
+COMMENT ON COLUMN instrument_tcp.deactivation_reason IS 'Why the profile was deactivated';
+COMMENT ON COLUMN instrument_tcp.submitted_by IS 'Maker who submitted the profile for activation';
+COMMENT ON COLUMN instrument_tcp.submitted_at IS 'Submission time (empty when no activation is pending)';
+COMMENT ON COLUMN instrument_tcp.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN instrument_tcp.rejection_reason IS 'Why the last submission was rejected';
+COMMENT ON COLUMN instrument_tcp.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN instrument_tcp.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN instrument_tcp.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN instrument_tcp.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN instrument_tcp.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_instrument_tcp_tenant ON instrument_tcp (tenant_id, created_at);
+CREATE INDEX ix_instrument_tcp_payment_instrument ON instrument_tcp (payment_instrument);
+CREATE INDEX ix_instrument_tcp_approval_request_id ON instrument_tcp (approval_request_id);
+CREATE INDEX ix_instrument_tcp_c1 ON instrument_tcp (payment_instrument, grade_code);
+ALTER TABLE instrument_tcp ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON instrument_tcp USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_instrument_tcp_touch BEFORE UPDATE ON instrument_tcp FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- transfer_rule: WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple validation. Evaluated by POST /transfer-rules/evaluate. Maker-checker.
+
+CREATE TABLE transfer_rule (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  code                         varchar(64) NOT NULL,
+  name                         varchar(160) NOT NULL,
+  service_type                 varchar(40),
+  sender_domain_code           varchar(64),
+  sender_category_code         varchar(64),
+  sender_grade_code            varchar(64),
+  sender_instrument            varchar(40) CHECK (sender_instrument IN ('WALLET', 'BANK_ACCOUNT', 'CARD', 'CASH', 'VOUCHER', 'AGENT_FLOAT', 'MERCHANT_TILL')),
+  sender_bank_code             varchar(64),
+  receiver_domain_code         varchar(64),
+  receiver_category_code       varchar(64),
+  receiver_grade_code          varchar(64),
+  receiver_instrument          varchar(40) CHECK (receiver_instrument IN ('WALLET', 'BANK_ACCOUNT', 'CARD', 'CASH', 'VOUCHER', 'AGENT_FLOAT', 'MERCHANT_TILL')),
+  receiver_bank_code           varchar(64),
+  hierarchy_scope              varchar(40) NOT NULL DEFAULT 'ANY' CHECK (hierarchy_scope IN ('ANY', 'WITHIN_HIERARCHY', 'OUTSIDE_HIERARCHY')),
+  allow                        boolean NOT NULL DEFAULT true,
+  min_amount                   numeric(28,8),
+  max_amount                   numeric(28,8),
+  amount_multiple              numeric(28,8),
+  currency                     char(3),
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'INACTIVE')),
+  valid_from                   timestamptz,
+  valid_to                     timestamptz,
+  approval_request_id          uuid,
+  approved_by                  varchar(64),
+  deactivation_reason          text,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_transfer_rule_code UNIQUE (tenant_id, code)
+);
+COMMENT ON TABLE transfer_rule IS 'WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple validation. Evaluated by POST /transfer-rules/evaluate. Maker-checker.
+';
+COMMENT ON COLUMN transfer_rule.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN transfer_rule.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN transfer_rule.created_at IS 'Creation time';
+COMMENT ON COLUMN transfer_rule.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN transfer_rule.updated_at IS 'Last update time';
+COMMENT ON COLUMN transfer_rule.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN transfer_rule.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN transfer_rule.code IS 'Rule code';
+COMMENT ON COLUMN transfer_rule.name IS 'Display name';
+COMMENT ON COLUMN transfer_rule.service_type IS 'Transaction type / service (empty = any)';
+COMMENT ON COLUMN transfer_rule.sender_domain_code IS 'Sender domain (empty = any)';
+COMMENT ON COLUMN transfer_rule.sender_category_code IS 'Sender category (empty = any)';
+COMMENT ON COLUMN transfer_rule.sender_grade_code IS 'Sender grade (empty = any)';
+COMMENT ON COLUMN transfer_rule.sender_instrument IS 'Sender instrument (empty = any)';
+COMMENT ON COLUMN transfer_rule.sender_bank_code IS 'Sender bank (empty = any)';
+COMMENT ON COLUMN transfer_rule.receiver_domain_code IS 'Receiver domain (empty = any)';
+COMMENT ON COLUMN transfer_rule.receiver_category_code IS 'Receiver category (empty = any)';
+COMMENT ON COLUMN transfer_rule.receiver_grade_code IS 'Receiver grade (empty = any)';
+COMMENT ON COLUMN transfer_rule.receiver_instrument IS 'Receiver instrument (empty = any)';
+COMMENT ON COLUMN transfer_rule.receiver_bank_code IS 'Receiver bank (empty = any)';
+COMMENT ON COLUMN transfer_rule.hierarchy_scope IS 'MQ-TR-2: within / outside the sender''s hierarchy';
+COMMENT ON COLUMN transfer_rule.allow IS 'Allow (true) or deny (false) the matching transfer';
+COMMENT ON COLUMN transfer_rule.min_amount IS 'Minimum amount (MQ-TR-3)';
+COMMENT ON COLUMN transfer_rule.max_amount IS 'Maximum amount (MQ-TR-3)';
+COMMENT ON COLUMN transfer_rule.amount_multiple IS 'The amount must be a whole multiple of this (MQ-TR-3)';
+COMMENT ON COLUMN transfer_rule.currency IS 'Currency of the amount bounds';
+COMMENT ON COLUMN transfer_rule.priority IS 'Lower wins when several rules match';
+COMMENT ON COLUMN transfer_rule.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN transfer_rule.valid_from IS 'Effective from';
+COMMENT ON COLUMN transfer_rule.valid_to IS 'Effective to';
+COMMENT ON COLUMN transfer_rule.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN transfer_rule.approved_by IS 'Checker who activated the rule';
+COMMENT ON COLUMN transfer_rule.deactivation_reason IS 'Why the rule was deactivated';
+COMMENT ON COLUMN transfer_rule.submitted_by IS 'Maker who submitted the rule for activation';
+COMMENT ON COLUMN transfer_rule.submitted_at IS 'Submission time (empty when no activation is pending)';
+COMMENT ON COLUMN transfer_rule.rejected_by IS 'Checker who rejected the last submission';
+COMMENT ON COLUMN transfer_rule.rejection_reason IS 'Why the last submission was rejected';
+COMMENT ON COLUMN transfer_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_rule.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN transfer_rule.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_transfer_rule_tenant ON transfer_rule (tenant_id, created_at);
+CREATE INDEX ix_transfer_rule_approval_request_id ON transfer_rule (approval_request_id);
+CREATE INDEX ix_transfer_rule_c1 ON transfer_rule (service_type, status);
+ALTER TABLE transfer_rule ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON transfer_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_transfer_rule_touch BEFORE UPDATE ON transfer_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- risk_appetite_metric: Board-approved risk appetite metric with amber/red thresholds and its latest value
 CREATE TABLE risk_appetite_metric (

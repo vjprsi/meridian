@@ -13,9 +13,27 @@ public final class LimitModel {
     /** Instrument scopes are counted per instrument; all other scopes are counted per customer ("party"). */
     public static final Set<String> INSTRUMENT_SCOPES = Set.of("ACCOUNT", "CARD", "WALLET", "AGENT", "MERCHANT");
 
+    /**
+     * A limit rule. Classic {@code limit_rule} rows use the 14-argument form (all WE-LIMIT-1 TCP fields null).
+     * WE-LIMIT-1 compiles Transfer Control Profiles into synthetic rules that carry a {@code direction}, hierarchy
+     * dimensions (domain / category / grade), an {@code instrument} and {@code bearer}, and the per-transaction TCP
+     * checks ({@code maxTransferPct}, {@code amountMultiple}, {@code minRemainingBalance}, {@code perTxnMin}).
+     * An empty match field means "any".
+     */
     public record Rule(UUID id, String code, String scope, String scopeRef, String transactionType, String channel,
                        String period, String measure, String currency, BigDecimal maxAmount, Integer maxCount,
-                       String breachAction, int priority, boolean regulatory) {
+                       String breachAction, int priority, boolean regulatory,
+                       String direction, String domainCode, String categoryCode, String gradeCode, String instrument,
+                       String bearer, BigDecimal maxTransferPct, BigDecimal amountMultiple, BigDecimal minRemainingBalance,
+                       BigDecimal perTxnMin) {
+        /** Classic (non-TCP) rule: no direction or TCP dimensions. */
+        public Rule(UUID id, String code, String scope, String scopeRef, String transactionType, String channel,
+                    String period, String measure, String currency, BigDecimal maxAmount, Integer maxCount,
+                    String breachAction, int priority, boolean regulatory) {
+            this(id, code, scope, scopeRef, transactionType, channel, period, measure, currency, maxAmount, maxCount,
+                    breachAction, priority, regulatory, null, null, null, null, null, null, null, null, null, null);
+        }
+
         public boolean counted() {
             return !"PER_TRANSACTION".equals(period) && !"BALANCE".equals(measure);
         }
@@ -23,20 +41,33 @@ public final class LimitModel {
         /** Higher = more specific. Scope dominates; a transaction type or channel qualifier refines it. */
         public int specificity() {
             int base = switch (scope) {
-                case "ACCOUNT", "CARD", "WALLET", "AGENT", "MERCHANT" -> 6;
+                case "ACCOUNT", "CARD", "WALLET", "AGENT", "MERCHANT", "INSTRUMENT_GRADE" -> 6;
+                case "REGULATORY_PROFILE" -> 6;
                 case "CUSTOMER" -> 5;
                 case "CUSTOMER_SEGMENT" -> 4;
                 case "KYC_TIER", "PRODUCT" -> 3;
                 case "TENANT" -> 1;
                 default -> 0;
             };
-            return base * 4 + (transactionType != null ? 2 : 0) + (channel != null ? 1 : 0);
+            int qualifiers = (transactionType != null ? 2 : 0) + (channel != null ? 1 : 0)
+                    + (gradeCode != null ? 1 : 0) + (categoryCode != null ? 1 : 0) + (domainCode != null ? 1 : 0);
+            return base * 8 + qualifiers;
         }
     }
 
     public record CheckRequest(String subjectType, UUID subjectId, UUID customerId, String kycTier, String customerSegment,
                                UUID productId, String transactionType, String channel, BigDecimal amount, String currency,
-                               BigDecimal currentBalance) {}
+                               BigDecimal currentBalance, String direction, String regulatoryProfileCode,
+                               UUID regulatoryProfileSubjectId, String domainCode, String categoryCode, String gradeCode,
+                               String instrument) {
+        /** Classic request (debit side, no TCP dimensions). */
+        public CheckRequest(String subjectType, UUID subjectId, UUID customerId, String kycTier, String customerSegment,
+                            UUID productId, String transactionType, String channel, BigDecimal amount, String currency,
+                            BigDecimal currentBalance) {
+            this(subjectType, subjectId, customerId, kycTier, customerSegment, productId, transactionType, channel,
+                    amount, currency, currentBalance, "DEBIT", null, null, null, null, null, null);
+        }
+    }
 
     /** A rule that applies to a check, with the subject its usage is counted against. */
     public record Applicable(Rule rule, String countingSubjectType, UUID countingSubjectId) {}

@@ -64,7 +64,8 @@ public class LimitCheckService {
     public Map<String, Object> evaluate(JsonNode body) {
         long started = System.nanoTime();
         CheckRequest req = request(body);
-        Evaluation e = tx.execute(s -> run(req, false));
+        CheckRequest payee = payeeRequest(body, req);
+        Evaluation e = tx.execute(s -> run(req, payee, false));
         Map<String, Object> out = summary(e, req);
         out.put("dry_run", true);
         out.put("latency_ms", (System.nanoTime() - started) / 1_000_000);
@@ -73,7 +74,8 @@ public class LimitCheckService {
 
     public Map<String, Object> simulate(JsonNode body) {
         CheckRequest req = request(body);
-        Evaluation e = tx.execute(s -> run(req, false));
+        CheckRequest payee = payeeRequest(body, req);
+        Evaluation e = tx.execute(s -> run(req, payee, false));
         Map<String, Object> out = summary(e, req);
         List<Map<String, Object>> applied = new ArrayList<>();
         for (Applicable a : e.selection().effective()) {
@@ -123,7 +125,8 @@ public class LimitCheckService {
             if (prior.isPresent()) {
                 return replay(prior.get(), req);
             }
-            Evaluation e = run(req, true);
+            CheckRequest payee = payeeRequest(body, req);
+            Evaluation e = run(req, payee, true);
             boolean reserve = !"REJECT".equals(e.action());
             ArrayNode deltas = json.createArrayNode();
             ArrayNode reservations = json.createArrayNode();
@@ -152,6 +155,23 @@ public class LimitCheckService {
             c.put("amount", req.amount().toPlainString());
             c.put("currency", req.currency());
             putIf(c, "current_balance", req.currentBalance() == null ? null : req.currentBalance().toPlainString());
+            // WE-LIMIT-1 payer TCP context
+            putIf(c, "direction", req.direction());
+            putIf(c, "regulatory_profile_code", req.regulatoryProfileCode());
+            putIf(c, "domain_code", req.domainCode());
+            putIf(c, "category_code", req.categoryCode());
+            putIf(c, "grade_code", req.gradeCode());
+            putIf(c, "payment_instrument", req.instrument());
+            // WE-LIMIT-1 credit block (echoed for audit; the credit-side counters are already in the reservations)
+            if (payee != null) {
+                c.put("payee_subject_type", payee.subjectType());
+                putIf(c, "payee_subject_id", payee.subjectId());
+                putIf(c, "payee_customer_id", payee.customerId());
+                putIf(c, "payee_regulatory_profile_code", payee.regulatoryProfileCode());
+                putIf(c, "payee_grade_code", payee.gradeCode());
+                putIf(c, "payee_payment_instrument", payee.instrument());
+                putIf(c, "payee_current_balance", payee.currentBalance() == null ? null : payee.currentBalance().toPlainString());
+            }
             c.put("allowed", e.allowed());
             c.put("status", reserve ? "RESERVED" : "REJECTED");
             putIf(c, "action", e.action());
@@ -262,7 +282,24 @@ public class LimitCheckService {
     // ------------------------------------------------------------------ core
 
     Evaluation run(CheckRequest req, boolean lock) {
+        return run(req, null, lock);
+    }
+
+    /** One applicable rule together with the request side (payer or payee) whose amount/balance it is evaluated with. */
+    private record Sided(Applicable applicable, CheckRequest side) {}
+
+    /**
+     * WE-LIMIT-1: evaluates the payer (debit) side and, when a credit block is supplied, the payee (credit) side in
+     * one pass. Both sides' counters are created and locked in the same single round-trip, so the credit-side
+     * reservation adds no extra hot-path query.
+     */
+    Evaluation run(CheckRequest req, CheckRequest payee, boolean lock) {
         LimitModel.Selection sel = LimitEngine.select(rules.rules(), req);
+        List<Sided> sided = new ArrayList<>();
+        sel.effective().forEach(a -> sided.add(new Sided(a, req)));
+        if (payee != null) {
+            LimitEngine.select(rules.rules(), payee).effective().forEach(a -> sided.add(new Sided(a, payee)));
+        }
         Instant now = Instant.now();
         // calendar periods follow the tenant's business date (UTC calendar date when business-day-service has none)
         java.time.LocalDate today = businessDates.today(() -> now.atZone(java.time.ZoneOffset.UTC).toLocalDate());
@@ -270,7 +307,8 @@ public class LimitCheckService {
         ArrayNode rolling = json.createArrayNode();
         Set<UUID> subjects = new LinkedHashSet<>();
         Set<UUID> ruleIds = new LinkedHashSet<>();
-        for (Applicable a : sel.effective()) {
+        for (Sided s : sided) {
+            Applicable a = s.applicable();
             subjects.add(a.countingSubjectId());
             ruleIds.add(a.rule().id());
             if (!a.rule().counted()) {
@@ -283,7 +321,10 @@ public class LimitCheckService {
             k.put("subject_id", a.countingSubjectId().toString());
             k.put("period_start", w.start().toString());
             k.put("period_end", w.end().toString());
-            k.put("currency", a.rule().currency() != null ? a.rule().currency() : req.currency());
+            k.put("currency", a.rule().currency() != null ? a.rule().currency() : s.side().currency());
+            if (a.rule().direction() != null) {
+                k.put("direction", a.rule().direction());
+            }
             if (w.rolling()) {
                 ObjectNode r = rolling.addObject();
                 r.put("limit_rule_id", a.rule().id().toString());
@@ -309,7 +350,8 @@ public class LimitCheckService {
         }
         List<RuleResult> results = new ArrayList<>();
         Map<UUID, UUID> usageIds = new HashMap<>();
-        for (Applicable a : sel.effective()) {
+        for (Sided s : sided) {
+            Applicable a = s.applicable();
             String k = a.rule().id() + "|" + a.countingSubjectId();
             Usage u = Usage.ZERO;
             JsonNode row = usage.get(k);
@@ -324,7 +366,7 @@ public class LimitCheckService {
             JsonNode ov = overrides.get(k);
             LimitModel.Limit limit = LimitEngine.limit(a.rule(), ov == null ? null : Db.dec(ov, "max_amount"),
                     ov == null ? null : Db.integer(ov, "max_count"), ov == null ? null : UUID.fromString(ov.get("id").asString()));
-            results.add(LimitEngine.evaluate(a.rule(), limit, u, req.amount(), req.currentBalance()));
+            results.add(LimitEngine.evaluate(a.rule(), limit, u, s.side().amount(), s.side().currentBalance()));
         }
         String action = LimitEngine.strictest(results);
         return new Evaluation(sel, results, usageIds, action, LimitEngine.allowed(action));
@@ -412,10 +454,38 @@ public class LimitCheckService {
         if (subjectType == null || subjectType.isBlank()) {
             throw ApiException.unprocessable("subject_type_required", "subject_type is required");
         }
+        String direction = Db.str(b, "direction");
+        String regProfile = Db.str(b, "regulatory_profile_code");
         return new CheckRequest(subjectType.toUpperCase(java.util.Locale.ROOT), Db.uuid(b, "subject_id"),
                 Db.uuid(b, "customer_id"), Db.str(b, "kyc_tier"), Db.str(b, "customer_segment"), Db.uuid(b, "product_id"),
                 Db.str(b, "transaction_type"), Db.str(b, "channel"), amount, Db.str(b, "currency"),
-                Db.dec(b, "current_balance"));
+                Db.dec(b, "current_balance"), direction == null ? "DEBIT" : direction.toUpperCase(java.util.Locale.ROOT),
+                regProfile, regProfileSubject(regProfile), Db.str(b, "domain_code"), Db.str(b, "category_code"),
+                Db.str(b, "grade_code"), Db.str(b, "payment_instrument"));
+    }
+
+    /**
+     * WE-LIMIT-1 credit block: the payee side of a transfer, evaluated as a CREDIT check against the payee subject.
+     * Returns null when no payee is supplied (classic single-sided behaviour).
+     */
+    static CheckRequest payeeRequest(JsonNode b, CheckRequest payer) {
+        java.util.UUID payeeId = Db.uuid(b, "payee_subject_id");
+        if (payeeId == null) {
+            return null;
+        }
+        String type = Db.str(b, "payee_subject_type");
+        String regProfile = Db.str(b, "payee_regulatory_profile_code");
+        return new CheckRequest(type == null ? "WALLET" : type.toUpperCase(java.util.Locale.ROOT), payeeId,
+                Db.uuid(b, "payee_customer_id"), payer.kycTier(), payer.customerSegment(), payer.productId(),
+                payer.transactionType(), payer.channel(), payer.amount(), payer.currency(),
+                Db.dec(b, "payee_current_balance"), "CREDIT", regProfile, regProfileSubject(regProfile),
+                payer.domainCode(), payer.categoryCode(), Db.str(b, "payee_grade_code"),
+                Db.str(b, "payee_payment_instrument"));
+    }
+
+    /** Deterministic counting subject of a regulatory-profile code (cross-account-group aggregation key). */
+    private static java.util.UUID regProfileSubject(String code) {
+        return code == null || code.isBlank() ? null : io.meridian.common.id.Ids.deterministic("regprofile:" + code);
     }
 
     private static void putIf(ObjectNode n, String f, Object v) {

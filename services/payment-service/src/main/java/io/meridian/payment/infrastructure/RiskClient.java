@@ -27,8 +27,16 @@ public class RiskClient {
         return client.post("sanctions-service", "/v1/risk/sanctions/screenings/screen-payment", body, LedgerClient.key(key));
     }
 
-    /** Checks the limits and reserves usage: {@code {id, allowed, status, action, breached_rule_ids}}. */
+    /**
+     * Checks the limits and reserves usage: {@code {id, allowed, status, action, breached_rule_ids}}. WE-LIMIT-1:
+     * the payer side is always a DEBIT; the TCP dimensions (regulatory_profile_code, domain/category/grade_code,
+     * payment_instrument) and the payee credit block are forwarded only when the caller set them, so when no
+     * Transfer Control Profiles are configured the request and its result are identical to before.
+     */
     public JsonNode checkLimits(ObjectNode check, String key) {
+        if (!check.hasNonNull("direction")) {
+            check.put("direction", "DEBIT");
+        }
         return client.post("limits-service", "/v1/risk/limits/checks", check, LedgerClient.key(key));
     }
 

@@ -44,7 +44,14 @@ enums:
                         REFERRED_TO_LAW_ENFORCEMENT]
   SarReportType: [SAR, STR, CTR, LCTR, EFTR, TFR]
   SarStatus: [DRAFT, PENDING_APPROVAL, APPROVED, SUBMITTED, ACKNOWLEDGED, REJECTED]
-  RiskLimitScope: [GLOBAL, TENANT, PRODUCT, KYC_TIER, CUSTOMER_SEGMENT, CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT]
+  RiskLimitScope: [GLOBAL, TENANT, PRODUCT, KYC_TIER, CUSTOMER_SEGMENT, CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT,
+                   REGULATORY_PROFILE, INSTRUMENT_GRADE]   # WE-LIMIT-1: cumulative (KYC/regulatory-profile) and instrument/grade TCP scopes
+  TransferDirection: [DEBIT, CREDIT]   # WE-LIMIT-1: payer (debit) vs payee (credit) side of a transfer
+  TcpTier: [CUMULATIVE, INSTRUMENT]   # WE-LIMIT-1: Rank-1 cumulative vs Rank-2 instrument TCP
+  TcpRuleMode: [RULE1, RULE2, RULE3]   # WE-LIMIT-1 (MQ-TCP-4): all-service-all-bearer -> per-service -> per-service-per-bearer
+  PaymentInstrumentType: [WALLET, BANK_ACCOUNT, CARD, CASH, VOUCHER, AGENT_FLOAT, MERCHANT_TILL]   # WE-LIMIT-1 instruments
+  TransferRuleStatus: [DRAFT, ACTIVE, INACTIVE]   # WE-LIMIT-1: maker-checker lifecycle of TCP / transfer-rule authoring rows
+  HierarchyScope: [ANY, WITHIN_HIERARCHY, OUTSIDE_HIERARCHY]   # WE-LIMIT-1 (MQ-TR-2): hierarchy vs outside-hierarchy transfer config
   RiskLimitPeriod: [PER_TRANSACTION, DAILY, WEEKLY, MONTHLY, YEARLY, LIFETIME, ROLLING_24H, ROLLING_7D, ROLLING_30D]
   RiskLimitMeasure: [AMOUNT, COUNT, BALANCE]
   RiskLimitStatus: [DRAFT, ACTIVE, INACTIVE]
@@ -1204,6 +1211,9 @@ services:
           - "reserved_count int nn default=0 ro | Reserved count"
           - "currency currency | Currency"
           - "last_reset_reason text ro | Reason of the last operational reset"
+          - "direction enum:TransferDirection | WE-LIMIT-1: debit or credit side (empty = legacy direction-agnostic counter)"
+          - "tier enum:TcpTier | WE-LIMIT-1: TCP tier that compiled the counting rule (empty = classic limit_rule)"
+          - "source_profile_id uuid idx | WE-LIMIT-1: authoring TCP profile compiled into the counting rule"
         unique: [[limit_rule_id, subject_id, period_start]]
 
       - name: limit_override
@@ -1241,6 +1251,19 @@ services:
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
           - "current_balance amount | Balance before the transaction (BALANCE limits)"
+          - "direction enum:TransferDirection | WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)"
+          - "regulatory_profile_code string(64) idx | WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent"
+          - "domain_code string(64) | WE-LIMIT-1: distribution domain of the subject (empty = any)"
+          - "category_code string(64) | WE-LIMIT-1: category of the subject (empty = any)"
+          - "grade_code string(64) | WE-LIMIT-1: grade of the subject (empty = any)"
+          - "payment_instrument enum:PaymentInstrumentType | WE-LIMIT-1: instrument used (instrument TCP)"
+          - "payee_subject_type string(32) | WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation)"
+          - "payee_subject_id uuid idx | WE-LIMIT-1 credit block: payee subject"
+          - "payee_customer_id uuid | WE-LIMIT-1 credit block: payee customer"
+          - "payee_regulatory_profile_code string(64) | WE-LIMIT-1 credit block: payee cumulative-TCP key"
+          - "payee_grade_code string(64) | WE-LIMIT-1 credit block: payee grade"
+          - "payee_payment_instrument enum:PaymentInstrumentType | WE-LIMIT-1 credit block: payee instrument"
+          - "payee_current_balance amount | WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)"
           - "allowed bool nn ro | Whether the transaction is within limits"
           - "status enum:LimitCheckStatus nn ro | Reservation status (RESERVED until committed, released or expired)"
           - "action enum:LimitBreachAction ro | Strictest action of the breached limits"
@@ -1256,6 +1279,133 @@ services:
           - "expires_at ts | Reservation expiry (default 15 minutes; released by /expire-reservations)"
           - "latency_ms int ro | Evaluation time"
         unique: [[tenant_id, idempotency_key]]
+
+      # ---------------------------------------------------------------- WE-LIMIT-1: two-tier Transfer Control Profile (G-04)
+      - name: transfer_control_profile
+        prefix: tcp
+        description: >
+          WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by
+          regulatory profile (KYC id), currency, direction and optional domain/category; it is compiled into
+          synthetic, windowed limit rules counted against the regulatory-profile id so usage aggregates across all
+          of a customer's account groups. Rank-1 is never superseded by an instrument TCP. Maker-checker.
+        fr: [LIM-01]
+        columns:
+          - "code string(64) nn uq | Profile code"
+          - "name string(160) nn | Display name"
+          - "regulatory_profile_code string(64) nn idx | Regulatory profile / KYC id the cumulative counters aggregate against"
+          - "currency currency nn | Currency"
+          - "direction enum:TransferDirection nn | Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)"
+          - "domain_code string(64) | Distribution domain (empty = any)"
+          - "category_code string(64) | Category (empty = any)"
+          - "rule_mode enum:TcpRuleMode nn default=RULE1 | MQ-TCP-4 granularity"
+          - "services string[] | Transaction types / services this profile counts (empty = all)"
+          - "daily_amount amount | Daily cumulative amount cap"
+          - "daily_count int | Daily cumulative count cap"
+          - "weekly_amount amount | Weekly cumulative amount cap"
+          - "weekly_count int | Weekly cumulative count cap"
+          - "monthly_amount amount | Monthly cumulative amount cap"
+          - "monthly_count int | Monthly cumulative count cap"
+          - "yearly_amount amount | Yearly cumulative amount cap (only when yearly_enabled)"
+          - "yearly_count int | Yearly cumulative count cap (only when yearly_enabled)"
+          - "yearly_enabled bool nn default=false | MQ-TCP-5: whether the yearly caps are enforced"
+          - "max_balance amount | Maximum balance (CREDIT direction; MQ-TCP-1)"
+          - "breach_action enum:LimitBreachAction nn default=REJECT | Action on breach"
+          - "priority int nn default=100 | Tie-breaker"
+          - "status enum:TransferRuleStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "is_regulatory bool nn default=true | Cumulative TCP is regulatory by default (never superseded)"
+          - "valid_from ts | Effective from"
+          - "valid_to ts | Effective to"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "approved_by string(64) ro | Checker who activated the profile"
+          - "deactivation_reason text ro | Why the profile was deactivated"
+          - "submitted_by string(64) ro | Maker who submitted the profile for activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason text ro | Why the last submission was rejected"
+        indexes: [[regulatory_profile_code, direction]]
+
+      - name: instrument_tcp
+        prefix: itc
+        description: >
+          WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade,
+          optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance,
+          max transfer %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile,
+          validated at activation. Maker-checker.
+        fr: [LIM-01]
+        columns:
+          - "code string(64) nn uq | Profile code"
+          - "name string(160) nn | Display name"
+          - "payment_instrument enum:PaymentInstrumentType nn idx | Instrument"
+          - "grade_code string(64) | Grade (empty = any grade)"
+          - "domain_code string(64) | Distribution domain (empty = any)"
+          - "category_code string(64) | Category (empty = any)"
+          - "service_type string(40) | Transaction type / service (empty = all)"
+          - "bearer string(16) | Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers)"
+          - "direction enum:TransferDirection | Side (empty = both)"
+          - "currency currency nn | Currency"
+          - "per_txn_min amount | Minimum amount per transaction"
+          - "per_txn_max amount | Maximum amount per transaction"
+          - "min_remaining_balance amount | Minimum balance that must remain after a debit"
+          - "max_transfer_pct rate | Maximum % of the current balance a single transfer may move (0..1)"
+          - "amount_multiple amount | The amount must be a whole multiple of this"
+          - "daily_amount amount | Daily amount cap"
+          - "daily_count int | Daily count cap"
+          - "monthly_amount amount | Monthly amount cap"
+          - "monthly_count int | Monthly count cap"
+          - "max_balance amount | Maximum balance (CREDIT side)"
+          - "breach_action enum:LimitBreachAction nn default=REJECT | Action on breach"
+          - "priority int nn default=100 | Tie-breaker"
+          - "status enum:TransferRuleStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "valid_from ts | Effective from"
+          - "valid_to ts | Effective to"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "approved_by string(64) ro | Checker who activated the profile"
+          - "deactivation_reason text ro | Why the profile was deactivated"
+          - "submitted_by string(64) ro | Maker who submitted the profile for activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason text ro | Why the last submission was rejected"
+        indexes: [[payment_instrument, grade_code]]
+
+      - name: transfer_rule
+        prefix: trf
+        description: >
+          WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver
+          domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple
+          validation. Evaluated by POST /transfer-rules/evaluate. Maker-checker.
+        fr: [LIM-01]
+        columns:
+          - "code string(64) nn uq | Rule code"
+          - "name string(160) nn | Display name"
+          - "service_type string(40) | Transaction type / service (empty = any)"
+          - "sender_domain_code string(64) | Sender domain (empty = any)"
+          - "sender_category_code string(64) | Sender category (empty = any)"
+          - "sender_grade_code string(64) | Sender grade (empty = any)"
+          - "sender_instrument enum:PaymentInstrumentType | Sender instrument (empty = any)"
+          - "sender_bank_code string(64) | Sender bank (empty = any)"
+          - "receiver_domain_code string(64) | Receiver domain (empty = any)"
+          - "receiver_category_code string(64) | Receiver category (empty = any)"
+          - "receiver_grade_code string(64) | Receiver grade (empty = any)"
+          - "receiver_instrument enum:PaymentInstrumentType | Receiver instrument (empty = any)"
+          - "receiver_bank_code string(64) | Receiver bank (empty = any)"
+          - "hierarchy_scope enum:HierarchyScope nn default=ANY | MQ-TR-2: within / outside the sender's hierarchy"
+          - "allow bool nn default=true | Allow (true) or deny (false) the matching transfer"
+          - "min_amount amount | Minimum amount (MQ-TR-3)"
+          - "max_amount amount | Maximum amount (MQ-TR-3)"
+          - "amount_multiple amount | The amount must be a whole multiple of this (MQ-TR-3)"
+          - "currency currency | Currency of the amount bounds"
+          - "priority int nn default=100 | Lower wins when several rules match"
+          - "status enum:TransferRuleStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "valid_from ts | Effective from"
+          - "valid_to ts | Effective to"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "approved_by string(64) ro | Checker who activated the rule"
+          - "deactivation_reason text ro | Why the rule was deactivated"
+          - "submitted_by string(64) ro | Maker who submitted the rule for activation"
+          - "submitted_at ts ro | Submission time (empty when no activation is pending)"
+          - "rejected_by string(64) ro | Checker who rejected the last submission"
+          - "rejection_reason text ro | Why the last submission was rejected"
+        indexes: [[service_type, status]]
 
       - name: risk_appetite_metric
         prefix: ram
@@ -1297,7 +1447,7 @@ services:
           - "POST /{id}/activate | Activate (maker-checker) | comment text"
           - "POST /{id}/reject | Reject the pending activation submission (checker); the rule keeps its status | reason text nn"
           - "POST /{id}/deactivate | Deactivate | reason text nn"
-          - "POST /simulate | Show which limits would apply to a subject and transaction (including superseded rules) | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount | object"
+          - "POST /simulate | Show which limits would apply to a subject and transaction (including superseded rules) | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount, direction enum:TransferDirection, regulatory_profile_code string(64), domain_code string(64), category_code string(64), grade_code string(64), payment_instrument enum:PaymentInstrumentType | object"
 
       - resource: limit-usages
         path: /v1/risk/limits/usages
@@ -1326,7 +1476,7 @@ services:
         actions:
           - "POST /{id}/commit | Commit the reserved usage after the transaction succeeds (amount at most the reserved amount; the rest is released) | amount amount"
           - "POST /{id}/release | Release the reservation after the transaction fails | reason string(255)"
-          - "POST /evaluate | Dry-run evaluation without reservation or persistence | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount | object"
+          - "POST /evaluate | Dry-run evaluation without reservation or persistence | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount, direction enum:TransferDirection, regulatory_profile_code string(64), domain_code string(64), category_code string(64), grade_code string(64), payment_instrument enum:PaymentInstrumentType, payee_subject_type string(32), payee_subject_id uuid, payee_customer_id uuid, payee_regulatory_profile_code string(64), payee_grade_code string(64), payee_payment_instrument enum:PaymentInstrumentType, payee_current_balance amount | object"
           - "POST /expire-reservations | Release reservations past expires_at (called by the scheduler) | max_checks int | object"
 
       - resource: risk-appetite-metrics
@@ -1337,6 +1487,44 @@ services:
         actions:
           - "POST /{id}/measurements | Record a new measurement | current_value rate nn, measured_at ts nn, source string(64)"
           - "GET /{id}/measurements | Measurement history | | risk_appetite_measurement[]"
+
+      # ---------------------------------------------------------------- WE-LIMIT-1 TCP authoring
+      - resource: transfer-control-profiles
+        path: /v1/risk/limits/tcp/cumulative
+        table: transfer_control_profile
+        description: Cumulative (Rank-1) Transfer Control Profiles, compiled into the limit engine on activation.
+        ops: [list, get, create, update]
+        filters: [regulatory_profile_code, currency, direction, status, domain_code, category_code]
+        actions:
+          - "POST /{id}/submit | Submit the profile for activation (maker); a checker activates it or rejects the submission | comment text"
+          - "POST /{id}/activate | Activate the profile (maker-checker); validated before it is compiled | comment text"
+          - "POST /{id}/reject | Reject the pending activation submission (checker) | reason text nn"
+          - "POST /{id}/deactivate | Deactivate the profile | reason text nn"
+
+      - resource: instrument-tcps
+        path: /v1/risk/limits/tcp/instrument
+        table: instrument_tcp
+        description: Instrument/grade (Rank-2) Transfer Control Profiles; Rank-2 must be a subset of Rank-1 (checked on activation).
+        ops: [list, get, create, update]
+        filters: [payment_instrument, grade_code, service_type, status, direction]
+        actions:
+          - "POST /{id}/submit | Submit the profile for activation (maker) | comment text"
+          - "POST /{id}/activate | Activate the profile (maker-checker); Rank-2 subset-of-Rank-1 validated here | comment text"
+          - "POST /{id}/reject | Reject the pending activation submission (checker) | reason text nn"
+          - "POST /{id}/deactivate | Deactivate the profile | reason text nn"
+
+      - resource: transfer-rules
+        path: /v1/risk/limits/transfer-rules
+        table: transfer_rule
+        description: Transfer-rule matrix (allow/deny by sender/receiver attributes and hierarchy scope).
+        ops: [list, get, create, update]
+        filters: [service_type, status, hierarchy_scope, sender_instrument, receiver_instrument]
+        actions:
+          - "POST /{id}/submit | Submit the rule for activation (maker) | comment text"
+          - "POST /{id}/activate | Activate the rule (maker-checker) | comment text"
+          - "POST /{id}/reject | Reject the pending activation submission (checker) | reason text nn"
+          - "POST /{id}/deactivate | Deactivate the rule | reason text nn"
+          - "POST /evaluate | Evaluate the transfer-rule matrix for a proposed transfer (allow/deny + the deciding rule) | service_type string(40), amount amount, currency currency, hierarchy_scope enum:HierarchyScope, sender_domain_code string(64), sender_category_code string(64), sender_grade_code string(64), sender_instrument enum:PaymentInstrumentType, sender_bank_code string(64), receiver_domain_code string(64), receiver_category_code string(64), receiver_grade_code string(64), receiver_instrument enum:PaymentInstrumentType, receiver_bank_code string(64) | object"
 
     events:
       - "risk.limit_rule.activated | limit_rule | A limit rule was activated"
@@ -1350,4 +1538,16 @@ services:
       - "risk.limit_override.approved | limit_override | A limit override was approved"
       - "risk.limit_override.rejected | limit_override | A limit override was rejected"
       - "risk.limit_override.expired | limit_override | A limit override expired or was revoked"
+      - "risk.transfer_control_profile.submitted | transfer_control_profile | A cumulative TCP was submitted for activation"
+      - "risk.transfer_control_profile.activated | transfer_control_profile | A cumulative TCP was activated and compiled"
+      - "risk.transfer_control_profile.rejected | transfer_control_profile | A cumulative TCP submission was rejected"
+      - "risk.transfer_control_profile.deactivated | transfer_control_profile | A cumulative TCP was deactivated"
+      - "risk.instrument_tcp.submitted | instrument_tcp | An instrument TCP was submitted for activation"
+      - "risk.instrument_tcp.activated | instrument_tcp | An instrument TCP was activated and compiled"
+      - "risk.instrument_tcp.rejected | instrument_tcp | An instrument TCP submission was rejected"
+      - "risk.instrument_tcp.deactivated | instrument_tcp | An instrument TCP was deactivated"
+      - "risk.transfer_rule.submitted | transfer_rule | A transfer rule was submitted for activation"
+      - "risk.transfer_rule.activated | transfer_rule | A transfer rule was activated"
+      - "risk.transfer_rule.rejected | transfer_rule | A transfer rule submission was rejected"
+      - "risk.transfer_rule.deactivated | transfer_rule | A transfer rule was deactivated"
       - "risk.appetite_metric.breached | risk_appetite_metric | A risk appetite metric turned amber or red"

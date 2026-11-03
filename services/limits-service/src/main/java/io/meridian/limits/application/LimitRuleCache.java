@@ -40,10 +40,19 @@ public class LimitRuleCache {
     }
 
     private List<LimitModel.Rule> load() {
-        return db.list("""
+        List<LimitModel.Rule> rules = new java.util.ArrayList<>(db.list("""
                 select row_to_json(r)::text from limit_rule r
                 where status = 'ACTIVE' and (valid_from is null or valid_from <= now()) and (valid_to is null or valid_to > now())
-                order by code""").stream().map(LimitRuleCache::rule).toList();
+                order by code""").stream().map(LimitRuleCache::rule).toList());
+        // WE-LIMIT-1: expand ACTIVE Transfer Control Profiles into synthetic rules (deterministic ids) in the same cache.
+        rules.addAll(TcpCompiler.compile(loadActive("transfer_control_profile"), loadActive("instrument_tcp")));
+        return List.copyOf(rules);
+    }
+
+    private List<JsonNode> loadActive(String table) {
+        return db.list("select row_to_json(r)::text from " + table + " r"
+                + " where status = 'ACTIVE' and (valid_from is null or valid_from <= now())"
+                + " and (valid_to is null or valid_to > now()) order by code");
     }
 
     static LimitModel.Rule rule(JsonNode r) {

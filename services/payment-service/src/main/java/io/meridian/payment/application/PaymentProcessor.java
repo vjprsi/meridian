@@ -671,6 +671,14 @@ public class PaymentProcessor {
             check.put("amount", dec(p, "amount").toPlainString());
             check.put("currency", str(p, "currency"));
             check.put("correlation_id", id.toString());
+            // WE-LIMIT-1: payer is a DEBIT; forward TCP dimensions only when the payment carries them (otherwise absent
+            // and the check is unchanged). No cumulative/instrument TCP configured => no synthetic rule matches.
+            check.put("direction", "DEBIT");
+            putIf(check, "regulatory_profile_code", str(p, "regulatory_profile_code"));
+            putIf(check, "payment_instrument", str(p, "payment_instrument"));
+            putIf(check, "domain_code", str(p, "domain_code"));
+            putIf(check, "category_code", str(p, "category_code"));
+            putIf(check, "grade_code", str(p, "grade_code"));
             JsonNode res = risk.checkLimits(check, "pay-limit:" + id);
             String checkId = res.path("id").asString(null);
             boolean allowed = res.path("allowed").asBoolean(true);

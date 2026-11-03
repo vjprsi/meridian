@@ -50,19 +50,30 @@ public final class LimitEngine {
                 mismatch.add(r);
                 continue;
             }
-            boolean instrument = LimitModel.INSTRUMENT_SCOPES.contains(r.scope());
-            String countingType = instrument ? r.scope() : "CUSTOMER";
-            UUID countingId = instrument ? req.subjectId()
-                    : req.customerId() != null ? req.customerId() : req.subjectId();
-            if (!instrument && req.customerId() == null) {
-                countingType = req.subjectType();
+            boolean regProfile = "REGULATORY_PROFILE".equals(r.scope());
+            boolean instrument = LimitModel.INSTRUMENT_SCOPES.contains(r.scope()) || "INSTRUMENT_GRADE".equals(r.scope());
+            String countingType;
+            UUID countingId;
+            if (regProfile) {
+                // WE-LIMIT-1: cumulative TCP aggregates across account groups by counting against the regulatory-profile
+                // id (deterministic subject). Degraded fallback to the party id when the profile code was not supplied.
+                countingType = "REGULATORY_PROFILE";
+                countingId = req.regulatoryProfileSubjectId() != null ? req.regulatoryProfileSubjectId()
+                        : req.customerId() != null ? req.customerId() : req.subjectId();
+            } else if (instrument) {
+                countingType = r.scope();
+                countingId = req.subjectId();
+            } else {
+                countingType = req.customerId() != null ? "CUSTOMER" : req.subjectType();
+                countingId = req.customerId() != null ? req.customerId() : req.subjectId();
             }
             Applicable a = new Applicable(r, countingType, countingId);
             if (r.regulatory()) {
                 regulatory.add(a);
                 continue;
             }
-            String key = (instrument ? r.scope() : "PARTY") + "|" + r.period() + "|" + r.measure() + "|"
+            String prefix = instrument ? r.scope() : regProfile ? "REGULATORY_PROFILE" : "PARTY";
+            String key = prefix + "|" + r.direction() + "|" + r.period() + "|" + r.measure() + "|"
                     + r.transactionType() + "|" + r.channel();
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(a);
         }
@@ -90,6 +101,22 @@ public final class LimitEngine {
         if (r.channel() != null && !r.channel().equals(req.channel())) {
             return false;
         }
+        // WE-LIMIT-1 direction isolation: a CREDIT (payee) check sees only explicit CREDIT rules; a DEBIT (payer) check
+        // sees classic (direction-less) rules and DEBIT rules, never CREDIT-only rules. This keeps classic behaviour
+        // identical and prevents the payer's limits being counted against the payee.
+        boolean credit = "CREDIT".equals(req.direction());
+        if (credit ? !"CREDIT".equals(r.direction()) : "CREDIT".equals(r.direction())) {
+            return false;
+        }
+        // Hierarchy / instrument dimensions on the rule (empty = any); a rule that names one the request lacks cannot match.
+        if (!dimensionMatches(r.domainCode(), req.domainCode()) || !dimensionMatches(r.categoryCode(), req.categoryCode())
+                || !dimensionMatches(r.gradeCode(), req.gradeCode()) || !dimensionMatches(r.instrument(), req.instrument())) {
+            return false;
+        }
+        if (r.bearer() != null && !r.bearer().equalsIgnoreCase(credit ? "PAYEE" : "PAYER")
+                && !"INITIATOR".equalsIgnoreCase(r.bearer())) {
+            return false;
+        }
         String ref = r.scopeRef();
         return switch (r.scope()) {
             case "GLOBAL", "TENANT" -> true;
@@ -97,8 +124,15 @@ public final class LimitEngine {
             case "KYC_TIER" -> req.kycTier() != null && req.kycTier().equalsIgnoreCase(ref);
             case "CUSTOMER_SEGMENT" -> req.customerSegment() != null && req.customerSegment().equalsIgnoreCase(ref);
             case "PRODUCT" -> req.productId() != null && req.productId().toString().equalsIgnoreCase(ref);
+            case "REGULATORY_PROFILE" -> req.regulatoryProfileCode() != null
+                    && req.regulatoryProfileCode().equalsIgnoreCase(ref);
+            case "INSTRUMENT_GRADE" -> req.instrument() != null; // instrument already matched by the dimension gate
             default -> r.scope().equals(req.subjectType()) && req.subjectId().toString().equalsIgnoreCase(ref);
         };
+    }
+
+    private static boolean dimensionMatches(String ruleValue, String reqValue) {
+        return ruleValue == null || ruleValue.equalsIgnoreCase(reqValue);
     }
 
     /** The period window containing {@code now} (UTC calendar periods; rolling periods use hourly buckets). */
@@ -171,6 +205,22 @@ public final class LimitEngine {
             if (maxAmount != null) {
                 breached = amount.compareTo(maxAmount) > 0;
                 remainingAmount = nonNegative(maxAmount.subtract(amount));
+            }
+            // WE-LIMIT-1 instrument per-transaction checks (any violation breaches the rule).
+            if (r.perTxnMin() != null && amount.compareTo(r.perTxnMin()) < 0) {
+                breached = true;
+            }
+            if (r.amountMultiple() != null && r.amountMultiple().signum() > 0
+                    && amount.remainder(r.amountMultiple()).signum() != 0) {
+                breached = true;
+            }
+            if (r.maxTransferPct() != null && r.maxTransferPct().signum() > 0 && currentBalance != null
+                    && amount.compareTo(currentBalance.multiply(r.maxTransferPct())) > 0) {
+                breached = true;
+            }
+            if (r.minRemainingBalance() != null && currentBalance != null
+                    && currentBalance.subtract(amount).compareTo(r.minRemainingBalance()) < 0) {
+                breached = true;
             }
         } else {
             BigDecimal consumed = usage.usedAmount().add(usage.reservedAmount());

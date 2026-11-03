@@ -15659,6 +15659,9 @@ API: /v1/risk/limits/usages · Requirements: LIM-01
 | reserved_count | integer | no |  | reserved_count (read-only) | Reserved count |
 | currency | char(3) | yes |  | currency | Currency |
 | last_reset_reason | text | yes |  | last_reset_reason (read-only) | Reason of the last operational reset |
+| direction | varchar(40) (TransferDirection) | yes |  | direction | WE-LIMIT-1: debit or credit side (empty = legacy direction-agnostic counter) |
+| tier | varchar(40) (TcpTier) | yes |  | tier | WE-LIMIT-1: TCP tier that compiled the counting rule (empty = classic limit_rule) |
+| source_profile_id | uuid | yes |  | source_profile_id | WE-LIMIT-1: authoring TCP profile compiled into the counting rule |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -15725,6 +15728,19 @@ API: /v1/risk/limits/checks · Requirements: LIM-01
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
 | current_balance | numeric(28,8) | yes |  | current_balance | Balance before the transaction (BALANCE limits) |
+| direction | varchar(40) (TransferDirection) | yes |  | direction | WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT) |
+| regulatory_profile_code | varchar(64) | yes |  | regulatory_profile_code | WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent |
+| domain_code | varchar(64) | yes |  | domain_code | WE-LIMIT-1: distribution domain of the subject (empty = any) |
+| category_code | varchar(64) | yes |  | category_code | WE-LIMIT-1: category of the subject (empty = any) |
+| grade_code | varchar(64) | yes |  | grade_code | WE-LIMIT-1: grade of the subject (empty = any) |
+| payment_instrument | varchar(40) (PaymentInstrumentType) | yes |  | payment_instrument | WE-LIMIT-1: instrument used (instrument TCP) |
+| payee_subject_type | varchar(32) | yes |  | payee_subject_type | WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation) |
+| payee_subject_id | uuid | yes |  | payee_subject_id | WE-LIMIT-1 credit block: payee subject |
+| payee_customer_id | uuid | yes |  | payee_customer_id | WE-LIMIT-1 credit block: payee customer |
+| payee_regulatory_profile_code | varchar(64) | yes |  | payee_regulatory_profile_code | WE-LIMIT-1 credit block: payee cumulative-TCP key |
+| payee_grade_code | varchar(64) | yes |  | payee_grade_code | WE-LIMIT-1 credit block: payee grade |
+| payee_payment_instrument | varchar(40) (PaymentInstrumentType) | yes |  | payee_payment_instrument | WE-LIMIT-1 credit block: payee instrument |
+| payee_current_balance | numeric(28,8) | yes |  | payee_current_balance | WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks) |
 | allowed | boolean | no |  | allowed (read-only) | Whether the transaction is within limits |
 | status | varchar(40) (LimitCheckStatus) | no |  | status (read-only) | Reservation status (RESERVED until committed, released or expired) |
 | action | varchar(40) (LimitBreachAction) | yes |  | action (read-only) | Strictest action of the breached limits |
@@ -15739,6 +15755,166 @@ API: /v1/risk/limits/checks · Requirements: LIM-01
 | correlation_id | varchar(128) | yes |  | correlation_id | Business transaction / saga id |
 | expires_at | timestamptz | yes |  | expires_at | Reservation expiry (default 15 minutes; released by /expire-reservations) |
 | latency_ms | integer | yes |  | latency_ms (read-only) | Evaluation time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `transfer_control_profile`
+
+WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by regulatory profile (KYC id), currency, direction and optional domain/category; it is compiled into synthetic, windowed limit rules counted against the regulatory-profile id so usage aggregates across all of a customer's account groups. Rank-1 is never superseded by an instrument TCP. Maker-checker.
+
+
+API: /v1/risk/limits/tcp/cumulative · Requirements: LIM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Profile code |
+| name | varchar(160) | no |  | name | Display name |
+| regulatory_profile_code | varchar(64) | no |  | regulatory_profile_code | Regulatory profile / KYC id the cumulative counters aggregate against |
+| currency | char(3) | no |  | currency | Currency |
+| direction | varchar(40) (TransferDirection) | no |  | direction | Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow) |
+| domain_code | varchar(64) | yes |  | domain_code | Distribution domain (empty = any) |
+| category_code | varchar(64) | yes |  | category_code | Category (empty = any) |
+| rule_mode | varchar(40) (TcpRuleMode) | no |  | rule_mode | MQ-TCP-4 granularity |
+| services | jsonb | yes |  | services | Transaction types / services this profile counts (empty = all) |
+| daily_amount | numeric(28,8) | yes |  | daily_amount | Daily cumulative amount cap |
+| daily_count | integer | yes |  | daily_count | Daily cumulative count cap |
+| weekly_amount | numeric(28,8) | yes |  | weekly_amount | Weekly cumulative amount cap |
+| weekly_count | integer | yes |  | weekly_count | Weekly cumulative count cap |
+| monthly_amount | numeric(28,8) | yes |  | monthly_amount | Monthly cumulative amount cap |
+| monthly_count | integer | yes |  | monthly_count | Monthly cumulative count cap |
+| yearly_amount | numeric(28,8) | yes |  | yearly_amount | Yearly cumulative amount cap (only when yearly_enabled) |
+| yearly_count | integer | yes |  | yearly_count | Yearly cumulative count cap (only when yearly_enabled) |
+| yearly_enabled | boolean | no |  | yearly_enabled | MQ-TCP-5: whether the yearly caps are enforced |
+| max_balance | numeric(28,8) | yes |  | max_balance | Maximum balance (CREDIT direction; MQ-TCP-1) |
+| breach_action | varchar(40) (LimitBreachAction) | no |  | breach_action | Action on breach |
+| priority | integer | no |  | priority | Tie-breaker |
+| status | varchar(40) (TransferRuleStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| is_regulatory | boolean | no |  | is_regulatory | Cumulative TCP is regulatory by default (never superseded) |
+| valid_from | timestamptz | yes |  | valid_from | Effective from |
+| valid_to | timestamptz | yes |  | valid_to | Effective to |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who activated the profile |
+| deactivation_reason | text | yes |  | deactivation_reason (read-only) | Why the profile was deactivated |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the profile for activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `instrument_tcp`
+
+WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade, optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance, max transfer %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile, validated at activation. Maker-checker.
+
+
+API: /v1/risk/limits/tcp/instrument · Requirements: LIM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Profile code |
+| name | varchar(160) | no |  | name | Display name |
+| payment_instrument | varchar(40) (PaymentInstrumentType) | no |  | payment_instrument | Instrument |
+| grade_code | varchar(64) | yes |  | grade_code | Grade (empty = any grade) |
+| domain_code | varchar(64) | yes |  | domain_code | Distribution domain (empty = any) |
+| category_code | varchar(64) | yes |  | category_code | Category (empty = any) |
+| service_type | varchar(40) | yes |  | service_type | Transaction type / service (empty = all) |
+| bearer | varchar(16) | yes |  | bearer | Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers) |
+| direction | varchar(40) (TransferDirection) | yes |  | direction | Side (empty = both) |
+| currency | char(3) | no |  | currency | Currency |
+| per_txn_min | numeric(28,8) | yes |  | per_txn_min | Minimum amount per transaction |
+| per_txn_max | numeric(28,8) | yes |  | per_txn_max | Maximum amount per transaction |
+| min_remaining_balance | numeric(28,8) | yes |  | min_remaining_balance | Minimum balance that must remain after a debit |
+| max_transfer_pct | numeric(18,10) | yes |  | max_transfer_pct | Maximum % of the current balance a single transfer may move (0..1) |
+| amount_multiple | numeric(28,8) | yes |  | amount_multiple | The amount must be a whole multiple of this |
+| daily_amount | numeric(28,8) | yes |  | daily_amount | Daily amount cap |
+| daily_count | integer | yes |  | daily_count | Daily count cap |
+| monthly_amount | numeric(28,8) | yes |  | monthly_amount | Monthly amount cap |
+| monthly_count | integer | yes |  | monthly_count | Monthly count cap |
+| max_balance | numeric(28,8) | yes |  | max_balance | Maximum balance (CREDIT side) |
+| breach_action | varchar(40) (LimitBreachAction) | no |  | breach_action | Action on breach |
+| priority | integer | no |  | priority | Tie-breaker |
+| status | varchar(40) (TransferRuleStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| valid_from | timestamptz | yes |  | valid_from | Effective from |
+| valid_to | timestamptz | yes |  | valid_to | Effective to |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who activated the profile |
+| deactivation_reason | text | yes |  | deactivation_reason (read-only) | Why the profile was deactivated |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the profile for activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `transfer_rule`
+
+WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple validation. Evaluated by POST /transfer-rules/evaluate. Maker-checker.
+
+
+API: /v1/risk/limits/transfer-rules · Requirements: LIM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Rule code |
+| name | varchar(160) | no |  | name | Display name |
+| service_type | varchar(40) | yes |  | service_type | Transaction type / service (empty = any) |
+| sender_domain_code | varchar(64) | yes |  | sender_domain_code | Sender domain (empty = any) |
+| sender_category_code | varchar(64) | yes |  | sender_category_code | Sender category (empty = any) |
+| sender_grade_code | varchar(64) | yes |  | sender_grade_code | Sender grade (empty = any) |
+| sender_instrument | varchar(40) (PaymentInstrumentType) | yes |  | sender_instrument | Sender instrument (empty = any) |
+| sender_bank_code | varchar(64) | yes |  | sender_bank_code | Sender bank (empty = any) |
+| receiver_domain_code | varchar(64) | yes |  | receiver_domain_code | Receiver domain (empty = any) |
+| receiver_category_code | varchar(64) | yes |  | receiver_category_code | Receiver category (empty = any) |
+| receiver_grade_code | varchar(64) | yes |  | receiver_grade_code | Receiver grade (empty = any) |
+| receiver_instrument | varchar(40) (PaymentInstrumentType) | yes |  | receiver_instrument | Receiver instrument (empty = any) |
+| receiver_bank_code | varchar(64) | yes |  | receiver_bank_code | Receiver bank (empty = any) |
+| hierarchy_scope | varchar(40) (HierarchyScope) | no |  | hierarchy_scope | MQ-TR-2: within / outside the sender's hierarchy |
+| allow | boolean | no |  | allow | Allow (true) or deny (false) the matching transfer |
+| min_amount | numeric(28,8) | yes |  | min_amount | Minimum amount (MQ-TR-3) |
+| max_amount | numeric(28,8) | yes |  | max_amount | Maximum amount (MQ-TR-3) |
+| amount_multiple | numeric(28,8) | yes |  | amount_multiple | The amount must be a whole multiple of this (MQ-TR-3) |
+| currency | char(3) | yes |  | currency | Currency of the amount bounds |
+| priority | integer | no |  | priority | Lower wins when several rules match |
+| status | varchar(40) (TransferRuleStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| valid_from | timestamptz | yes |  | valid_from | Effective from |
+| valid_to | timestamptz | yes |  | valid_to | Effective to |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who activated the rule |
+| deactivation_reason | text | yes |  | deactivation_reason (read-only) | Why the rule was deactivated |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the rule for activation |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time (empty when no activation is pending) |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the last submission |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Why the last submission was rejected |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
